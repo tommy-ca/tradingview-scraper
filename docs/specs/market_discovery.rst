@@ -1,30 +1,26 @@
-Market Discovery Notes
-======================
+Validation Snapshots
+====================
 
-Screener-supported markets
--------------------------
-- The screener accepts the following markets (per Screener.SUPPORTED_MARKETS): ``america, australia, canada, germany, india, israel, italy, luxembourg, mexico, spain, turkey, uk, crypto, forex, cfd, futures, bonds, global``.
+Forex (trend preset)
+--------------------
+- Config: ``configs/forex_trend_momentum.yaml``
+- Exchanges: FX_IDC, THINKMARKETS, BLACKBULL, ICMARKETS, ACTIVTRADES, FUSIONMARKETS, OANDA, TRADENATIONSB, TRADENATION, FXOPEN, FX, SKILLING, FPMARKETS, VELOCITY, CAPITALCOM, VANTAGE, PEPPERSTONE.
+- Filters (daily long): Rec >= 0.2, ADX >= 15, Perf.W >= 0, Perf.1M >= 0.5%, Perf.3M >= 1.5%, Vol.D <= 6% (ATR/close <= 6% fallback), volume >= 1B.
+- Latest run (status=success): 5 candidates (THINKMARKETS: CHFJPY, GBPJPY, EURJPY, EURNOK, USDBRL).
 
-Safe probe pattern
-------------------
-- Use minimal columns to avoid 400 errors: ``name, close, change, change_abs, volume, Recommend.All``.
-- Example (forex): ``Screener().screen(market='forex', columns=cols, sort_by='volume', sort_order='desc', limit=500)``.
-- If you request fields unsupported by a market (e.g., ``market_cap_calc`` on CFD), the API returns HTTP 400.
+Crypto (Binance spot/perps)
+---------------------------
+- Configs: see ``configs/binance_*`` presets (trend, TS, XS, MR). Base sort market cap then volume; fields enriched via Overview.
+- Long filters remain sparse in bearish regime (often 0–1 names). Short presets surface small/mid-cap alts.
+- Latest runs: trend momentum (1: SHIBDOGE), TS momentum long (1: JSTUSDT.P), TS momentum short (2: BTTCUSDT, TUSDT), TS mean reversion short (5: XECUSDT, 1000CHEEMSUSDT variants, IQUSDT, DAMUSDT.P); XS/long MR often 0.
 
-Forex exchanges (discovered via screener, top counts)
-----------------------------------------------------
-- FX_IDC, THINKMARKETS, BLACKBULL, ICMARKETS, ACTIVTRADES, FUSIONMARKETS, OANDA, TRADENATIONSB, TRADENATION, FXOPEN, FX, SKILLING, FPMARKETS, VELOCITY, CAPITALCOM, VANTAGE, PEPPERSTONE (counts vary; FX_IDC and THINKMARKETS dominate).
+CFD (OANDA)
+-----------
+- Configs: ``configs/cfd_trend_momentum.yaml`` (OANDA) and ``configs/cfd_trend_multi.yaml`` (OANDA-only; other CFD venues sparse).
+- Screener-only fields: Rec, change, volume; richer metrics require Overview enrichment.
+- Latest run (OANDA): 2 candidates (XAUUSD, XCUUSD).
 
-CFD exchanges (discovered via screener)
----------------------------------------
-- Dominated by CRYPTOCAP aggregates; practical CFDs come from OANDA (multi-instrument), with isolated single rows for other codes (SAXO/BLACKBULL/PEPPERSTONE/etc.). In practice, OANDA-only is the usable CFD source.
-
-Field availability
-------------------
-- Screener fields (forex/cfd): ``name, close, change, change_abs, volume, Recommend.All`` (plus ``market_cap_calc`` for forex; CFD 400s on ``market_cap_calc``).
-- Rich indicators (Perf.W/1M/3M/6M, ADX, Volatility.D/W/M, ATR, RSI, Stoch.K, Value.Traded) require per-symbol Overview calls.
-
-Preset guidance
----------------
-- Use forex presets with Overview enrichment for trend filters (Rec/ADX/momentum/volatility). Volume is tick-volume proxy; adjust floors per exchange universe.
-- For CFDs, use OANDA-only presets; add Overview enrichment for production-quality trend filters.
+Notes
+-----
+- Screener limitations: FX/CFD/crypto screens expose minimal fields; Overview provides Perf.*, ADX, Volatility.*, ATR, oscillators, and Value.Traded.
+- Adjust thresholds/exchanges per regime; majors may need lower Rec/Perf gates and higher liquidity floors.
