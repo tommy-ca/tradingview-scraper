@@ -1,0 +1,35 @@
+# Base universe: Forex, focus on high-liquidity exchanges; enriched via Overview
+# Exchanges selected from discovery (high prevalence): FX_IDC, THINKMARKETS, OANDA, VANTAGE, FUSIONMARKETS
+markets: ["forex"]
+exchanges: ["FX_IDC", "THINKMARKETS", "OANDA", "VANTAGE", "FUSIONMARKETS"]
+columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
+volume:
+  min: 1000000000
+volatility:
+  max: 6.0
+  atr_pct_max: 0.06
+  fallback_use_atr_pct: true
+trend:
+  direction: "long"
+  timeframe: "daily"
+  logic: "AND"
+  recommendation:
+    enabled: true
+    min: 0.2
+  adx:
+    enabled: true
+    min: 15
+  momentum:
+    enabled: true
+    horizons: {change: 0.0, Perf.W: 0.0, Perf.1M: 0.5, Perf.3M: 1.5}
+sort_by: volume
+sort_order: desc
+final_sort_by: volume
+final_sort_order: desc
+limit: 100
+pagination_size: 50
+retries: 2
+timeout: 10
+export:
+  enabled: false
+  type: json
