@@ -22,6 +22,9 @@ trend:
   momentum:
     enabled: true
     horizons: {change: 0.0, Perf.W: 0.0, Perf.1M: 0.5, Perf.3M: 1.5}
+  confirmation_momentum:
+    enabled: true
+    horizons: {Perf.1M: 0.5, Perf.3M: 1.5}
 sort_by: volume
 sort_order: desc
 final_sort_by: volume
