@@ -1,6 +1,8 @@
-# Base universe: Binance, non-stables, take top 100 by market cap (sorted), with volume floor before filters
+# Base universe: Binance/OKX/Bybit/Bitget perps only, top 100 by market cap then volume
 markets: ["crypto"]
-exchanges: ["BINANCE"]
+exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
+include_perps_only: true
+exclude_perps: false
 columns: ["name", "close", "volume", "Value.Traded", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
   min: 50000000

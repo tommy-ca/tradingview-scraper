@@ -1,6 +1,9 @@
-# Base universe: Binance, non-stables, take top 100 by market cap (sorted), with volume floor before filters
+# Base universe: Binance/OKX/Bybit/Bitget perps only, top 100 by market cap then volume
+# Weekly TS momentum
 markets: ["crypto"]
-exchanges: ["BINANCE"]
+exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
+include_perps_only: true
+exclude_perps: false
 columns: ["name", "close", "volume", "Value.Traded", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
   min: 30000000
@@ -9,19 +12,18 @@ volatility:
   atr_pct_max: 0.08
   fallback_use_atr_pct: true
 trend:
-  direction: "short"
-  timeframe: "daily"
+  direction: "long"
+  timeframe: "weekly"
   logic: "AND"
   recommendation:
     enabled: true
-    min: 0
+    min: 0.0
   adx:
     enabled: true
-    min: 0
-    max: 25
+    min: 10
   momentum:
     enabled: true
-    horizons: {change: -0.3, Perf.W: -1.0, Perf.1M: -6.0}
+    horizons: {Perf.W: 0.0, Perf.1M: 0.5, Perf.3M: 1.0}
 sort_by: market_cap_calc
 sort_order: desc
 final_sort_by: volume
