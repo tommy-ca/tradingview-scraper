@@ -123,13 +123,18 @@ Configuration Examples
    limit: 100
    pagination_size: 50
    retries: 2
-   timeout: 10
-    export:
-      enabled: true
-      type: json
+    timeout: 10
+     export:
+       enabled: true
+       type: json
 
-Preset Configurations
----------------------
+Optional Multi-Screen Blocks
+----------------------------
+- ``trend_screen`` / ``confirm_screen`` / ``execute_screen`` are optional sequential filters (recommendation/ADX/momentum plus osc/volatility) evaluated after base liquidity/volatility/trend checks. They currently support daily/weekly/monthly fields; intraday remains out of scope.
+ 
+ Preset Configurations
+ ---------------------
+
 - ``configs/futures_trend_momentum.yaml``: broad commodities, volume >= 5k, ADX >= 20, Rec >= 0.2, momentum across daily/W/1M with 3M confirmation; limit 100 sorted by volume.
 - ``configs/futures_metals_trend_momentum.yaml``: COMEX/NYMEX metals, volume >= 1k, volatility guard (Vol.D <= 8% or ATR/close <= 10%), ADX >= 20, Perf.1M >= 1%, Perf.3M >= 3%.
 - ``configs/index_futures_trend_momentum.yaml``: major equity index futures across CME/CBOT/EUREX/ICEUS/HKEX/SGX, volume >= 10k, ADX >= 15, Perf.1M >= 1%, Perf.3M >= 2%.
@@ -147,8 +152,17 @@ Recent Notes from E2E Validation
 - Trend timeframe support: ``trend.timeframe`` can be ``daily`` (uses ``change`` + ``Perf.W`` as default momentum fields), ``weekly`` (``Perf.W``), or ``monthly`` (``Perf.1M``/``Perf.3M``); adjust ``trend.momentum.horizons`` to override.
 - Trend direction support: ``trend.direction`` controls comparisons (``long`` uses >= thresholds; ``short`` uses <= for recommendation and inverted momentum comparisons; ADX remains a magnitude gate).
 
+Planned Multi-Timeframe (3-Screen) Support
+------------------------------------------
+- Roles: Trend (high TF) to set bias; Confirmation (mid TF) to align continuation; Execution (low TF) to time entries with oscillators/volatility.
+- Suggested sets: (A) weekly → daily → 4h/6h, (B) daily → 4h → 1h, (C) 12h → 4h → 1h, (D) monthly → weekly → daily. Futures/FX: A/B; Crypto: B/C; Equities: A/D.
+- Indicator splits: Trend uses Rec/ADX + slower momentum (Perf.1M/3M or Perf.W/1M) with a volatility guard; Confirmation relaxes gates and uses faster momentum/ROC + optional volume surge; Execution uses short momentum (change/Perf.W-equivalent), oscillators (RSI/Stoch), and tight ATR/close.
+- Schema sketch (planned): support ``trend_screen``, ``confirm_screen``, ``execute_screen`` blocks with their own ``timeframe``, thresholds, and required columns, plus CLI overrides (e.g., ``--trend-tf weekly --confirm-tf daily --execute-tf 4h``).
+- Limitation: current implementation only supports daily/weekly/monthly fields from Screener/Overview; intraday (4h/1h/12h) would require additional data support. Until then, multi-screen will be constrained to available timeframes.
+ 
 Testing Strategy
 ----------------
+
 
 - Unit tests (mocked HTTP)
   - Payload builder covers filters, columns, sorting, pagination range composition.

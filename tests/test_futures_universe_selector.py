@@ -2,6 +2,7 @@ import pytest
 
 from tradingview_scraper.futures_universe_selector import (
     FuturesUniverseSelector,
+    ScreenConfig,
     SelectorConfig,
     _format_markdown_table,
     load_config,
@@ -181,3 +182,112 @@ def test_format_markdown_table():
     assert lines[0].startswith("| symbol | name | close | volume | Recommend.All |")
     assert "4373.91" in table
     assert "145011" in table
+
+
+def test_multi_screen_passes_all():
+    payload = {
+        "status": "success",
+        "data": [
+            {
+                "symbol": "CME:GC1!",
+                "name": "Gold",
+                "close": 4375.0,
+                "volume": 5000,
+                "Recommend.All": 0.5,
+                "ADX": 25,
+                "Volatility.D": 4.0,
+                "Perf.W": 1.2,
+                "Perf.1M": 2.5,
+                "Perf.3M": 5.0,
+                "RSI": 60,
+            }
+        ],
+    }
+
+    cfg = SelectorConfig(
+        volume={"min": 0},
+        volatility={"min": None, "max": None, "fallback_use_atr_pct": False},
+        trend={
+            "recommendation": {"enabled": False},
+            "adx": {"enabled": False},
+            "momentum": {"enabled": False},
+            "confirmation_momentum": {"enabled": False},
+        },
+        trend_screen=ScreenConfig(
+            timeframe="daily",
+            direction="long",
+            recommendation={"enabled": True, "min": 0.2},
+            adx={"enabled": True, "min": 10},
+            momentum={"enabled": True, "horizons": {"Perf.W": 0.5}},
+            osc={"enabled": True, "horizons": {"RSI": 70}},
+        ),
+        confirm_screen=ScreenConfig(
+            timeframe="daily",
+            direction="long",
+            momentum={"enabled": True, "horizons": {"Perf.1M": 1.0}},
+        ),
+        execute_screen=ScreenConfig(
+            timeframe="daily",
+            direction="long",
+            momentum={"enabled": True, "horizons": {"Perf.W": 0.5}},
+            osc={"enabled": True, "horizons": {"RSI": 70}},
+        ),
+    )
+
+    selector = FuturesUniverseSelector(config=cfg, screener=DummyScreener(payload))
+    result = selector.run()
+    assert result["status"] == "success"
+    assert result["total_selected"] == 1
+    row = result["data"][0]
+    assert row["passes"]["all"] is True
+    assert row["passes"].get("trend_screen_combined") is True
+    assert row["passes"].get("confirm_screen_combined") is True
+    assert row["passes"].get("execute_screen_combined") is True
+
+
+def test_multi_screen_fails_confirmation():
+    payload = {
+        "status": "success",
+        "data": [
+            {
+                "symbol": "CME:GC1!",
+                "name": "Gold",
+                "close": 4375.0,
+                "volume": 5000,
+                "Recommend.All": 0.5,
+                "ADX": 25,
+                "Volatility.D": 4.0,
+                "Perf.W": 0.2,
+                "Perf.1M": 0.1,
+                "Perf.3M": 0.2,
+                "RSI": 60,
+            }
+        ],
+    }
+
+    cfg = SelectorConfig(
+        volume={"min": 0},
+        volatility={"min": None, "max": None, "fallback_use_atr_pct": False},
+        trend={
+            "recommendation": {"enabled": False},
+            "adx": {"enabled": False},
+            "momentum": {"enabled": False},
+        },
+        trend_screen=ScreenConfig(
+            timeframe="daily",
+            direction="long",
+            recommendation={"enabled": True, "min": 0.2},
+            momentum={"enabled": True, "horizons": {"Perf.W": 0.1}},
+        ),
+        confirm_screen=ScreenConfig(
+            timeframe="daily",
+            direction="long",
+            momentum={"enabled": True, "horizons": {"Perf.1M": 0.5}},
+        ),
+    )
+
+    selector = FuturesUniverseSelector(config=cfg, screener=DummyScreener(payload))
+    result = selector.run()
+    assert result["status"] == "success"
+    assert result["total_selected"] == 0
+    assert result["data"] == []

@@ -137,6 +137,41 @@ class TrendConfig(BaseModel):
         return value_lower
 
 
+class ScreenConfig(BaseModel):
+    timeframe: str
+    logic: str = "AND"
+    direction: str = "long"
+    recommendation: TrendRuleConfig = Field(default_factory=TrendRuleConfig)
+    adx: TrendRuleConfig = Field(default_factory=TrendRuleConfig)
+    momentum: TrendRuleConfig = Field(default_factory=TrendRuleConfig)
+    osc: TrendRuleConfig = Field(default_factory=TrendRuleConfig)
+    volatility: TrendRuleConfig = Field(default_factory=TrendRuleConfig)
+
+    @field_validator("logic")
+    @classmethod
+    def validate_logic(cls, value: str) -> str:
+        value_upper = value.upper()
+        if value_upper not in {"AND", "OR"}:
+            raise ValueError("screen.logic must be AND or OR")
+        return value_upper
+
+    @field_validator("timeframe")
+    @classmethod
+    def validate_timeframe(cls, value: str) -> str:
+        value_lower = value.lower()
+        if value_lower not in {"daily", "weekly", "monthly"}:
+            raise ValueError("screen.timeframe must be daily, weekly, or monthly")
+        return value_lower
+
+    @field_validator("direction")
+    @classmethod
+    def validate_direction(cls, value: str) -> str:
+        value_lower = value.lower()
+        if value_lower not in {"long", "short"}:
+            raise ValueError("screen.direction must be long or short")
+        return value_lower
+
+
 class ExportMetadata(BaseModel):
     symbol: str = "futures_universe"
     data_category: str = "universe_selector"
@@ -153,6 +188,9 @@ class SelectorConfig(BaseModel):
     volume: VolumeConfig = Field(default_factory=VolumeConfig)
     volatility: VolatilityConfig = Field(default_factory=VolatilityConfig)
     trend: TrendConfig = Field(default_factory=TrendConfig)
+    trend_screen: Optional[ScreenConfig] = None
+    confirm_screen: Optional[ScreenConfig] = None
+    execute_screen: Optional[ScreenConfig] = None
     sort_by: str = "volume"
     sort_order: str = "desc"
     final_sort_by: Optional[str] = None
@@ -452,6 +490,105 @@ class FuturesUniverseSelector:
         checks["combined"] = combined
         return checks
 
+    def _evaluate_screen(
+        self, row: Dict[str, Any], screen: ScreenConfig
+    ) -> Dict[str, bool]:
+        checks: Dict[str, bool] = {}
+        is_long = screen.direction == "long"
+
+        if screen.recommendation.enabled:
+            rec_min = screen.recommendation.min
+            rec_value = row.get("Recommend.All")
+            if rec_min is None:
+                rec_pass = True
+            else:
+                rec_pass = False
+                if rec_value is not None:
+                    rec_pass = rec_value >= rec_min if is_long else rec_value <= rec_min
+            checks["recommendation"] = rec_pass
+
+        if screen.adx.enabled:
+            adx_min = screen.adx.min
+            adx_value = row.get("ADX")
+            if adx_min is None:
+                checks["adx"] = True
+            else:
+                checks["adx"] = adx_value is not None and adx_value >= adx_min
+
+        if screen.momentum.enabled:
+            horizons = screen.momentum.horizons or {}
+            if not horizons:
+                checks["momentum"] = True
+            else:
+                momentum_pass = True
+                for field, threshold in horizons.items():
+                    value = row.get(field)
+                    if value is None:
+                        momentum_pass = False
+                        break
+                    if is_long:
+                        if value <= threshold:
+                            momentum_pass = False
+                            break
+                    else:
+                        if value >= threshold:
+                            momentum_pass = False
+                            break
+                checks["momentum"] = momentum_pass
+
+        if screen.osc.enabled:
+            horizons = screen.osc.horizons or {}
+            if not horizons:
+                checks["osc"] = True
+            else:
+                osc_pass = True
+                for field, threshold in horizons.items():
+                    value = row.get(field)
+                    if value is None:
+                        osc_pass = False
+                        break
+                    if is_long:
+                        if value >= threshold:
+                            osc_pass = False
+                            break
+                    else:
+                        if value <= threshold:
+                            osc_pass = False
+                            break
+                checks["osc"] = osc_pass
+
+        if screen.volatility.enabled:
+            horizons = screen.volatility.horizons or {}
+            if not horizons:
+                checks["volatility"] = True
+            else:
+                vol_pass = True
+                for field, threshold in horizons.items():
+                    value = row.get(field)
+                    if value is None:
+                        vol_pass = False
+                        break
+                    if is_long:
+                        if value >= threshold:
+                            vol_pass = False
+                            break
+                    else:
+                        if value <= threshold:
+                            vol_pass = False
+                            break
+                checks["volatility"] = vol_pass
+
+        enabled_checks = {k: v for k, v in checks.items() if v is not None}
+        if not enabled_checks:
+            combined = True
+        elif screen.logic == "AND":
+            combined = all(enabled_checks.values())
+        else:
+            combined = any(enabled_checks.values())
+
+        checks["combined"] = combined
+        return checks
+
     def _apply_post_filters(
         self, rows: Iterable[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -487,8 +624,42 @@ class FuturesUniverseSelector:
             trend_checks = self._evaluate_trend(row)
             passes.update({f"trend_{k}": v for k, v in trend_checks.items()})
 
+            screens_combined = True
+            if liquidity_ok and volatility_ok and trend_checks.get("combined", True):
+                if self.config.trend_screen:
+                    screen_checks = self._evaluate_screen(row, self.config.trend_screen)
+                    passes.update(
+                        {f"trend_screen_{k}": v for k, v in screen_checks.items()}
+                    )
+                    screens_combined = screens_combined and screen_checks.get(
+                        "combined", True
+                    )
+                if screens_combined and self.config.confirm_screen:
+                    confirm_checks = self._evaluate_screen(
+                        row, self.config.confirm_screen
+                    )
+                    passes.update(
+                        {f"confirm_screen_{k}": v for k, v in confirm_checks.items()}
+                    )
+                    screens_combined = screens_combined and confirm_checks.get(
+                        "combined", True
+                    )
+                if screens_combined and self.config.execute_screen:
+                    execute_checks = self._evaluate_screen(
+                        row, self.config.execute_screen
+                    )
+                    passes.update(
+                        {f"execute_screen_{k}": v for k, v in execute_checks.items()}
+                    )
+                    screens_combined = screens_combined and execute_checks.get(
+                        "combined", True
+                    )
+
             passes["all"] = (
-                liquidity_ok and volatility_ok and trend_checks.get("combined", True)
+                liquidity_ok
+                and volatility_ok
+                and trend_checks.get("combined", True)
+                and screens_combined
             )
             row["passes"] = passes
 
