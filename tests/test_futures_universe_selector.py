@@ -3,6 +3,7 @@ import pytest
 from tradingview_scraper.futures_universe_selector import (
     FuturesUniverseSelector,
     SelectorConfig,
+    _format_markdown_table,
     load_config,
 )
 
@@ -152,3 +153,31 @@ def test_daily_timeframe_defaults_change_and_perf_w():
     assert result["total_selected"] == 1
     passes = result["data"][0].get("passes", {})
     assert passes.get("trend_momentum") is True
+
+
+def test_format_markdown_table():
+    rows = [
+        {
+            "symbol": "COMEX:GC1!",
+            "name": "Gold",
+            "close": 4373.91234,
+            "volume": 205686,
+            "Recommend.All": 0.5575757,
+        },
+        {
+            "symbol": "COMEX:SI1!",
+            "name": "Silver",
+            "close": 66.901,
+            "volume": 145011,
+            "Recommend.All": 0.60303,
+        },
+    ]
+
+    table = _format_markdown_table(
+        rows, ["symbol", "name", "close", "volume", "Recommend.All"]
+    )
+
+    lines = table.splitlines()
+    assert lines[0].startswith("| symbol | name | close | volume | Recommend.All |")
+    assert "4373.91" in table
+    assert "145011" in table

@@ -143,6 +143,7 @@ Recent Notes from E2E Validation
 - Working CLI examples:
   - Dry-run to inspect payload: ``python -m tradingview_scraper.futures_universe_selector --config /tmp/futures_selector_live.yaml --dry-run --verbose``
   - Live run with exchange and trend filters (example returned gold/silver/platinum trending contracts): ``python -m tradingview_scraper.futures_universe_selector --config /tmp/futures_selector_live.yaml --verbose``
+- Output formats: stdout defaults to pretty JSON; pass ``--print-format table`` for a Markdown table of results (dry-run remains JSON to show payloads).
 - Trend timeframe support: ``trend.timeframe`` can be ``daily`` (uses ``change`` + ``Perf.W`` as default momentum fields), ``weekly`` (``Perf.W``), or ``monthly`` (``Perf.1M``/``Perf.3M``); adjust ``trend.momentum.horizons`` to override.
 - Trend direction support: ``trend.direction`` controls comparisons (``long`` uses >= thresholds; ``short`` uses <= for recommendation and inverted momentum comparisons; ADX remains a magnitude gate).
 

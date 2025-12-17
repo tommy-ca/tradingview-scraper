@@ -46,6 +46,20 @@ DEFAULT_COLUMNS = [
 
 DEFAULT_MOMENTUM = {"Perf.1M": 0.0, "Perf.3M": 0.0}
 
+TABLE_DISPLAY_COLUMNS = [
+    "symbol",
+    "name",
+    "close",
+    "volume",
+    "change",
+    "Recommend.All",
+    "ADX",
+    "Volatility.D",
+    "Perf.W",
+    "Perf.1M",
+    "Perf.3M",
+]
+
 
 class ExportConfig(BaseModel):
     enabled: bool = False
@@ -577,6 +591,51 @@ class FuturesUniverseSelector:
         }
 
 
+def _format_markdown_table(
+    rows: List[Mapping[str, Any]], columns: Optional[List[str]] = None
+) -> str:
+    if not rows:
+        return "No data"
+
+    configured_cols = columns or []
+    ordered_cols: List[str] = []
+    seen = set()
+
+    for col in ["symbol"] + [c for c in configured_cols if c != "symbol"]:
+        if col in seen:
+            continue
+        if any(col in row for row in rows):
+            ordered_cols.append(col)
+            seen.add(col)
+
+    if not ordered_cols:
+        for key in rows[0].keys():
+            if key not in seen:
+                ordered_cols.append(key)
+                seen.add(key)
+
+    header = "| " + " | ".join(ordered_cols) + " |"
+    separator = "| " + " | ".join("---" for _ in ordered_cols) + " |"
+    data_lines: List[str] = []
+
+    for row in rows:
+        cells = []
+        for col in ordered_cols:
+            value = row.get(col, "")
+            if isinstance(value, float):
+                cell = f"{value:.6g}"
+            elif isinstance(value, bool):
+                cell = "true" if value else "false"
+            elif value is None:
+                cell = ""
+            else:
+                cell = str(value)
+            cells.append(cell)
+        data_lines.append("| " + " | ".join(cells) + " |")
+
+    return "\n".join([header, separator, *data_lines])
+
+
 def load_config_from_env(env_var: str = "FUTURES_SELECTOR_CONFIG") -> SelectorConfig:
     """Load config from a JSON string stored in an environment variable."""
     payload = os.environ.get(env_var)
@@ -607,6 +666,12 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--verbose", action="store_true", help="Enable info-level logging"
     )
+    parser.add_argument(
+        "--print-format",
+        choices=["json", "table"],
+        default="json",
+        help="Format stdout as pretty JSON or markdown table",
+    )
     return parser.parse_args(argv)
 
 
@@ -635,7 +700,21 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     selector = FuturesUniverseSelector(cfg)
     result = selector.run(dry_run=args.dry_run)
-    sys.stdout.write(json.dumps(result, indent=2, sort_keys=True, default=str))
+
+    if args.print_format == "table" and result.get("status") != "dry_run":
+        columns = result.get("filters_applied", {}).get("columns")
+        table = _format_markdown_table(result.get("data") or [], columns)
+        summary = [
+            f"status: {result.get('status')}",
+            f"total_candidates: {result.get('total_candidates')}",
+            f"total_selected: {result.get('total_selected')}",
+        ]
+        if result.get("errors"):
+            summary.append(f"errors: {result.get('errors')}")
+        sys.stdout.write("\n".join(summary + [table]))
+    else:
+        sys.stdout.write(json.dumps(result, indent=2, sort_keys=True, default=str))
+
     sys.stdout.write("\n")
     return 0 if result.get("status") in {"success", "dry_run"} else 1
 
