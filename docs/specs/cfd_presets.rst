@@ -4,7 +4,7 @@ CFD Screening Notes
 - Screener field limits: ``market='cfd'`` returns only ``name, close, change, change_abs, volume, Recommend.All``; requesting ``market_cap_calc`` errors. Rich indicators (Perf.W/1M/3M/6M, ADX, Volatility.D/W/M, ATR, RSI, Stoch.K, Value.Traded) require per-symbol Overview calls.
 - Exchange filtering is required to avoid crypto-cap aggregates; OANDA symbols work (e.g., XAUUSD, US30USD, DE30EUR, AU200AUD, commodities).
 - Base universe suggestion: filter ``exchange == OANDA``, sort by volume desc, limit 50–100.
-- Multi-exchange screener option (very sparse outside OANDA): ``configs/cfd_trend_multi.yaml`` (OANDA, SAXO, PEPPERSTONE, BLACKBULL, FXOPEN), Rec >= 0.1, change >= 0, volume >= 1,000, sort by volume.
+- Multi-exchange screener option now OANDA-only (other CFD venues return negligible rows): ``configs/cfd_trend_multi.yaml`` with Rec >= 0.1, change >= 0, volume >= 1,000, sort by volume.
 - Trend-following (OANDA screener-only prototype): see ``configs/cfd_trend_momentum.yaml``
   - Columns: ``name, close, volume, change, change_abs, Recommend.All``
   - Filters: Rec >= 0.2, change >= 0, volume >= 5,000 (adjust per broker), sort by volume desc.

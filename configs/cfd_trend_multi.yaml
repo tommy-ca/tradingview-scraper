@@ -1,8 +1,8 @@
-# Base universe: CFDs across multiple brokers (limited screener fields)
-# Exchanges: OANDA, SAXO, PEPPERSTONE, BLACKBULL, FXOPEN (others mostly empty)
+# Base universe: CFDs across brokers (limited screener fields); non-OANDA venues are sparse
+# Exchanges: OANDA only (others return negligible rows)
 # Screener-only fields used; no Perf/ADX/Vol fields available without Overview enrichment
 markets: ["cfd"]
-exchanges: ["OANDA", "SAXO", "PEPPERSTONE", "BLACKBULL", "FXOPEN"]
+exchanges: ["OANDA"]
 columns: ["name", "close", "volume", "change", "change_abs", "Recommend.All"]
 volume:
   min: 1000

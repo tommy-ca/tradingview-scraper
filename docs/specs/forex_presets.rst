@@ -3,7 +3,7 @@ Forex Trend Preset
 
 Overview
 --------
-- Base universe: FX, exchanges from discovery: FX_IDC, THINKMARKETS, OANDA, VANTAGE, FUSIONMARKETS (high prevalence in screener results).
+- Base universe: FX, exchanges from discovery (high prevalence): FX_IDC, THINKMARKETS, BLACKBULL, ICMARKETS, ACTIVTRADES, FUSIONMARKETS, OANDA, TRADENATIONSB, TRADENATION, FXOPEN, FX, SKILLING, FPMARKETS, VELOCITY, CAPITALCOM, VANTAGE, PEPPERSTONE.
 - Columns (overview-enriched): ``name, close, volume, change, Recommend.All, ADX, Volatility.D, Perf.W, Perf.1M, Perf.3M, ATR``.
 - Volatility gate: ``Volatility.D <= 6%`` or ``ATR/close <= 6%`` fallback.
 - Liquidity: volume >= 1,000,000,000 (tick-volume proxy; adjust as needed).
