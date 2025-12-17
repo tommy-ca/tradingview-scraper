@@ -130,6 +130,8 @@ class SelectorConfig(BaseModel):
     exchanges: List[str] = Field(default_factory=list)
     include_symbols: List[str] = Field(default_factory=list)
     exclude_symbols: List[str] = Field(default_factory=list)
+    include_perps_only: bool = False
+    exclude_perps: bool = False
     columns: List[str] = Field(default_factory=lambda: DEFAULT_COLUMNS.copy())
     volume: VolumeConfig = Field(default_factory=VolumeConfig)
     volatility: VolatilityConfig = Field(default_factory=VolatilityConfig)
@@ -425,6 +427,12 @@ class FuturesUniverseSelector:
         for row in rows:
             symbol = row.get("symbol", "").upper()
             exchange = self._extract_exchange(symbol)
+
+            is_perp = symbol.endswith(".P")
+            if self.config.include_perps_only and not is_perp:
+                continue
+            if self.config.exclude_perps and is_perp:
+                continue
 
             if include_set and symbol not in include_set:
                 continue
