@@ -124,12 +124,20 @@ Configuration Examples
    pagination_size: 50
    retries: 2
    timeout: 10
-   export:
-     enabled: true
-     type: json
+    export:
+      enabled: true
+      type: json
+
+Preset Configurations
+---------------------
+- ``configs/futures_trend_momentum.yaml``: broad commodities, volume >= 5k, ADX >= 20, Rec >= 0.2, momentum across daily/W/1M with 3M confirmation; limit 100 sorted by volume.
+- ``configs/futures_metals_trend_momentum.yaml``: COMEX/NYMEX metals, volume >= 1k, volatility guard (Vol.D <= 8% or ATR/close <= 10%), ADX >= 20, Perf.1M >= 1%, Perf.3M >= 3%.
+- ``configs/index_futures_trend_momentum.yaml``: major equity index futures across CME/CBOT/EUREX/ICEUS/HKEX/SGX, volume >= 10k, ADX >= 15, Perf.1M >= 1%, Perf.3M >= 2%.
+- ``configs/futures_bonds_trend_momentum.yaml``: CBOT/EUREX govies, volume >= 1k, volatility guard (Vol.D <= 5% or ATR/close <= 5%), ADX >= 12, Perf.1M >= 0.5%, Perf.3M >= 1%.
 
 Recent Notes from E2E Validation
 --------------------------------
+
 - Futures scanner returns many non-commodity venues by default; include explicit exchanges (e.g., COMEX, NYMEX, CME, ICEUS, CBOT) to avoid unrelated markets dominating results.
 - Include only supported futures fields (e.g., ``name``, ``close``, ``volume``, ``change``, ``Recommend.All``, ``ADX``, ``Volatility.D``, ``Perf.1M``, ``Perf.3M``, ``ATR``); unsupported fields (like ``market_cap_basic`` or ``symbol`` in columns) trigger HTTP 400.
 - Working CLI examples:
