@@ -1,0 +1,154 @@
+import pytest
+
+from tradingview_scraper.futures_universe_selector import (
+    FuturesUniverseSelector,
+    SelectorConfig,
+    load_config,
+)
+
+
+class DummyScreener:
+    def __init__(self, payload):
+        self.payload = payload
+        self.calls = []
+
+    def screen(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.payload
+
+
+def test_load_config_overrides():
+    cfg = load_config(None, overrides={"limit": 5, "volume": {"min": 123}})
+    assert isinstance(cfg, SelectorConfig)
+    assert cfg.limit == 5
+    assert cfg.volume.min == 123
+
+
+def test_dry_run_returns_payload():
+    selector = FuturesUniverseSelector(
+        config={"limit": 10, "pagination_size": 5},
+        screener=DummyScreener({"status": "success", "data": []}),
+    )
+
+    result = selector.run(dry_run=True)
+    assert result["status"] == "dry_run"
+    assert result["payloads"]
+    first_payload = result["payloads"][0]
+    assert first_payload["limit"] == 10
+    assert first_payload["pagination_size"] == 5
+
+
+def test_selector_filters_and_passes():
+    screener = DummyScreener(
+        {
+            "status": "success",
+            "data": [
+                {
+                    "symbol": "NYMEX:CL1!",
+                    "name": "WTI",
+                    "close": 80.0,
+                    "volume": 5000,
+                    "change": 1.2,
+                    "Recommend.All": 0.4,
+                    "ADX": 25,
+                    "Volatility.D": 5.0,
+                    "Perf.1M": 0.02,
+                    "Perf.3M": 0.10,
+                },
+                {
+                    "symbol": "CME:ES1!",
+                    "name": "ES",
+                    "close": 5000.0,
+                    "volume": 500,
+                    "change": 0.5,
+                    "Recommend.All": 0.5,
+                    "ADX": 30,
+                    "Volatility.D": 3.0,
+                    "Perf.1M": 0.01,
+                    "Perf.3M": 0.02,
+                },
+                {
+                    "symbol": "ICEUS:SB1!",
+                    "name": "Sugar",
+                    "close": 20.0,
+                    "volume": 4000,
+                    "change": 0.3,
+                    "Recommend.All": 0.35,
+                    "ADX": 22,
+                    "ATR": 1.0,
+                    "Perf.1M": 0.03,
+                    "Perf.3M": 0.04,
+                },
+            ],
+            "total": 3,
+        }
+    )
+
+    selector = FuturesUniverseSelector(
+        config={
+            "limit": 10,
+            "volume": {"min": 1000},
+            "volatility": {"max": 6.0, "atr_pct_max": 0.1},
+            "trend": {
+                "logic": "AND",
+                "recommendation": {"min": 0.3},
+                "adx": {"min": 20},
+                "momentum": {"horizons": {"Perf.1M": 0, "Perf.3M": 0}},
+            },
+        },
+        screener=screener,
+    )
+
+    result = selector.run()
+    assert result["status"] == "success"
+    assert result["total_candidates"] == 3
+    assert result["total_selected"] == 2
+
+    symbols = {row["symbol"] for row in result["data"]}
+    assert "NYMEX:CL1!" in symbols
+    assert "ICEUS:SB1!" in symbols
+    assert "CME:ES1!" not in symbols  # filtered by liquidity
+
+    for row in result["data"]:
+        assert row.get("passes", {}).get("all") is True
+        if row["symbol"] == "ICEUS:SB1!":
+            # ATR fallback used to compute atr_pct
+            assert pytest.approx(row.get("atr_pct"), rel=1e-3) == 0.05
+
+
+def test_daily_timeframe_defaults_change_and_perf_w():
+    screener = DummyScreener(
+        {
+            "status": "success",
+            "data": [
+                {
+                    "symbol": "TEST:FX1!",
+                    "name": "FX1!",
+                    "close": 100.0,
+                    "volume": 20000,
+                    "change": 1.0,
+                    "Perf.W": 1.5,
+                    "Recommend.All": 0.5,
+                    "ADX": 30.0,
+                }
+            ],
+        }
+    )
+
+    selector = FuturesUniverseSelector(
+        config={
+            "limit": 5,
+            "trend": {
+                "timeframe": "daily",
+                "recommendation": {"min": 0.3},
+                "adx": {"min": 20},
+            },
+        },
+        screener=screener,
+    )
+
+    result = selector.run()
+    assert result["status"] == "success"
+    assert result["total_selected"] == 1
+    passes = result["data"][0].get("passes", {})
+    assert passes.get("trend_momentum") is True
