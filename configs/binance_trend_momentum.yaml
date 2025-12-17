@@ -23,6 +23,9 @@ trend:
   momentum:
     enabled: true
     horizons: {change: -0.2, Perf.W: -0.5, Perf.1M: 0.0, Perf.3M: 0.5}
+  confirmation_momentum:
+    enabled: true
+    horizons: {Perf.1M: 0.5, Perf.3M: 1.0}
 sort_by: market_cap_calc
 sort_order: desc
 final_sort_by: volume

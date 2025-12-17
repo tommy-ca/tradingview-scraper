@@ -94,6 +94,9 @@ class TrendConfig(BaseModel):
     momentum: TrendRuleConfig = Field(
         default_factory=lambda: TrendRuleConfig(horizons=DEFAULT_MOMENTUM)
     )
+    confirmation_momentum: TrendRuleConfig = Field(
+        default_factory=lambda: TrendRuleConfig(enabled=False, horizons={})
+    )
 
     @field_validator("logic")
     @classmethod
@@ -404,6 +407,25 @@ class FuturesUniverseSelector:
                         momentum_pass = False
                         break
             checks["momentum"] = momentum_pass
+
+        if trend_cfg.confirmation_momentum.enabled:
+            conf_pass = True
+            for field, threshold in (
+                trend_cfg.confirmation_momentum.horizons or {}
+            ).items():
+                value = row.get(field)
+                if value is None:
+                    conf_pass = False
+                    break
+                if is_long:
+                    if value <= threshold:
+                        conf_pass = False
+                        break
+                else:
+                    if value >= threshold:
+                        conf_pass = False
+                        break
+            checks["confirmation_momentum"] = conf_pass
 
         enabled_checks = {k: v for k, v in checks.items() if v is not None}
         if not enabled_checks:
