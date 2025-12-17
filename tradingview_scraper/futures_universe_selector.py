@@ -495,6 +495,7 @@ class FuturesUniverseSelector:
         aggregated: List[Dict[str, Any]] = []
         errors: List[str] = []
 
+        filters: List[Dict[str, Any]] = []
         for market in self.config.markets:
             filters = self._build_filters(market)
             if self.config.exchanges:
