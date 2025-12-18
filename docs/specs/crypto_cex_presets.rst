@@ -35,6 +35,14 @@ Presets (config paths under configs/)
 - TS Mean Reversion (short, perps) – ``crypto_cex_ts_mean_reversion_short.yaml``
   - Direction short, Rec <= 0, ADX max 25, change <= -0.3%, Perf.W <= -1%, Perf.1M <= -6%, volume >= 30M, timeframe daily; base sort market cap then volume.
 
+Base universes (spot only)
+--------------------------
+- ``crypto_cex_base_top50.yaml`` – volume >= 150M, Value.Traded >= 75M, Vol.D <= 5% or ATR/close <= 8%, stables excluded, limit 50.
+- ``crypto_cex_base_top50_binance.yaml`` – Binance-only base; volume >= 200M, Value.Traded >= 100M.
+- ``crypto_cex_base_top50_okx.yaml`` – OKX-only base; volume >= 150M, Value.Traded >= 75M.
+- ``crypto_cex_base_top50_bybit.yaml`` – Bybit-only base; volume >= 120M, Value.Traded >= 60M.
+- ``crypto_cex_base_top50_bitget.yaml`` – Bitget-only base; volume >= 80M, Value.Traded >= 40M.
+
 Usage
 -----
 Run any preset via CLI (example):
