@@ -1,0 +1,1502 @@
+[
+  {
+    "symbol": "WHITEBIT:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1755773267358.24
+  },
+  {
+    "symbol": "BINANCEUS:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1745684819285.6802
+  },
+  {
+    "symbol": "BITFINEX:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1745664456328
+  },
+  {
+    "symbol": "BTSE:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1744057379766
+  },
+  {
+    "symbol": "BINANCE:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1743893477920.3599
+  },
+  {
+    "symbol": "CRYPTOCOM:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1743747942664
+  },
+  {
+    "symbol": "GEMINI:BTCRLUSD",
+    "base": "BTCRLUSD",
+    "market_cap": 1743661499912.28
+  },
+  {
+    "symbol": "GEMINI:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1743661499912.28
+  },
+  {
+    "symbol": "OKX:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1743630156928.4001
+  },
+  {
+    "symbol": "BITSTAMP:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1743348668984
+  },
+  {
+    "symbol": "COINBASE:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1743308342342.3198
+  },
+  {
+    "symbol": "KRAKEN:BTCUSD",
+    "base": "BTCUSD",
+    "market_cap": 1743069177408
+  },
+  {
+    "symbol": "WHITEBIT:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 347470213497.34503
+  },
+  {
+    "symbol": "BITFINEX:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345574094113.9523
+  },
+  {
+    "symbol": "BTSE:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345261301517.3177
+  },
+  {
+    "symbol": "BINANCE:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345179421269.66876
+  },
+  {
+    "symbol": "OKX:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345167351763.72736
+  },
+  {
+    "symbol": "POLONIEX:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345144575399.06537
+  },
+  {
+    "symbol": "BITSTAMP:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345139591900.06213
+  },
+  {
+    "symbol": "CRYPTOCOM:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345097348629.2673
+  },
+  {
+    "symbol": "COINBASE:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345076830469.16693
+  },
+  {
+    "symbol": "KRAKEN:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345046656704.3134
+  },
+  {
+    "symbol": "GEMINI:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345030966346.5896
+  },
+  {
+    "symbol": "GEMINI:ETHRLUSD",
+    "base": "ETHRLUSD",
+    "market_cap": 345030966346.5896
+  },
+  {
+    "symbol": "BINANCEUS:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 345000792581.73615
+  },
+  {
+    "symbol": "BITFLYER:ETHUSD",
+    "base": "ETHUSD",
+    "market_cap": 343312016447.86115
+  },
+  {
+    "symbol": "WHITEBIT:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 187437811288.44955
+  },
+  {
+    "symbol": "BITFINEX:USTUSD",
+    "base": "USTUSD",
+    "market_cap": 186487579839.57172
+  },
+  {
+    "symbol": "BINANCEUS:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186338523926.02228
+  },
+  {
+    "symbol": "BINANCE:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186282627958.44122
+  },
+  {
+    "symbol": "CRYPTOCOM:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186273311963.8444
+  },
+  {
+    "symbol": "OKX:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186263995969.24753
+  },
+  {
+    "symbol": "BITGET:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186245363980.05386
+  },
+  {
+    "symbol": "BITSTAMP:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186230458388.6989
+  },
+  {
+    "symbol": "KRAKEN:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186223005593.02142
+  },
+  {
+    "symbol": "GEMINI:USDTRLUSD",
+    "base": "USDTRLUSD",
+    "market_cap": 186215552797.34396
+  },
+  {
+    "symbol": "GEMINI:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186215552797.34396
+  },
+  {
+    "symbol": "COINBASE:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186211826399.50522
+  },
+  {
+    "symbol": "POLONIEX:USDTUSD",
+    "base": "USDTUSD",
+    "market_cap": 186198743016.69342
+  },
+  {
+    "symbol": "OKX:BNBUSD",
+    "base": "BNBUSD",
+    "market_cap": 116124646260.12901
+  },
+  {
+    "symbol": "BTSE:BNBUSD",
+    "base": "BNBUSD",
+    "market_cap": 115833973855.07837
+  },
+  {
+    "symbol": "BINANCE:BNBUSD",
+    "base": "BNBUSD",
+    "market_cap": 115821628561.431
+  },
+  {
+    "symbol": "KRAKEN:BNBUSD",
+    "base": "BNBUSD",
+    "market_cap": 115796836204.2648
+  },
+  {
+    "symbol": "BINANCEUS:BNBUSD",
+    "base": "BNBUSD",
+    "market_cap": 115788572085.2094
+  },
+  {
+    "symbol": "COINBASE:BNBUSD",
+    "base": "BNBUSD",
+    "market_cap": 115781685319.32991
+  },
+  {
+    "symbol": "WHITEBIT:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 114237066858.03009
+  },
+  {
+    "symbol": "BITFINEX:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113667850492.1469
+  },
+  {
+    "symbol": "POLONIEX:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113588426359.47903
+  },
+  {
+    "symbol": "BINANCE:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113583163678.94429
+  },
+  {
+    "symbol": "BTSE:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113577114620.8584
+  },
+  {
+    "symbol": "OKX:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113558967446.6007
+  },
+  {
+    "symbol": "KRAKEN:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113553523294.3234
+  },
+  {
+    "symbol": "BITSTAMP:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113540820272.343
+  },
+  {
+    "symbol": "COINBASE:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113534771214.2571
+  },
+  {
+    "symbol": "CRYPTOCOM:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113534771214.2571
+  },
+  {
+    "symbol": "BINANCEUS:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113522673098.0853
+  },
+  {
+    "symbol": "GEMINI:XRPUSD",
+    "base": "XRPUSD",
+    "market_cap": 113480329691.484
+  },
+  {
+    "symbol": "GEMINI:XRPRLUSD",
+    "base": "XRPRLUSD",
+    "market_cap": 112512480397.74
+  },
+  {
+    "symbol": "BITFINEX:UDCUSD",
+    "base": "UDCUSD",
+    "market_cap": 78071642403.54474
+  },
+  {
+    "symbol": "BINANCE:USDCUSD",
+    "base": "USDCUSD",
+    "market_cap": 77985866527.95154
+  },
+  {
+    "symbol": "GEMINI:USDCUSD",
+    "base": "USDCUSD",
+    "market_cap": 77973390036.95618
+  },
+  {
+    "symbol": "BITGET:USDCUSD",
+    "base": "USDCUSD",
+    "market_cap": 77962473107.33522
+  },
+  {
+    "symbol": "BITSTAMP:USDCUSD",
+    "base": "USDCUSD",
+    "market_cap": 77961693326.64801
+  },
+  {
+    "symbol": "KRAKEN:USDCUSD",
+    "base": "USDCUSD",
+    "market_cap": 77954675300.46312
+  },
+  {
+    "symbol": "BINANCEUS:USDCUSD",
+    "base": "USDCUSD",
+    "market_cap": 77954675300.46312
+  },
+  {
+    "symbol": "WHITEBIT:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 70047929507.97522
+  },
+  {
+    "symbol": "BITFINEX:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69783767373.10602
+  },
+  {
+    "symbol": "OKX:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69727562663.55939
+  },
+  {
+    "symbol": "BTSE:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69705080779.74072
+  },
+  {
+    "symbol": "BINANCE:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69699460308.78607
+  },
+  {
+    "symbol": "CRYPTOCOM:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69699460308.78607
+  },
+  {
+    "symbol": "BINANCEUS:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69693839837.8314
+  },
+  {
+    "symbol": "COINBASE:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69688219366.87674
+  },
+  {
+    "symbol": "KRAKEN:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69682598895.92207
+  },
+  {
+    "symbol": "BITSTAMP:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69679788660.44473
+  },
+  {
+    "symbol": "GEMINI:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 69674168189.49008
+  },
+  {
+    "symbol": "GEMINI:SOLRLUSD",
+    "base": "SOLRLUSD",
+    "market_cap": 69661241106.29434
+  },
+  {
+    "symbol": "POLONIEX:SOLUSD",
+    "base": "SOLUSD",
+    "market_cap": 68979497651.14197
+  },
+  {
+    "symbol": "OKX:STETHUSD",
+    "base": "STETHUSD",
+    "market_cap": 27218359036.19685
+  },
+  {
+    "symbol": "POLONIEX:TRXUSD",
+    "base": "TRXUSD",
+    "market_cap": 26690189208.818783
+  },
+  {
+    "symbol": "BITFINEX:TRXUSD",
+    "base": "TRXUSD",
+    "market_cap": 26322173410.687492
+  },
+  {
+    "symbol": "BTSE:TRXUSD",
+    "base": "TRXUSD",
+    "market_cap": 26272937690.638725
+  },
+  {
+    "symbol": "OKX:TRXUSD",
+    "base": "TRXUSD",
+    "market_cap": 26259681919.85636
+  },
+  {
+    "symbol": "KRAKEN:TRXUSD",
+    "base": "TRXUSD",
+    "market_cap": 26256367977.160774
+  },
+  {
+    "symbol": "BINANCE:TRXUSD",
+    "base": "TRXUSD",
+    "market_cap": 26223214347.593315
+  },
+  {
+    "symbol": "BINANCE:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19272455536.177086
+  },
+  {
+    "symbol": "BITFINEX:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19245053940.62802
+  },
+  {
+    "symbol": "POLONIEX:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19230890055.888706
+  },
+  {
+    "symbol": "BTSE:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19220696966.80663
+  },
+  {
+    "symbol": "OKX:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19219174655.94279
+  },
+  {
+    "symbol": "KRAKEN:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19215155755.262257
+  },
+  {
+    "symbol": "CRYPTOCOM:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19215064416.610428
+  },
+  {
+    "symbol": "WHITEBIT:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19213389874.660206
+  },
+  {
+    "symbol": "COINBASE:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19211563101.623604
+  },
+  {
+    "symbol": "BITSTAMP:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19210040790.759766
+  },
+  {
+    "symbol": "GEMINI:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19205473858.168255
+  },
+  {
+    "symbol": "GEMINI:DOGERLUSD",
+    "base": "DOGERLUSD",
+    "market_cap": 19205473858.168255
+  },
+  {
+    "symbol": "BINANCEUS:DOGEUSD",
+    "base": "DOGEUSD",
+    "market_cap": 19153715288.797794
+  },
+  {
+    "symbol": "WHITEBIT:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13148962577.289717
+  },
+  {
+    "symbol": "BITFINEX:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13128092405.490143
+  },
+  {
+    "symbol": "OKX:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13111209478.216822
+  },
+  {
+    "symbol": "BITSTAMP:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13109054210.905334
+  },
+  {
+    "symbol": "BTSE:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13107617366.03101
+  },
+  {
+    "symbol": "CRYPTOCOM:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13107258154.812428
+  },
+  {
+    "symbol": "COINBASE:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13104025253.845198
+  },
+  {
+    "symbol": "KRAKEN:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13100217614.928236
+  },
+  {
+    "symbol": "BINANCE:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13075288356.358694
+  },
+  {
+    "symbol": "BINANCEUS:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13024998785.757315
+  },
+  {
+    "symbol": "POLONIEX:ADAUSD",
+    "base": "ADAUSD",
+    "market_cap": 13008795845.320768
+  },
+  {
+    "symbol": "BINANCEUS:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 11144358807.8125
+  },
+  {
+    "symbol": "BITFLYER:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 11003552300.372032
+  },
+  {
+    "symbol": "BINANCE:WBTCUSD",
+    "base": "WBTCUSD",
+    "market_cap": 10925287165.765482
+  },
+  {
+    "symbol": "KRAKEN:WBTCUSD",
+    "base": "WBTCUSD",
+    "market_cap": 10897738479.49005
+  },
+  {
+    "symbol": "CRYPTOCOM:WBTCUSD",
+    "base": "WBTCUSD",
+    "market_cap": 10819277820.502157
+  },
+  {
+    "symbol": "KRAKEN:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 10806094270.625
+  },
+  {
+    "symbol": "OKX:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 10804896167.1875
+  },
+  {
+    "symbol": "BINANCE:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 10802409243.91389
+  },
+  {
+    "symbol": "COINBASE:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 10801301856.875
+  },
+  {
+    "symbol": "CRYPTOCOM:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 10798506282.1875
+  },
+  {
+    "symbol": "GEMINI:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 10791517345.468748
+  },
+  {
+    "symbol": "GEMINI:BCHRLUSD",
+    "base": "BCHRLUSD",
+    "market_cap": 10791517345.468748
+  },
+  {
+    "symbol": "BITSTAMP:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 10785327144.375
+  },
+  {
+    "symbol": "POLONIEX:BCHUSD",
+    "base": "BCHUSD",
+    "market_cap": 10624421413.414156
+  },
+  {
+    "symbol": "COINBASE:USDSUSD",
+    "base": "USDSUSD",
+    "market_cap": 9917024084.083775
+  },
+  {
+    "symbol": "KRAKEN:USDSUSD",
+    "base": "USDSUSD",
+    "market_cap": 9808820317.800978
+  },
+  {
+    "symbol": "GEMINI:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8562822751.92434
+  },
+  {
+    "symbol": "GEMINI:LINKRLUSD",
+    "base": "LINKRLUSD",
+    "market_cap": 8562822751.92434
+  },
+  {
+    "symbol": "BINANCE:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8558627436.3622265
+  },
+  {
+    "symbol": "BTSE:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8555923937.216859
+  },
+  {
+    "symbol": "OKX:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8554530237.275953
+  },
+  {
+    "symbol": "CRYPTOCOM:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8553136537.335048
+  },
+  {
+    "symbol": "COINBASE:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8552439687.364595
+  },
+  {
+    "symbol": "KRAKEN:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8551101735.421327
+  },
+  {
+    "symbol": "BITSTAMP:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8550349137.453238
+  },
+  {
+    "symbol": "BITFINEX:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8548258587.54188
+  },
+  {
+    "symbol": "BINANCEUS:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8459758641.294402
+  },
+  {
+    "symbol": "POLONIEX:LINKUSD",
+    "base": "LINKUSD",
+    "market_cap": 8437566269.340389
+  },
+  {
+    "symbol": "OKX:HYPEUSD",
+    "base": "HYPEUSD",
+    "market_cap": 8200641879.183
+  },
+  {
+    "symbol": "BITSTAMP:HYPEUSD",
+    "base": "HYPEUSD",
+    "market_cap": 8183807618.233
+  },
+  {
+    "symbol": "BITFINEX:HYPEUSD",
+    "base": "HYPEUSD",
+    "market_cap": 8144415447.610001
+  },
+  {
+    "symbol": "BITFINEX:XMRUSD",
+    "base": "XMRUSD",
+    "market_cap": 8061780562.533285
+  },
+  {
+    "symbol": "KRAKEN:XMRUSD",
+    "base": "XMRUSD",
+    "market_cap": 8044440623.103998
+  },
+  {
+    "symbol": "BINANCEUS:HYPEUSD",
+    "base": "HYPEUSD",
+    "market_cap": 8043409881.91
+  },
+  {
+    "symbol": "POLONIEX:XMRUSD",
+    "base": "XMRUSD",
+    "market_cap": 8030827903.655037
+  },
+  {
+    "symbol": "POLONIEX:XLMUSD",
+    "base": "XLMUSD",
+    "market_cap": 6915444904.46269
+  },
+  {
+    "symbol": "BITFINEX:XLMUSD",
+    "base": "XLMUSD",
+    "market_cap": 6874756261.384648
+  },
+  {
+    "symbol": "KRAKEN:XLMUSD",
+    "base": "XLMUSD",
+    "market_cap": 6853109855.120864
+  },
+  {
+    "symbol": "BITSTAMP:XLMUSD",
+    "base": "XLMUSD",
+    "market_cap": 6853077498.758736
+  },
+  {
+    "symbol": "COINBASE:XLMUSD",
+    "base": "XLMUSD",
+    "market_cap": 6852559796.9646845
+  },
+  {
+    "symbol": "CRYPTOCOM:XLMUSD",
+    "base": "XLMUSD",
+    "market_cap": 6852430371.516171
+  },
+  {
+    "symbol": "BINANCE:XLMUSD",
+    "base": "XLMUSD",
+    "market_cap": 6838945534.035611
+  },
+  {
+    "symbol": "OKX:XLMUSD",
+    "base": "XLMUSD",
+    "market_cap": 6824603900.085895
+  },
+  {
+    "symbol": "BINANCEUS:XLMUSD",
+    "base": "XLMUSD",
+    "market_cap": 6730123322.671469
+  },
+  {
+    "symbol": "BINANCE:ZECUSD",
+    "base": "ZECUSD",
+    "market_cap": 6618950978.8586855
+  },
+  {
+    "symbol": "OKX:ZECUSD",
+    "base": "ZECUSD",
+    "market_cap": 6615355319.811984
+  },
+  {
+    "symbol": "GEMINI:ZECRLUSD",
+    "base": "ZECRLUSD",
+    "market_cap": 6610422414.17482
+  },
+  {
+    "symbol": "GEMINI:ZECUSD",
+    "base": "ZECUSD",
+    "market_cap": 6610422414.17482
+  },
+  {
+    "symbol": "BITFINEX:ZECUSD",
+    "base": "ZECUSD",
+    "market_cap": 6608942542.483672
+  },
+  {
+    "symbol": "KRAKEN:ZECUSD",
+    "base": "ZECUSD",
+    "market_cap": 6606147229.289279
+  },
+  {
+    "symbol": "COINBASE:ZECUSD",
+    "base": "ZECUSD",
+    "market_cap": 6603680776.470697
+  },
+  {
+    "symbol": "POLONIEX:ZECUSD",
+    "base": "ZECUSD",
+    "market_cap": 6491830363.979699
+  },
+  {
+    "symbol": "KRAKEN:USDEUSD",
+    "base": "USDEUSD",
+    "market_cap": 6433779754.769993
+  },
+  {
+    "symbol": "OKX:LEOUSD",
+    "base": "LEOUSD",
+    "market_cap": 6170038743.1017
+  },
+  {
+    "symbol": "BITFINEX:LEOUSD",
+    "base": "LEOUSD",
+    "market_cap": 5868773441.85478
+  },
+  {
+    "symbol": "WHITEBIT:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5867490604.854567
+  },
+  {
+    "symbol": "BITFINEX:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5842889449.105372
+  },
+  {
+    "symbol": "BTSE:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5838367741.350848
+  },
+  {
+    "symbol": "BINANCE:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5836814266.500267
+  },
+  {
+    "symbol": "OKX:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5836068567.916344
+  },
+  {
+    "symbol": "COINBASE:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5836068567.916344
+  },
+  {
+    "symbol": "CRYPTOCOM:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5835762011.458409
+  },
+  {
+    "symbol": "KRAKEN:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5833003003.337005
+  },
+  {
+    "symbol": "BINANCEUS:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5832236612.192169
+  },
+  {
+    "symbol": "GEMINI:LTCRLUSD",
+    "base": "LTCRLUSD",
+    "market_cap": 5831470221.047336
+  },
+  {
+    "symbol": "GEMINI:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5831470221.047336
+  },
+  {
+    "symbol": "BITSTAMP:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5828404656.467996
+  },
+  {
+    "symbol": "POLONIEX:LTCUSD",
+    "base": "LTCUSD",
+    "market_cap": 5765121210.548216
+  },
+  {
+    "symbol": "COINBASE:DAIUSD",
+    "base": "DAIUSD",
+    "market_cap": 5365382702.664872
+  },
+  {
+    "symbol": "KRAKEN:DAIUSD",
+    "base": "DAIUSD",
+    "market_cap": 5364846164.394606
+  },
+  {
+    "symbol": "OKX:DAIUSD",
+    "base": "DAIUSD",
+    "market_cap": 5362163473.043273
+  },
+  {
+    "symbol": "CRYPTOCOM:DAIUSD",
+    "base": "DAIUSD",
+    "market_cap": 5358944243.421675
+  },
+  {
+    "symbol": "GEMINI:DAIUSD",
+    "base": "DAIUSD",
+    "market_cap": 5349823092.827144
+  },
+  {
+    "symbol": "GEMINI:DAIRLUSD",
+    "base": "DAIRLUSD",
+    "market_cap": 5349823092.827144
+  },
+  {
+    "symbol": "BITFINEX:SUIUSD",
+    "base": "SUIUSD",
+    "market_cap": 5269355255.154129
+  },
+  {
+    "symbol": "CRYPTOCOM:SUIUSD",
+    "base": "SUIUSD",
+    "market_cap": 5265992075.4295435
+  },
+  {
+    "symbol": "BINANCE:SUIUSD",
+    "base": "SUIUSD",
+    "market_cap": 5265938189.816623
+  },
+  {
+    "symbol": "COINBASE:SUIUSD",
+    "base": "SUIUSD",
+    "market_cap": 5265618388.793479
+  },
+  {
+    "symbol": "BITSTAMP:SUIUSD",
+    "base": "SUIUSD",
+    "market_cap": 5265244702.1574135
+  },
+  {
+    "symbol": "KRAKEN:SUIUSD",
+    "base": "SUIUSD",
+    "market_cap": 5264497328.885283
+  },
+  {
+    "symbol": "OKX:SUIUSD",
+    "base": "SUIUSD",
+    "market_cap": 5263376268.977088
+  },
+  {
+    "symbol": "BINANCEUS:SUIUSD",
+    "base": "SUIUSD",
+    "market_cap": 5224139172.190251
+  },
+  {
+    "symbol": "WHITEBIT:WBTUSD",
+    "base": "WBTUSD",
+    "market_cap": 5084219242.656
+  },
+  {
+    "symbol": "BITFINEX:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5068531857.989884
+  },
+  {
+    "symbol": "BTSE:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5062518855.192507
+  },
+  {
+    "symbol": "COINBASE:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5059512353.793817
+  },
+  {
+    "symbol": "CRYPTOCOM:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5058653353.394192
+  },
+  {
+    "symbol": "BINANCE:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5057516423.415267
+  },
+  {
+    "symbol": "GEMINI:AVAXRLUSD",
+    "base": "AVAXRLUSD",
+    "market_cap": 5057364852.794754
+  },
+  {
+    "symbol": "GEMINI:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5057364852.794754
+  },
+  {
+    "symbol": "BITSTAMP:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5057356262.790757
+  },
+  {
+    "symbol": "KRAKEN:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5055217351.79569
+  },
+  {
+    "symbol": "OKX:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5050063349.397937
+  },
+  {
+    "symbol": "BINANCEUS:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5025152337.8088
+  },
+  {
+    "symbol": "POLONIEX:AVAXUSD",
+    "base": "AVAXUSD",
+    "market_cap": 5020253458.529736
+  },
+  {
+    "symbol": "BITFINEX:WHBTUSD",
+    "base": "WHBTUSD",
+    "market_cap": 4963141658.484
+  },
+  {
+    "symbol": "BITSTAMP:DAIUSD",
+    "base": "DAIUSD",
+    "market_cap": 4949619197.035372
+  },
+  {
+    "symbol": "BINANCE:HBARUSD",
+    "base": "HBARUSD",
+    "market_cap": 4674403246.186299
+  },
+  {
+    "symbol": "CRYPTOCOM:HBARUSD",
+    "base": "HBARUSD",
+    "market_cap": 4657665418.1467495
+  },
+  {
+    "symbol": "BITSTAMP:HBARUSD",
+    "base": "HBARUSD",
+    "market_cap": 4657537988.926806
+  },
+  {
+    "symbol": "COINBASE:HBARUSD",
+    "base": "HBARUSD",
+    "market_cap": 4657113224.860329
+  },
+  {
+    "symbol": "KRAKEN:HBARUSD",
+    "base": "HBARUSD",
+    "market_cap": 4656263696.727373
+  },
+  {
+    "symbol": "OKX:HBARUSD",
+    "base": "HBARUSD",
+    "market_cap": 4654989404.527941
+  },
+  {
+    "symbol": "BINANCEUS:HBARUSD",
+    "base": "HBARUSD",
+    "market_cap": 4591699558.62278
+  },
+  {
+    "symbol": "WHITEBIT:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4448794537.08961
+  },
+  {
+    "symbol": "BITFINEX:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4437009650.898644
+  },
+  {
+    "symbol": "KRAKEN:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4437009650.898644
+  },
+  {
+    "symbol": "BITSTAMP:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4431117207.803162
+  },
+  {
+    "symbol": "OKX:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4431117207.803162
+  },
+  {
+    "symbol": "GEMINI:SHIBRLUSD",
+    "base": "SHIBRLUSD",
+    "market_cap": 4431117207.803162
+  },
+  {
+    "symbol": "BTSE:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4431117207.803162
+  },
+  {
+    "symbol": "CRYPTOCOM:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4431117207.803162
+  },
+  {
+    "symbol": "COINBASE:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4431117207.803162
+  },
+  {
+    "symbol": "GEMINI:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4429938719.184065
+  },
+  {
+    "symbol": "BINANCEUS:SHIBUSD",
+    "base": "SHIBUSD",
+    "market_cap": 4389870106.134781
+  },
+  {
+    "symbol": "COINBASE:MANTLEUSD",
+    "base": "MANTLEUSD",
+    "market_cap": 3954929382.8432713
+  },
+  {
+    "symbol": "KRAKEN:MNTUSD",
+    "base": "MNTUSD",
+    "market_cap": 3952977616.409889
+  },
+  {
+    "symbol": "BITFINEX:MNTUSD",
+    "base": "MNTUSD",
+    "market_cap": 3887918735.297152
+  },
+  {
+    "symbol": "CRYPTOCOM:PYUSDUSD",
+    "base": "PYUSDUSD",
+    "market_cap": 3865902846.5089884
+  },
+  {
+    "symbol": "KRAKEN:PYUSDUSD",
+    "base": "PYUSDUSD",
+    "market_cap": 3865245689.026106
+  },
+  {
+    "symbol": "BITSTAMP:PYUSDUSD",
+    "base": "PYUSDUSD",
+    "market_cap": 3788319607.206304
+  },
+  {
+    "symbol": "BITFINEX:TONUSD",
+    "base": "TONUSD",
+    "market_cap": 3656879199.418871
+  },
+  {
+    "symbol": "BITSTAMP:TONUSD",
+    "base": "TONUSD",
+    "market_cap": 3653472092.9860053
+  },
+  {
+    "symbol": "BINANCE:TONUSD",
+    "base": "TONUSD",
+    "market_cap": 3649337973.770415
+  },
+  {
+    "symbol": "CRYPTOCOM:TONUSD",
+    "base": "TONUSD",
+    "market_cap": 3648790385.5854487
+  },
+  {
+    "symbol": "COINBASE:TONUSD",
+    "base": "TONUSD",
+    "market_cap": 3647319692.1611905
+  },
+  {
+    "symbol": "OKX:TONUSD",
+    "base": "TONUSD",
+    "market_cap": 3644868536.454093
+  },
+  {
+    "symbol": "KRAKEN:TONUSD",
+    "base": "TONUSD",
+    "market_cap": 3635063913.625703
+  },
+  {
+    "symbol": "GEMINI:TONRLUSD",
+    "base": "TONRLUSD",
+    "market_cap": 3627465330.9337
+  },
+  {
+    "symbol": "GEMINI:TONUSD",
+    "base": "TONUSD",
+    "market_cap": 3627465330.9337
+  },
+  {
+    "symbol": "CRYPTOCOM:CROUSD",
+    "base": "CROUSD",
+    "market_cap": 3521682585.6514783
+  },
+  {
+    "symbol": "OKX:CROUSD",
+    "base": "CROUSD",
+    "market_cap": 3520911723.752463
+  },
+  {
+    "symbol": "COINBASE:CROUSD",
+    "base": "CROUSD",
+    "market_cap": 3519369999.9544325
+  },
+  {
+    "symbol": "KRAKEN:CROUSD",
+    "base": "CROUSD",
+    "market_cap": 3517828276.1564016
+  },
+  {
+    "symbol": "BITSTAMP:WLFIUSD",
+    "base": "WLFIUSD",
+    "market_cap": 3456228623.23456
+  },
+  {
+    "symbol": "OKX:WLFIUSD",
+    "base": "WLFIUSD",
+    "market_cap": 3440722647.0474005
+  },
+  {
+    "symbol": "GEMINI:WLFIRLUSD",
+    "base": "WLFIRLUSD",
+    "market_cap": 3434520256.572536
+  },
+  {
+    "symbol": "GEMINI:WLFIUSD",
+    "base": "WLFIUSD",
+    "market_cap": 3434520256.572536
+  },
+  {
+    "symbol": "KRAKEN:WLFIUSD",
+    "base": "WLFIUSD",
+    "market_cap": 3430028870.3666
+  },
+  {
+    "symbol": "CRYPTOCOM:WLFIUSD",
+    "base": "WLFIUSD",
+    "market_cap": 3427890115.03044
+  },
+  {
+    "symbol": "COINBASE:WLFIUSD",
+    "base": "WLFIUSD",
+    "market_cap": 3427355426.1964
+  },
+  {
+    "symbol": "GEMINI:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3358338018.585576
+  },
+  {
+    "symbol": "GEMINI:UNIRLUSD",
+    "base": "UNIRLUSD",
+    "market_cap": 3358338018.585576
+  },
+  {
+    "symbol": "BITFINEX:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3336402516.2212715
+  },
+  {
+    "symbol": "BTSE:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3334448491.585371
+  },
+  {
+    "symbol": "COINBASE:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3330666508.4191117
+  },
+  {
+    "symbol": "BITSTAMP:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3328901582.941524
+  },
+  {
+    "symbol": "KRAKEN:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3328775516.835982
+  },
+  {
+    "symbol": "OKX:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3327514855.780562
+  },
+  {
+    "symbol": "CRYPTOCOM:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3325308698.9335775
+  },
+  {
+    "symbol": "BINANCE:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3324992903.3391953
+  },
+  {
+    "symbol": "BINANCEUS:UNIUSD",
+    "base": "UNIUSD",
+    "market_cap": 3151652638.5495
+  },
+  {
+    "symbol": "BINANCE:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2980075560.3844304
+  },
+  {
+    "symbol": "BITFINEX:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2977770529.5642433
+  },
+  {
+    "symbol": "GEMINI:DOTRLUSD",
+    "base": "DOTRLUSD",
+    "market_cap": 2975959433.9198112
+  },
+  {
+    "symbol": "GEMINI:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2975959433.9198112
+  },
+  {
+    "symbol": "BTSE:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2974981508.129841
+  },
+  {
+    "symbol": "BITSTAMP:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2973489758.0410395
+  },
+  {
+    "symbol": "CRYPTOCOM:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2972995822.8652854
+  },
+  {
+    "symbol": "KRAKEN:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2972501887.6895304
+  },
+  {
+    "symbol": "OKX:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2971843307.4551916
+  },
+  {
+    "symbol": "COINBASE:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2971843307.4551916
+  },
+  {
+    "symbol": "BINANCEUS:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2963611054.525953
+  },
+  {
+    "symbol": "POLONIEX:DOTUSD",
+    "base": "DOTUSD",
+    "market_cap": 2955701670.556599
+  },
+  {
+    "symbol": "POLONIEX:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2931579156.162483
+  },
+  {
+    "symbol": "BINANCEUS:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2770149794.151065
+  },
+  {
+    "symbol": "BITFINEX:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2753467676.606177
+  },
+  {
+    "symbol": "KRAKEN:CCUSD",
+    "base": "CCUSD",
+    "market_cap": 2749918551.9890223
+  },
+  {
+    "symbol": "BINANCE:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2745748937.341633
+  },
+  {
+    "symbol": "CRYPTOCOM:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2741376967.5598826
+  },
+  {
+    "symbol": "BTSE:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2741070873.659976
+  },
+  {
+    "symbol": "COINBASE:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2740764779.7600703
+  },
+  {
+    "symbol": "KRAKEN:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2740305638.9102106
+  },
+  {
+    "symbol": "OKX:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2738469075.5107737
+  },
+  {
+    "symbol": "BITSTAMP:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2730816728.0131187
+  },
+  {
+    "symbol": "GEMINI:AAVERLUSD",
+    "base": "AAVERLUSD",
+    "market_cap": 2728577651.135305
+  },
+  {
+    "symbol": "GEMINI:AAVEUSD",
+    "base": "AAVEUSD",
+    "market_cap": 2728577651.135305
+  },
+  {
+    "symbol": "GEMINI:USD1USD",
+    "base": "USD1USD",
+    "market_cap": 2716279092.483697
+  },
+  {
+    "symbol": "CRYPTOCOM:USD1USD",
+    "base": "USD1USD",
+    "market_cap": 2715980301.7835236
+  },
+  {
+    "symbol": "COINBASE:USD1USD",
+    "base": "USD1USD",
+    "market_cap": 2713834441.300462
+  },
+  {
+    "symbol": "KRAKEN:USD1USD",
+    "base": "USD1USD",
+    "market_cap": 2713562813.3912134
+  },
+  {
+    "symbol": "BITFINEX:BGBUSD",
+    "base": "BGBUSD",
+    "market_cap": 2453938743.0645967
+  },
+  {
+    "symbol": "BINANCE:TAOUSD",
+    "base": "TAOUSD",
+    "market_cap": 2432015747.8098702
+  },
+  {
+    "symbol": "KRAKEN:TAOUSD",
+    "base": "TAOUSD",
+    "market_cap": 2431158834.4707446
+  },
+  {
+    "symbol": "COINBASE:TAOUSD",
+    "base": "TAOUSD",
+    "market_cap": 2430697455.975772
+  },
+  {
+    "symbol": "CRYPTOCOM:TAOUSD",
+    "base": "TAOUSD",
+    "market_cap": 2428805699.0487757
+  },
+  {
+    "symbol": "KRAKEN:BITUSD",
+    "base": "BITUSD",
+    "market_cap": 2134232205.834768
+  },
+  {
+    "symbol": "BITFINEX:USDFUSD",
+    "base": "USDFUSD",
+    "market_cap": 2111631620.5915644
+  },
+  {
+    "symbol": "KRAKEN:MUSD",
+    "base": "MUSD",
+    "market_cap": 2057945060.3100088
+  },
+  {
+    "symbol": "BINANCEUS:ETCUSD",
+    "base": "ETCUSD",
+    "market_cap": 1909797052.970455
+  },
+  {
+    "symbol": "BITSTAMP:ETCUSD",
+    "base": "ETCUSD",
+    "market_cap": 1902662397.8536043
+  }
+]

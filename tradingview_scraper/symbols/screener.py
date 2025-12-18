@@ -318,8 +318,7 @@ class Screener:
                 return {
                     "status": "success",
                     "data": formatted_data,
-                    "total": len(formatted_data),
-                    "totalCount": json_response.get("totalCount", len(formatted_data)),
+                    "payload": payload,
                 }
             else:
                 return {
@@ -331,6 +330,18 @@ class Screener:
             return {"status": "failed", "error": f"Request failed: {str(e)}"}
         except Exception as e:
             return {"status": "failed", "error": f"Request failed: {str(e)}"}
+
+    def scrape(self, market: str = "crypto", **kwargs) -> Dict:
+        """Convenience wrapper to run a screener scan.
+
+        Args:
+            market (str): market name (e.g., "crypto", "america", "forex").
+            **kwargs: passed through to ``screen`` (filters, columns, sort_by, sort_order, limit, range_start).
+
+        Returns:
+            dict: same structure as ``screen``.
+        """
+        return self.screen(market=market, **kwargs)
 
     def _export(
         self,

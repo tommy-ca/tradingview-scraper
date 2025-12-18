@@ -35,7 +35,7 @@ dedupe_by_symbol: true
 exclude_stable_bases: true
 prefer_perps: true
 perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
-market_cap_file: null
+market_cap_file: market_caps_crypto.json
 market_cap_limit: 50
 limit: 50
 pagination_size: 50
