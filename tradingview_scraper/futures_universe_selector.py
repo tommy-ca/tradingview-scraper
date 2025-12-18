@@ -11,10 +11,33 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import csv
 import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
+
+STABLE_BASES = {
+    "USDT",
+    "USDC",
+    "BUSD",
+    "FDUSD",
+    "TUSD",
+    "DAI",
+    "PAX",
+    "USDP",
+    "EUR",
+    "GBP",
+    "BIDR",
+    "TRY",
+    "BRL",
+    "UST",
+    "USTC",
+    "CHF",
+    "JPY",
+    "AEUR",
+}
+
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -204,6 +227,11 @@ class SelectorConfig(BaseModel):
     retries: int = 2
     timeout: int = 10
     dedupe_by_symbol: bool = False
+    exclude_stable_bases: bool = False
+    prefer_perps: bool = False
+    perp_exchange_priority: List[str] = Field(default_factory=list)
+    market_cap_file: Optional[str] = None
+    market_cap_limit: Optional[int] = None
     export: ExportConfig = Field(default_factory=ExportConfig)
     export_metadata: ExportMetadata = Field(default_factory=ExportMetadata)
 
@@ -288,6 +316,7 @@ class FuturesUniverseSelector:
         )
         self.screener = screener or Screener(export_result=False)
         self.overview = overview or Overview(export_result=False)
+        self._market_cap_map: Optional[Dict[str, float]] = None
 
     def _build_columns(self) -> List[str]:
         columns: List[str] = []
@@ -375,6 +404,17 @@ class FuturesUniverseSelector:
         if not symbol or ":" not in symbol:
             return None
         return symbol.split(":", 1)[0]
+
+    @staticmethod
+    def _base_symbol(symbol: str) -> str:
+        if not symbol:
+            return ""
+        core = symbol.split(":", 1)[-1]
+        return core.replace(".P", "").upper()
+
+    @staticmethod
+    def _is_perp(symbol: str) -> bool:
+        return bool(symbol) and symbol.upper().endswith(".P")
 
     def _evaluate_liquidity(self, row: Dict[str, Any]) -> bool:
         volume_value = row.get("volume")
@@ -605,6 +645,10 @@ class FuturesUniverseSelector:
         for row in rows:
             symbol = row.get("symbol", "").upper()
             exchange = self._extract_exchange(symbol)
+            base_symbol = self._base_symbol(symbol)
+
+            if self.config.exclude_stable_bases and base_symbol in STABLE_BASES:
+                continue
 
             is_perp = symbol.endswith(".P")
             if self.config.include_perps_only and not is_perp:
@@ -671,38 +715,6 @@ class FuturesUniverseSelector:
             if passes["all"]:
                 filtered.append(row)
 
-        if self.config.dedupe_by_symbol:
-            best_by_symbol: Dict[str, Dict[str, Any]] = {}
-            sort_field = self.config.final_sort_by or self.config.sort_by or "volume"
-            descending = (self.config.final_sort_order or "desc").lower() == "desc"
-
-            for row in filtered:
-                symbol = row.get("symbol", "")
-                key = symbol.split(":", 1)[1] if ":" in symbol else symbol
-                current_best = best_by_symbol.get(key)
-                candidate_value = row.get(sort_field)
-                if current_best is None:
-                    best_by_symbol[key] = row
-                    continue
-                best_value = current_best.get(sort_field)
-                try:
-                    if candidate_value is None:
-                        continue
-                    if best_value is None:
-                        best_by_symbol[key] = row
-                        continue
-                    if descending:
-                        if candidate_value > best_value:
-                            best_by_symbol[key] = row
-                    else:
-                        if candidate_value < best_value:
-                            best_by_symbol[key] = row
-                except TypeError:
-                    # If values are not comparable, keep existing
-                    continue
-
-            filtered = list(best_by_symbol.values())
-
         return filtered
 
     def _apply_momentum_composite(
@@ -740,6 +752,140 @@ class FuturesUniverseSelector:
             row[composite_field] = sum(scores) / len(scores) if scores else None
 
         return rows
+
+    def _load_market_cap_map(self) -> Dict[str, float]:
+        if self._market_cap_map is not None:
+            return self._market_cap_map
+        path = self.config.market_cap_file
+        if not path:
+            self._market_cap_map = {}
+            return self._market_cap_map
+        path_obj = Path(path)
+        if not path_obj.exists():
+            logging.warning("Market cap file not found: %s", path)
+            self._market_cap_map = {}
+            return self._market_cap_map
+        caps: Dict[str, float] = {}
+        try:
+            if path_obj.suffix.lower() == ".json":
+                with path_obj.open("r", encoding="utf-8") as handle:
+                    payload = json.load(handle)
+                if isinstance(payload, dict):
+                    for key, val in payload.items():
+                        try:
+                            caps[str(key).upper()] = float(val)
+                        except (TypeError, ValueError):
+                            continue
+                elif isinstance(payload, list):
+                    for item in payload:
+                        if not isinstance(item, Mapping):
+                            continue
+                        sym = item.get("symbol") or item.get("base")
+                        cap_val = item.get("market_cap") or item.get("cap")
+                        if sym and isinstance(cap_val, (int, float)):
+                            caps[str(sym).upper().replace(".P", "")] = float(cap_val)
+            elif path_obj.suffix.lower() in {".csv", ".tsv"}:
+                with path_obj.open("r", encoding="utf-8") as handle:
+                    reader = csv.DictReader(handle)
+                    for row in reader:
+                        sym = row.get("symbol") or row.get("base")
+                        cap_val = row.get("market_cap") or row.get("cap")
+                        if sym and cap_val is not None:
+                            try:
+                                caps[str(sym).upper().replace(".P", "")] = float(
+                                    cap_val
+                                )
+                            except (TypeError, ValueError):
+                                continue
+        except Exception as exc:  # pragma: no cover - defensive
+            logging.warning("Failed to load market cap file %s: %s", path, exc)
+            caps = {}
+        self._market_cap_map = caps
+        return self._market_cap_map
+
+    def _apply_market_cap_filter(
+        self, rows: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        if not self.config.market_cap_file:
+            return rows
+        cap_map = self._load_market_cap_map()
+        if not cap_map:
+            return rows
+        annotated: List[Dict[str, Any]] = []
+        for row in rows:
+            base = self._base_symbol(row.get("symbol", ""))
+            cap_val = cap_map.get(base)
+            if cap_val is None:
+                continue
+            row["market_cap_external"] = cap_val
+            annotated.append(row)
+        if not annotated:
+            return rows
+        if self.config.market_cap_limit:
+            # select top bases by cap
+            tops = sorted(
+                ((b, v) for b, v in cap_map.items()), key=lambda x: x[1], reverse=True
+            )[: self.config.market_cap_limit]
+            allowed_bases = {b for b, _ in tops}
+            annotated = [
+                r
+                for r in annotated
+                if self._base_symbol(r.get("symbol", "")) in allowed_bases
+            ]
+        return annotated
+
+    def _dedupe_by_base(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        sort_field = self.config.final_sort_by or self.config.sort_by or "volume"
+        descending = (self.config.final_sort_order or "desc").lower() == "desc"
+        best_by_base: Dict[str, Dict[str, Any]] = {}
+        priority = [p.upper() for p in self.config.perp_exchange_priority]
+
+        def exchange_rank(symbol: str) -> int:
+            exchange = self._extract_exchange(symbol) or ""
+            if exchange.upper() in priority:
+                return priority.index(exchange.upper())
+            return len(priority)
+
+        for row in rows:
+            symbol = row.get("symbol", "")
+            base = self._base_symbol(symbol)
+            current = best_by_base.get(base)
+            if current is None:
+                best_by_base[base] = row
+                continue
+
+            candidate_value = row.get(sort_field)
+            best_value = current.get(sort_field)
+
+            if self.config.prefer_perps:
+                cand_perp = self._is_perp(symbol)
+                best_perp = self._is_perp(current.get("symbol", ""))
+                if cand_perp and not best_perp:
+                    best_by_base[base] = row
+                    continue
+                if best_perp and not cand_perp:
+                    continue
+                if cand_perp and best_perp and priority:
+                    if exchange_rank(symbol) < exchange_rank(current.get("symbol", "")):
+                        best_by_base[base] = row
+                        continue
+
+            try:
+                if candidate_value is None:
+                    continue
+                if best_value is None:
+                    best_by_base[base] = row
+                    continue
+                if descending:
+                    if candidate_value > best_value:
+                        best_by_base[base] = row
+                else:
+                    if candidate_value < best_value:
+                        best_by_base[base] = row
+            except TypeError:
+                continue
+
+        return list(best_by_base.values())
 
     def _export_results(self, data: List[Dict[str, Any]]) -> None:
         if not self.config.export.enabled:
@@ -802,8 +948,13 @@ class FuturesUniverseSelector:
 
         filtered = self._apply_post_filters(aggregated)
 
+        filtered = self._apply_market_cap_filter(filtered)
+
         if self.config.momentum_composite_fields:
             filtered = self._apply_momentum_composite(filtered)
+
+        if self.config.dedupe_by_symbol:
+            filtered = self._dedupe_by_base(filtered)
 
         final_sorted = filtered
         if self.config.final_sort_by:
