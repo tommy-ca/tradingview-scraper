@@ -300,6 +300,20 @@ print(article['title'])
 - Filtering knobs: `provider`, `area`, `section` (`all`/`esg`), `language` (see `data/languages.json`).
 - Caveats: no WebSocket/streaming; this is HTTP polling. Inputs require both `symbol` and `exchange`.
 
+#### CLI: poll headlines (and bodies)
+```bash
+python -m tradingview_scraper.symbols.news \
+  --exchange BINANCE \
+  --symbols BTCUSD,ETHUSD \
+  --provider cointelegraph \
+  --sort latest \
+  --max-headlines 10 \
+  --fetch-content \
+  --content-limit 2 \
+  --export json
+```
+- Returns JSON to stdout and (if `--export` is set) writes files to `export/`.
+
 #### Output (news headline):
 ```json
 [
