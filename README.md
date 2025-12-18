@@ -347,96 +347,72 @@ news_content = news_scraper.scrape_news_content(
 }
 ```
 
-### 6. Fetching Real-Time Trading Data
-- The `RealTimeData` class offers functionality to fetch real-time trading data from various exchanges. This section provides usage examples demonstrating how to retrieve the latest trade information and OHLCV (Open, High, Low, Close, Volume) data.
+### 6. Streaming and Historical Data (WebSocket)
+- Two paths: `RealTimeData` for simple real-time quotes/1m series; `Streamer` for bounded historical candles plus optional indicators (and an option to keep streaming).
+- Timeframes supported in the chart series: `1m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `1d`, `1w`, `1M`.
+- Exports go to the `export/` directory (JSON/CSV) with filenames like `ohlc_<symbol>_<timestamp>.json`.
 
-#### Retrieve OHLCV Data:
-- **Timestamp**
-- **Open**
-- **High**
-- **Low**
-- **Close**
-- **Volume**
-##### Example:
-#### Method 1: Simple OHLCV Retrieval
-This method is straightforward and streams only OHLC data.
-```python
-from tradingview_scraper.symbols.stream import RealTimeData
-# Create an instance of the RealTimeData class
-real_time_data = RealTimeData()
-
-# Retrieve OHLCV data for a specific symbol
-data_generator = real_time_data.get_ohlcv(exchange_symbol="BINANCE:BTCUSDT")
-```
-#### Method 2: Streaming OHLC and Indicators Simultaneously
-- Streams both OHLC data and indicators
-- Exports historical data in specific timeframe (price candles and indicator history).
-- Specifies the number of OHLCV historical candles to export.
-- Requires JWT token for indicator access.
+#### Quick start: historical export + optional indicators
 ```python
 from tradingview_scraper.symbols.stream import Streamer
-# Create an instance of the Streamer class
-streamer = Streamer(
-    export_result=False,
-    export_type='json',
-    websocket_jwt_token="Your-Tradingview-Websocket-JWT"
-    )
 
-data_generator = streamer.stream(
+streamer = Streamer(
+    export_result=True,            # return dict and write files
+    export_type="json",           # or "csv"
+    websocket_jwt_token="<TV JWT>"  # required for indicators
+)
+
+result = streamer.stream(
     exchange="BINANCE",
     symbol="BTCUSDT",
     timeframe="4h",
-    numb_price_candles=100,
-    indicator_id="STD;RSI",
-    indicator_version="31.0"
-    )
+    numb_price_candles=200,
+    indicators=[("STD;RSI", "31.0")],  # optional list of (id, version)
+)
+print(result["ohlc"][:2])
 ```
-#### Important Notes
-- **Export Historical Data**: Set `export_result=True` if only historical data is needed. (returns json instead of generator)
-- **Stream Only OHLCV**: Do not include `indicator_id` or `indicator_version`.
+- Returns `{"ohlc": [...], "indicator": {...}}` once it sees `numb_price_candles` (and all requested indicators). Use this for backfill slices; loop multiple calls to walk backward in time.
 
-#### Indicator Search
-- For assistance in finding your preferred indicator, visit: [TradingView Indicator Search](https://www.tradingview.com/pubscripts-suggest-json/?search=rsi).
+#### Quick start: live stream with warm start
+```python
+from tradingview_scraper.symbols.stream import Streamer
 
+# Grab a warm-start history, then continue streaming packets
+streamer = Streamer(export_result=True)
+backfill = streamer.stream("BINANCE", "BTCUSDT", timeframe="1h", numb_price_candles=200)
 
-#### Retrieve Watchlist Market Info
-  - You can send a list of exchange:symbol to get real-time market information, including:
-  - volume
-  - `lp_time` (Last Price Time)
-  - `lp` (Last Price)
-  - `ch` (Change in Price)
-  - `chp` (Change in Percent)
-##### Example:
+streamer_live = Streamer(export_result=False)
+gen = streamer_live.stream("BINANCE", "BTCUSDT", timeframe="1h", numb_price_candles=1)
+for pkt in gen:
+    print(pkt)  # handle incoming packets; merge with backfill on timestamp
+```
+
+#### Simple real-time quotes / OHLCV (no export)
 ```python
 from tradingview_scraper.symbols.stream import RealTimeData
-# Create an instance of the RealTimeData class
-real_time_data = RealTimeData()
-
-# Define the exchange symbols for which to fetch data
-exchange_symbol = ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "FXOPEN:XAUUSD"]
-
-# Retrieve the latest trade information for a specific symbol
-data_generator = real_time_data.get_latest_trade_info(exchange_symbol=exchange_symbol)
-```
-
-#### Printing Results
-- To display the real-time data packets, iterate over the generator as follows:
-```python
+rt = RealTimeData()
+data_generator = rt.get_ohlcv(exchange_symbol="BINANCE:BTCUSDT")
 for packet in data_generator:
-    print('-' * 50)
     print(packet)
 ```
-#### Output Examples
-##### Output (OHLCV):
-```text
-{'m': 'du', 'p': ['cs_qgmbtglzdudl', {'sds_1': {'s': [{'i': 9, 'v': [1734082440.0, 100010.0, 100010.01, 100006.27, 100006.27, 1.3242]}], 'ns': {'d': '', 'indexes': 'nochange'}, 't': 's1', 'lbs': {'bar_close_time': 1734082500}}}]}
-```
-##### Output (Watchlist market info):
-```text
-{'m': 'qsd', 'p': ['qs_folpuhzgowtu', {'n': 'BINANCE:BTCUSDT', 's': 'ok', 'v': {'volume': 6817.46425, 'lp_time': 1734082521, 'lp': 99957.9, 'chp': -0.05, 'ch': -46.39}}]}
+
+#### Watchlist snapshot (quote fields)
+```python
+from tradingview_scraper.symbols.stream import RealTimeData
+rt = RealTimeData()
+exchange_symbol = ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "FXOPEN:XAUUSD"]
+data_generator = rt.get_latest_trade_info(exchange_symbol=exchange_symbol)
+for packet in data_generator:
+    print(packet)
 ```
 
+#### Notes and caveats
+- Indicator output schema is indicator-dependent; map the numbered fields (`0`, `1`, …) per indicator manually.
+- No built-in support for open interest/funding fields; only TA indicators and OHLC(+volume) are handled.
+- Add your own retry/backoff around `Streamer.stream` for robustness; current code stops on socket close.
+
 ### 7. Getting Calendar events
+
 
 #### Scraping Earnings events
 ```python
