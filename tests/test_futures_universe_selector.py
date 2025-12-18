@@ -291,3 +291,50 @@ def test_multi_screen_fails_confirmation():
     assert result["status"] == "success"
     assert result["total_selected"] == 0
     assert result["data"] == []
+
+
+def test_dedupe_by_symbol_keeps_best_volume():
+    payload = {
+        "status": "success",
+        "data": [
+            {
+                "symbol": "BYBIT:ABCUSDT",
+                "name": "ABC",
+                "close": 1.0,
+                "volume": 100,
+                "Recommend.All": 0.5,
+                "Perf.W": 1.0,
+                "Perf.1M": 1.0,
+                "Perf.3M": 1.0,
+            },
+            {
+                "symbol": "OKX:ABCUSDT",
+                "name": "ABC",
+                "close": 1.1,
+                "volume": 500,
+                "Recommend.All": 0.4,
+                "Perf.W": 0.5,
+                "Perf.1M": 0.5,
+                "Perf.3M": 0.5,
+            },
+        ],
+    }
+
+    cfg = SelectorConfig(
+        volume={"min": 0},
+        volatility={"min": None, "max": None, "fallback_use_atr_pct": False},
+        dedupe_by_symbol=True,
+        trend={
+            "recommendation": {"min": 0.0},
+            "adx": {"enabled": False},
+            "momentum": {"enabled": False},
+            "confirmation_momentum": {"enabled": False},
+        },
+        final_sort_by="volume",
+    )
+
+    selector = FuturesUniverseSelector(config=cfg, screener=DummyScreener(payload))
+    result = selector.run()
+    assert result["status"] == "success"
+    assert result["total_selected"] == 1
+    assert result["data"][0]["symbol"].startswith("OKX:ABCUSDT")

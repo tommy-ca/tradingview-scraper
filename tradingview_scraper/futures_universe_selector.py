@@ -190,7 +190,9 @@ class SelectorConfig(BaseModel):
     trend: TrendConfig = Field(default_factory=TrendConfig)
     trend_screen: Optional[ScreenConfig] = None
     confirm_screen: Optional[ScreenConfig] = None
-    execute_screen: Optional[ScreenConfig] = None
+    execute_screen: Optional[ScreenConfig] = (
+        None  # optional; downstream execution can be handled separately
+    )
     sort_by: str = "volume"
     sort_order: str = "desc"
     final_sort_by: Optional[str] = None
@@ -199,6 +201,7 @@ class SelectorConfig(BaseModel):
     pagination_size: int = 50
     retries: int = 2
     timeout: int = 10
+    dedupe_by_symbol: bool = False
     export: ExportConfig = Field(default_factory=ExportConfig)
     export_metadata: ExportMetadata = Field(default_factory=ExportMetadata)
 
@@ -665,6 +668,38 @@ class FuturesUniverseSelector:
 
             if passes["all"]:
                 filtered.append(row)
+
+        if self.config.dedupe_by_symbol:
+            best_by_symbol: Dict[str, Dict[str, Any]] = {}
+            sort_field = self.config.final_sort_by or self.config.sort_by or "volume"
+            descending = (self.config.final_sort_order or "desc").lower() == "desc"
+
+            for row in filtered:
+                symbol = row.get("symbol", "")
+                key = symbol.split(":", 1)[1] if ":" in symbol else symbol
+                current_best = best_by_symbol.get(key)
+                candidate_value = row.get(sort_field)
+                if current_best is None:
+                    best_by_symbol[key] = row
+                    continue
+                best_value = current_best.get(sort_field)
+                try:
+                    if candidate_value is None:
+                        continue
+                    if best_value is None:
+                        best_by_symbol[key] = row
+                        continue
+                    if descending:
+                        if candidate_value > best_value:
+                            best_by_symbol[key] = row
+                    else:
+                        if candidate_value < best_value:
+                            best_by_symbol[key] = row
+                except TypeError:
+                    # If values are not comparable, keep existing
+                    continue
+
+            filtered = list(best_by_symbol.values())
 
         return filtered
 
