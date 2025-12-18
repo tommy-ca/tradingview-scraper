@@ -20,6 +20,8 @@ Presets (config paths under configs/)
   - Rec >= -0.1, ADX max 30, change <= -0.3%, Perf.W <= -1%, Perf.1M >= -12%, RSI <= 55, Stoch.K <= 60, volume >= 30M, timeframe daily; base sort market cap then volume.
 - Cross-Sectional Momentum (long, spot) – ``crypto_cex_xs_momentum.yaml``
   - Rec >= 0.15, ADX >= 18, Perf.W >= 0.5%, Perf.1M >= 2%, change >= 0, volume >= 50M; base sort market cap then volume; take top decile by Perf.W for XS longs.
+- Cross-Sectional Momentum (long/short, spot+perps) – ``crypto_cex_xs_momentum_long_short.yaml``
+  - Universe: top 120 by market cap across BINANCE/OKX/BYBIT/BITGET with perps allowed; filters: volume >= 50M, Vol.D <= 6% or ATR/close <= 8%. No Rec/ADX/momentum gating. Downstream: z-score Perf.W/Perf.1M/Perf.3M, long top 10%, short bottom 10%; prefer perps for shorts, skip if not listed.
 - Cross-Sectional Mean Reversion (long, spot) – ``crypto_cex_xs_mean_reversion.yaml``
   - Rec >= -0.05, ADX max 40, change <= -0.3%, Perf.W <= -0.5%, Perf.1M >= -10%, RSI <= 55, Stoch.K <= 60, volume >= 30M; base sort market cap then volume; take bottom decile by Perf.W for XS longs.
 - TS Momentum (long, perps daily) – ``crypto_cex_ts_momentum_long.yaml``

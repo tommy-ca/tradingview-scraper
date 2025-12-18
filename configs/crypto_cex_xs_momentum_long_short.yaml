@@ -1,0 +1,37 @@
+# Cross-sectional momentum (long/short):
+# - Universe: top 120 by market cap across BINANCE/OKX/BYBIT/BITGET, with perps allowed for shorting.
+# - Filters: volume floor + volatility guard only (no Rec/ADX gating).
+# - Ranking (downstream): build normalized momentum composite (e.g., z-score Perf.W/Perf.1M/Perf.3M),
+#   long top 10% and short bottom 10%. Prefer perps for shorts where available; otherwise skip short leg.
+markets: ["crypto"]
+exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
+include_perps_only: false
+exclude_perps: false
+columns: ["name", "close", "volume", "Value.Traded", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "ATR"]
+volume:
+  min: 50000000
+volatility:
+  max: 6.0
+  atr_pct_max: 0.08
+  fallback_use_atr_pct: true
+trend:
+  direction: "long"
+  timeframe: "daily"
+  logic: "AND"
+  recommendation:
+    enabled: false
+  adx:
+    enabled: false
+  momentum:
+    enabled: false
+sort_by: market_cap_calc
+sort_order: desc
+final_sort_by: volume
+final_sort_order: desc
+limit: 120
+pagination_size: 50
+retries: 2
+timeout: 10
+export:
+  enabled: false
+  type: json
