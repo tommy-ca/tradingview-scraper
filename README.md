@@ -270,64 +270,58 @@ print("All Indicators:", indicators)
 ```
 
 ### 5. Getting News Headlines/Content
+
+#### Quick start: headlines
 ```python
 from tradingview_scraper.symbols.news import NewsScraper
 
-# Create an instance of the NewsScraper with export options
-news_scraper = NewsScraper(export_result=True, export_type='json')
-
-# Retrieve news headlines from a specific provider
-news_headlines = news_scraper.scrape_headlines(
-    symbol='BTCUSD',      # Uncomment and specify if needed
-    exchange='BINANCE', # Uncomment and specify if needed
-    # provider='newsbtc',  # Specify the news provider
-    # area='world',  # Specify the geographical area
-    # section='all',  # Specify the section of news
-    sort='latest'
+scraper = NewsScraper(export_result=True, export_type='json')
+headlines = scraper.scrape_headlines(
+    symbol='BTCUSD',
+    exchange='BINANCE',
+    provider='cointelegraph',  # optional filter
+    area='americas',           # optional filter (see data/areas.json)
+    sort='latest',             # latest | oldest | most_urgent | least_urgent
 )
-
-# Retrieve detailed news content for a specific story
-news_content = news_scraper.scrape_news_content(
-    story_path=news_headlines['data'][0]['storyPath']  # Specify the story path from scraped headlines
-)
+print(headlines[:2])  # returns a list, not wrapped in a dict
 ```
-- Retrieve news by symbol:
-  - Both `symbol` and `exchange` are required parameters
-- Filter result by:
-  - `area`, `provider` and `section` can be specified to refine the news results.
+
+#### Fetch story body
+```python
+story_path = headlines[0].get('storyPath') or headlines[0].get('link', '').replace('https://tradingview.com', '')
+article = scraper.scrape_news_content(story_path)
+print(article['title'])
+```
+
+#### Workflows
+- Polling: schedule `scrape_headlines` by symbol+exchange (required) and dedupe by `id`/`storyPath`.
+- Drill-down: fetch full bodies only for new headlines; store `related_symbols` for routing.
+- Export: enable `export_result` to write JSON/CSV into `export/` (filenames prefixed with `news_*`).
+- Filtering knobs: `provider`, `area`, `section` (`all`/`esg`), `language` (see `data/languages.json`).
+- Caveats: no WebSocket/streaming; this is HTTP polling. Inputs require both `symbol` and `exchange`.
 
 #### Output (news headline):
 ```json
-{
-  "status": "success",
-  "data": [
-    {
-      "id": "tag:reuters.com,2024:newsml_L1N3KM09S:0",
-      "title": "Goldman Sachs sees biggest boost to US economy from Harris win",
-      "provider": "reuters",
-      "sourceLogoId": "reuters",
-      "published": 1725443676,
-      "source": "Reuters",
-      "urgency": 2,
-      "permission": "preview",
-      "relatedSymbols": [
-        {
-          "symbol": "BITMEX:XBTETH.P",
-          "currency-logoid": "country/US",
-          "base-currency-logoid": "crypto/XTVCBTC"
-        },
-        {
-          "symbol": "ICEUS:DXY",
-          "logoid": "indices/u-s-dollar-index"
-        }
-      ],
-      "storyPath": "/news/reuters.com,2024:newsml_L1N3KM09S:0-goldman-sachs-sees-biggest-boost-to-us-economy-from-harris-win/"
-    }
-  ],
-  "total": 1
-}
+[
+  {
+    "id": "tag:reuters.com,2024:newsml_L1N3KM09S:0",
+    "title": "Goldman Sachs sees biggest boost to US economy from Harris win",
+    "provider": "reuters",
+    "sourceLogoId": "reuters",
+    "published": 1725443676,
+    "source": "Reuters",
+    "urgency": 2,
+    "permission": "preview",
+    "relatedSymbols": [
+      {"symbol": "BITMEX:XBTETH.P"},
+      {"symbol": "ICEUS:DXY"}
+    ],
+    "storyPath": "/news/reuters.com,2024:newsml_L1N3KM09S:0-goldman-sachs-sees-biggest-boost-to-us-economy-from-harris-win/"
+  }
+]
 ```
 #### Output (news content):
+
 ```json
 {
   "status": "success",
