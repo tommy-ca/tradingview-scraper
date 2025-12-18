@@ -197,6 +197,8 @@ class SelectorConfig(BaseModel):
     sort_order: str = "desc"
     final_sort_by: Optional[str] = None
     final_sort_order: str = "desc"
+    momentum_composite_fields: List[str] = Field(default_factory=list)
+    momentum_composite_field_name: str = "momentum_zscore"
     limit: int = 100
     pagination_size: int = 50
     retries: int = 2
@@ -703,6 +705,42 @@ class FuturesUniverseSelector:
 
         return filtered
 
+    def _apply_momentum_composite(
+        self, rows: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        fields = [f for f in self.config.momentum_composite_fields if f]
+        if not fields:
+            return rows
+
+        stats = {}
+        for field in fields:
+            values = [
+                float(r[field]) for r in rows if isinstance(r.get(field), (int, float))
+            ]
+            if not values:
+                continue
+            mean_val = sum(values) / len(values)
+            variance = sum((v - mean_val) ** 2 for v in values) / len(values)
+            std_val = variance**0.5
+            if std_val > 0:
+                stats[field] = (mean_val, std_val)
+
+        composite_field = self.config.momentum_composite_field_name or "momentum_zscore"
+        if not stats:
+            for row in rows:
+                row[composite_field] = None
+            return rows
+
+        for row in rows:
+            scores = []
+            for field, (mean_val, std_val) in stats.items():
+                val = row.get(field)
+                if isinstance(val, (int, float)):
+                    scores.append((val - mean_val) / std_val)
+            row[composite_field] = sum(scores) / len(scores) if scores else None
+
+        return rows
+
     def _export_results(self, data: List[Dict[str, Any]]) -> None:
         if not self.config.export.enabled:
             return
@@ -763,6 +801,9 @@ class FuturesUniverseSelector:
                 errors.extend(market_errors)
 
         filtered = self._apply_post_filters(aggregated)
+
+        if self.config.momentum_composite_fields:
+            filtered = self._apply_momentum_composite(filtered)
 
         final_sorted = filtered
         if self.config.final_sort_by:

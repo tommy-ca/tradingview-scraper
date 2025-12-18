@@ -27,7 +27,9 @@ trend:
     enabled: false
 sort_by: market_cap_calc
 sort_order: desc
-final_sort_by: Perf.W
+momentum_composite_fields: [Perf.W, Perf.1M, Perf.3M, Perf.6M, Perf.YTD]
+momentum_composite_field_name: momentum_zscore
+final_sort_by: momentum_zscore
 final_sort_order: desc
 dedupe_by_symbol: true
 limit: 120
