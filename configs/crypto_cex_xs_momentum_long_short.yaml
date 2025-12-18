@@ -3,6 +3,7 @@
 # - Filters: volume floor + volatility guard only (no Rec/ADX gating).
 # - Ranking (downstream): build normalized momentum composite (e.g., z-score Perf.W/Perf.1M/Perf.3M),
 #   long top 10% and short bottom 10%. Prefer perps for shorts where available; otherwise skip short leg.
+# - Output ordering: base sort by market cap, final sort by Perf.W as a proxy; apply the normalized composite downstream for final ranks.
 markets: ["crypto"]
 exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
 include_perps_only: false
@@ -26,7 +27,7 @@ trend:
     enabled: false
 sort_by: market_cap_calc
 sort_order: desc
-final_sort_by: volume
+final_sort_by: Perf.W
 final_sort_order: desc
 limit: 120
 pagination_size: 50
