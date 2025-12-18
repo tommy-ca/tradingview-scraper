@@ -97,15 +97,17 @@ class ExportConfig(BaseModel):
 
 
 class VolumeConfig(BaseModel):
-    min: float = 2000.0
+    min: float = 0.0
+    value_traded_min: float = 0.0
     per_exchange: Dict[str, float] = Field(default_factory=dict)
 
 
 class VolatilityConfig(BaseModel):
     min: Optional[float] = None
     max: Optional[float] = None
+    atr_pct_max: Optional[float] = None
     fallback_use_atr_pct: bool = True
-    atr_pct_max: Optional[float] = 0.06
+    use_value_traded_floor: bool = False
 
     @model_validator(mode="after")
     def validate_bounds(self) -> "VolatilityConfig":
@@ -232,6 +234,7 @@ class SelectorConfig(BaseModel):
     perp_exchange_priority: List[str] = Field(default_factory=list)
     market_cap_file: Optional[str] = None
     market_cap_limit: Optional[int] = None
+    market_cap_require_hit: bool = False
     export: ExportConfig = Field(default_factory=ExportConfig)
     export_metadata: ExportMetadata = Field(default_factory=ExportMetadata)
 
@@ -418,9 +421,16 @@ class FuturesUniverseSelector:
 
     def _evaluate_liquidity(self, row: Dict[str, Any]) -> bool:
         volume_value = row.get("volume")
+        value_traded = row.get("Value.Traded")
+        vt_floor = self.config.volume.value_traded_min or 0
+        vol_floor = self.config.volume.min or 0
+
+        # If Value.Traded is present, enforce that floor first
+        if value_traded is not None and value_traded < vt_floor:
+            return False
+
         if volume_value is None:
-            # Allow passing when no volume is reported and threshold is non-positive
-            return self.config.volume.min <= 0
+            return vol_floor <= 0
         symbol = row.get("symbol", "")
         exchange = self._extract_exchange(symbol)
         if exchange and exchange in self.config.volume.per_exchange:
@@ -820,7 +830,7 @@ class FuturesUniverseSelector:
             row["market_cap_external"] = cap_val
             annotated.append(row)
         if not annotated:
-            return rows
+            return rows if not self.config.market_cap_require_hit else []
         if self.config.market_cap_limit:
             # select top bases by cap
             tops = sorted(
