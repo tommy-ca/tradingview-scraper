@@ -29,6 +29,7 @@ sort_by: market_cap_calc
 sort_order: desc
 final_sort_by: Perf.W
 final_sort_order: desc
+dedupe_by_symbol: true
 limit: 120
 pagination_size: 50
 retries: 2
