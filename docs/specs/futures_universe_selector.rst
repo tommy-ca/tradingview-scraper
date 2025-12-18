@@ -155,10 +155,10 @@ Recent Notes from E2E Validation
 Planned Multi-Timeframe (3-Screen) Support
 ------------------------------------------
 - Roles: Trend (high TF) to set bias; Confirmation (mid TF) to align continuation; Execution (low TF) to time entries with oscillators/volatility.
-- Suggested sets: (A) weekly → daily → 4h/6h, (B) daily → 4h → 1h, (C) 12h → 4h → 1h, (D) monthly → weekly → daily. Futures/FX: A/B; Crypto: B/C; Equities: A/D.
-- Indicator splits: Trend uses Rec/ADX + slower momentum (Perf.1M/3M or Perf.W/1M) with a volatility guard; Confirmation relaxes gates and uses faster momentum/ROC + optional volume surge; Execution uses short momentum (change/Perf.W-equivalent), oscillators (RSI/Stoch), and tight ATR/close.
+- Suggested sets: (A) weekly → daily → 4h/6h, (B) daily → 4h → 1h, (C) 12h → 4h → 1h, (D) monthly → weekly → daily. Futures/FX: A/D; Crypto: B/C; Equities: D.
+- Indicator splits: Trend uses Rec/ADX + slower momentum (Perf.1M/3M/6M or Perf.W/1M) with a volatility guard; Confirmation relaxes gates and uses faster momentum/ROC + optional volume surge; Execution uses short momentum (change/Perf.W-equivalent), oscillators (RSI/Stoch), and tight ATR/close.
 - Schema sketch (planned): support ``trend_screen``, ``confirm_screen``, ``execute_screen`` blocks with their own ``timeframe``, thresholds, and required columns, plus CLI overrides (e.g., ``--trend-tf weekly --confirm-tf daily --execute-tf 4h``).
-- Limitation: current implementation only supports daily/weekly/monthly fields from Screener/Overview; intraday (4h/1h/12h) would require additional data support. Until then, multi-screen will be constrained to available timeframes.
+- Limitation: current implementation only supports daily/weekly/monthly fields from Screener/Overview; intraday (4h/1h/12h) not available in Screener/Overview (``change|1h``/``Perf.4H`` queries fail). MTF currently constrained to higher timeframes.
  
 Testing Strategy
 ----------------

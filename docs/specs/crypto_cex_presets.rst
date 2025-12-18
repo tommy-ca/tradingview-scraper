@@ -54,6 +54,17 @@ Screener vs. Overview field availability
 - Screener (crypto) fields are limited: ``name``, ``symbol``, ``close``, ``change``, ``change_abs``, ``volume``, ``market_cap_calc``, ``Recommend.All``. Use these for server-side filters.
 - Overview provides richer fields used in presets: ``Perf.W``, ``Perf.1M``, ``Perf.3M``, ``Perf.6M``, ``ADX``, ``Volatility.*``, ``ATR``, ``RSI``, ``Stoch.K``, and liquidity proxies like ``Value.Traded``. (Fundamental fields may be present but are often not meaningful for crypto.)
 
+Multi-Timeframe (MTF) crypto notes
+----------------------------------
+- Intraday fields (e.g., ``change|1h``, ``Perf.4H``) are not available via Screener/Overview; MTF must use daily/weekly/monthly fields.
+- Recommended MTF sets given constraints: (A) monthly → weekly → daily, (B) weekly → daily → daily. Trend: Perf.1M/3M/6M (or Perf.W/Perf.1M); Confirm: Perf.W/Perf.1M; Execute: daily change/Perf.W plus oscillators (RSI/Stoch.K) and volatility guard.
+- Sample configs:
+  - Spot long: ``configs/crypto_cex_mtf_monthly_weekly_daily.yaml``, ``configs/crypto_cex_mtf_weekly_daily_daily.yaml``.
+  - Spot short: ``configs/crypto_cex_mtf_monthly_weekly_daily_short.yaml``, ``configs/crypto_cex_mtf_weekly_daily_daily_short.yaml``.
+  - Perps short: ``configs/crypto_cex_mtf_weekly_daily_daily_perps_short.yaml``.
+  - Mixed trend/MR: ``configs/crypto_cex_mtf_trend_mr_trend.yaml`` (monthly trend → weekly MR → daily trend) and ``configs/crypto_cex_mtf_mr_trend_trend.yaml`` (monthly MR → weekly trend → daily trend).
+- All current runs returned 0 under bearish regime/thresholds; lower volume floors or relax Perf/RSI/Stoch gates to widen coverage.
+
 Notes from latest runs (bearish regime at time of test)
 ------------------------------------------------------
 - Long-biased presets returned 0–2 names (momentum/mean-reversion mostly empty).
