@@ -4,6 +4,10 @@ markets: ["america"]
 exchanges: []
 include_perps_only: false
 exclude_perps: false
+filters:
+  - left: "type"
+    operation: "in_range"
+    right: ["stock", "dr"]
 columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR", "market_cap_basic"]
 volume:
   min: 500000

@@ -201,6 +201,7 @@ class ExportMetadata(BaseModel):
 class SelectorConfig(BaseModel):
     markets: List[str] = Field(default_factory=lambda: ["futures"])
     exchanges: List[str] = Field(default_factory=list)
+    filters: List[Dict[str, Any]] = Field(default_factory=list)
     include_symbols: List[str] = Field(default_factory=list)
     exclude_symbols: List[str] = Field(default_factory=list)
     include_perps_only: bool = False
@@ -370,6 +371,10 @@ class FuturesUniverseSelector:
                     "right": self.config.volume.value_traded_min,
                 }
             )
+
+        if self.config.filters:
+            filters.extend(self.config.filters)
+
         return filters
 
     def _screen_market(

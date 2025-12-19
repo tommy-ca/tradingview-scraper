@@ -113,14 +113,16 @@ def main():
                 norm_name = normalize_name(raw_name)
 
                 # If name exists, keep the one with higher volume
+                vol_current = item.get("volume") or 0
                 if norm_name in aggregated:
-                    if item.get("volume", 0) > aggregated[norm_name].get("volume", 0):
+                    vol_existing = aggregated[norm_name].get("volume") or 0
+                    if vol_current > vol_existing:
                         aggregated[norm_name] = item
                 else:
                     aggregated[norm_name] = item
 
             # Sort by volume desc
-            sorted_items = sorted(aggregated.values(), key=lambda x: x.get("volume", 0), reverse=True)
+            sorted_items = sorted(aggregated.values(), key=lambda x: x.get("volume") or 0, reverse=True)
 
             for item in sorted_items:
                 symbol = item.get("symbol", "")
