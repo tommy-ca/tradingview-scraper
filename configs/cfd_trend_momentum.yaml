@@ -1,7 +1,7 @@
-# Base universe: CFDs on OANDA; screener fields are limited (no Perf/ADX/Vol fields)
+# Base universe: CFDs on multiple exchanges; screener fields are limited
 # Uses screener-only data: change (daily), Recommend.All, volume; sort by volume
 markets: ["cfd"]
-exchanges: ["OANDA"]
+exchanges: ["OANDA", "FOREXCOM", "FXCM", "CAPITALCOM", "PEPPERSTONE", "EIGHTCAP", "SKILLING", "VANTAGE", "SAXO"]
 columns: ["name", "close", "volume", "change", "change_abs", "Recommend.All"]
 volume:
   min: 0

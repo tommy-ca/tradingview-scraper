@@ -1,4 +1,4 @@
-# Base universe: Forex short trend
+# Base universe: Forex short trend (Relaxed)
 markets: ["forex"]
 exchanges: ["FX_IDC", "THINKMARKETS", "BLACKBULL", "ICMARKETS", "ACTIVTRADES", "FUSIONMARKETS", "OANDA", "TRADENATIONSB", "TRADENATION", "FXOPEN", "FX", "SKILLING", "FPMARKETS", "VELOCITY", "CAPITALCOM", "VANTAGE", "PEPPERSTONE", "FXCM", "ICE"]
 columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
@@ -14,16 +14,16 @@ trend:
   logic: "AND"
   recommendation:
     enabled: true
-    min: -0.3
+    min: -0.1
   adx:
     enabled: true
     min: 20
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: -0.2, Perf.1M: -1.0}
+    horizons: {change: 0.0, Perf.W: -0.2, Perf.1M: -0.5}
   confirmation_momentum:
     enabled: true
-    horizons: {Perf.3M: -2.0}
+    horizons: {Perf.3M: -1.0}
 sort_by: volume
 sort_order: desc
 final_sort_by: volume
