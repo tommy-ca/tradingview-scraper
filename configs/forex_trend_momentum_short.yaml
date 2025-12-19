@@ -1,0 +1,37 @@
+# Base universe: Forex short trend
+markets: ["forex"]
+exchanges: ["FX_IDC", "THINKMARKETS", "BLACKBULL", "ICMARKETS", "ACTIVTRADES", "FUSIONMARKETS", "OANDA", "TRADENATIONSB", "TRADENATION", "FXOPEN", "FX", "SKILLING", "FPMARKETS", "VELOCITY", "CAPITALCOM", "VANTAGE", "PEPPERSTONE", "FXCM", "ICE"]
+columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
+volume:
+  min: 0
+volatility:
+  max: 10.0
+  atr_pct_max: 0.1
+  fallback_use_atr_pct: true
+trend:
+  direction: "short"
+  timeframe: "daily"
+  logic: "AND"
+  recommendation:
+    enabled: true
+    min: 0.05
+  adx:
+    enabled: true
+    min: 8
+  momentum:
+    enabled: true
+    horizons: {change: 0.1, Perf.W: 0.2, Perf.1M: 0.0, Perf.3M: -0.5}
+  confirmation_momentum:
+    enabled: true
+    horizons: {Perf.1M: 0.0, Perf.3M: -0.5}
+sort_by: volume
+sort_order: desc
+final_sort_by: volume
+final_sort_order: desc
+limit: 100
+pagination_size: 50
+retries: 2
+timeout: 10
+export:
+  enabled: false
+  type: json

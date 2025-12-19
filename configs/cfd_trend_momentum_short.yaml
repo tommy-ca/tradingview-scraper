@@ -1,0 +1,35 @@
+# Base universe: CFDs on OANDA; screener fields are limited (no Perf/ADX/Vol fields)
+# Uses screener-only data: change (daily), Recommend.All, volume; sort by volume
+markets: ["cfd"]
+exchanges: ["OANDA"]
+columns: ["name", "close", "volume", "change", "change_abs", "Recommend.All"]
+volume:
+  min: 0
+volatility:
+  max: null
+  atr_pct_max: null
+  fallback_use_atr_pct: false
+trend:
+  direction: "short"
+  timeframe: "daily"
+  logic: "AND"
+  recommendation:
+    enabled: true
+    min: 0.0
+  adx:
+    enabled: false
+  momentum:
+    enabled: true
+    horizons: {change: 0.2}
+sort_by: volume
+sort_order: desc
+final_sort_by: volume
+final_sort_order: desc
+prefilter_limit: 200
+limit: 50
+pagination_size: 50
+retries: 2
+timeout: 10
+export:
+  enabled: false
+  type: json
