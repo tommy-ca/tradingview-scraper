@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -15,33 +16,19 @@ def load_json(filepath):
 
 def normalize_name(name):
     """Normalize asset name by removing common suffixes."""
-    # Suffixes to remove
-    suffixes = [".P", ".I", ".a", ".s", "_mini", "1!", "Z2025", "F2026", "G2025", "H2025", ".ONE", ".SML", ".PRO.OTMS", ".TV"]
-
-    # Simple strip of known suffixes
-    # Note: Some suffixes might be part of the symbol (e.g. 'P' in stock ticker),
-    # but for Forex/CFD 'AUDNOK.P', it's safe.
-    # For Futures 'SAILZ2025' -> 'SAIL'. 'SAIL1!' -> 'SAIL'.
-    # We need to be careful not to over-normalize stocks if they have these chars.
-    # But usually suffixes are after a dot or specific futures codes.
-
-    # Heuristic: if dot exists, split by dot.
+    # Handle dot suffixes first (e.g., AUDNOK.P -> AUDNOK)
     if "." in name:
-        base = name.split(".")[0]
-        # Check if suffix is in our ignore list or looks like one
-        # Actually, for Forex 'AUDNOK.P', base is 'AUDNOK'.
-        return base
+        name = name.split(".")[0]
 
-    # For Futures like 'SAIL1!', 'SAILZ2025'
+    # Strip continuous contract suffix (e.g., SI1! -> SI)
     if name.endswith("1!"):
         return name[:-2]
 
-    # Removing 'Z2025' etc is harder without regex, but we can try common ones if they appear at end.
-    # Since specific futures contracts (Z2025) are distinct from continuous (1!), maybe we WANT to keep them separate?
-    # User said "normalized name, so we have clear understanding of global candidates".
-    # Seeing 'SAIL' is better than 'SAILZ2025' and 'SAIL1!' separate.
-    # But strictly speaking, they are different instruments.
-    # However, for "trend opportunity", knowing SAIL is trending is the key.
+    # Strip futures contract month/year codes (e.g., SIH2026 -> SI)
+    # Month codes: F,G,H,J,K,M,N,Q,U,V,X,Z followed by 4-digit year
+    match = re.match(r"^(.+?)[FGHJKMNQUVXZ]\d{4}$", name)
+    if match:
+        return match.group(1)
 
     return name
 
