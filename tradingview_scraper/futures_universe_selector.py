@@ -9,9 +9,9 @@ liquidity/volatility/trend rules, and optional export of results.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import logging
-import csv
 import os
 import re
 import sys
@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+
 from tradingview_scraper.symbols.overview import Overview
 from tradingview_scraper.symbols.screener import Screener
 from tradingview_scraper.symbols.utils import save_csv_file, save_json_file
@@ -127,16 +128,10 @@ class TrendConfig(BaseModel):
     logic: str = "AND"
     timeframe: str = "monthly"
     direction: str = "long"
-    recommendation: TrendRuleConfig = Field(
-        default_factory=lambda: TrendRuleConfig(min=0.3)
-    )
+    recommendation: TrendRuleConfig = Field(default_factory=lambda: TrendRuleConfig(min=0.3))
     adx: TrendRuleConfig = Field(default_factory=lambda: TrendRuleConfig(min=20))
-    momentum: TrendRuleConfig = Field(
-        default_factory=lambda: TrendRuleConfig(horizons=DEFAULT_MOMENTUM)
-    )
-    confirmation_momentum: TrendRuleConfig = Field(
-        default_factory=lambda: TrendRuleConfig(enabled=False, horizons={})
-    )
+    momentum: TrendRuleConfig = Field(default_factory=lambda: TrendRuleConfig(horizons=DEFAULT_MOMENTUM))
+    confirmation_momentum: TrendRuleConfig = Field(default_factory=lambda: TrendRuleConfig(enabled=False, horizons={}))
 
     @field_validator("logic")
     @classmethod
@@ -218,9 +213,7 @@ class SelectorConfig(BaseModel):
     trend: TrendConfig = Field(default_factory=TrendConfig)
     trend_screen: Optional[ScreenConfig] = None
     confirm_screen: Optional[ScreenConfig] = None
-    execute_screen: Optional[ScreenConfig] = (
-        None  # optional; downstream execution can be handled separately
-    )
+    execute_screen: Optional[ScreenConfig] = None  # optional; downstream execution can be handled separately
     sort_by: str = "volume"
     sort_order: str = "desc"
     final_sort_by: Optional[str] = None
@@ -254,9 +247,7 @@ class SelectorConfig(BaseModel):
             raise ValueError("sort_order must be 'asc' or 'desc'")
         return value_lower
 
-    @field_validator(
-        "limit", "pagination_size", "retries", "timeout", "prefilter_limit"
-    )
+    @field_validator("limit", "pagination_size", "retries", "timeout", "prefilter_limit")
     @classmethod
     def validate_positive(cls, value: Optional[int], info: Any) -> Optional[int]:
         if value is None:
@@ -326,9 +317,7 @@ class FuturesUniverseSelector:
         screener: Optional[Screener] = None,
         overview: Optional[Overview] = None,
     ) -> None:
-        self.config = (
-            config if isinstance(config, SelectorConfig) else load_config(config)
-        )
+        self.config = config if isinstance(config, SelectorConfig) else load_config(config)
         self.screener = screener or Screener(export_result=False)
         self.overview = overview or Overview(export_result=False)
         self._market_cap_map: Optional[Dict[str, float]] = None
@@ -339,10 +328,7 @@ class FuturesUniverseSelector:
             if col not in columns:
                 columns.append(col)
 
-        if (
-            self.config.trend.timeframe in {"daily", "weekly"}
-            and "Perf.W" not in columns
-        ):
+        if self.config.trend.timeframe in {"daily", "weekly"} and "Perf.W" not in columns:
             columns.append("Perf.W")
         return columns
 
@@ -386,9 +372,7 @@ class FuturesUniverseSelector:
             batch_size = min(page_size, remaining)
             filters_with_exchange = list(filters)
             if exchange:
-                filters_with_exchange = filters_with_exchange + [
-                    {"left": "exchange", "operation": "equal", "right": exchange}
-                ]
+                filters_with_exchange = filters_with_exchange + [{"left": "exchange", "operation": "equal", "right": exchange}]
             response = self.screener.screen(
                 market=market,
                 filters=filters_with_exchange,
@@ -400,9 +384,7 @@ class FuturesUniverseSelector:
             )
 
             if not response or response.get("status") != "success":
-                errors.append(
-                    response.get("error", f"Failed to screen market {market}")
-                )
+                errors.append(response.get("error", f"Failed to screen market {market}"))
                 break
 
             data = response.get("data", [])
@@ -486,10 +468,7 @@ class FuturesUniverseSelector:
                 atr_pct = atr / close
                 row["atr_pct"] = atr_pct
 
-        checks_present = any(
-            value is not None
-            for value in (vol_cfg.min, vol_cfg.max, vol_cfg.atr_pct_max)
-        )
+        checks_present = any(value is not None for value in (vol_cfg.min, vol_cfg.max, vol_cfg.atr_pct_max))
         if not checks_present:
             return True, atr_pct
 
@@ -521,9 +500,7 @@ class FuturesUniverseSelector:
         if trend_cfg.adx.enabled:
             adx_min = trend_cfg.adx.min
             adx_value = row.get("ADX")
-            checks["adx"] = (
-                adx_min is not None and adx_value is not None and adx_value >= adx_min
-            )
+            checks["adx"] = adx_min is not None and adx_value is not None and adx_value >= adx_min
 
         if trend_cfg.momentum.enabled:
             horizons = trend_cfg.momentum.horizons or {}
@@ -558,9 +535,7 @@ class FuturesUniverseSelector:
 
         if trend_cfg.confirmation_momentum.enabled:
             conf_pass = True
-            for field, threshold in (
-                trend_cfg.confirmation_momentum.horizons or {}
-            ).items():
+            for field, threshold in (trend_cfg.confirmation_momentum.horizons or {}).items():
                 value = row.get(field)
                 if value is None:
                     conf_pass = False
@@ -586,9 +561,7 @@ class FuturesUniverseSelector:
         checks["combined"] = combined
         return checks
 
-    def _evaluate_screen(
-        self, row: Dict[str, Any], screen: ScreenConfig
-    ) -> Dict[str, bool]:
+    def _evaluate_screen(self, row: Dict[str, Any], screen: ScreenConfig) -> Dict[str, bool]:
         checks: Dict[str, bool] = {}
         is_long = screen.direction == "long"
 
@@ -685,9 +658,7 @@ class FuturesUniverseSelector:
         checks["combined"] = combined
         return checks
 
-    def _apply_post_filters(
-        self, rows: Iterable[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _apply_post_filters(self, rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
         filtered: List[Dict[str, Any]] = []
         include_set = set(s.upper() for s in self.config.include_symbols)
         exclude_set = set(s.upper() for s in self.config.exclude_symbols)
@@ -740,39 +711,18 @@ class FuturesUniverseSelector:
             if liquidity_ok and volatility_ok and trend_checks.get("combined", True):
                 if self.config.trend_screen:
                     screen_checks = self._evaluate_screen(row, self.config.trend_screen)
-                    passes.update(
-                        {f"trend_screen_{k}": v for k, v in screen_checks.items()}
-                    )
-                    screens_combined = screens_combined and screen_checks.get(
-                        "combined", True
-                    )
+                    passes.update({f"trend_screen_{k}": v for k, v in screen_checks.items()})
+                    screens_combined = screens_combined and screen_checks.get("combined", True)
                 if screens_combined and self.config.confirm_screen:
-                    confirm_checks = self._evaluate_screen(
-                        row, self.config.confirm_screen
-                    )
-                    passes.update(
-                        {f"confirm_screen_{k}": v for k, v in confirm_checks.items()}
-                    )
-                    screens_combined = screens_combined and confirm_checks.get(
-                        "combined", True
-                    )
+                    confirm_checks = self._evaluate_screen(row, self.config.confirm_screen)
+                    passes.update({f"confirm_screen_{k}": v for k, v in confirm_checks.items()})
+                    screens_combined = screens_combined and confirm_checks.get("combined", True)
                 if screens_combined and self.config.execute_screen:
-                    execute_checks = self._evaluate_screen(
-                        row, self.config.execute_screen
-                    )
-                    passes.update(
-                        {f"execute_screen_{k}": v for k, v in execute_checks.items()}
-                    )
-                    screens_combined = screens_combined and execute_checks.get(
-                        "combined", True
-                    )
+                    execute_checks = self._evaluate_screen(row, self.config.execute_screen)
+                    passes.update({f"execute_screen_{k}": v for k, v in execute_checks.items()})
+                    screens_combined = screens_combined and execute_checks.get("combined", True)
 
-            passes["all"] = (
-                liquidity_ok
-                and volatility_ok
-                and trend_checks.get("combined", True)
-                and screens_combined
-            )
+            passes["all"] = liquidity_ok and volatility_ok and trend_checks.get("combined", True) and screens_combined
             row["passes"] = passes
 
             if passes["all"]:
@@ -780,18 +730,14 @@ class FuturesUniverseSelector:
 
         return filtered
 
-    def _apply_momentum_composite(
-        self, rows: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _apply_momentum_composite(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         fields = [f for f in self.config.momentum_composite_fields if f]
         if not fields:
             return rows
 
         stats = {}
         for field in fields:
-            values = [
-                float(r[field]) for r in rows if isinstance(r.get(field), (int, float))
-            ]
+            values = [float(r[field]) for r in rows if isinstance(r.get(field), (int, float))]
             if not values:
                 continue
             mean_val = sum(values) / len(values)
@@ -855,9 +801,7 @@ class FuturesUniverseSelector:
                         cap_val = row.get("market_cap") or row.get("cap")
                         if sym and cap_val is not None:
                             try:
-                                caps[str(sym).upper().replace(".P", "")] = float(
-                                    cap_val
-                                )
+                                caps[str(sym).upper().replace(".P", "")] = float(cap_val)
                             except (TypeError, ValueError):
                                 continue
         except Exception as exc:  # pragma: no cover - defensive
@@ -866,9 +810,7 @@ class FuturesUniverseSelector:
         self._market_cap_map = caps
         return self._market_cap_map
 
-    def _apply_market_cap_filter(
-        self, rows: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _apply_market_cap_filter(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if not self.config.market_cap_file:
             return rows
         cap_map = self._load_market_cap_map()
@@ -886,15 +828,9 @@ class FuturesUniverseSelector:
             return rows if not self.config.market_cap_require_hit else []
         if self.config.market_cap_limit:
             # select top bases by cap
-            tops = sorted(
-                ((b, v) for b, v in cap_map.items()), key=lambda x: x[1], reverse=True
-            )[: self.config.market_cap_limit]
+            tops = sorted(((b, v) for b, v in cap_map.items()), key=lambda x: x[1], reverse=True)[: self.config.market_cap_limit]
             allowed_bases = {b for b, _ in tops}
-            annotated = [
-                r
-                for r in annotated
-                if self._base_symbol(r.get("symbol", "")) in allowed_bases
-            ]
+            annotated = [r for r in annotated if self._base_symbol(r.get("symbol", "")) in allowed_bases]
         return annotated
 
     def _dedupe_by_base(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -902,11 +838,7 @@ class FuturesUniverseSelector:
         descending = (self.config.final_sort_order or "desc").lower() == "desc"
         best_by_base: Dict[str, Dict[str, Any]] = {}
         priority = [p.upper() for p in self.config.perp_exchange_priority]
-        quote_priority = (
-            {q.upper(): idx for idx, q in enumerate(self.config.allowed_spot_quotes)}
-            if self.config.allowed_spot_quotes
-            else None
-        )
+        quote_priority = {q.upper(): idx for idx, q in enumerate(self.config.allowed_spot_quotes)} if self.config.allowed_spot_quotes else None
 
         def exchange_rank(symbol: str) -> int:
             exchange = self._extract_exchange(symbol) or ""
@@ -981,12 +913,8 @@ class FuturesUniverseSelector:
             final_sorted = sorted(rows, key=sort_key, reverse=reverse)
         return final_sorted
 
-    def _select_perp_candidate(
-        self, base: str, perps: List[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
-        candidates = [
-            p for p in perps if self._base_symbol(p.get("symbol", "")) == base
-        ]
+    def _select_perp_candidate(self, base: str, perps: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        candidates = [p for p in perps if self._base_symbol(p.get("symbol", "")) == base]
         if not candidates:
             return None
 
@@ -1011,9 +939,7 @@ class FuturesUniverseSelector:
 
         return sorted(candidates, key=candidate_key)[0]
 
-    def _attach_perp_counterparts(
-        self, rows: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _attach_perp_counterparts(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         spot_rows: List[Dict[str, Any]] = []
         for r in rows:
             symbol = r.get("symbol", "")
@@ -1023,10 +949,7 @@ class FuturesUniverseSelector:
                 base, quote = self._extract_base_quote(symbol)
                 if not (base and quote):
                     continue
-                if (
-                    self.config.allowed_spot_quotes
-                    and quote not in self.config.allowed_spot_quotes
-                ):
+                if self.config.allowed_spot_quotes and quote not in self.config.allowed_spot_quotes:
                     continue
                 spot_rows.append(r)
             else:
@@ -1118,9 +1041,7 @@ class FuturesUniverseSelector:
                     aggregated.extend(market_rows)
                     errors.extend(market_errors)
             else:
-                market_rows, market_errors = self._screen_market(
-                    market, filters, columns, max_rows=prefilter_limit
-                )
+                market_rows, market_errors = self._screen_market(market, filters, columns, max_rows=prefilter_limit)
                 aggregated.extend(market_rows)
                 errors.extend(market_errors)
 
@@ -1157,9 +1078,7 @@ class FuturesUniverseSelector:
         }
 
 
-def _format_markdown_table(
-    rows: List[Mapping[str, Any]], columns: Optional[List[str]] = None
-) -> str:
+def _format_markdown_table(rows: List[Mapping[str, Any]], columns: Optional[List[str]] = None) -> str:
     if not rows:
         return "No data"
 
@@ -1211,14 +1130,10 @@ def load_config_from_env(env_var: str = "FUTURES_SELECTOR_CONFIG") -> SelectorCo
 
 
 def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Futures trend-following universe selector"
-    )
+    parser = argparse.ArgumentParser(description="Futures trend-following universe selector")
     parser.add_argument("--config", help="Path to YAML/JSON config file")
     parser.add_argument("--limit", type=int, help="Override max results")
-    parser.add_argument(
-        "--export", choices=["json", "csv"], help="Enable export and set type"
-    )
+    parser.add_argument("--export", choices=["json", "csv"], help="Enable export and set type")
     parser.add_argument(
         "--export-enabled",
         action="store_true",
@@ -1229,9 +1144,7 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Return payloads without hitting TradingView",
     )
-    parser.add_argument(
-        "--verbose", action="store_true", help="Enable info-level logging"
-    )
+    parser.add_argument("--verbose", action="store_true", help="Enable info-level logging")
     parser.add_argument(
         "--print-format",
         choices=["json", "table"],

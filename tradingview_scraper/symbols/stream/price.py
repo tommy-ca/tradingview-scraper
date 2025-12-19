@@ -1,27 +1,26 @@
 """Module providing a two function which return python generator contains trades realtime data."""
 
-import re
 import json
-from typing import List
-import string
 import logging
+import re
+import secrets
 import signal
+import string
 import time
 from time import sleep
-import secrets
+from typing import List
 
-from websocket import create_connection, WebSocketConnectionClosedException
 import requests
+from websocket import WebSocketConnectionClosedException, create_connection
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 class RealTimeData:
     def __init__(self):
         """
-        Initializes the RealTimeData class, setting up the WebSocket connection 
+        Initializes the RealTimeData class, setting up the WebSocket connection
         and request headers for TradingView data streaming.
         """
         self.request_header = {
@@ -34,7 +33,7 @@ class RealTimeData:
             "Pragma": "no-cache",
             "Sec-WebSocket-Extensions": "permessage-deflate; client_max_window_bits",
             "Upgrade": "websocket",
-            "User-Agent": "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
         }
         self.ws_url = "wss://data.tradingview.com/socket.io/websocket?from=screener%2F&date={date}"
         self.ws_url = "wss://data.tradingview.com/socket.io/websocket?from=screener%2F"
@@ -46,7 +45,7 @@ class RealTimeData:
         Validates the provided exchange symbols.
 
         Args:
-            exchange_symbol (str or list): A single symbol or a list of symbols 
+            exchange_symbol (str or list): A single symbol or a list of symbols
                                             in the format 'EXCHANGE:SYMBOL'.
 
         Raises:
@@ -57,15 +56,15 @@ class RealTimeData:
         """
         if not exchange_symbol:
             raise ValueError("exchange_symbol could not be empty")
-        
+
         if isinstance(exchange_symbol, str):
             exchange_symbol = [exchange_symbol]
-            
+
         for item in exchange_symbol:
-            if len(item.split(':')) != 2:
+            if len(item.split(":")) != 2:
                 raise ValueError(f"Invalid symbol format '{item}'. Must be like 'BINANCE:BTCUSDT'")
 
-            exchange, symbol = item.split(':')
+            exchange, symbol = item.split(":")
             retries = 3
             for attempt in range(retries):
                 try:
@@ -85,7 +84,6 @@ class RealTimeData:
                         raise ValueError(f"Invalid exchange:symbol '{item}' after {retries} attempts") from e
         return True
 
-
     def generate_session(self, prefix: str) -> str:
         """
         Generates a random session identifier.
@@ -96,9 +94,8 @@ class RealTimeData:
         Returns:
             str: A session identifier consisting of the prefix and a random string.
         """
-        random_string = ''.join(secrets.choice(string.ascii_lowercase) for _ in range(12))
+        random_string = "".join(secrets.choice(string.ascii_lowercase) for _ in range(12))
         return prefix + random_string
-
 
     def prepend_header(self, message: str) -> str:
         """
@@ -113,7 +110,6 @@ class RealTimeData:
         message_length = len(message)
         return f"~m~{message_length}~m~{message}"
 
-
     def construct_message(self, func: str, param_list: list) -> str:
         """
         Constructs a message in JSON format.
@@ -125,7 +121,7 @@ class RealTimeData:
         Returns:
             str: The constructed JSON message.
         """
-        return json.dumps({"m": func, "p": param_list}, separators=(',', ':'))
+        return json.dumps({"m": func, "p": param_list}, separators=(",", ":"))
 
     def create_message(self, func: str, param_list: list) -> str:
         """
@@ -150,13 +146,12 @@ class RealTimeData:
         """
         message = self.create_message(func, args)
         logging.debug("Sending message: %s", message)
-        
+
         try:
             self.ws.send(message)
         except (ConnectionError, TimeoutError) as e:  # Catch specific exceptions
             logging.error("Failed to send message: %s", e)
-        
-    
+
     def get_ohlcv(self, exchange_symbol: str):
         """
         Returns a generator that yields OHLC data for a specified symbol in real-time.
@@ -167,14 +162,14 @@ class RealTimeData:
         Returns:
             generator: A generator yielding OHLC data as JSON objects.
         """
-        #self.validate_symbols(exchange_symbol)
+        # self.validate_symbols(exchange_symbol)
         quote_session = self.generate_session(prefix="qs_")
         chart_session = self.generate_session(prefix="cs_")
         logging.info(f"Quote session generated: {quote_session}, Chart session generated: {chart_session}")
 
         self._initialize_sessions(quote_session, chart_session)
         self._add_symbol_to_sessions(quote_session, chart_session, exchange_symbol)
-        
+
         return self.get_data()
 
     def _initialize_sessions(self, quote_session: str, chart_session: str):
@@ -191,15 +186,35 @@ class RealTimeData:
     def _get_quote_fields(self):
         """
         Returns the fields to be set for the quote session.
-        
+
         Returns:
             list: A list of fields for the quote session.
         """
-        return ["ch", "chp", "current_session", "description", "local_description", 
-                "language", "exchange", "fractional", "is_tradable", "lp", 
-                "lp_time", "minmov", "minmove2", "original_name", "pricescale", 
-                "pro_name", "short_name", "type", "update_mode", "volume", 
-                "currency_code", "rchp", "rtc"]
+        return [
+            "ch",
+            "chp",
+            "current_session",
+            "description",
+            "local_description",
+            "language",
+            "exchange",
+            "fractional",
+            "is_tradable",
+            "lp",
+            "lp_time",
+            "minmov",
+            "minmove2",
+            "original_name",
+            "pricescale",
+            "pro_name",
+            "short_name",
+            "type",
+            "update_mode",
+            "volume",
+            "currency_code",
+            "rchp",
+            "rtc",
+        ]
 
     def _add_symbol_to_sessions(self, quote_session: str, chart_session: str, exchange_symbol: str):
         """
@@ -210,14 +225,12 @@ class RealTimeData:
         self.send_message("resolve_symbol", [chart_session, "sds_sym_1", f"={resolve_symbol}"])
         self.send_message("create_series", [chart_session, "sds_1", "s1", "sds_sym_1", "1", 10, ""])
         self.send_message("quote_fast_symbols", [quote_session, exchange_symbol])
-        self.send_message("create_study", [chart_session, "st1", "st1", "sds_1", 
-                            "Volume@tv-basicstudies-246", {"length": 20, "col_prev_close": "false"}])
+        self.send_message("create_study", [chart_session, "st1", "st1", "sds_1", "Volume@tv-basicstudies-246", {"length": 20, "col_prev_close": "false"}])
         self.send_message("quote_hibernate_all", [quote_session])
 
-        
     def get_latest_trade_info(self, exchange_symbol: List[str]):
         """
-        Returns summary information about multiple symbols including last changes, 
+        Returns summary information about multiple symbols including last changes,
         change percentage, and last trade time.
 
         Args:
@@ -242,10 +255,9 @@ class RealTimeData:
         resolve_symbol = json.dumps({"adjustment": "splits", "currency-id": "USD", "session": "regular", "symbol": exchange_symbols[0]})
         self.send_message("quote_add_symbols", [quote_session, f"={resolve_symbol}"])
         self.send_message("quote_fast_symbols", [quote_session, f"={resolve_symbol}"])
-        
-        self.send_message("quote_add_symbols", [quote_session]+exchange_symbols)
-        self.send_message("quote_fast_symbols", [quote_session]+exchange_symbols)
 
+        self.send_message("quote_add_symbols", [quote_session] + exchange_symbols)
+        self.send_message("quote_fast_symbols", [quote_session] + exchange_symbols)
 
     def get_data(self):
         """
@@ -265,9 +277,9 @@ class RealTimeData:
                         logging.debug(f"Received heartbeat: {result}")
                         self.ws.send(result)
                     else:
-                        split_result = [x for x in re.split(r'~m~\d+~m~', result) if x]
+                        split_result = [x for x in re.split(r"~m~\d+~m~", result) if x]
                         for item in split_result:
-                           if item:
+                            if item:
                                 try:
                                     yield json.loads(item)  # Yield parsed JSON data
                                 except Exception as e:
@@ -283,7 +295,7 @@ class RealTimeData:
         finally:
             self.ws.close()
 
-        
+
 # Signal handler for keyboard interrupt
 def signal_handler(sig, frame):
     """
@@ -301,7 +313,6 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 
-
 # Example Usage
 if __name__ == "__main__":
     real_time_data = RealTimeData()
@@ -314,6 +325,5 @@ if __name__ == "__main__":
 
     # Iterate over the generator to get real-time data
     for packet in data_generator:
-        print('-'*50)
+        print("-" * 50)
         print(packet)
-

@@ -12,6 +12,8 @@ from tradingview_scraper.futures_universe_selector import (
     SelectorConfig,
     load_config,
     load_config_from_env,
+)
+from tradingview_scraper.futures_universe_selector import (
     main as _shared_main,
 )
 

@@ -9,27 +9,23 @@ Classes:
     Streamer: Handles the connection and data retrieval from TradingView WebSocket streams.
 """
 
-import re
-import sys
 import json
 import logging
+import re
 import signal
+import sys
 from time import sleep
-from typing import Optional, Union, List, Tuple
+from typing import List, Optional, Tuple
 
 from websocket import WebSocketConnectionClosedException
 
-from tradingview_scraper.symbols.stream import StreamHandler
-from tradingview_scraper.symbols.stream.utils import (
-    validate_symbols,
-    fetch_indicator_metadata
-)
-from tradingview_scraper.symbols.utils import save_json_file, save_csv_file
 from tradingview_scraper.symbols.exceptions import DataNotFoundError
+from tradingview_scraper.symbols.stream import StreamHandler
+from tradingview_scraper.symbols.stream.utils import fetch_indicator_metadata, validate_symbols
+from tradingview_scraper.symbols.utils import save_csv_file, save_json_file
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 class Streamer:
@@ -48,12 +44,7 @@ class Streamer:
             Yields parsed real-time data from the TradingView WebSocket connection.
     """
 
-    def __init__(
-        self,
-        export_result=False,
-        export_type='json',
-        websocket_jwt_token:str="unauthorized_user_token"
-        ):
+    def __init__(self, export_result=False, export_type="json", websocket_jwt_token: str = "unauthorized_user_token"):
         """
         Initializes the Streamer class with export options and WebSocket authentication token.
 
@@ -68,14 +59,7 @@ class Streamer:
         ws_url = "wss://data.tradingview.com/socket.io/websocket?from=chart%2FVEPYsueI%2F&type=chart"
         self.stream_obj = StreamHandler(websocket_url=ws_url, jwt_token=websocket_jwt_token)
 
-    def _add_symbol_to_sessions(
-        self,
-        quote_session: str,
-        chart_session: str,
-        exchange_symbol: str,
-        timeframe: str = "1m",
-        numb_candles: int = 10
-        ):
+    def _add_symbol_to_sessions(self, quote_session: str, chart_session: str, exchange_symbol: str, timeframe: str = "1m", numb_candles: int = 10):
         """
         Adds a symbol to the WebSocket session.
 
@@ -86,25 +70,11 @@ class Streamer:
             timeframe (str): The timeframe for the data (e.g., '1m', '5m'). Default is '1m'.
             numb_candles (int): The number of candles to fetch. Default is 10.
         """
-        timeframe_map = {
-            '1m': '1',
-            '5m': '5', 
-            '15m': '15',
-            '30m': '30',
-            '1h': '60',
-            '2h': '120',
-            '4h': '240',
-            '1d': '1D',
-            '1w': '1W',
-            '1M': '1M'
-        }
+        timeframe_map = {"1m": "1", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "2h": "120", "4h": "240", "1d": "1D", "1w": "1W", "1M": "1M"}
         resolve_symbol = json.dumps({"adjustment": "splits", "symbol": exchange_symbol})
         self.stream_obj.send_message("quote_add_symbols", [quote_session, f"={resolve_symbol}"])
-        self.stream_obj.send_message("resolve_symbol", [chart_session,
-                                                        "sds_sym_1", f"={resolve_symbol}"])
-        self.stream_obj.send_message("create_series", [chart_session,
-                                                       "sds_1", "s1", "sds_sym_1", timeframe_map.get(timeframe, "1"),
-                                                       numb_candles, ""])
+        self.stream_obj.send_message("resolve_symbol", [chart_session, "sds_sym_1", f"={resolve_symbol}"])
+        self.stream_obj.send_message("create_series", [chart_session, "sds_1", "s1", "sds_sym_1", timeframe_map.get(timeframe, "1"), numb_candles, ""])
         self.stream_obj.send_message("quote_fast_symbols", [quote_session, exchange_symbol])
 
     def _add_indicator_study(self, indicator_study: dict):
@@ -127,25 +97,23 @@ class Streamer:
         """
         for idx, (indicator_id, indicator_version) in enumerate(indicators):
             logging.info(f"Processing indicator {idx + 1}/{len(indicators)}: {indicator_id} v{indicator_version}")
-            
-            ind_study = fetch_indicator_metadata(script_id=indicator_id,
-                                                 script_version=indicator_version,
-                                                 chart_session=self.stream_obj.chart_session)
-            
+
+            ind_study = fetch_indicator_metadata(script_id=indicator_id, script_version=indicator_version, chart_session=self.stream_obj.chart_session)
+
             # Check if indicator metadata was successfully fetched
-            if not ind_study or 'p' not in ind_study:
+            if not ind_study or "p" not in ind_study:
                 logging.error(f"Failed to fetch metadata for indicator {indicator_id} v{indicator_version}")
                 continue
-            
-            study_id = f'st{9 + idx}'
+
+            study_id = f"st{9 + idx}"
             # Modify study ID for additional indicators (st9, st10, st11, etc.)
-            ind_study['p'][1] = study_id
+            ind_study["p"][1] = study_id
             logging.info(f"Assigned study ID '{study_id}' to indicator {indicator_id}")
-            
+
             # Store full indicator_id as the key (e.g., "STD;RSI")
             self.study_id_to_name_map[study_id] = indicator_id
             logging.debug(f"Stored mapping: {study_id} -> {indicator_id}")
-            
+
             try:
                 self._add_indicator_study(indicator_study=ind_study)
                 logging.info(f"Successfully added indicator {indicator_id} v{indicator_version}")
@@ -163,20 +131,14 @@ class Streamer:
         Returns:
             list: A list of serialized OHLC data.
         """
-        ohlc_data = raw_data.get('p', [{}, {}, {}])[1].get('sds_1', {}).get('s', [])
+        ohlc_data = raw_data.get("p", [{}, {}, {}])[1].get("sds_1", {}).get("s", [])
 
         json_data = []
         for entry in ohlc_data:
-            json_entry = {
-                'index': entry['i'],
-                'timestamp': entry['v'][0],
-                'open': entry['v'][1],
-                'high': entry['v'][2],
-                'low': entry['v'][3],
-                'close': entry['v'][4]
-            }
-            #some packets may not have volume data to avoid KeyError
-            if len(entry['v']) > 5: json_entry["volume"] = entry['v'][5]
+            json_entry = {"index": entry["i"], "timestamp": entry["v"][0], "open": entry["v"][1], "high": entry["v"][2], "low": entry["v"][3], "close": entry["v"][4]}
+            # some packets may not have volume data to avoid KeyError
+            if len(entry["v"]) > 5:
+                json_entry["volume"] = entry["v"][5]
             json_data.append(json_entry)
         return json_data
 
@@ -191,17 +153,12 @@ class Streamer:
             list: A list of serialized indicator data or an empty list if an error occurs.
         """
         try:
-            indicator_data = raw_data['p'][1]['st9']['st']
+            indicator_data = raw_data["p"][1]["st9"]["st"]
 
             converted_data = []
             for item in indicator_data:
-                timestamp, smoothing, close, *other_values = item['v']
-                converted_data.append({
-                    'index': item['i'],
-                    'timestamp': timestamp,
-                    "smoothing": smoothing,
-                    "close": close
-                })
+                timestamp, smoothing, close, *other_values = item["v"]
+                converted_data.append({"index": item["i"], "timestamp": timestamp, "smoothing": smoothing, "close": close})
 
             return converted_data
         except (KeyError, TypeError) as e:
@@ -219,7 +176,7 @@ class Streamer:
             DataNotFoundError: If no 'OHLC' packet is found within the first 15 packets.
         """
         json_data = []
-        if pkt.get('m') == "timescale_update":
+        if pkt.get("m") == "timescale_update":
             json_data = self._serialize_ohlc(pkt)
         return json_data
 
@@ -234,32 +191,25 @@ class Streamer:
             dict: A dictionary with indicator IDs as keys and their data as values.
         """
         indicator_data = {}
-        if pkt.get('m') == "du":
-            for item in pkt.get('p', []):
+        if pkt.get("m") == "du":
+            for item in pkt.get("p", []):
                 if isinstance(item, dict):
-                    for k, v in pkt.get('p')[1].items():
-                        if k.startswith('st') and k in self.study_id_to_name_map:
-                            if 'st' in v and len(v['st']) > 10:
+                    for k, v in pkt.get("p")[1].items():
+                        if k.startswith("st") and k in self.study_id_to_name_map:
+                            if "st" in v and len(v["st"]) > 10:
                                 indicator_name = self.study_id_to_name_map[k]
                                 json_data = []
-                                for val in v['st']:
-                                    tmp = {"index": val['i'], "timestamp": val['v'][0]}
-                                    tmp.update({str(idx): v for idx, v in enumerate(val['v'][1:])})
+                                for val in v["st"]:
+                                    tmp = {"index": val["i"], "timestamp": val["v"][0]}
+                                    tmp.update({str(idx): v for idx, v in enumerate(val["v"][1:])})
                                     json_data.append(tmp)
-                                
+
                                 indicator_data[indicator_name] = json_data
                                 logging.debug(f"Indicator {indicator_name} (study {k}) data extracted: {len(json_data)} points")
 
         return indicator_data
 
-    def stream(
-        self,
-        exchange: str,
-        symbol: str,
-        timeframe: str = '1m',
-        numb_price_candles: int = 10,
-        indicators: Optional[List[Tuple[str, str]]] = None
-        ):
+    def stream(self, exchange: str, symbol: str, timeframe: str = "1m", numb_price_candles: int = 10, indicators: Optional[List[Tuple[str, str]]] = None):
         """
         Starts streaming data for a given exchange and symbol, with optional indicators.
 
@@ -279,23 +229,18 @@ class Streamer:
 
         ind_flag = indicators is not None and len(indicators) > 0
 
-        self._add_symbol_to_sessions(self.stream_obj.quote_session,
-                                     self.stream_obj.chart_session,
-                                     exchange_symbol,
-                                     timeframe,
-                                     numb_price_candles)
+        self._add_symbol_to_sessions(self.stream_obj.quote_session, self.stream_obj.chart_session, exchange_symbol, timeframe, numb_price_candles)
 
         if ind_flag:
             self._add_indicators(indicators)
 
         if self.export_result is True:
-
             ohlc_json_data = []
             indicator_json_data = {}
             expected_indicator_count = len(indicators) if ind_flag else 0
-            
+
             logging.info(f"Starting data collection for {numb_price_candles} candles and {expected_indicator_count} indicators")
-            
+
             for i, pkt in enumerate(self.get_data()):
                 # Extract OHLC data
                 received_data = self._extract_ohlc_from_stream(pkt)
@@ -308,7 +253,7 @@ class Streamer:
                 if received_indicator_data:
                     indicator_json_data.update(received_indicator_data)
                     logging.info(f"Indicator data received: {len(indicator_json_data)}/{expected_indicator_count} indicators")
-                
+
                 # Check if we have sufficient data
                 ohlc_ready = len(ohlc_json_data) >= numb_price_candles
                 indicators_ready = not ind_flag or len(indicator_json_data) >= expected_indicator_count
@@ -327,7 +272,7 @@ class Streamer:
                     if not ohlc_json_data:
                         raise DataNotFoundError("No 'OHLC' packet found within the timeout period.")
                     break
-            
+
             # Check for empty indicator data and log errors
             if ind_flag:
                 for indicator_id, _ in indicators:
@@ -335,16 +280,12 @@ class Streamer:
                         logging.error(f"❌ Unable to scrape indicator: {indicator_id} - No data received")
                     elif not indicator_json_data[indicator_id]:
                         logging.error(f"❌ Unable to scrape indicator: {indicator_id} - Empty data")
-            
+
             logging.info(f"Data collection complete: {len(ohlc_json_data)} OHLC candles, {len(indicator_json_data)} indicators")
-            
+
             self._export(json_data=ohlc_json_data, symbol=symbol, data_category="ohlc")
             if ind_flag is True:
-                self._export(
-                    json_data=indicator_json_data,
-                    symbol=symbol,
-                    data_category="indicator"
-                    )
+                self._export(json_data=indicator_json_data, symbol=symbol, data_category="indicator")
 
             return {"ohlc": ohlc_json_data, "indicator": indicator_json_data}
 
@@ -382,7 +323,7 @@ class Streamer:
                         logging.debug("Received heartbeat: %s", result)
                         self.stream_obj.ws.send(result)
                     else:
-                        split_result = [x for x in re.split(r'~m~\d+~m~', result) if x]
+                        split_result = [x for x in re.split(r"~m~\d+~m~", result) if x]
                         for item in split_result:
                             if item:
                                 yield json.loads(item)  # Yield parsed JSON data

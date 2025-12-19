@@ -1,5 +1,5 @@
-import os
 import json
+import os
 import random
 from datetime import datetime
 from typing import List
@@ -7,7 +7,7 @@ from typing import List
 import pandas as pd
 
 
-def ensure_export_directory(path='/export'):
+def ensure_export_directory(path="/export"):
     """Check if the export directory exists, and create it if it does not.
 
     Parameters
@@ -26,6 +26,7 @@ def ensure_export_directory(path='/export'):
             print(f"[INFO] Directory {path} created.")
         except Exception as e:
             print(f"[ERROR] Error creating directory {path}: {e}")
+
 
 def generate_export_filepath(symbol, data_category, timeframe, file_extension):
     """Generate a file path for exporting data, including the current timestamp.
@@ -51,11 +52,12 @@ def generate_export_filepath(symbol, data_category, timeframe, file_extension):
         "<current_directory>/export/<data_category>_<symbol>_<timestamp><file_extension>".
     """
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    symbol_lower = f'{symbol.lower()}_' if symbol else ''
-    timeframe = f'{timeframe}_' if timeframe else ''
+    symbol_lower = f"{symbol.lower()}_" if symbol else ""
+    timeframe = f"{timeframe}_" if timeframe else ""
     root_path = os.getcwd()
     path = os.path.join(root_path, "export", f"{data_category}_{symbol_lower}{timeframe}{timestamp}{file_extension}")
     return path
+
 
 def save_json_file(data, **kwargs):
     """
@@ -85,14 +87,14 @@ def save_json_file(data, **kwargs):
     Exception
         For any unexpected errors that may occur during file writing.
     """
-    symbol = kwargs.get('symbol')
-    data_category = kwargs.get('data_category')
-    timeframe = kwargs.get('timeframe', '')
-    
-    output_path = generate_export_filepath(symbol, data_category, timeframe, '.json')
+    symbol = kwargs.get("symbol")
+    data_category = kwargs.get("data_category")
+    timeframe = kwargs.get("timeframe", "")
+
+    output_path = generate_export_filepath(symbol, data_category, timeframe, ".json")
     ensure_export_directory(os.path.dirname(output_path))  # Ensure the directory exists
     try:
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         print(f"[INFO] JSON file saved at: {output_path}")
     except FileNotFoundError:
@@ -103,6 +105,7 @@ def save_json_file(data, **kwargs):
         print(f"[ERROR] Error: The data provided is not serializable. {e}")
     except Exception as e:
         print(f"[ERROR] An unexpected error occurred: {e}")
+
 
 def save_csv_file(data, **kwargs):
     """
@@ -132,11 +135,11 @@ def save_csv_file(data, **kwargs):
     Exception
         For any unexpected errors that may occur during file writing.
     """
-    symbol = kwargs.get('symbol')
-    data_category = kwargs.get('data_category')
-    timeframe = kwargs.get('timeframe', '')
+    symbol = kwargs.get("symbol")
+    data_category = kwargs.get("data_category")
+    timeframe = kwargs.get("timeframe", "")
 
-    output_path = generate_export_filepath(symbol, data_category, timeframe, '.csv')
+    output_path = generate_export_filepath(symbol, data_category, timeframe, ".csv")
     ensure_export_directory(os.path.dirname(output_path))  # Ensure the directory exists
     try:
         df = pd.DataFrame.from_dict(data)
@@ -150,6 +153,7 @@ def save_csv_file(data, **kwargs):
         print(f"[ERROR] Error: Permission denied when trying to write to {output_path}.")
     except Exception as e:
         print(f"[ERROR] An unexpected error occurred: {e}")
+
 
 def generate_user_agent():
     """
@@ -166,10 +170,11 @@ def generate_user_agent():
         "Mozilla/5.0 (compatible; Googlebot-News; +http://www.google.com/bot.html)",
         "Mozilla/5.0 (compatible; Googlebot-Video/1.0; +http://www.google.com/bot.html)",
         "Mozilla/5.0 (compatible; Googlebot-AdsBot/1.0; +http://www.google.com/bot.html)",
-        "Mozilla/5.0 (compatible; Google-Site-Verification/1.0; +http://www.google.com/bot.html)"
+        "Mozilla/5.0 (compatible; Google-Site-Verification/1.0; +http://www.google.com/bot.html)",
     ]
-    
+
     return random.choice(user_agents)
+
 
 def validate_string_array(data: List[str], valid_values: List[str]) -> bool:
     """
@@ -190,12 +195,12 @@ def validate_string_array(data: List[str], valid_values: List[str]) -> bool:
     bool
         True if all items in the data list are valid, False otherwise.
     """
-    
+
     if not data:
         return False
 
     for item in data:
         if item not in valid_values:
             return False
-    
+
     return True

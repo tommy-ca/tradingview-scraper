@@ -1,0 +1,26 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.8
+    hooks:
+      - id: ruff
+        args: [ --fix ]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty
+        entry: uvx ty
+        args: ["check"]
+        language: system
+        types: [python]
+        pass_filenames: true
+        # Exclude tests and currently failing files to allow incremental adoption
+        exclude: >
+          (?x)^(
+            tests/|
+            tradingview_scraper/symbols/news\.py|
+            tradingview_scraper/futures_universe_selector\.py|
+            tradingview_scraper/symbols/cal\.py|
+            tradingview_scraper/symbols/stream/streamer\.py
+          )

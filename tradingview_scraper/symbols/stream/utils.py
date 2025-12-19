@@ -11,6 +11,7 @@ This module contains functions to:
 
 import logging
 import time
+
 import requests
 
 
@@ -32,10 +33,7 @@ def validate_symbols(exchange_symbol):
     Returns:
         bool: True if all provided symbols are valid.
     """
-    validate_url = (
-        "https://scanner.tradingview.com/symbol?"
-        "symbol={exchange}%3A{symbol}&fields=market&no_404=false"
-    )
+    validate_url = "https://scanner.tradingview.com/symbol?" "symbol={exchange}%3A{symbol}&fields=market&no_404=false"
 
     if not exchange_symbol:
         raise ValueError("exchange_symbol cannot be empty")
@@ -46,25 +44,19 @@ def validate_symbols(exchange_symbol):
     for item in exchange_symbol:
         parts = item.split(":")
         if len(parts) != 2:
-            raise ValueError(
-                f"Invalid symbol format '{item}'. Must be like 'BINANCE:BTCUSDT'"
-            )
+            raise ValueError(f"Invalid symbol format '{item}'. Must be like 'BINANCE:BTCUSDT'")
 
         exchange, symbol = parts
         retries = 3
 
         for attempt in range(retries):
             try:
-                res = requests.get(
-                    validate_url.format(exchange=exchange, symbol=symbol), timeout=5
-                )
+                res = requests.get(validate_url.format(exchange=exchange, symbol=symbol), timeout=5)
                 res.raise_for_status()
             except requests.RequestException as exc:
                 status = getattr(exc.response, "status_code", None)
                 if status == 404:
-                    raise ValueError(
-                        f"Invalid exchange:symbol '{item}' after {retries} attempts"
-                    ) from exc
+                    raise ValueError(f"Invalid exchange:symbol '{item}' after {retries} attempts") from exc
 
                 logging.warning(
                     "Attempt %d failed to validate exchange:symbol '%s': %s",
@@ -76,9 +68,7 @@ def validate_symbols(exchange_symbol):
                 if attempt < retries - 1:
                     time.sleep(1)  # Wait briefly before retrying
                 else:
-                    raise ValueError(
-                        f"Invalid exchange:symbol '{item}' after {retries} attempts"
-                    ) from exc
+                    raise ValueError(f"Invalid exchange:symbol '{item}' after {retries} attempts") from exc
             else:
                 break  # Successful request; exit retry loop
 
@@ -117,10 +107,7 @@ def fetch_tradingview_indicators(query: str):
         filtered_results = []
 
         for indicator in results:
-            if (
-                query.lower() in indicator["scriptName"].lower()
-                or query.lower() in indicator["author"]["username"].lower()
-            ):
+            if query.lower() in indicator["scriptName"].lower() or query.lower() in indicator["author"]["username"].lower():
                 filtered_results.append(
                     {
                         "scriptName": indicator["scriptName"],
@@ -172,9 +159,7 @@ def display_and_select_indicator(indicators):
 
     if 0 <= selected_index < len(indicators):
         selected_indicator = indicators[selected_index]
-        print(
-            f"You selected: {selected_indicator['scriptName']} by {selected_indicator['author']}"
-        )
+        print(f"You selected: {selected_indicator['scriptName']} by {selected_indicator['author']}")
         return (
             selected_indicator.get("scriptIdPart"),
             selected_indicator.get("version"),
@@ -247,29 +232,17 @@ def prepare_indicator_metadata(script_id: str, metainfo: dict, chart_session: st
                 "text": metainfo["inputs"][0]["defval"],
                 "pineId": script_id,
                 "pineVersion": metainfo.get("pine", {}).get("version", "1.0"),
-                "pineFeatures": {
-                    "v": "{\"indicator\":1,\"plot\":1,\"ta\":1}",
-                    "f": True,
-                    "t": "text"
-                },
-                "__profile": {
-                    "v": False,
-                    "f": True,
-                    "t": "bool"
-                }
-            }
-        ]
+                "pineFeatures": {"v": '{"indicator":1,"plot":1,"ta":1}', "f": True, "t": "text"},
+                "__profile": {"v": False, "f": True, "t": "bool"},
+            },
+        ],
     }
 
     # Collect additional input values that start with 'in_'
     in_x = {}
     for input_item in metainfo.get("inputs", []):
         if input_item["id"].startswith("in_"):
-            in_x[input_item["id"]] = {
-                "v": input_item["defval"],
-                "f": True,
-                "t": input_item["type"]
-            }
+            in_x[input_item["id"]] = {"v": input_item["defval"], "f": True, "t": input_item["type"]}
 
     # Update the dictionary inside output_data with additional inputs
     for item in output_data["p"]:

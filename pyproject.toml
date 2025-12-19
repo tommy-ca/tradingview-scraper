@@ -1,0 +1,35 @@
+[project]
+name = "tradingview-scraper"
+version = "0.4.20"
+description = "Tradingview scraper tool"
+requires-python = ">=3.8"
+dependencies = [
+    "requests==2.32.4",
+    "pandas>=2.0.3",
+    "beautifulsoup4>=4.12.3",
+    "pydantic>=2.8.2",
+    "websockets>=13.1",
+    "websocket-client>=1.8.0",
+    "python-dotenv>=1.0.1",
+]
+
+[tool.ruff]
+# Same as .pylintrc max-line-length
+line-length = 200
+target-version = "py38"
+
+[tool.ruff.lint]
+# Enable Pyflakes (F), pycodestyle (E, W), and isort (I)
+select = ["F", "E", "W", "I"]
+
+# Ignore rules to match .pylintrc permissive style
+ignore = [
+    "E501",  # Line too long (letting line-length setting handle soft limits, but strictly ignoring noise)
+    "F841",  # Unused variable
+    "E741",  # Ambiguous variable name (part of invalid-name)
+    "E712",  # Comparison to True should be 'if cond is True' (often ignored in permissive codebases)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*.py" = ["E402"]

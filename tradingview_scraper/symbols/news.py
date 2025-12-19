@@ -1,21 +1,20 @@
 """Module providing a function to scrape published news about a symbol."""
 
-import os
-import json
-import sys
 import argparse
+import json
 import logging
-from typing import List
+import os
+import sys
+from typing import List, Optional
 
-from bs4 import BeautifulSoup
-import requests
 import pkg_resources
-
+import requests
+from bs4 import BeautifulSoup
 
 from tradingview_scraper.symbols.utils import (
+    generate_user_agent,
     save_csv_file,
     save_json_file,
-    generate_user_agent,
 )
 
 
@@ -47,34 +46,26 @@ class NewsScraper:
 
         if exchange and exchange not in self.exchanges:
             raise ValueError(
-                "Unsupported exchange! Please check 'the available options' at the link below:\n\t"
-                "https://github.com/mnwato/tradingview-scraper/blob/main/tradingview_scraper/data/exchanges.txt"
+                "Unsupported exchange! Please check 'the available options' at the link below:\n\thttps://github.com/mnwato/tradingview-scraper/blob/main/tradingview_scraper/data/exchanges.txt"
             )
 
         if provider and provider not in self.news_providers:
             raise ValueError(
-                "Unsupported provider! Please check 'the available options' at the link below:\n\t"
-                "https://github.com/mnwato/tradingview-scraper/blob/main/tradingview_scraper/data/news_providers.txt"
+                "Unsupported provider! Please check 'the available options' at the link below:\n\thttps://github.com/mnwato/tradingview-scraper/blob/main/tradingview_scraper/data/news_providers.txt"
             )
 
         if area and area not in self.areas:
-            raise ValueError(
-                "Invalid area! Please check 'the available options' at the link below:\n\t"
-                "https://github.com/mnwato/tradingview-scraper/blob/main/tradingview_scraper/data/areas.json"
-            )
+            raise ValueError("Invalid area! Please check 'the available options' at the link below:\n\thttps://github.com/mnwato/tradingview-scraper/blob/main/tradingview_scraper/data/areas.json")
 
         if section not in ["all", "esg", "financial_statement", "press_release"]:
             raise ValueError("Invalid section! It must be 'all' or 'esg'.")
 
         if sort not in ["latest", "oldest", "most_urgent", "least_urgent"]:
-            raise ValueError(
-                "Invalid sort option! It must be one of 'latest', 'oldest', 'most_urgent', or 'least_urgent'."
-            )
+            raise ValueError("Invalid sort option! It must be one of 'latest', 'oldest', 'most_urgent', or 'least_urgent'.")
 
         if language not in self.languages:
             raise ValueError(
-                "Unsupported language! Please check 'the available options' at the link below:\n\t"
-                "https://github.com/mnwato/tradingview-scraper/blob/main/tradingview_scraper/data/languages.json"
+                "Unsupported language! Please check 'the available options' at the link below:\n\thttps://github.com/mnwato/tradingview-scraper/blob/main/tradingview_scraper/data/languages.json"
             )
 
         return kwargs
@@ -123,14 +114,7 @@ class NewsScraper:
         # Breadcrumbs
         breadcrumbs = article_tag.find("nav", {"aria-label": "Breadcrumbs"})
         if breadcrumbs:
-            article_json["breadcrumbs"] = " > ".join(
-                [
-                    item.get_text(strip=True)
-                    for item in breadcrumbs.find_all(
-                        "span", class_="breadcrumb-content-cZAS4vtj"
-                    )
-                ]
-            )
+            article_json["breadcrumbs"] = " > ".join([item.get_text(strip=True) for item in breadcrumbs.find_all("span", class_="breadcrumb-content-cZAS4vtj")])
 
         # Title
         title = article_tag.find("h1", class_="title-KX2tCBZq")
@@ -152,18 +136,14 @@ class NewsScraper:
                         symbol_name = symbol_name_tag.get_text(strip=True)
                         if symbol_name:
                             symbol_img = a.find("img")
-                            article_json["related_symbols"].append(
-                                {"symbol": symbol_name, "logo": symbol_img}
-                            )
+                            article_json["related_symbols"].append({"symbol": symbol_name, "logo": symbol_img})
 
         # Body extraction
         body_content = article_tag.find("div", class_="body-KX2tCBZq")
         if body_content:
             for element in body_content.find_all(["p", "img"], recursive=True):
                 if element.name == "p":
-                    article_json["body"].append(
-                        {"type": "text", "content": element.get_text(strip=True)}
-                    )
+                    article_json["body"].append({"type": "text", "content": element.get_text(strip=True)})
                 elif element.name == "img":
                     article_json["body"].append(
                         {
@@ -186,8 +166,8 @@ class NewsScraper:
         self,
         symbol: str,
         exchange: str,
-        provider: str = None,
-        area: str = None,
+        provider: Optional[str] = None,
+        area: Optional[str] = None,
         sort: str = "latest",
         section: str = "all",
         language: str = "en",
@@ -271,17 +251,13 @@ class NewsScraper:
 
             # Save results
             if self.export_result:
-                self._export(
-                    data=news_list, symbol=symbol, provider=provider, area=area
-                )
+                self._export(data=news_list, symbol=symbol, provider=provider, area=area)
 
             return news_list
 
         except requests.exceptions.HTTPError as http_err:
             if response.status_code == 400:
-                raise ValueError(
-                    "Bad request: The server could not understand the request."
-                ) from http_err
+                raise ValueError("Bad request: The server could not understand the request.") from http_err
             raise  # Propagate other HTTP errors
         except Exception as err:
             raise RuntimeError("An error occurred while scraping news.") from err
@@ -306,9 +282,7 @@ class NewsScraper:
         return news_list
 
     def _export(self, data, symbol=None, provider=None, area=None):
-        data_category = (
-            "news_symbol" if symbol else "news_provider" if provider else "news_area"
-        )
+        data_category = "news_symbol" if symbol else "news_provider" if provider else "news_area"
 
         if self.export_type == "json":
             save_json_file(data=data, symbol=symbol, data_category=data_category)
@@ -325,9 +299,7 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename(
-            "tradingview_scraper", "data/languages.json"
-        )
+        path = pkg_resources.resource_filename("tradingview_scraper", "data/languages.json")
         if not os.path.exists(path):
             print(f"[ERROR] Languages file not found at {path}.")
             return []
@@ -348,9 +320,7 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename(
-            "tradingview_scraper", "data/exchanges.txt"
-        )
+        path = pkg_resources.resource_filename("tradingview_scraper", "data/exchanges.txt")
         if not os.path.exists(path):
             print(f"[ERROR] Exchanges file not found at {path}.")
             return []
@@ -371,9 +341,7 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename(
-            "tradingview_scraper", "data/news_providers.txt"
-        )
+        path = pkg_resources.resource_filename("tradingview_scraper", "data/news_providers.txt")
         if not os.path.exists(path):
             print(f"[ERROR] News provider file not found at {path}.")
             return []
@@ -427,44 +395,30 @@ def _load_symbols_from_file(path: str) -> List[str]:
 
 
 def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="TradingView news scraper (headlines + optional bodies)"
-    )
-    parser.add_argument(
-        "--exchange", required=True, help="Exchange code (e.g., BINANCE, NASDAQ)"
-    )
-    parser.add_argument(
-        "--symbols", help="Comma-separated symbols (e.g., BTCUSD,ETHUSD)"
-    )
+    parser = argparse.ArgumentParser(description="TradingView news scraper (headlines + optional bodies)")
+    parser.add_argument("--exchange", required=True, help="Exchange code (e.g., BINANCE, NASDAQ)")
+    parser.add_argument("--symbols", help="Comma-separated symbols (e.g., BTCUSD,ETHUSD)")
     parser.add_argument(
         "--symbols-file",
         dest="symbols_file",
         help="Path to file with one symbol per line",
     )
-    parser.add_argument(
-        "--provider", help="News provider filter (see data/news_providers.txt)"
-    )
-    parser.add_argument(
-        "--area", help="Geographic area filter (see data/areas.json, e.g., americas)"
-    )
+    parser.add_argument("--provider", help="News provider filter (see data/news_providers.txt)")
+    parser.add_argument("--area", help="Geographic area filter (see data/areas.json, e.g., americas)")
     parser.add_argument(
         "--section",
         default="all",
         choices=["all", "esg", "financial_statement", "press_release"],
         help="News section",
     )
-    parser.add_argument(
-        "--language", default="en", help="Language code (see data/languages.json)"
-    )
+    parser.add_argument("--language", default="en", help="Language code (see data/languages.json)")
     parser.add_argument(
         "--sort",
         default="latest",
         choices=["latest", "oldest", "most_urgent", "least_urgent"],
         help="Sort order",
     )
-    parser.add_argument(
-        "--max-headlines", type=int, default=20, help="Cap headlines per symbol"
-    )
+    parser.add_argument("--max-headlines", type=int, default=20, help="Cap headlines per symbol")
     parser.add_argument(
         "--fetch-content",
         action="store_true",
@@ -476,9 +430,7 @@ def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         default=5,
         help="Number of headlines to fetch body for when enabled",
     )
-    parser.add_argument(
-        "--export", choices=["json", "csv"], help="Enable export and set format"
-    )
+    parser.add_argument("--export", choices=["json", "csv"], help="Enable export and set format")
     parser.add_argument("--verbose", action="store_true", help="Enable debug logging")
     return parser.parse_args(argv)
 
@@ -497,9 +449,7 @@ def _gather_symbols(args: argparse.Namespace) -> List[str]:
             ordered.append(sym)
             seen.add(sym)
     if not ordered:
-        raise ValueError(
-            "At least one symbol is required via --symbols or --symbols-file"
-        )
+        raise ValueError("At least one symbol is required via --symbols or --symbols-file")
     return ordered
 
 
@@ -513,9 +463,7 @@ def main(argv: List[str] | None = None) -> int:
         logging.error("Failed to parse symbols: %s", exc)
         return 1
 
-    scraper = NewsScraper(
-        export_result=bool(args.export), export_type=args.export or "json"
-    )
+    scraper = NewsScraper(export_result=bool(args.export), export_type=args.export or "json")
     results = {}
     errors: List[str] = []
 
@@ -538,9 +486,7 @@ def main(argv: List[str] | None = None) -> int:
             if args.fetch_content and headlines:
                 contents = []
                 for item in headlines[: args.content_limit]:
-                    story_path = item.get("storyPath") or item.get("link", "").replace(
-                        "https://tradingview.com", ""
-                    )
+                    story_path = item.get("storyPath") or item.get("link", "").replace("https://tradingview.com", "")
                     if not story_path:
                         continue
                     try:

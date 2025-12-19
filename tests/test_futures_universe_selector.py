@@ -174,9 +174,7 @@ def test_format_markdown_table():
         },
     ]
 
-    table = _format_markdown_table(
-        rows, ["symbol", "name", "close", "volume", "Recommend.All"]
-    )
+    table = _format_markdown_table(rows, ["symbol", "name", "close", "volume", "Recommend.All"])
 
     lines = table.splitlines()
     assert lines[0].startswith("| symbol | name | close | volume | Recommend.All |")

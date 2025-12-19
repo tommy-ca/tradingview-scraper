@@ -1,13 +1,13 @@
 """Module providing a function to screen stocks, crypto, forex, and other markets with custom filters."""
 
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 import requests
 
 from tradingview_scraper.symbols.utils import (
+    generate_user_agent,
     save_csv_file,
     save_json_file,
-    generate_user_agent,
 )
 
 
@@ -130,10 +130,7 @@ class Screener:
             ValueError: If the market is not supported.
         """
         if market not in self.SUPPORTED_MARKETS:
-            raise ValueError(
-                f"Unsupported market: {market}. "
-                f"Supported markets: {', '.join(self.SUPPORTED_MARKETS.keys())}"
-            )
+            raise ValueError(f"Unsupported market: {market}. " f"Supported markets: {', '.join(self.SUPPORTED_MARKETS.keys())}")
 
     def _get_default_columns(self, market: str) -> List[str]:
         """
@@ -277,9 +274,7 @@ class Screener:
 
         try:
             # Make request
-            response = requests.post(
-                url, json=payload, headers=self.headers, timeout=10
-            )
+            response = requests.post(url, json=payload, headers=self.headers, timeout=10)
 
             if response.status_code == 200:
                 json_response = response.json()
@@ -298,9 +293,7 @@ class Screener:
                         }
 
                         # Map each field value
-                        field_list = (
-                            columns if columns else self._get_default_columns(market)
-                        )
+                        field_list = columns if columns else self._get_default_columns(market)
                         for idx, field in enumerate(field_list):
                             if idx < len(symbol_data):
                                 formatted_item[field] = symbol_data[idx]

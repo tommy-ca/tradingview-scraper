@@ -1,23 +1,25 @@
 """Setup configuration for tradingview-scraper package."""
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
+
 
 def readme():
     """Read README.md file."""
-    with open('README.md', encoding='utf-8') as f:
+    with open("README.md", encoding="utf-8") as f:
         readme_content = f.read()
     return readme_content
 
+
 classifiers = [
-  'Development Status :: 2 - Pre-Alpha',
-  'Intended Audience :: Developers',
-  'Operating System :: OS Independent',
-  'License :: OSI Approved :: MIT License',
-  'Programming Language :: Python :: 3.8'
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.8",
 ]
 
-VERSION = '0.4.20'
-DESCRIPTION = 'Tradingview scraper tool'
+VERSION = "0.4.20"
+DESCRIPTION = "Tradingview scraper tool"
 
 # Setting up
 setup(
@@ -25,21 +27,21 @@ setup(
     version=VERSION,
     author="Mostafa Najmi",
     author_email="m.n.irib@gmail.com",
-    url='https://github.com/mnwato/tradingview-scraper',
-    download_url='https://github.com/mnwato/tradingview-scraper/archive/refs/tags/0.4.9.zip',
+    url="https://github.com/mnwato/tradingview-scraper",
+    download_url="https://github.com/mnwato/tradingview-scraper/archive/refs/tags/0.4.9.zip",
     description=DESCRIPTION,
     long_description_content_type="text/markdown",
     long_description=readme(),
-    license='MIT',
+    license="MIT",
     packages=find_packages(),
     package_data={
-        'tradingview_scraper': [
-            'data/areas.json',
-            'data/exchanges.txt',
-            'data/indicators.txt',
-            'data/languages.json',
-            'data/news_providers.txt',
-            'data/timeframes.json',
+        "tradingview_scraper": [
+            "data/areas.json",
+            "data/exchanges.txt",
+            "data/indicators.txt",
+            "data/languages.json",
+            "data/news_providers.txt",
+            "data/timeframes.json",
         ],
     },
     install_requires=[
@@ -52,6 +54,6 @@ setup(
         "websocket-client>=1.8.0",
         "python-dotenv>=1.0.1",
     ],
-    keywords=['tradingview', 'scraper', 'python', 'crawler', 'financial'],
-    classifiers=classifiers
+    keywords=["tradingview", "scraper", "python", "crawler", "financial"],
+    classifiers=classifiers,
 )
