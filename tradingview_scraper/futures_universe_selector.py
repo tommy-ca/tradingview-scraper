@@ -18,6 +18,16 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from tradingview_scraper.symbols.overview import Overview
+from tradingview_scraper.symbols.screener import Screener
+from tradingview_scraper.symbols.utils import save_csv_file, save_json_file
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - optional dependency
+    yaml = None
+
 STABLE_BASES = {
     "USDT",
     "USDC",
@@ -40,17 +50,6 @@ STABLE_BASES = {
     "AEUR",
 }
 
-
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
-
-try:
-    import yaml
-except ImportError:  # pragma: no cover - optional dependency
-    yaml = None
-
-from tradingview_scraper.symbols.overview import Overview
-from tradingview_scraper.symbols.screener import Screener
-from tradingview_scraper.symbols.utils import save_csv_file, save_json_file
 
 logger = logging.getLogger(__name__)
 
