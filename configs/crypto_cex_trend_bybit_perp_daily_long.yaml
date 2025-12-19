@@ -1,18 +1,8 @@
-# Crypto CEX perp trend (daily) – Bybit only
-markets: ["crypto"]
-exchanges: ["BYBIT"]
-include_perps_only: true
-exclude_perps: false
-exclude_dated_futures: true
-base_from_spot_only: false
-columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
-volume:
-  min: 0
-  value_traded_min: 20000000
-volatility:
-  max: 15.0
-  atr_pct_max: 0.12
-  fallback_use_atr_pct: true
+# Crypto CEX perp trend (daily) – BYBIT only, Long direction
+# Uses base_preset for universe filters, applies trend filters on top
+base_preset: presets/crypto_cex_preset_bybit_perp.yaml
+
+# Trend filters (long direction)
 trend:
   direction: "long"
   timeframe: "daily"
@@ -29,20 +19,8 @@ trend:
   confirmation_momentum:
     enabled: true
     horizons: {Perf.1M: 0.5, Perf.3M: 1.0}
-sort_by: Value.Traded
-sort_order: desc
-final_sort_by: Value.Traded
-final_sort_order: desc
-dedupe_by_symbol: true
-ensure_symbols: [BYBIT:BTCUSDT.P, BYBIT:ETHUSDT.P, BYBIT:SOLUSDT.P, BYBIT:ADAUSDT.P, BYBIT:DOGEUSDT.P, BYBIT:LINKUSDT.P, BYBIT:LTCUSDT.P, BYBIT:DOTUSDT.P, BYBIT:AVAXUSDT.P, BYBIT:TRXUSDT.P, BYBIT:MATICUSDT.P, BYBIT:POLUSDT.P]
-exclude_stable_bases: true
-prefer_perps: true
-perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
-prefilter_limit: 1500
-limit: 50
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
+
+# Export metadata
+export_metadata:
+  symbol: bybit_perp_long
+  data_category: universe_selector

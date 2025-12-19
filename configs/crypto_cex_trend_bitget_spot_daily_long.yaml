@@ -1,19 +1,8 @@
-# Crypto CEX spot trend (daily) – Bitget only
-markets: ["crypto"]
-exchanges: ["BITGET"]
-include_perps_only: false
-exclude_perps: true
-exclude_dated_futures: true
-base_from_spot_only: true
-allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
-columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
-volume:
-  min: 0
-  value_traded_min: 20000000
-volatility:
-  max: 15.0
-  atr_pct_max: 0.12
-  fallback_use_atr_pct: true
+# Crypto CEX spot trend (daily) – BITGET only, Long direction
+# Uses base_preset for universe filters, applies trend filters on top
+base_preset: presets/crypto_cex_preset_bitget_spot.yaml
+
+# Trend filters (long direction)
 trend:
   direction: "long"
   timeframe: "daily"
@@ -30,18 +19,8 @@ trend:
   confirmation_momentum:
     enabled: true
     horizons: {Perf.1M: 0.5, Perf.3M: 1.0}
-sort_by: market_cap_calc
-sort_order: desc
-final_sort_by: Value.Traded
-final_sort_order: desc
-dedupe_by_symbol: true
-ensure_symbols: [BITGET:BTCUSDT, BITGET:ETHUSDT, BITGET:SOLUSDT, BITGET:ADAUSDT, BITGET:DOGEUSDT, BITGET:LINKUSDT, BITGET:LTCUSDT, BITGET:DOTUSDT, BITGET:AVAXUSDT, BITGET:TRXUSDT, BITGET:MATICUSDT, BITGET:POLUSDT]
-exclude_stable_bases: true
-prefilter_limit: 1500
-limit: 50
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
+
+# Export metadata
+export_metadata:
+  symbol: bitget_spot_long
+  data_category: universe_selector

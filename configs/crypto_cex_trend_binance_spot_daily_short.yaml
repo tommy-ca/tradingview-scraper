@@ -1,47 +1,26 @@
-# Crypto CEX spot trend (daily) – Binance only, short
-markets: ["crypto"]
-exchanges: ["BINANCE"]
-include_perps_only: false
-exclude_perps: true
-exclude_dated_futures: true
-base_from_spot_only: true
-allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
-columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
-volume:
-  min: 2000000
-  value_traded_min: 1500000
-volatility:
-  max: 20.0
-  atr_pct_max: 0.15
-  fallback_use_atr_pct: true
+# Crypto CEX spot trend (daily) – BINANCE only, Short direction
+# Uses base_preset for universe filters, applies trend filters on top
+base_preset: presets/crypto_cex_preset_binance_spot.yaml
+
+# Trend filters (short direction)
 trend:
   direction: "short"
   timeframe: "daily"
   logic: "AND"
   recommendation:
     enabled: true
-    min: -0.1
+    min: -0.2
   adx:
     enabled: true
-    min: 8
+    min: 10
   momentum:
     enabled: true
-    horizons: {change: 0.1, Perf.W: 0.2, Perf.1M: -0.3, Perf.3M: -0.8}
+    horizons: {change: 0.2, Perf.W: 0.5, Perf.1M: -0.5, Perf.3M: -1.0}
   confirmation_momentum:
     enabled: true
-    horizons: {Perf.1M: -0.3, Perf.3M: -0.8}
-sort_by: market_cap_calc
-sort_order: desc
-final_sort_by: Value.Traded
-final_sort_order: desc
-dedupe_by_symbol: true
-ensure_symbols: [BINANCE:BTCUSDT, BINANCE:ETHUSDT, BINANCE:BNBUSDT, BINANCE:SOLUSDT, BINANCE:XRPUSDT, BINANCE:ADAUSDT, BINANCE:DOGEUSDT, BINANCE:LINKUSDT, BINANCE:LTCUSDT, BINANCE:DOTUSDT, BINANCE:AVAXUSDT, BINANCE:TRXUSDT, BINANCE:MATICUSDT, BINANCE:POLUSDT]
-exclude_stable_bases: true
-prefilter_limit: 1500
-limit: 50
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
+    horizons: {Perf.1M: -0.5, Perf.3M: -1.0}
+
+# Export metadata
+export_metadata:
+  symbol: binance_spot_short
+  data_category: universe_selector
