@@ -1,18 +1,16 @@
-# Base universe (spot) – Bybit only
-# Liquidity: volume >= 120M, Value.Traded >= 60M
-# Volatility: Volatility.D <= 5% or ATR/close <= 8%
-# Stables excluded; dedupe by base; limit 50; sort by volume
+# Base universe (spot) – Bybit only, no strategy filters
 markets: ["crypto"]
 exchanges: ["BYBIT"]
 include_perps_only: false
 exclude_perps: true
-columns: ["name", "close", "volume", "Value.Traded", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "Perf.YTD", "ATR"]
+exclude_dated_futures: true
+columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "Perf.YTD", "ATR"]
 volume:
-  min: 60000000
-  value_traded_min: 30000000
+  min: 2000000
+  value_traded_min: 1500000
 volatility:
-  max: null
-  atr_pct_max: null
+  max: 20.0
+  atr_pct_max: 0.15
   fallback_use_atr_pct: true
 trend:
   direction: "long"
@@ -26,19 +24,24 @@ trend:
     enabled: false
   osc:
     enabled: false
-sort_by: volume
+sort_by: market_cap_calc
 sort_order: desc
-momentum_composite_fields: [Perf.W, Perf.1M, Perf.3M, Perf.6M, Perf.YTD]
+momentum_composite_fields: []
 momentum_composite_field_name: momentum_zscore
-final_sort_by: volume
+final_sort_by: Value.Traded
 final_sort_order: desc
 dedupe_by_symbol: true
+attach_perp_counterparts: false
+base_from_spot_only: true
+allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
+ensure_symbols: [BYBIT:BTCUSDT, BYBIT:ETHUSDT, BYBIT:SOLUSDT, BYBIT:ADAUSDT, BYBIT:DOGEUSDT, BYBIT:LINKUSDT, BYBIT:LTCUSDT, BYBIT:DOTUSDT, BYBIT:AVAXUSDT, BYBIT:TRXUSDT, BYBIT:MATICUSDT, BYBIT:POLUSDT]
 exclude_stable_bases: true
 prefer_perps: false
 perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null
 market_cap_require_hit: false
+prefilter_limit: 1500
 limit: 50
 pagination_size: 50
 retries: 2

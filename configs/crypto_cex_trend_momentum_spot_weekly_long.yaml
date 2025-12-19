@@ -1,19 +1,21 @@
-# Base universe: Binance/OKX/Bybit/Bitget spot (exclude perps), top 100 by market cap then volume
+# Crypto CEX spot weekly trend momentum - long
 markets: ["crypto"]
 exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
 include_perps_only: false
 exclude_perps: true
+base_from_spot_only: true
+allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
 columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
   min: 0
   value_traded_min: 50000000
 volatility:
-  max: 6.0
-  atr_pct_max: 0.08
+  max: 8.0
+  atr_pct_max: 0.12
   fallback_use_atr_pct: true
 trend:
   direction: "long"
-  timeframe: "daily"
+  timeframe: "weekly"
   logic: "AND"
   recommendation:
     enabled: true
@@ -23,7 +25,7 @@ trend:
     min: 10
   momentum:
     enabled: true
-    horizons: {change: -0.2, Perf.W: -0.5, Perf.1M: 0.0, Perf.3M: 0.5}
+    horizons: {Perf.W: 0.0, Perf.1M: 0.5, Perf.3M: 1.0}
   confirmation_momentum:
     enabled: true
     horizons: {Perf.1M: 0.5, Perf.3M: 1.0}

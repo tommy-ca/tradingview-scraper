@@ -1,4 +1,4 @@
-# Futures metals trend momentum with multi-timeframe confirmation (spot-style futures)
+# Metals futures trend (long) – COMEX/NYMEX
 markets: ["futures"]
 exchanges: ["COMEX", "NYMEX"]
 include_symbols: []
@@ -6,11 +6,10 @@ exclude_perps: false
 include_perps_only: false
 columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
-  min: 500
-
+  min: 100
 volatility:
-  max: 15.0
-  atr_pct_max: 0.2
+  max: 20.0
+  atr_pct_max: 0.25
   fallback_use_atr_pct: true
 trend:
   direction: "long"
@@ -18,21 +17,21 @@ trend:
   logic: "AND"
   recommendation:
     enabled: true
-    min: -0.2
+    min: -0.1
   adx:
     enabled: true
     min: 5
   momentum:
     enabled: true
-    horizons: {change: -0.3, Perf.W: -0.7, Perf.1M: -0.2, Perf.3M: 0.0}
+    horizons: {change: -0.3, Perf.W: -0.5, Perf.1M: -0.1, Perf.3M: 0.2}
   confirmation_momentum:
     enabled: true
-    horizons: {Perf.1M: 0.0, Perf.3M: 0.2}
+    horizons: {Perf.1M: 0.0, Perf.3M: 0.3}
 sort_by: volume
 sort_order: desc
 final_sort_by: volume
 final_sort_order: desc
-prefilter_limit: 200
+prefilter_limit: 800
 limit: 50
 pagination_size: 50
 retries: 2

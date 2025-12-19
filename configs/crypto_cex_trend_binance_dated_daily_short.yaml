@@ -1,38 +1,45 @@
-# Base universe: Binance/OKX/Bybit/Bitget spot (exclude perps), top 100 by market cap then volume
+# Crypto CEX dated futures trend (daily) – Binance only, short
 markets: ["crypto"]
-exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
+exchanges: ["BINANCE"]
 include_perps_only: false
 exclude_perps: true
+include_dated_futures_only: true
+allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
 columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
   min: 0
-  value_traded_min: 50000000
+  value_traded_min: 10000000
 volatility:
-  max: 6.0
-  atr_pct_max: 0.08
+  max: 20.0
+  atr_pct_max: 0.15
   fallback_use_atr_pct: true
 trend:
-  direction: "long"
+  direction: "short"
   timeframe: "daily"
   logic: "AND"
   recommendation:
     enabled: true
-    min: 0.0
+    min: -0.2
   adx:
     enabled: true
     min: 10
   momentum:
     enabled: true
-    horizons: {change: -0.2, Perf.W: -0.5, Perf.1M: 0.0, Perf.3M: 0.5}
+    horizons: {change: 0.2, Perf.W: 0.5, Perf.1M: -0.5, Perf.3M: -1.0}
   confirmation_momentum:
     enabled: true
-    horizons: {Perf.1M: 0.5, Perf.3M: 1.0}
-sort_by: market_cap_calc
+    horizons: {Perf.1M: -0.5, Perf.3M: -1.0}
+sort_by: Value.Traded
 sort_order: desc
 final_sort_by: Value.Traded
 final_sort_order: desc
+dedupe_by_symbol: true
+ensure_symbols: []
+exclude_stable_bases: true
+prefer_perps: false
+perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
 prefilter_limit: 1500
-limit: 100
+limit: 50
 pagination_size: 50
 retries: 2
 timeout: 10

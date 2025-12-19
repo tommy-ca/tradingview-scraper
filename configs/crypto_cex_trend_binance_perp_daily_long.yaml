@@ -1,0 +1,48 @@
+# Crypto CEX perp trend (daily) – Binance only
+markets: ["crypto"]
+exchanges: ["BINANCE"]
+include_perps_only: true
+exclude_perps: false
+exclude_dated_futures: true
+base_from_spot_only: false
+columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
+volume:
+  min: 2000000
+  value_traded_min: 10000000
+volatility:
+  max: 20.0
+  atr_pct_max: 0.15
+  fallback_use_atr_pct: true
+trend:
+  direction: "long"
+  timeframe: "daily"
+  logic: "AND"
+  recommendation:
+    enabled: true
+    min: -0.05
+  adx:
+    enabled: true
+    min: 8
+  momentum:
+    enabled: true
+    horizons: {change: -0.2, Perf.W: -1.0, Perf.1M: -0.5, Perf.3M: 0.0}
+  confirmation_momentum:
+    enabled: true
+    horizons: {Perf.1M: 0.0, Perf.3M: 0.5}
+sort_by: Value.Traded
+sort_order: desc
+final_sort_by: Value.Traded
+final_sort_order: desc
+dedupe_by_symbol: true
+ensure_symbols: [BINANCE:BTCUSDT.P, BINANCE:ETHUSDT.P, BINANCE:BNBUSDT.P, BINANCE:SOLUSDT.P, BINANCE:XRPUSDT.P, BINANCE:ADAUSDT.P, BINANCE:DOGEUSDT.P, BINANCE:LINKUSDT.P, BINANCE:LTCUSDT.P, BINANCE:DOTUSDT.P, BINANCE:AVAXUSDT.P, BINANCE:TRXUSDT.P, BINANCE:MATICUSDT.P, BINANCE:POLUSDT.P]
+exclude_stable_bases: true
+prefer_perps: true
+perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
+prefilter_limit: 1500
+limit: 50
+pagination_size: 50
+retries: 2
+timeout: 10
+export:
+  enabled: false
+  type: json

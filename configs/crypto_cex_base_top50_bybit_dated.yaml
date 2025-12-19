@@ -1,16 +1,17 @@
-# Base universe (spot) – OKX only, no strategy filters
+# Base universe (dated futures) – Bybit only, no strategy filters
 markets: ["crypto"]
-exchanges: ["OKX"]
+exchanges: ["BYBIT"]
 include_perps_only: false
 exclude_perps: true
-exclude_dated_futures: true
+include_dated_futures_only: true
+allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
 columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "Perf.YTD", "ATR"]
 volume:
-  min: 2000000
-  value_traded_min: 1500000
+  min: 0
+  value_traded_min: 5000000
 volatility:
-  max: 20.0
-  atr_pct_max: 0.15
+  max: 25.0
+  atr_pct_max: 0.2
   fallback_use_atr_pct: true
 trend:
   direction: "long"
@@ -24,7 +25,7 @@ trend:
     enabled: false
   osc:
     enabled: false
-sort_by: market_cap_calc
+sort_by: Value.Traded
 sort_order: desc
 momentum_composite_fields: []
 momentum_composite_field_name: momentum_zscore
@@ -32,9 +33,8 @@ final_sort_by: Value.Traded
 final_sort_order: desc
 dedupe_by_symbol: true
 attach_perp_counterparts: false
-base_from_spot_only: true
-allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
-ensure_symbols: [OKX:BTCUSDT, OKX:ETHUSDT, OKX:SOLUSDT, OKX:ADAUSDT, OKX:DOGEUSDT, OKX:LINKUSDT, OKX:LTCUSDT, OKX:DOTUSDT, OKX:AVAXUSDT, OKX:TRXUSDT, OKX:MATICUSDT, OKX:POLUSDT]
+base_from_spot_only: false
+ensure_symbols: []
 exclude_stable_bases: true
 prefer_perps: false
 perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]

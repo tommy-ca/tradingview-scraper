@@ -1,13 +1,13 @@
 # Base universe: Forex, focus on high-liquidity exchanges; enriched via Overview
 # Exchanges selected from discovery (high prevalence): FX_IDC, THINKMARKETS, OANDA, VANTAGE, FUSIONMARKETS
 markets: ["forex"]
-exchanges: ["FX_IDC", "THINKMARKETS", "BLACKBULL", "ICMARKETS", "ACTIVTRADES", "FUSIONMARKETS", "OANDA", "TRADENATIONSB", "TRADENATION", "FXOPEN", "FX", "SKILLING", "FPMARKETS", "VELOCITY", "CAPITALCOM", "VANTAGE", "PEPPERSTONE"]
+exchanges: ["FX_IDC", "THINKMARKETS", "BLACKBULL", "ICMARKETS", "ACTIVTRADES", "FUSIONMARKETS", "OANDA", "TRADENATIONSB", "TRADENATION", "FXOPEN", "FX", "SKILLING", "FPMARKETS", "VELOCITY", "CAPITALCOM", "VANTAGE", "PEPPERSTONE", "FXCM", "ICE"]
 columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
-  min: 1000000000
+  min: 0
 volatility:
-  max: 6.0
-  atr_pct_max: 0.06
+  max: 10.0
+  atr_pct_max: 0.1
   fallback_use_atr_pct: true
 trend:
   direction: "long"
@@ -15,16 +15,16 @@ trend:
   logic: "AND"
   recommendation:
     enabled: true
-    min: 0.2
+    min: -0.05
   adx:
     enabled: true
-    min: 15
+    min: 8
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: 0.0, Perf.1M: 0.5, Perf.3M: 1.5}
+    horizons: {change: -0.1, Perf.W: -0.2, Perf.1M: 0.0, Perf.3M: 0.5}
   confirmation_momentum:
     enabled: true
-    horizons: {Perf.1M: 0.5, Perf.3M: 1.5}
+    horizons: {Perf.1M: 0.0, Perf.3M: 0.5}
 sort_by: volume
 sort_order: desc
 final_sort_by: volume

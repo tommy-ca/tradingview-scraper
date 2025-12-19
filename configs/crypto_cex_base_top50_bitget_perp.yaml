@@ -1,13 +1,13 @@
-# Base universe (spot) – OKX only, no strategy filters
+# Base universe (perps) – Bitget only, no strategy filters
 markets: ["crypto"]
-exchanges: ["OKX"]
-include_perps_only: false
-exclude_perps: true
+exchanges: ["BITGET"]
+include_perps_only: true
+exclude_perps: false
 exclude_dated_futures: true
 columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "Perf.YTD", "ATR"]
 volume:
   min: 2000000
-  value_traded_min: 1500000
+  value_traded_min: 7500000
 volatility:
   max: 20.0
   atr_pct_max: 0.15
@@ -24,7 +24,7 @@ trend:
     enabled: false
   osc:
     enabled: false
-sort_by: market_cap_calc
+sort_by: Value.Traded
 sort_order: desc
 momentum_composite_fields: []
 momentum_composite_field_name: momentum_zscore
@@ -32,11 +32,11 @@ final_sort_by: Value.Traded
 final_sort_order: desc
 dedupe_by_symbol: true
 attach_perp_counterparts: false
-base_from_spot_only: true
-allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
-ensure_symbols: [OKX:BTCUSDT, OKX:ETHUSDT, OKX:SOLUSDT, OKX:ADAUSDT, OKX:DOGEUSDT, OKX:LINKUSDT, OKX:LTCUSDT, OKX:DOTUSDT, OKX:AVAXUSDT, OKX:TRXUSDT, OKX:MATICUSDT, OKX:POLUSDT]
+base_from_spot_only: false
+allowed_spot_quotes: []
+ensure_symbols: [BITGET:BTCUSDT.P, BITGET:ETHUSDT.P, BITGET:SOLUSDT.P, BITGET:ADAUSDT.P, BITGET:DOGEUSDT.P, BITGET:LINKUSDT.P, BITGET:LTCUSDT.P, BITGET:DOTUSDT.P, BITGET:AVAXUSDT.P, BITGET:TRXUSDT.P, BITGET:MATICUSDT.P, BITGET:POLUSDT.P]
 exclude_stable_bases: true
-prefer_perps: false
+prefer_perps: true
 perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null

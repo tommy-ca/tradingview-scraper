@@ -4,7 +4,7 @@ markets: ["cfd"]
 exchanges: ["OANDA"]
 columns: ["name", "close", "volume", "change", "change_abs", "Recommend.All"]
 volume:
-  min: 5000
+  min: 0
 volatility:
   max: null
   atr_pct_max: null
@@ -15,16 +15,17 @@ trend:
   logic: "AND"
   recommendation:
     enabled: true
-    min: 0.2
+    min: 0.0
   adx:
     enabled: false
   momentum:
     enabled: true
-    horizons: {change: 0.0}
+    horizons: {change: -0.2}
 sort_by: volume
 sort_order: desc
 final_sort_by: volume
 final_sort_order: desc
+prefilter_limit: 200
 limit: 50
 pagination_size: 50
 retries: 2
