@@ -335,6 +335,9 @@ class FuturesUniverseSelector:
             if col not in columns:
                 columns.append(col)
 
+        if self.config.volume.value_traded_min > 0 and "Value.Traded" not in columns:
+            columns.append("Value.Traded")
+
         if self.config.trend.timeframe in {"daily", "weekly"} and "Perf.W" not in columns:
             columns.append("Perf.W")
         return columns
@@ -356,6 +359,15 @@ class FuturesUniverseSelector:
                     "left": "volume",
                     "operation": "greater",
                     "right": self.config.volume.min,
+                }
+            )
+
+        if self.config.volume.value_traded_min > 0:
+            filters.append(
+                {
+                    "left": "Value.Traded",
+                    "operation": "greater",
+                    "right": self.config.volume.value_traded_min,
                 }
             )
         return filters

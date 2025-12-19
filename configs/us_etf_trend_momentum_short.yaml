@@ -1,12 +1,13 @@
 # US ETFs trend momentum short - High Quality (Relaxed)
-# Base: market_cap_basic desc then volume, top 100
+# Base: market_cap_basic desc then volume, top 250
 markets: ["america"]
 exchanges: []
 include_perps_only: false
 exclude_perps: false
 columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR", "market_cap_basic"]
 volume:
-  min: 5000000
+  min: 100000
+  value_traded_min: 5000000
 volatility:
   max: 6.0
   atr_pct_max: 0.08
@@ -31,7 +32,7 @@ sort_by: market_cap_basic
 sort_order: desc
 final_sort_by: volume
 final_sort_order: desc
-limit: 100
+limit: 250
 pagination_size: 50
 retries: 2
 timeout: 10
