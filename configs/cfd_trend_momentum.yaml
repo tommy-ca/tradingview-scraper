@@ -15,12 +15,12 @@ trend:
   logic: "AND"
   recommendation:
     enabled: true
-    min: 0.0
+    min: 0.3
   adx:
     enabled: false
   momentum:
     enabled: true
-    horizons: {change: -0.2}
+    horizons: {change: 0.2}
 sort_by: volume
 sort_order: desc
 final_sort_by: volume
