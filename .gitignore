@@ -63,3 +63,4 @@ docs/_templates
 
 # Environment variables file
 .env
+outputs/
