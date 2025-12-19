@@ -238,6 +238,8 @@ class SelectorConfig(BaseModel):
     market_cap_file: Optional[str] = None
     market_cap_limit: Optional[int] = None
     market_cap_require_hit: bool = False
+    base_universe_limit: Optional[int] = None
+    base_universe_sort_by: str = "Value.Traded"
     export: ExportConfig = Field(default_factory=ExportConfig)
     export_metadata: ExportMetadata = Field(default_factory=ExportMetadata)
 
@@ -285,8 +287,19 @@ def _load_config_file(path: str) -> Dict[str, Any]:
         if ext in {".yaml", ".yml"}:
             if yaml is None:
                 raise ImportError("PyYAML is required to load YAML configs")
-            return yaml.safe_load(handle) or {}
-        return json.load(handle)
+            raw = yaml.safe_load(handle) or {}
+        else:
+            raw = json.load(handle)
+
+    # Handle base_preset inheritance
+    if "base_preset" in raw:
+        preset_path = raw.pop("base_preset")
+        if not Path(preset_path).is_absolute():
+            preset_path = path_obj.parent / preset_path
+        base = _load_config_file(str(preset_path))
+        raw = _merge(base, raw)
+
+    return raw
 
 
 def load_config(
@@ -684,10 +697,12 @@ class FuturesUniverseSelector:
         return checks
 
     def _apply_post_filters(self, rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        filtered: List[Dict[str, Any]] = []
         include_set = set(s.upper() for s in self.config.include_symbols)
         exclude_set = set(s.upper() for s in self.config.exclude_symbols)
         exchange_set = set(self.config.exchanges)
+
+        # Stage 1: Apply symbol/type filters + liquidity + volatility checks
+        base_candidates: List[Dict[str, Any]] = []
 
         for row in rows:
             symbol = row.get("symbol", "").upper()
@@ -727,6 +742,7 @@ class FuturesUniverseSelector:
             if exchange_set and exchange not in exchange_set:
                 continue
 
+            # Evaluate liquidity and volatility
             passes = {}
             liquidity_ok = self._evaluate_liquidity(row)
             passes["liquidity"] = liquidity_ok
@@ -734,11 +750,28 @@ class FuturesUniverseSelector:
             volatility_ok, _ = self._evaluate_volatility(row)
             passes["volatility"] = volatility_ok
 
+            # Only add to base candidates if liquidity and volatility pass
+            if liquidity_ok and volatility_ok:
+                row["passes"] = passes
+                base_candidates.append(row)
+
+        # Apply base universe limit if configured
+        if self.config.base_universe_limit and base_candidates:
+            sort_field = self.config.base_universe_sort_by
+            base_candidates.sort(key=lambda x: x.get(sort_field) or 0, reverse=True)
+            base_candidates = base_candidates[: self.config.base_universe_limit]
+
+        # Stage 2: Apply trend filters to base candidates
+        filtered: List[Dict[str, Any]] = []
+
+        for row in base_candidates:
+            passes = row.get("passes", {})
+
             trend_checks = self._evaluate_trend(row)
             passes.update({f"trend_{k}": v for k, v in trend_checks.items()})
 
             screens_combined = True
-            if liquidity_ok and volatility_ok and trend_checks.get("combined", True):
+            if trend_checks.get("combined", True):
                 if self.config.trend_screen:
                     screen_checks = self._evaluate_screen(row, self.config.trend_screen)
                     passes.update({f"trend_screen_{k}": v for k, v in screen_checks.items()})
@@ -752,7 +785,7 @@ class FuturesUniverseSelector:
                     passes.update({f"execute_screen_{k}": v for k, v in execute_checks.items()})
                     screens_combined = screens_combined and execute_checks.get("combined", True)
 
-            passes["all"] = liquidity_ok and volatility_ok and trend_checks.get("combined", True) and screens_combined
+            passes["all"] = passes.get("liquidity", False) and passes.get("volatility", False) and trend_checks.get("combined", True) and screens_combined
             row["passes"] = passes
 
             if passes["all"]:
