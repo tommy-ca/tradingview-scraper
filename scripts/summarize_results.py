@@ -62,7 +62,24 @@ def main():
 
             filtered_items = [item for item in items if item.get("passes", {}).get("all", False)]
 
+            # Aggregate by name (deduplicate)
+            aggregated = {}
             for item in filtered_items:
+                name = item.get("name", "")
+                if not name:
+                    continue
+
+                # If name exists, keep the one with higher volume
+                if name in aggregated:
+                    if item.get("volume", 0) > aggregated[name].get("volume", 0):
+                        aggregated[name] = item
+                else:
+                    aggregated[name] = item
+
+            # Sort by volume desc (or original sort) - let's use volume
+            sorted_items = sorted(aggregated.values(), key=lambda x: x.get("volume", 0), reverse=True)
+
+            for item in sorted_items:
                 symbol = item.get("symbol", "")
                 name = item.get("name", "")[:20]  # Truncate
                 close = item.get("close", 0)
