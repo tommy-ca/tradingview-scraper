@@ -35,9 +35,14 @@ final_sort_by: Value.Traded
 final_sort_order: desc
 prefilter_limit: 1500
 limit: 100
+base_universe_limit: 100
+base_universe_sort_by: Value.Traded
 pagination_size: 50
 retries: 2
 timeout: 10
 export:
   enabled: false
   type: json
+export_metadata:
+  symbol: crypto_spot_short
+  data_category: universe_selector
