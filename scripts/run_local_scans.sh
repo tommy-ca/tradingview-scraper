@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-# Create outputs directory if it doesn't exist
-mkdir -p outputs
-
 echo "Starting Universe Trend Scans..."
 
 echo "----------------------------------------"
@@ -37,4 +34,4 @@ uv run python -m tradingview_scraper.futures_universe_selector \
   --export json
 
 echo "----------------------------------------"
-echo "All scans completed successfully. Results are in outputs/"
+echo "All scans completed successfully. Results are in export/"

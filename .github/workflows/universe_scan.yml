@@ -34,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: futures-trend-results
-          path: outputs/
+          path: export/
 
   scan-cfd:
     runs-on: ubuntu-latest
@@ -54,7 +54,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cfd-trend-results
-          path: outputs/
+          path: export/
 
   scan-forex:
     runs-on: ubuntu-latest
@@ -74,7 +74,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: forex-trend-results
-          path: outputs/
+          path: export/
 
   scan-etf:
     runs-on: ubuntu-latest
@@ -94,7 +94,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: us-etf-trend-results
-          path: outputs/
+          path: export/
 
   scan-stocks:
     runs-on: ubuntu-latest
@@ -114,4 +114,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: us-stocks-trend-results
-          path: outputs/
+          path: export/
