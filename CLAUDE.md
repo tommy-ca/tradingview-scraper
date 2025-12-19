@@ -10,35 +10,38 @@ TradingView Scraper is a Python library for scraping trading data, ideas, news, 
 
 ### Installation and Setup
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (including dev)
+uv sync --extra dev
 
 # Install the package in development mode
-pip install -e .
+# (uv sync installs the package in editable mode by default if configured, or just use uv sync)
+uv sync
 ```
 
 ### Testing
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run specific test file
-pytest tests/test_ideas.py
-pytest tests/test_indicators.py
-pytest tests/test_realtime_price.py
+uv run pytest tests/test_ideas.py
+uv run pytest tests/test_indicators.py
+uv run pytest tests/test_realtime_price.py
 
 # Run tests with verbose output
-pytest -v
+uv run pytest -v
 ```
 
 ### Code Quality
 ```bash
-# Lint with flake8 (used in CI)
-flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+# Lint with ruff (replaces flake8)
+uvx ruff check .
+
+# Format with ruff
+uvx ruff format .
 
 # Run pylint (used in CI)
-pylint $(git ls-files '*.py')
+uv run pylint $(git ls-files '*.py')
 ```
 
 ### Building Documentation
@@ -174,7 +177,7 @@ When adding tests:
 ## CI/CD
 
 GitHub Actions workflows:
-- **python-app.yml**: Runs on push/PR to main, executes flake8 linting and pytest
+- **python-app.yml**: Runs on push/PR to main, executes ruff linting and pytest
 - **pylint.yml**: Runs pylint on all Python files for Python 3.8 and 3.9
 - **release.yml**: Handles PyPI releases
 - **docs.yml**: Builds and publishes documentation
