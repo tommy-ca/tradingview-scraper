@@ -318,6 +318,13 @@ class FuturesUniverseSelector:
         overview: Optional[Overview] = None,
     ) -> None:
         self.config = config if isinstance(config, SelectorConfig) else load_config(config)
+
+        # Auto-fix export symbol if default and market is different
+        if self.config.export_metadata.symbol == "futures_universe" and self.config.markets:
+            market_name = self.config.markets[0]
+            if market_name != "futures":
+                self.config.export_metadata.symbol = f"{market_name}_universe"
+
         self.screener = screener or Screener(export_result=False)
         self.overview = overview or Overview(export_result=False)
         self._market_cap_map: Optional[Dict[str, float]] = None
