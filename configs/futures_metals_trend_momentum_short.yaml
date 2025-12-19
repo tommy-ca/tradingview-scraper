@@ -1,4 +1,4 @@
-# Futures metals trend momentum (High Quality)
+# Futures metals trend momentum short (High Quality)
 # Base: market=futures, exchanges=COMEX/NYMEX (Metals/Energy)
 markets: ["futures"]
 exchanges: ["COMEX", "NYMEX"]
@@ -13,21 +13,21 @@ volatility:
   atr_pct_max: 0.2
   fallback_use_atr_pct: true
 trend:
-  direction: "long"
+  direction: "short"
   timeframe: "daily"
   logic: "AND"
   recommendation:
     enabled: true
-    min: 0.4
+    min: -0.4
   adx:
     enabled: true
     min: 20
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: 0.5, Perf.1M: 3.0}
+    horizons: {change: 0.0, Perf.W: -0.5, Perf.1M: -3.0}
   confirmation_momentum:
     enabled: true
-    horizons: {Perf.3M: 5.0}
+    horizons: {Perf.3M: -5.0}
 sort_by: volume
 sort_order: desc
 final_sort_by: volume

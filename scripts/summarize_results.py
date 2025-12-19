@@ -57,7 +57,9 @@ def main():
     # Group files by market prefix
     grouped = defaultdict(list)
     for f in files:
-        if "futures" in f.name:
+        if "futures_metals" in f.name:
+            grouped["metals"].append(f)
+        elif "futures" in f.name:
             grouped["futures"].append(f)
         elif "cfd" in f.name:
             grouped["cfd"].append(f)
@@ -69,7 +71,13 @@ def main():
             grouped["unknown"].append(f)
 
     # Process order
-    order_map = [("futures", ["Futures L", "Futures S"]), ("cfd", ["CFD L", "CFD S"]), ("forex", ["Forex L", "Forex S"]), ("america", ["US ETFs L", "US ETFs S", "US Stocks L", "US Stocks S"])]
+    order_map = [
+        ("futures", ["Futures L", "Futures S"]),
+        ("metals", ["Metals L", "Metals S"]),
+        ("cfd", ["CFD L", "CFD S"]),
+        ("forex", ["Forex L", "Forex S"]),
+        ("america", ["US ETFs L", "US ETFs S", "US Stocks L", "US Stocks S"]),
+    ]
 
     print(f"{'Market':<15} | {'Symbol':<20} | {'Name':<20} | {'Close':<10} | {'Change%':<8} | {'Rec':<5} | {'ADX':<6} | {'Vol.D':<6}")
     print("-" * 110)

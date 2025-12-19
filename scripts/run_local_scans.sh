@@ -14,6 +14,16 @@ uv run python -m tradingview_scraper.futures_universe_selector \
   --config configs/futures_trend_momentum_short.yaml \
   --export json
 
+echo "1c. Running Futures Metals Trend Scan (Long)..."
+uv run python -m tradingview_scraper.futures_universe_selector \
+  --config configs/futures_metals_trend_momentum.yaml \
+  --export json
+
+echo "1d. Running Futures Metals Trend Scan (Short)..."
+uv run python -m tradingview_scraper.futures_universe_selector \
+  --config configs/futures_metals_trend_momentum_short.yaml \
+  --export json
+
 echo "----------------------------------------"
 echo "2. Running CFD Trend Scan (Long)..."
 uv run python -m tradingview_scraper.cfd_universe_selector \
