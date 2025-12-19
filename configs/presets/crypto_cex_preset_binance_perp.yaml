@@ -1,0 +1,59 @@
+# Binance Perp Base Universe Preset (Tier 1 - Highest Liquidity)
+# This preset defines the base universe filtering parameters for Binance perpetual futures markets.
+# Trend configs should apply their own recommendation/adx/momentum filters on top.
+
+# Exchange identification
+exchanges: ["BINANCE"]
+markets: ["crypto"]
+
+# Instrument type filters
+include_perps_only: true
+exclude_perps: false
+exclude_dated_futures: true
+base_from_spot_only: false
+
+# Liquidity filters (Tier 1 - Highest thresholds for perps)
+volume:
+  min: 0
+  value_traded_min: 15000000  # $15M minimum daily value traded for perps
+
+# Volatility filters (standardized)
+volatility:
+  max: 15.0                   # 15% max daily volatility
+  atr_pct_max: 0.12           # 12% ATR/price ratio max
+  fallback_use_atr_pct: true
+
+# Data columns
+columns: [name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D, Volatility.W, Volatility.M, Perf.W, Perf.1M, Perf.3M, ATR]
+
+# Sorting and limits
+sort_by: Value.Traded
+sort_order: desc
+final_sort_by: Value.Traded
+final_sort_order: desc
+dedupe_by_symbol: true
+prefilter_limit: 1500
+limit: 50
+base_universe_limit: 50
+base_universe_sort_by: Value.Traded
+pagination_size: 50
+
+# Ensure key symbols are included
+ensure_symbols: [BINANCE:BTCUSDT.P, BINANCE:ETHUSDT.P, BINANCE:BNBUSDT.P, BINANCE:SOLUSDT.P, BINANCE:XRPUSDT.P, BINANCE:ADAUSDT.P, BINANCE:DOGEUSDT.P, BINANCE:LINKUSDT.P, BINANCE:LTCUSDT.P, BINANCE:DOTUSDT.P, BINANCE:AVAXUSDT.P, BINANCE:TRXUSDT.P]
+exclude_stable_bases: true
+prefer_perps: true
+perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
+
+# External data
+market_cap_file: market_caps_crypto.json
+market_cap_limit: null
+market_cap_require_hit: false
+
+# API settings
+retries: 2
+timeout: 10
+
+# Export (disabled by default in presets)
+export:
+  enabled: false
+  type: json
