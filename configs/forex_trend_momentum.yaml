@@ -2,6 +2,7 @@
 # Exchanges selected from discovery (high prevalence): FX_IDC, THINKMARKETS, OANDA, VANTAGE, FUSIONMARKETS
 markets: ["forex"]
 exchanges: ["FX_IDC", "THINKMARKETS", "BLACKBULL", "ICMARKETS", "ACTIVTRADES", "FUSIONMARKETS", "OANDA", "TRADENATIONSB", "TRADENATION", "FXOPEN", "FX", "SKILLING", "FPMARKETS", "VELOCITY", "CAPITALCOM", "VANTAGE", "PEPPERSTONE", "FXCM", "ICE"]
+allowed_spot_quotes: ["USD", "EUR", "JPY", "GBP", "CHF", "AUD", "CAD", "NZD"]
 columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
   min: 0
