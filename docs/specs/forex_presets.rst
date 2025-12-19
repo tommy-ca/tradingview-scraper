@@ -8,6 +8,7 @@ Overview
 - Volatility gate: ``Volatility.D <= 6%`` or ``ATR/close <= 6%`` fallback.
 - Liquidity: volume >= 1,000,000,000 (tick-volume proxy; adjust as needed).
 - Sorting: volume desc (base and final).
+- Currency filtering: ``base_currencies`` and ``allowed_spot_quotes`` restrict pairs to major/minor crosses (G8: USD, EUR, JPY, GBP, CHF, CAD, AUD, NZD), excluding exotics.
 
 Preset (configs/forex_trend_momentum.yaml)
 -----------------------------------------
@@ -25,5 +26,5 @@ Usage
 Notes
 -----
 - Screener for FX exposes only a few fields (name, close, change/change_abs, volume, Recommend.All); richer fields come from per-symbol Overview.
-- Adjust volume floors and exchanges if targeting majors only (e.g., add include_symbols for EURUSD, GBPUSD, USDJPY, etc.).
+- Use ``base_currencies`` and ``allowed_spot_quotes`` filters to target major/minor pairs only, excluding exotic pairs (e.g., USD/TRY, EUR/PLN).
 - For looser regimes, reduce Rec/ADX or momentum thresholds if the screen returns no candidates.

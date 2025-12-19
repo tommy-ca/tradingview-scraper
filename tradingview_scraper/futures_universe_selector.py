@@ -230,6 +230,7 @@ class SelectorConfig(BaseModel):
     attach_perp_counterparts: bool = False
     base_from_spot_only: bool = False
     allowed_spot_quotes: List[str] = Field(default_factory=list)
+    base_currencies: List[str] = Field(default_factory=list)  # Filter by base currency
     ensure_symbols: List[str] = Field(default_factory=list)
     exclude_stable_bases: bool = False
     prefer_perps: bool = False
@@ -707,6 +708,11 @@ class FuturesUniverseSelector:
             if self.config.allowed_spot_quotes and not is_perp:
                 _, quote = self._extract_base_quote(symbol)
                 if not quote or quote not in self.config.allowed_spot_quotes:
+                    continue
+
+            if self.config.base_currencies and not is_perp:
+                base, _ = self._extract_base_quote(symbol)
+                if not base or base not in self.config.base_currencies:
                     continue
 
             if self.config.include_perps_only and not is_perp:

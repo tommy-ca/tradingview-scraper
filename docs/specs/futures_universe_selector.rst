@@ -56,7 +56,7 @@ Functional Requirements
   - Support export via existing JSON/CSV utilities when ``export_result`` is true.
 - Configuration
   - Accept YAML/JSON config file or Python dict.
-  - Keys: ``markets`` (default ["futures"]), ``exchanges``, ``include_symbols``, ``exclude_symbols``, ``columns``, ``volume``, ``volatility``, ``trend`` (direction, timeframe, rules, logic), ``sort_by``, ``sort_order``, ``limit``, ``pagination_size``, ``retries``, ``timeout``, ``export`` block (``enabled``, ``type``).
+  - Keys: ``markets`` (default ["futures"]), ``exchanges``, ``include_symbols``, ``exclude_symbols``, ``base_currencies`` (for forex: filter by base currency), ``allowed_spot_quotes`` (for forex: filter by quote currency), ``columns``, ``volume``, ``volatility``, ``trend`` (direction, timeframe, rules, logic), ``sort_by``, ``sort_order``, ``limit``, ``pagination_size``, ``retries``, ``timeout``, ``export`` block (``enabled``, ``type``).
   - Provide default config embedded in code and show sample config in docs.
 - Interfaces
   - Python: ``FuturesUniverseSelector(config: Mapping, screener: Screener = None, overview: Overview = None)`` with ``run() -> Dict``.
