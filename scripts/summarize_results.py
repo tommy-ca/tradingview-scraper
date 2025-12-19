@@ -13,6 +13,39 @@ def load_json(filepath):
         return None
 
 
+def normalize_name(name):
+    """Normalize asset name by removing common suffixes."""
+    # Suffixes to remove
+    suffixes = [".P", ".I", ".a", ".s", "_mini", "1!", "Z2025", "F2026", "G2025", "H2025", ".ONE", ".SML", ".PRO.OTMS", ".TV"]
+
+    # Simple strip of known suffixes
+    # Note: Some suffixes might be part of the symbol (e.g. 'P' in stock ticker),
+    # but for Forex/CFD 'AUDNOK.P', it's safe.
+    # For Futures 'SAILZ2025' -> 'SAIL'. 'SAIL1!' -> 'SAIL'.
+    # We need to be careful not to over-normalize stocks if they have these chars.
+    # But usually suffixes are after a dot or specific futures codes.
+
+    # Heuristic: if dot exists, split by dot.
+    if "." in name:
+        base = name.split(".")[0]
+        # Check if suffix is in our ignore list or looks like one
+        # Actually, for Forex 'AUDNOK.P', base is 'AUDNOK'.
+        return base
+
+    # For Futures like 'SAIL1!', 'SAILZ2025'
+    if name.endswith("1!"):
+        return name[:-2]
+
+    # Removing 'Z2025' etc is harder without regex, but we can try common ones if they appear at end.
+    # Since specific futures contracts (Z2025) are distinct from continuous (1!), maybe we WANT to keep them separate?
+    # User said "normalized name, so we have clear understanding of global candidates".
+    # Seeing 'SAIL' is better than 'SAILZ2025' and 'SAIL1!' separate.
+    # But strictly speaking, they are different instruments.
+    # However, for "trend opportunity", knowing SAIL is trending is the key.
+
+    return name
+
+
 def main():
     export_dir = Path("export")
     files = sorted(list(export_dir.glob("*.json")))
@@ -62,26 +95,34 @@ def main():
 
             filtered_items = [item for item in items if item.get("passes", {}).get("all", False)]
 
-            # Aggregate by name (deduplicate)
+            # Aggregate by normalized name (deduplicate)
             aggregated = {}
             for item in filtered_items:
-                name = item.get("name", "")
-                if not name:
+                raw_name = item.get("name", "")
+                if not raw_name:
                     continue
 
-                # If name exists, keep the one with higher volume
-                if name in aggregated:
-                    if item.get("volume", 0) > aggregated[name].get("volume", 0):
-                        aggregated[name] = item
-                else:
-                    aggregated[name] = item
+                norm_name = normalize_name(raw_name)
 
-            # Sort by volume desc (or original sort) - let's use volume
+                # If name exists, keep the one with higher volume
+                if norm_name in aggregated:
+                    if item.get("volume", 0) > aggregated[norm_name].get("volume", 0):
+                        aggregated[norm_name] = item
+                else:
+                    aggregated[norm_name] = item
+
+            # Sort by volume desc
             sorted_items = sorted(aggregated.values(), key=lambda x: x.get("volume", 0), reverse=True)
 
             for item in sorted_items:
                 symbol = item.get("symbol", "")
-                name = item.get("name", "")[:20]  # Truncate
+                # We display the symbol of the representative item (highest volume)
+                # But maybe display normalized name in Name col?
+                name = item.get("name", "")
+                norm_name = normalize_name(name)
+
+                display_name = norm_name[:20]
+
                 close = item.get("close", 0)
                 change = item.get("change", 0)
                 rec = item.get("Recommend.All", 0)
@@ -94,7 +135,7 @@ def main():
                 fmt_adx = f"{adx:.1f}" if adx else "-"
                 fmt_vol = f"{vol:.1f}%" if vol else "-"
 
-                print(f"{label:<15} | {symbol:<20} | {name:<20} | {fmt_close:<10} | {fmt_change:<8} | {fmt_rec:<5} | {fmt_adx:<6} | {fmt_vol:<6}")
+                print(f"{label:<15} | {symbol:<20} | {display_name:<20} | {fmt_close:<10} | {fmt_change:<8} | {fmt_rec:<5} | {fmt_adx:<6} | {fmt_vol:<6}")
 
 
 if __name__ == "__main__":
