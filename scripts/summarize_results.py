@@ -52,6 +52,10 @@ def main():
             grouped["cfd"].append(f)
         elif "forex" in f.name:
             grouped["forex"].append(f)
+        elif "crypto_spot" in f.name:
+            grouped["crypto_spot"].append(f)
+        elif "crypto_perp" in f.name:
+            grouped["crypto_perp"].append(f)
         elif "america" in f.name:
             grouped["america"].append(f)
         else:
@@ -64,6 +68,8 @@ def main():
         ("cfd", ["CFD L", "CFD S"]),
         ("forex", ["Forex L", "Forex S"]),
         ("america", ["US ETFs L", "US ETFs S", "US Stocks L", "US Stocks S"]),
+        ("crypto_spot", ["Crypto Spot L", "Crypto Spot S"]),
+        ("crypto_perp", ["Crypto Perp L", "Crypto Perp S"]),
     ]
 
     print(f"{'Market':<15} | {'Symbol':<20} | {'Name':<20} | {'Close':<10} | {'Change%':<8} | {'Rec':<5} | {'ADX':<6} | {'Vol.D':<6}")

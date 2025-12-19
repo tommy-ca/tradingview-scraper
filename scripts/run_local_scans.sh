@@ -69,4 +69,26 @@ uv run python -m tradingview_scraper.futures_universe_selector \
   --export json
 
 echo "----------------------------------------"
+echo "6. Running Crypto Spot Trend Scan (Long)..."
+uv run python -m tradingview_scraper.futures_universe_selector \
+  --config configs/crypto_cex_trend_momentum_spot_daily_long.yaml \
+  --export json
+
+echo "6b. Running Crypto Spot Trend Scan (Short)..."
+uv run python -m tradingview_scraper.futures_universe_selector \
+  --config configs/crypto_cex_trend_momentum_spot_daily_short.yaml \
+  --export json
+
+echo "----------------------------------------"
+echo "7. Running Crypto Perp Trend Scan (Long)..."
+uv run python -m tradingview_scraper.futures_universe_selector \
+  --config configs/crypto_cex_trend_momentum_perp_daily_long.yaml \
+  --export json
+
+echo "7b. Running Crypto Perp Trend Scan (Short)..."
+uv run python -m tradingview_scraper.futures_universe_selector \
+  --config configs/crypto_cex_trend_momentum_perp_daily_short.yaml \
+  --export json
+
+echo "----------------------------------------"
 echo "All scans completed successfully. Results are in export/"
