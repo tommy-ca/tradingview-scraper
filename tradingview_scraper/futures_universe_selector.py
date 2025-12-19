@@ -13,6 +13,7 @@ import json
 import logging
 import csv
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
@@ -20,6 +21,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 STABLE_BASES = {
     "USDT",
     "USDC",
+    "USD",
     "BUSD",
     "FDUSD",
     "TUSD",
@@ -209,6 +211,8 @@ class SelectorConfig(BaseModel):
     exclude_symbols: List[str] = Field(default_factory=list)
     include_perps_only: bool = False
     exclude_perps: bool = False
+    exclude_dated_futures: bool = False
+    include_dated_futures_only: bool = False
     columns: List[str] = Field(default_factory=lambda: DEFAULT_COLUMNS.copy())
     volume: VolumeConfig = Field(default_factory=VolumeConfig)
     volatility: VolatilityConfig = Field(default_factory=VolatilityConfig)
@@ -224,11 +228,16 @@ class SelectorConfig(BaseModel):
     final_sort_order: str = "desc"
     momentum_composite_fields: List[str] = Field(default_factory=list)
     momentum_composite_field_name: str = "momentum_zscore"
+    prefilter_limit: Optional[int] = None
     limit: int = 100
     pagination_size: int = 50
     retries: int = 2
     timeout: int = 10
     dedupe_by_symbol: bool = False
+    attach_perp_counterparts: bool = False
+    base_from_spot_only: bool = False
+    allowed_spot_quotes: List[str] = Field(default_factory=list)
+    ensure_symbols: List[str] = Field(default_factory=list)
     exclude_stable_bases: bool = False
     prefer_perps: bool = False
     perp_exchange_priority: List[str] = Field(default_factory=list)
@@ -246,9 +255,13 @@ class SelectorConfig(BaseModel):
             raise ValueError("sort_order must be 'asc' or 'desc'")
         return value_lower
 
-    @field_validator("limit", "pagination_size", "retries", "timeout")
+    @field_validator(
+        "limit", "pagination_size", "retries", "timeout", "prefilter_limit"
+    )
     @classmethod
-    def validate_positive(cls, value: int, info: Any) -> int:
+    def validate_positive(cls, value: Optional[int], info: Any) -> Optional[int]:
+        if value is None:
+            return value
         if value <= 0:
             raise ValueError(f"{info.field_name} must be positive")
         return value
@@ -361,14 +374,16 @@ class FuturesUniverseSelector:
         filters: List[Dict[str, Any]],
         columns: List[str],
         exchange: Optional[str] = None,
+        max_rows: Optional[int] = None,
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
         collected: List[Dict[str, Any]] = []
         errors: List[str] = []
         offset = 0
         page_size = self.config.pagination_size
+        target = max_rows or self.config.limit
 
-        while len(collected) < self.config.limit:
-            remaining = self.config.limit - len(collected)
+        while len(collected) < target:
+            remaining = target - len(collected)
             batch_size = min(page_size, remaining)
             filters_with_exchange = list(filters)
             if exchange:
@@ -409,15 +424,36 @@ class FuturesUniverseSelector:
         return symbol.split(":", 1)[0]
 
     @staticmethod
-    def _base_symbol(symbol: str) -> str:
+    def _extract_base_quote(symbol: str) -> Tuple[str, str]:
         if not symbol:
-            return ""
-        core = symbol.split(":", 1)[-1]
-        return core.replace(".P", "").upper()
+            return "", ""
+        core = symbol.split(":", 1)[-1].upper().replace(".P", "")
+        for stable in sorted(STABLE_BASES, key=len, reverse=True):
+            if core.endswith(stable) and len(core) > len(stable):
+                return core[: -len(stable)], stable
+        return core, ""
+
+    @staticmethod
+    def _base_symbol(symbol: str) -> str:
+        base, _ = FuturesUniverseSelector._extract_base_quote(symbol)
+        return base
 
     @staticmethod
     def _is_perp(symbol: str) -> bool:
         return bool(symbol) and symbol.upper().endswith(".P")
+
+    @staticmethod
+    def _is_spot_symbol(symbol: str) -> bool:
+        base, quote = FuturesUniverseSelector._extract_base_quote(symbol)
+        return bool(base) and bool(quote)
+
+    @staticmethod
+    def _is_dated_symbol(symbol: str) -> bool:
+        if not symbol:
+            return False
+        core = symbol.split(":", 1)[-1].upper().replace(".P", "")
+        patterns = [r"[0-9]{1,2}[A-Z][0-9]{2,4}$", r"[A-Z]{1,3}[0-9]{2,4}$"]
+        return any(re.search(pat, core) for pat in patterns)
 
     def _evaluate_liquidity(self, row: Dict[str, Any]) -> bool:
         volume_value = row.get("volume")
@@ -444,23 +480,29 @@ class FuturesUniverseSelector:
         volatility_value = row.get("Volatility.D")
         atr_pct: Optional[float] = None
 
-        if volatility_value is None and vol_cfg.fallback_use_atr_pct:
+        if vol_cfg.fallback_use_atr_pct:
             atr = row.get("ATR")
             close = row.get("close")
             if atr is not None and close not in (None, 0):
                 atr_pct = atr / close
                 row["atr_pct"] = atr_pct
 
-        if vol_cfg.min is None and vol_cfg.max is None:
+        checks_present = any(
+            value is not None
+            for value in (vol_cfg.min, vol_cfg.max, vol_cfg.atr_pct_max)
+        )
+        if not checks_present:
             return True, atr_pct
 
         if volatility_value is not None:
             above_min = vol_cfg.min is None or volatility_value >= vol_cfg.min
             below_max = vol_cfg.max is None or volatility_value <= vol_cfg.max
-            return above_min and below_max, atr_pct
+            if above_min and below_max:
+                return True, atr_pct
 
         if atr_pct is not None and vol_cfg.atr_pct_max is not None:
-            return atr_pct <= vol_cfg.atr_pct_max, atr_pct
+            if atr_pct <= vol_cfg.atr_pct_max:
+                return True, atr_pct
 
         return False, atr_pct
 
@@ -661,6 +703,18 @@ class FuturesUniverseSelector:
                 continue
 
             is_perp = symbol.endswith(".P")
+            is_dated = self._is_dated_symbol(symbol)
+
+            if self.config.include_dated_futures_only and not is_dated:
+                continue
+            if self.config.exclude_dated_futures and is_dated:
+                continue
+
+            if self.config.allowed_spot_quotes and not is_perp:
+                _, quote = self._extract_base_quote(symbol)
+                if not quote or quote not in self.config.allowed_spot_quotes:
+                    continue
+
             if self.config.include_perps_only and not is_perp:
                 continue
             if self.config.exclude_perps and is_perp:
@@ -849,6 +903,11 @@ class FuturesUniverseSelector:
         descending = (self.config.final_sort_order or "desc").lower() == "desc"
         best_by_base: Dict[str, Dict[str, Any]] = {}
         priority = [p.upper() for p in self.config.perp_exchange_priority]
+        quote_priority = (
+            {q.upper(): idx for idx, q in enumerate(self.config.allowed_spot_quotes)}
+            if self.config.allowed_spot_quotes
+            else None
+        )
 
         def exchange_rank(symbol: str) -> int:
             exchange = self._extract_exchange(symbol) or ""
@@ -866,6 +925,17 @@ class FuturesUniverseSelector:
 
             candidate_value = row.get(sort_field)
             best_value = current.get(sort_field)
+
+            if self.config.base_from_spot_only and quote_priority is not None:
+                _, cand_quote = self._extract_base_quote(symbol)
+                _, best_quote = self._extract_base_quote(current.get("symbol", ""))
+                cand_rank = quote_priority.get(cand_quote or "", len(quote_priority))
+                best_rank = quote_priority.get(best_quote or "", len(quote_priority))
+                if cand_rank < best_rank:
+                    best_by_base[base] = row
+                    continue
+                if best_rank < cand_rank:
+                    continue
 
             if self.config.prefer_perps:
                 cand_perp = self._is_perp(symbol)
@@ -896,6 +966,100 @@ class FuturesUniverseSelector:
                 continue
 
         return list(best_by_base.values())
+
+    def _sort_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        final_sorted = rows
+        if self.config.final_sort_by:
+            reverse = self.config.final_sort_order == "desc"
+            field = self.config.final_sort_by
+
+            def sort_key(row: Dict[str, Any]):
+                val = row.get(field)
+                if isinstance(val, (int, float)):
+                    return val
+                return float("-inf") if reverse else float("inf")
+
+            final_sorted = sorted(rows, key=sort_key, reverse=reverse)
+        return final_sorted
+
+    def _select_perp_candidate(
+        self, base: str, perps: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        candidates = [
+            p for p in perps if self._base_symbol(p.get("symbol", "")) == base
+        ]
+        if not candidates:
+            return None
+
+        priority = [p.upper() for p in self.config.perp_exchange_priority]
+        field = self.config.final_sort_by or self.config.sort_by or "volume"
+        reverse = (self.config.final_sort_order or "desc") == "desc"
+
+        def exchange_rank(symbol: str) -> int:
+            exchange = self._extract_exchange(symbol) or ""
+            if exchange.upper() in priority:
+                return priority.index(exchange.upper())
+            return len(priority)
+
+        def candidate_key(row: Dict[str, Any]):
+            exchange_score = exchange_rank(row.get("symbol", ""))
+            val = row.get(field)
+            if isinstance(val, (int, float)):
+                metric = -val if reverse else val
+            else:
+                metric = float("inf")
+            return (exchange_score, metric)
+
+        return sorted(candidates, key=candidate_key)[0]
+
+    def _attach_perp_counterparts(
+        self, rows: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        spot_rows: List[Dict[str, Any]] = []
+        for r in rows:
+            symbol = r.get("symbol", "")
+            if self.config.base_from_spot_only:
+                if self._is_perp(symbol):
+                    continue
+                base, quote = self._extract_base_quote(symbol)
+                if not (base and quote):
+                    continue
+                if (
+                    self.config.allowed_spot_quotes
+                    and quote not in self.config.allowed_spot_quotes
+                ):
+                    continue
+                spot_rows.append(r)
+            else:
+                if not self._is_perp(symbol):
+                    spot_rows.append(r)
+
+        perp_rows = [r for r in rows if self._is_perp(r.get("symbol", ""))]
+
+        spot_unique = self._dedupe_by_base(spot_rows)
+        spot_sorted = self._sort_rows(spot_unique)
+        base_trimmed = spot_sorted[: self.config.limit]
+
+        ensure_set = {s.upper() for s in self.config.ensure_symbols}
+        if ensure_set:
+            spot_lookup = {(r.get("symbol", "") or "").upper(): r for r in spot_sorted}
+            existing = {row.get("symbol") for row in base_trimmed}
+            for symbol in ensure_set:
+                row = spot_lookup.get(symbol)
+                if row and row.get("symbol") not in existing:
+                    base_trimmed.append(row)
+                    existing.add(row.get("symbol"))
+
+        seen_symbols = {row.get("symbol") for row in base_trimmed}
+        extras: List[Dict[str, Any]] = []
+        for row in base_trimmed:
+            base = self._base_symbol(row.get("symbol", ""))
+            perp_candidate = self._select_perp_candidate(base, perp_rows)
+            if perp_candidate and perp_candidate.get("symbol") not in seen_symbols:
+                extras.append(perp_candidate)
+                seen_symbols.add(perp_candidate.get("symbol"))
+
+        return base_trimmed + extras
 
     def _export_results(self, data: List[Dict[str, Any]]) -> None:
         if not self.config.export.enabled:
@@ -942,16 +1106,21 @@ class FuturesUniverseSelector:
         filters: List[Dict[str, Any]] = []
         for market in self.config.markets:
             filters = self._build_filters(market)
+            prefilter_limit = self.config.prefilter_limit or self.config.limit
             if self.config.exchanges:
                 for exchange in self.config.exchanges:
                     market_rows, market_errors = self._screen_market(
-                        market, filters, columns, exchange=exchange
+                        market,
+                        filters,
+                        columns,
+                        exchange=exchange,
+                        max_rows=prefilter_limit,
                     )
                     aggregated.extend(market_rows)
                     errors.extend(market_errors)
             else:
                 market_rows, market_errors = self._screen_market(
-                    market, filters, columns
+                    market, filters, columns, max_rows=prefilter_limit
                 )
                 aggregated.extend(market_rows)
                 errors.extend(market_errors)
@@ -963,23 +1132,13 @@ class FuturesUniverseSelector:
         if self.config.momentum_composite_fields:
             filtered = self._apply_momentum_composite(filtered)
 
-        if self.config.dedupe_by_symbol:
-            filtered = self._dedupe_by_base(filtered)
-
-        final_sorted = filtered
-        if self.config.final_sort_by:
-            reverse = self.config.final_sort_order == "desc"
-            field = self.config.final_sort_by
-
-            def sort_key(row: Dict[str, Any]):
-                val = row.get(field)
-                if isinstance(val, (int, float)):
-                    return val
-                return float("-inf") if reverse else float("inf")
-
-            final_sorted = sorted(filtered, key=sort_key, reverse=reverse)
-
-        trimmed = final_sorted[: self.config.limit]
+        if self.config.attach_perp_counterparts:
+            trimmed = self._attach_perp_counterparts(filtered)
+        else:
+            if self.config.dedupe_by_symbol:
+                filtered = self._dedupe_by_base(filtered)
+            final_sorted = self._sort_rows(filtered)
+            trimmed = final_sorted[: self.config.limit]
 
         if self.config.export.enabled:
             self._export_results(trimmed)

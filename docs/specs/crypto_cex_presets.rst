@@ -3,45 +3,43 @@ Crypto CEX Screening Presets
 
 Overview
 --------
-- Base universe: Binance/OKX/Bybit/Bitget symbols excluding stable bases (USDT/USDC/BUSD/FDUSD/TUSD/DAI/PAX/USDP/EUR/GBP/BIDR/TRY/BRL/UST/USTC/CHF/JPY).
-- Exchange filtering: spot presets set ``exchanges: [BINANCE, OKX, BYBIT, BITGET]`` with ``exclude_perps: true``; TS (perps) presets set ``include_perps_only: true`` for the same exchanges.
-- Ordering: take top candidates sorted by ``market_cap_calc`` (with volume floor applied) and limit to 100 before filters.
-- Columns: ``name, close, volume, change, Recommend.All, ADX, Volatility.D, Perf.W, Perf.1M, Perf.3M, ATR``.
-- Volatility gate (all presets): ``Volatility.D <= 6%`` or ``ATR/close <= 8%``.
-- Volume floors: spot and perps share the same floor in configs (50M or 30M depending on preset); override if needed for perps.
+- Base universes are now split by instrument type: spot, perps (.P suffix), and dated futures (expiry-coded). Exchange scope remains ``[BINANCE, OKX, BYBIT, BITGET]``.
+- Spot presets enforce a quote whitelist (USDT/USD/USDC/FDUSD/BUSD) and exclude perps and dated futures; perps presets require ``include_perps_only: true``; dated presets require expiry-coded symbols.
+- Ordering: fetch with ``prefilter_limit`` (1500) sorted by ``market_cap_calc`` (spot) or ``Value.Traded`` (perps/dated), then final sort ``Value.Traded`` and cap at ``limit``.
+- Columns: ``name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D/W/M, Perf.W/1M/3M, ATR``.
+- Liquidity/volatility guard (current presets): ``Value.Traded >= 50M``; ``Volatility.D <= 8%`` or ``ATR/close <= 12%``. Adjust per instrument if needed.
 
 Presets (config paths under configs/)
 -------------------------------------
-- Trend Momentum (long, daily spot) – ``crypto_cex_trend_momentum.yaml``
-  - Rec >= 0.15, ADX >= 20, change >= 0, Perf.W >= 1%, Perf.1M >= 2%, Perf.3M >= 5%, volume >= 75M, timeframe daily; base sort market cap then volume.
-- Trend Momentum (long, weekly spot) – ``crypto_cex_trend_momentum_weekly.yaml``
-  - Weekly timeframe version of the above; Rec >= 0.15, ADX >= 20, Perf.W >= 0%, Perf.1M >= 0.5%, Perf.3M >= 1%; volume >= 75M.
-- Mean Reversion (long, spot) – ``crypto_cex_mean_reversion.yaml``
-  - Rec >= -0.1, ADX max 30, change <= -0.3%, Perf.W <= -1%, Perf.1M >= -12%, RSI <= 55, Stoch.K <= 60, volume >= 30M, timeframe daily; base sort market cap then volume.
-- Cross-Sectional Momentum (long, spot) – ``crypto_cex_xs_momentum.yaml``
-  - Rec >= 0.15, ADX >= 18, Perf.W >= 0.5%, Perf.1M >= 2%, change >= 0, volume >= 50M; base sort market cap then volume; take top decile by Perf.W for XS longs.
-- Cross-Sectional Momentum (long/short, spot+perps) – ``crypto_cex_xs_momentum_long_short.yaml``
-  - Universe: top 50 spot symbols; filters: volume >= 100M and Value.Traded >= 50M, Vol.D <= 6% or ATR/close <= 8%; stables excluded. Ordering: compute momentum_zscore from Perf.W/Perf.1M/Perf.3M/Perf.6M/Perf.YTD and sort desc; dedupe_by_symbol selects one venue per underlying, preferring perps by exchange priority (BINANCE>OKX>BYBIT>BITGET) when mapped. Downstream: long top 10%, short bottom 10%; prefer perps for shorts, skip if not listed.
-- Cross-Sectional Mean Reversion (long, spot) – ``crypto_cex_xs_mean_reversion.yaml``
-  - Rec >= -0.05, ADX max 40, change <= -0.3%, Perf.W <= -0.5%, Perf.1M >= -10%, RSI <= 55, Stoch.K <= 60, volume >= 30M; base sort market cap then volume; take bottom decile by Perf.W for XS longs.
-- TS Momentum (long, perps daily) – ``crypto_cex_ts_momentum_long.yaml``
-  - Rec >= 0.1, ADX >= 18, change >= 0.2%, Perf.W >= 1.5%, Perf.1M >= 1%, volume >= 75M, timeframe daily; base sort market cap then volume; ranks by Perf.W desc.
-- TS Momentum (long, perps weekly) – ``crypto_cex_ts_momentum_long_weekly.yaml``
-  - Weekly timeframe TS perps; Rec >= 0.1, ADX >= 18, Perf.W >= 0%, Perf.1M >= 0.5%, Perf.3M >= 1%, volume >= 75M.
-- TS Mean Reversion (long, perps) – ``crypto_cex_ts_mean_reversion_long.yaml``
-  - Rec >= -0.05, ADX max 35, change <= -0.2%, Perf.W <= -0.5%, Perf.1M >= -10%, RSI <= 55, Stoch.K <= 60, volume >= 30M; base sort market cap then volume; ranks by Perf.W asc.
-- TS Momentum (short, perps) – ``crypto_cex_ts_momentum_short.yaml``
-  - Direction short, Rec <= -0.1, ADX >= 18, change <= -0.1%, Perf.W <= -0.5%, Perf.1M <= -2%, volume >= 50M, timeframe daily; base sort market cap then volume.
-- TS Mean Reversion (short, perps) – ``crypto_cex_ts_mean_reversion_short.yaml``
-  - Direction short, Rec <= 0, ADX max 25, change <= -0.3%, Perf.W <= -1%, Perf.1M <= -6%, volume >= 30M, timeframe daily; base sort market cap then volume.
+Spot trend (daily/weekly)
+- ``crypto_cex_trend_momentum_spot_daily_long.yaml`` / ``..._short.yaml`` plus per-exchange spot trend variants: ``crypto_cex_trend_<exchange>_spot_daily_long.yaml`` / ``..._short.yaml`` (BINANCE/OKX/BYBIT/BITGET)
+  - Liquidity: Value.Traded >= 50M (20M for per-exchange), Vol.D <= 8–15% or ATR/close <= 12%; quote whitelist USDT/USD/USDC/FDUSD/BUSD; exclude perps and dated futures.
+  - Long: Rec>=0, ADX>=10, momentum change>=-0.2, Perf.W>=-0.5, Perf.1M>=0, Perf.3M>=0.5. Short: Rec<=-0.2, ADX>=10, momentum inverted.
+  - Sort: market_cap_calc then Value.Traded; limit 100 (spot) or 50 (per-exchange).
+- ``crypto_cex_trend_momentum_spot_weekly_long.yaml`` / ``..._short.yaml``
+  - Same liquidity/vol caps; weekly horizons (long: Perf.W>=0, Perf.1M>=0.5, Perf.3M>=1; shorts inverted).
 
-Base universes (spot only)
---------------------------
-- ``crypto_cex_base_top50.yaml`` – volume >= 150M, Value.Traded >= 75M, Vol.D <= 5% or ATR/close <= 8%, stables excluded, limit 50.
-- ``crypto_cex_base_top50_binance.yaml`` – Binance-only base; volume >= 200M, Value.Traded >= 100M.
-- ``crypto_cex_base_top50_okx.yaml`` – OKX-only base; volume >= 150M, Value.Traded >= 75M.
-- ``crypto_cex_base_top50_bybit.yaml`` – Bybit-only base; volume >= 120M, Value.Traded >= 60M.
-- ``crypto_cex_base_top50_bitget.yaml`` – Bitget-only base; volume >= 80M, Value.Traded >= 40M.
+Perps trend (daily)
+- ``crypto_cex_trend_momentum_perp_daily_long.yaml`` / ``..._short.yaml`` (multi-exchange)
+- Per-exchange: ``crypto_cex_trend_<exchange>_perp_daily_long.yaml`` / ``..._short.yaml``
+  - ``include_perps_only: true``; Liquidity Value.Traded >= 50M (20M per-exchange); Vol.D <= 8–15% or ATR/close <= 12%.
+  - Sort by Value.Traded; majors ensured via .P symbols in per-exchange variants.
+
+Dated futures trend (daily)
+- ``crypto_cex_trend_momentum_dated_daily_long.yaml`` / ``..._short.yaml`` (multi-exchange)
+- Per-exchange: ``crypto_cex_trend_<exchange>_dated_daily_long.yaml`` / ``..._short.yaml``
+  - ``include_dated_futures_only: true``; quote whitelist; Liquidity Value.Traded >= 50M (10M per-exchange); Vol caps as above; daily momentum as spot.
+
+Legacy/other presets
+- Cross-sectional, mean-reversion, and TS momentum presets remain as-is (xs_momentum/mean_reversion, ts_momentum/mean_reversion, MTF variants). Volume/vol thresholds there may differ; adjust per strategy.
+
+Base universes
+--------------
+- Spot: ``crypto_cex_base_top50.yaml`` – excludes perps and dated futures, quote whitelist USDT/USD/USDC/FDUSD/BUSD, Value.Traded >= 1.5M, volume >= 2M, Vol.D <= 20% or ATR/close <= 15%, dedupe by base, limit 50, sorted by market_cap_calc then Value.Traded. Majors ensured.
+- Perps: ``crypto_cex_base_top50_perp.yaml`` – `include_perps_only: true`, excludes dated, Value.Traded >= 7.5M, volume >= 2M, Vol.D <= 20% or ATR/close <= 15%, dedupe by base, prefer perps, limit 50, sorted by Value.Traded; majors ensured via `.P` symbols.
+- Dated futures: ``crypto_cex_base_top50_dated.yaml`` – `include_dated_futures_only: true`, excludes perps, quote whitelist, Value.Traded >= 5M, Vol.D <= 25% or ATR/close <= 20%, dedupe by base, limit 50, sorted by Value.Traded (currently yields 0 under these floors).
+- Per-exchange splits for spot/perps/dated: ``crypto_cex_base_top50_<exchange>.yaml``, ``..._<exchange>_perp.yaml``, ``..._<exchange>_dated.yaml`` (BINANCE/OKX/BYBIT/BITGET). Spot floors per exchange: BINANCE/OKX/BYBIT Value.Traded >= 1.5M; BITGET >= 1.0M (volume >= 2M, same vol caps as multi-spot). Perps use Value.Traded >= 7.5M (volume >= 2M). Dated use Value.Traded >= 5M.
+- Merged views: ``outputs/crypto_trend_runs/merged_base_universe_spot.json`` and ``..._perp.json`` aggregate per-exchange spot/perp bases into normalized symbols with their tradable exchange symbols; dated is empty at current floors.
 
 Usage
 -----
@@ -75,10 +73,9 @@ Multi-Timeframe (MTF) crypto notes
   - Mixed trend/MR: ``configs/crypto_cex_mtf_trend_mr_trend.yaml`` (monthly trend → weekly MR → daily trend) and ``configs/crypto_cex_mtf_mr_trend_trend.yaml`` (monthly MR → weekly trend → daily trend).
 - All current runs returned 0 under bearish regime/thresholds; lower volume floors or relax Perf/RSI/Stoch gates to widen coverage.
 
-Notes from latest runs (bearish regime at time of test)
-------------------------------------------------------
-- Long-biased presets returned 0–2 names (momentum/mean-reversion mostly empty).
-- Short-biased presets returned small/mid-cap alts (e.g., TS momentum short: SPELLUSDT, XRPUSDT/P, 1000XECUSDT.P, SCUSDT; TS mean-reversion short: IOTXUSDT.P, ACHUSDT.P, DYMUSDT.P, IQUSDT, 1000CHEEMSUSDT, etc.).
-- Cross-sectional mean reversion produced duplicate symbols (e.g., SHIBDOGE) in the output; deduplicate in downstream consumers if needed.
-- Sorting by ``market_cap_calc`` keeps larger caps prioritized while volume floors screen out illiquid names; adjust floors if running perps-only or majors-only.
-- Exchange discovery snapshot (top-volume screener sample): BYBIT, OKX, BITGET all return data alongside BINANCE; DEX venues dominate tail listings and remain excluded by exchange filter.
+Notes
+-----
+- Recent runs (prefilter 400) show spot longs empty and dated futures empty under current thresholds; shorts return sparse sets, perps shorts return healthy lists. To surface longs or dated: lower Value.Traded floors (e.g., spot/perps to 10–20M, dated to 5–10M) and relax long momentum/Rec/ADX gates.
+- Majors can still be filtered out under bearish regimes if Perf.W/1M/3M thresholds stay positive; relax momentum gates or add ``ensure_symbols`` per exchange to guarantee inclusion.
+- Dated futures are explicitly separated to avoid contaminating spot/perp runs; adjust ``value_traded_min`` downward if dated lists come back empty.
+- Quote whitelist and dated/perp flags are enforced in post-filtering; widen quotes or disable exclusions if you need broader coverage.
