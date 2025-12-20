@@ -44,11 +44,18 @@ STABLE_BASES = {
     "BIDR",
     "TRY",
     "BRL",
+    "MXN",
+    "ZAR",
     "UST",
     "USTC",
     "CHF",
     "JPY",
     "AEUR",
+    "FUSD",
+    "FUSDT",
+    "USDS",
+    "ZUSD",
+    "USDM",
 }
 
 

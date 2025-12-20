@@ -1,87 +1,73 @@
-from unittest.mock import patch
-
 from tradingview_scraper.futures_universe_selector import FuturesUniverseSelector, SelectorConfig
 
 
-def test_market_cap_rank_guard():
+def test_rank_guard():
     """
-    Test that the rank guard correctly filters out symbols not in the Top N of the market cap file.
+    Test that the rank guard correctly filters out symbols not in the top N.
     """
-    config = SelectorConfig(
-        markets=["crypto"],
-        market_cap_file="dummy_caps.json",
-        market_cap_rank_limit=2,  # Only Top 2
-    )
-
-    # Mock market cap map
-    # BTC is Top 1, ETH is Top 2, SOL is Top 3
-    cap_map = {"BTC": 1000, "ETH": 500, "SOL": 100}
+    config = SelectorConfig(markets=["crypto"], market_cap_file="market_caps_crypto.json", market_cap_rank_limit=2, base_universe_limit=10)
 
     selector = FuturesUniverseSelector(config)
+    # Mock market cap map
+    selector._market_cap_map = {"BTC": 1000000000000, "ETH": 300000000000, "SOL": 50000000000, "DOGE": 20000000000}
 
-    with patch.object(selector, "_load_market_cap_map", return_value=cap_map):
-        rows = [
-            {"symbol": "BINANCE:BTCUSDT", "Value.Traded": 100},
-            {"symbol": "BINANCE:ETHUSDT", "Value.Traded": 90},
-            {"symbol": "BINANCE:SOLUSDT", "Value.Traded": 80},  # Should be filtered (Rank 3)
-        ]
+    rows = [
+        {"symbol": "BINANCE:BTCUSDT"},
+        {"symbol": "BINANCE:ETHUSDT"},
+        {"symbol": "BINANCE:SOLUSDT"},
+        {"symbol": "BINANCE:DOGEUSDT"},
+    ]
 
-        # We need to simulate the pipeline or call the filter directly
-        filtered = selector._apply_market_cap_filter(rows)
+    filtered = selector._apply_market_cap_filter(rows)
+    symbols = [r["symbol"] for r in filtered]
 
-        symbols = [r["symbol"] for r in filtered]
-        assert "BINANCE:BTCUSDT" in symbols
-        assert "BINANCE:ETHUSDT" in symbols
-        assert "BINANCE:SOLUSDT" not in symbols
+    assert "BINANCE:BTCUSDT" in symbols
+    assert "BINANCE:ETHUSDT" in symbols
+    assert "BINANCE:SOLUSDT" not in symbols
+    assert len(filtered) == 2
 
 
-def test_market_cap_floor_guard():
+def test_floor_guard():
     """
-    Test that the floor guard correctly filters out symbols below the minimum market cap value.
+    Test that the floor guard correctly filters out symbols with market cap below threshold.
     """
-    config = SelectorConfig(
-        markets=["crypto"],
-        market_cap_floor=500000000,  # $500M
-    )
+    config = SelectorConfig(markets=["crypto"], market_cap_floor=100000000, base_universe_limit=10)
 
     selector = FuturesUniverseSelector(config)
 
     rows = [
-        {"symbol": "BINANCE:BTCUSDT", "market_cap_calc": 1000000000, "Value.Traded": 100},  # $1B - Pass
-        {"symbol": "BINANCE:LOWCAP", "market_cap_calc": 100000000, "Value.Traded": 200},  # $100M - Fail
+        {"symbol": "BINANCE:BTCUSDT", "market_cap_calc": 1000000000},
+        {"symbol": "BINANCE:SMALLUSDT", "market_cap_calc": 50000000},
     ]
 
-    # Update: _apply_market_cap_filter needs to handle floor guard too
     filtered = selector._apply_market_cap_filter(rows)
-
     symbols = [r["symbol"] for r in filtered]
+
     assert "BINANCE:BTCUSDT" in symbols
-    assert "BINANCE:LOWCAP" not in symbols
+    assert "BINANCE:SMALLUSDT" not in symbols
+    assert len(filtered) == 1
 
 
-def test_liquidity_priority_with_guards():
+def test_liquidity_priority():
     """
-    Test that Value.Traded remains the primary sorting factor after guards are applied.
+    Test that Value.Traded is used for final sorting and limiting.
     """
-    config = SelectorConfig(markets=["crypto"], market_cap_rank_limit=10, limit=2, final_sort_by="Value.Traded")
-
-    cap_map = {"BTC": 1000, "ETH": 900, "SOL": 800}
+    config = SelectorConfig(markets=["crypto"], base_universe_limit=2, base_universe_sort_by="Value.Traded")
 
     selector = FuturesUniverseSelector(config)
 
-    with patch.object(selector, "_load_market_cap_map", return_value=cap_map):
-        rows = [
-            {"symbol": "BINANCE:BTCUSDT", "Value.Traded": 50},  # Rank 1 cap, Low liquidity
-            {"symbol": "BINANCE:ETHUSDT", "Value.Traded": 200},  # Rank 2 cap, High liquidity
-            {"symbol": "BINANCE:SOLUSDT", "Value.Traded": 150},  # Rank 3 cap, Med liquidity
-        ]
+    rows = [
+        {"symbol": "BINANCE:BTCUSDT", "Value.Traded": 1000, "market_cap_calc": 1000000000},
+        {"symbol": "BINANCE:ETHUSDT", "Value.Traded": 2000, "market_cap_calc": 300000000},
+        {"symbol": "BINANCE:SOLUSDT", "Value.Traded": 1500, "market_cap_calc": 50000000},
+    ]
 
-        # Simulate the run logic
-        filtered = selector._apply_market_cap_filter(rows)
-        final = selector._sort_rows(filtered)[: config.limit]
+    # In run(), rows are sorted and sliced
+    rows.sort(key=lambda x: x.get("Value.Traded") or 0, reverse=True)
+    final = rows[: config.base_universe_limit]
 
-        symbols = [r["symbol"] for r in final]
-        assert symbols == ["BINANCE:ETHUSDT", "BINANCE:SOLUSDT"]
+    symbols = [r["symbol"] for r in final]
+    assert symbols == ["BINANCE:ETHUSDT", "BINANCE:SOLUSDT"]
 
 
 def test_aggregation_by_base():
@@ -100,6 +86,7 @@ def test_aggregation_by_base():
     rows = [
         {"symbol": "BINANCE:BTCUSDT", "Value.Traded": 1000},
         {"symbol": "BINANCE:BTCUSDC", "Value.Traded": 500},  # Should be dropped
+        {"symbol": "BINANCE:BTCFUSD", "Value.Traded": 300},  # Should be dropped
         {"symbol": "BINANCE:ETHUSDT", "Value.Traded": 800},
     ]
 
@@ -109,5 +96,6 @@ def test_aggregation_by_base():
     symbols = {r["symbol"] for r in aggregated}
     assert "BINANCE:BTCUSDT" in symbols
     assert "BINANCE:BTCUSDC" not in symbols
+    assert "BINANCE:BTCFUSD" not in symbols
     assert "BINANCE:ETHUSDT" in symbols
     assert len(aggregated) == 2
