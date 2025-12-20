@@ -2,7 +2,7 @@
 
 This plan outlines the steps to implement a robust retry mechanism with exponential backoff for the `Streamer` class.
 
-## Phase 1: Research & Design
+## Phase 1: Research & Design [checkpoint: d67102c]
 - [x] Task: Analyze current WebSocket handling in `tradingview_scraper/symbols/stream/streamer.py`
 - [x] Task: Design the `RetryHandler` utility or integrate logic into `Streamer`
 - [x] Task: Conductor - User Manual Verification 'Research & Design' (Protocol in workflow.md)
