@@ -41,6 +41,7 @@ sort_order: desc
 final_sort_by: Value.Traded
 final_sort_order: desc
 dedupe_by_symbol: true
+group_duplicates: true
 prefilter_limit: 1500
 limit: 50
 base_universe_limit: 50

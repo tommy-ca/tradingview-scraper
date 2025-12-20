@@ -70,6 +70,7 @@ DEFAULT_COLUMNS = [
     "volume",
     "change",
     "Recommend.All",
+    "Value.Traded",
     "ADX",
     "Volatility.D",
     "Perf.W",
@@ -237,6 +238,7 @@ class SelectorConfig(BaseModel):
     timeout: int = 30
     prefilter_limit: Optional[int] = None
     dedupe_by_symbol: bool = True
+    group_duplicates: bool = False
     base_from_spot_only: bool = False
     attach_perp_counterparts: bool = False
     quote_priority: List[str] = Field(default_factory=lambda: ["USDT", "USDC", "USD", "BUSD", "FDUSD"])
@@ -925,6 +927,7 @@ class FuturesUniverseSelector:
         sort_field = self.config.final_sort_by or self.config.sort_by or "Value.Traded"
         descending = (self.config.final_sort_order or "desc").lower() == "desc"
         best_by_base: Dict[str, Dict[str, Any]] = {}
+        all_members: Dict[str, List[str]] = {}
         priority = [p.upper() for p in self.config.perp_exchange_priority]
 
         # Use config.quote_priority if available
@@ -945,6 +948,11 @@ class FuturesUniverseSelector:
             if base in STABLE_BASES and not self.config.include_stable_bases:
                 continue
 
+            if base not in all_members:
+                all_members[base] = []
+            if symbol not in all_members[base]:
+                all_members[base].append(symbol)
+
             current = best_by_base.get(base)
             if current is None:
                 best_by_base[base] = row
@@ -960,17 +968,30 @@ class FuturesUniverseSelector:
             cand_q_rank = quote_priority_map.get(cand_quote, 999)
             curr_q_rank = quote_priority_map.get(current_quote, 999)
 
+            better = False
             if cand_q_rank < curr_q_rank:
                 # Prefer candidate if its liquidity is at least 30% of best
                 if candidate_value > best_value * 0.3:
-                    best_by_base[base] = row
-                    continue
+                    better = True
             elif cand_q_rank > curr_q_rank:
                 # Prefer current if its liquidity is at least 30% of candidate
                 if best_value > candidate_value * 0.3:
-                    continue
+                    better = False
+                else:
+                    # Current is much less liquid than candidate, maybe switch?
+                    # If ranks are different, we stick to priority unless it's extreme
+                    pass
 
-            # 2. Prefer Linear Perps over Inverse Perps (if both are perps)
+            if better:
+                best_by_base[base] = row
+                continue
+
+            # If quotes are same rank, continue with other preferences
+            if cand_q_rank != curr_q_rank:
+                # One is definitely preferred by quote rank and we already decided
+                continue
+
+            # 2. Prefer Linear Perps over Inverse Perps (if both are perps) handled by quote priority mostly
             # 3. Perp vs Spot preference
             if self.config.prefer_perps:
                 cand_perp = self._is_perp(symbol)
@@ -999,7 +1020,13 @@ class FuturesUniverseSelector:
             except TypeError:
                 continue
 
-        return list(best_by_base.values())
+        results = list(best_by_base.values())
+        if self.config.group_duplicates:
+            for row in results:
+                base = self._base_symbol(row.get("symbol", ""))
+                row["alternates"] = [s for s in all_members.get(base, []) if s != row.get("symbol")]
+
+        return results
 
     def _sort_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         final_sorted = rows
