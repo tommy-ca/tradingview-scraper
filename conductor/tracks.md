@@ -28,8 +28,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 --- 
 
-## [ ] Track: Data Lakehouse Ingestor & Persistent DataLoader
-*Link: [./conductor/tracks/lakehouse_ingestor_20251220/](./conductor/tracks/lakehouse_ingestor_20251220/)*
+## [ ] Track: Lakehouse Data Quality & Gap Management
+*Link: [./conductor/tracks/lakehouse_quality_20251220/](./conductor/tracks/lakehouse_quality_20251220/)*
 
 
 

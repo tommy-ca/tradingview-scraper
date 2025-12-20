@@ -73,3 +73,35 @@ class LakehouseStorage:
         if df.empty:
             return None
         return df["timestamp"].max()
+
+    def detect_gaps(self, symbol: str, interval: str) -> List[tuple]:
+        """
+        Identifies missing data points in the historical time-series.
+
+        Returns:
+            List[tuple]: List of (start_missing_ts, end_missing_ts) gaps.
+        """
+        df = self.load_candles(symbol, interval)
+        if df.empty or len(df) < 2:
+            return []
+
+        # Expected interval in seconds
+        from tradingview_scraper.symbols.stream.loader import DataLoader
+
+        interval_mins = DataLoader.TIMEFRAME_MINUTES.get(interval)
+        if not interval_mins:
+            logger.error(f"Unknown interval for gap detection: {interval}")
+            return []
+
+        expected_diff = interval_mins * 60
+        gaps = []
+
+        timestamps = df["timestamp"].tolist()
+        for i in range(1, len(timestamps)):
+            diff = timestamps[i] - timestamps[i - 1]
+            if diff > expected_diff * 1.5:  # Allow some tolerance
+                gaps.append((timestamps[i - 1] + expected_diff, timestamps[i] - expected_diff))
+
+        if gaps:
+            logger.info(f"Detected {len(gaps)} gaps for {symbol} ({interval}).")
+        return gaps

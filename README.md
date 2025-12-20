@@ -185,6 +185,7 @@ The following research reports outline advanced capabilities and feasibility stu
 - [Multi-Market Data Loading Research](docs/research/dataloader_multi_market_20251220.md) - Validation across Crypto, Forex, Stocks, Indices, and Commodities.
 - [Deep History & Genesis Reach Feasibility](docs/research/deep_history_feasibility_20251220.md) - Analysis of maximum lookback limits for building crypto data lakehouses.
 - [Persistent Data Loading & Lakehouse Ingestion](docs/research/lakehouse_ingestor_20251220.md) - Implementation of a stateful loader for deep historical accumulation.
+- [Lakehouse Data Quality & Gap Management](docs/research/lakehouse_gap_management_20251220.md) - Automated detection and repair of missing historical data.
 
 ## Examples
 

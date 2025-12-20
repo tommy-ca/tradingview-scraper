@@ -30,6 +30,7 @@ Research & Development:
    research/dataloader_multi_market_20251220
    research/deep_history_feasibility_20251220
    research/lakehouse_ingestor_20251220
+   research/lakehouse_gap_management_20251220
 
 
 Indices and tables

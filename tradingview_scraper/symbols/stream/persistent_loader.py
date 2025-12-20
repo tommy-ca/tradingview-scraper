@@ -35,26 +35,14 @@ class PersistentDataLoader:
         """
         last_ts = self.storage.get_last_timestamp(symbol, interval)
 
-        # If we have data, we might only need a few candles,
-        # but the API gives "Latest N" anyway, so we just fetch and merge.
-        # Overlap is handled by deduplication in storage.save_candles.
-
-        # Determine start date for logging info
         if last_ts:
             last_dt = datetime.fromtimestamp(last_ts)
             logger.info(f"Syncing {symbol} ({interval}) from last seen: {last_dt}")
         else:
             logger.info(f"Performing initial sync for {symbol} ({interval}) with depth {depth}")
 
-        # Fetch latest data from API
-        # We use a dummy range that results in 'depth' candles
         end_dt = datetime.now()
-        # DataLoader calculates count based on start_dt.
-        # We just want 'depth' candles, so we estimate a start_dt.
         start_dt = end_dt - timedelta(minutes=self.loader.TIMEFRAME_MINUTES[interval] * depth)
-        # Note: we don't use DataLoader.load directly because we want the FULL N candles,
-        # not a filtered range.
-        # Let's use a simpler internal fetch or just use load with a broad range.
 
         from tradingview_scraper.symbols.stream import Streamer
 
@@ -73,6 +61,31 @@ class PersistentDataLoader:
 
         return 0
 
+    def repair(self, symbol: str, interval: str = "1h") -> int:
+        """
+        Detects and attempts to fill gaps in local storage for a symbol.
+        """
+        gaps = self.storage.detect_gaps(symbol, interval)
+        if not gaps:
+            logger.info(f"No gaps detected for {symbol} ({interval}).")
+            return 0
+
+        total_filled = 0
+        for gap_start, gap_end in gaps:
+            now_ts = datetime.now().timestamp()
+            diff_mins = (now_ts - gap_start) / 60
+            depth = int(diff_mins / self.loader.TIMEFRAME_MINUTES[interval]) + 5
+
+            if depth > 8500:
+                logger.warning(f"Gap at {datetime.fromtimestamp(gap_start)} is too deep ({depth} candles). Max reach is ~8500.")
+                depth = 8500
+
+            logger.info(f"Attempting to fill gap: {datetime.fromtimestamp(gap_start)} to {datetime.fromtimestamp(gap_end)} (Depth: {depth})")
+            filled = self.sync(symbol, interval, depth=depth)
+            total_filled += filled
+
+        return total_filled
+
     def load(self, symbol: str, start: Union[datetime, str], end: Union[datetime, str], interval: str = "1h", force_api: bool = False) -> pd.DataFrame:
         """
         Loads data from local storage, falling back to API if range is missing.
@@ -85,11 +98,8 @@ class PersistentDataLoader:
         start_ts = start.timestamp()
         end_ts = end.timestamp()
 
-        # 1. Check local storage
         df = self.storage.load_candles(symbol, interval, start_ts, end_ts)
 
-        # 2. If data is missing or force_api, try to fetch from API
-        # (Simple logic: if df is empty, we definitely need API)
         if df.empty or force_api:
             logger.info(f"Data for {symbol} range not found in local storage. Fetching from API...")
             api_candles = self.loader.load(symbol, start, end, interval)
