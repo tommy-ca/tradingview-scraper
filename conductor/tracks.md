@@ -35,6 +35,12 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [ ] Track: Consolidation of Research Learnings into Library & Tests
 *Link: [./conductor/tracks/research_consolidation_20251220/](./conductor/tracks/research_consolidation_20251220/)*
+--- 
+
+## [ ] Track: API Resilience & Rate-Limit Management
+*Link: [./conductor/tracks/api_resilience_20251220/](./conductor/tracks/api_resilience_20251220/)*
+
+
 
 
 
