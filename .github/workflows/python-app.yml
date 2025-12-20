@@ -31,12 +31,12 @@ jobs:
 
     - name: Install dependencies
       run: |
-        uv pip install --system -r dev-requirements.txt
+        uv sync --extra dev
 
     - name: Lint with ruff
       run: |
         # Stop the build if there are Python syntax errors or undefined names
-        uvx ruff check . --output-format=github
+        uv run ruff check . --output-format=github
 
     - name: List files in the repository
       run: |

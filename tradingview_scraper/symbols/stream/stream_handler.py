@@ -199,3 +199,14 @@ class StreamHandler:
             "rchp",
             "rtc",
         ]
+
+    def close(self):
+        """
+        Closes the WebSocket connection and clean up sessions.
+        """
+        try:
+            if hasattr(self, "ws") and self.ws:
+                self.ws.close()
+                logging.info("WebSocket connection closed successfully.")
+        except Exception as e:
+            logging.error("Error closing WebSocket: %s", e)

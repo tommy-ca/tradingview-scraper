@@ -23,6 +23,7 @@ Research & Development:
 
    research/arbitrage_research_20251220
    research/streamer_research_20251220
+   research/historical_technicals_20251220
 
 
 Indices and tables

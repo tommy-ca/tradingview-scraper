@@ -23,5 +23,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Link: [./conductor/tracks/universe_selector_guards_20251220/](./conductor/tracks/universe_selector_guards_20251220/)*
 ---
 
-## [x] Track: Update Trend Following Strategy Universe Selectors
-*Link: [./conductor/tracks/update_trend_strategy_20251220/](./conductor/tracks/update_trend_strategy_20251220/)*
+## [ ] Track: Historical Data and Technical Indicator Research
+*Link: [./conductor/tracks/historical_technicals_research_20251220/](./conductor/tracks/historical_technicals_research_20251220/)*
+
+
+

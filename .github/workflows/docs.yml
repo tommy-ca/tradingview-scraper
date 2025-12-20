@@ -21,12 +21,12 @@ jobs:
 
     - name: Install requirements
       run: |
-        uv pip install --system sphinx sphinx-rtd-theme
+        uv sync --extra dev
     
     - name: Build docs
       run: |
         cd docs
-        make html
+        uv run make html
     # https://github.com/peaceiris/actions-gh-pages
     - name: Deploy
       if: success()

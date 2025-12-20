@@ -231,7 +231,7 @@ class Streamer:
 
         return indicator_data
 
-    def stream(self, exchange: str, symbol: str, timeframe: str = "1m", numb_price_candles: int = 10, indicators: Optional[List[Tuple[str, str]]] = None):
+    def stream(self, exchange: str, symbol: str, timeframe: str = "1m", numb_price_candles: int = 10, indicators: Optional[List[Tuple[str, str]]] = None, auto_close: bool = False):
         """
         Starts streaming data for a given exchange and symbol, with optional indicators.
 
@@ -242,6 +242,7 @@ class Streamer:
             numb_price_candles (int): The number of price candles to retrieve. Default is 10.
             indicators (list, optional): List of tuples, each containing (indicator_id, indicator_version).
                                         Example: [("STD;RSI", "37.0"), ("STD;MACD", "31.0")]
+            auto_close (bool): If True, closes the connection after the stream is complete. Default is False.
 
         Returns:
             dict: A dictionary containing OHLC and indicator data.
@@ -309,9 +310,19 @@ class Streamer:
             if ind_flag is True:
                 self._export(json_data=indicator_json_data, symbol=symbol, data_category="indicator")
 
+            if auto_close:
+                self.close()
+
             return {"ohlc": ohlc_json_data, "indicator": indicator_json_data}
 
         return self.get_data()
+
+    def close(self):
+        """
+        Closes the underlying WebSocket connection.
+        """
+        if hasattr(self, "stream_obj") and self.stream_obj:
+            self.stream_obj.close()
 
     def _export(self, json_data, symbol, data_category):
         """
