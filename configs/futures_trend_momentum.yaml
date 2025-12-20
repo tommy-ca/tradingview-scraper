@@ -1,16 +1,6 @@
-# Futures/commodities trend momentum with multi-timeframe confirmation (High Quality)
-# Base: market=futures, top 100 by volume (after type filter), sort volume, limited to US exchanges
-markets: ["futures"]
-exchanges: ["CME", "CBOT", "COMEX", "NYMEX"]
-include_perps_only: false
-exclude_perps: false
-columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
-volume:
-  min: 5000
-volatility:
-  max: 8.0
-  atr_pct_max: 0.1
-  fallback_use_atr_pct: true
+# Futures Trend Momentum (Long) - Refactored
+base_preset: presets/futures_us_liquid.yaml
+
 trend:
   direction: "long"
   timeframe: "daily"
@@ -27,14 +17,7 @@ trend:
   confirmation_momentum:
     enabled: true
     horizons: {Perf.3M: 5.0}
-sort_by: volume
-sort_order: desc
-final_sort_by: volume
-final_sort_order: desc
-limit: 100
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
+
+export_metadata:
+  symbol: "futures_trend_momentum"
+  data_category: "universe_selector"

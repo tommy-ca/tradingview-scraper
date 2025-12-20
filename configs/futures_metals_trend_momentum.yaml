@@ -41,5 +41,5 @@ export:
   enabled: false
   type: json
 export_metadata:
-  symbol: "futures_metals_universe"
+  symbol: "futures_metals_trend_momentum"
   data_category: "universe_selector"

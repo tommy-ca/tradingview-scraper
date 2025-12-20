@@ -43,3 +43,6 @@ export:
 export_metadata:
   symbol: "futures_metals_universe"
   data_category: "universe_selector"
+export_metadata:
+  symbol: "futures_metals_trend_momentum_short"
+  data_category: "universe_selector"

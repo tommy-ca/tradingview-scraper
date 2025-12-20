@@ -1,16 +1,6 @@
-# Base universe: Forex, focus on high-liquidity exchanges; enriched via Overview
-# Exchanges selected from discovery (high prevalence): FX_IDC, THINKMARKETS, OANDA, VANTAGE, FUSIONMARKETS
-markets: ["forex"]
-exchanges: ["FX_IDC", "THINKMARKETS", "BLACKBULL", "ICMARKETS", "ACTIVTRADES", "FUSIONMARKETS", "OANDA", "TRADENATIONSB", "TRADENATION", "FXOPEN", "FX", "SKILLING", "FPMARKETS", "VELOCITY", "CAPITALCOM", "VANTAGE", "PEPPERSTONE", "FXCM", "ICE"]
-allowed_spot_quotes: ["USD", "EUR", "JPY", "GBP", "CHF", "AUD", "CAD", "NZD"]
-base_currencies: ["USD", "EUR", "JPY", "GBP", "CHF", "CAD", "AUD", "NZD"]
-columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
-volume:
-  min: 0
-volatility:
-  max: 10.0
-  atr_pct_max: 0.1
-  fallback_use_atr_pct: true
+# Forex Trend Momentum (Long) - Refactored
+base_preset: presets/forex_liquid.yaml
+
 trend:
   direction: "long"
   timeframe: "daily"
@@ -23,18 +13,8 @@ trend:
     min: 20
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: 0.2, Perf.1M: 1.0}
-  confirmation_momentum:
-    enabled: true
-    horizons: {Perf.3M: 2.0}
-sort_by: volume
-sort_order: desc
-final_sort_by: volume
-final_sort_order: desc
-limit: 100
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
+    horizons: {change: 0.0, Perf.W: 0.5, Perf.1M: 1.0}
+
+export_metadata:
+  symbol: "forex_trend_momentum"
+  data_category: "universe_selector"

@@ -1,21 +1,8 @@
-# US stocks trend momentum (daily) - High Quality
-# Base: market_cap_basic desc then volume, top 250
-markets: ["america"]
-exchanges: []
-include_perps_only: false
-exclude_perps: false
-filters:
-  - left: "type"
-    operation: "in_range"
-    right: ["stock", "dr"]
-columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR", "market_cap_basic"]
-volume:
-  min: 500000
-  value_traded_min: 10000000
-volatility:
-  max: 6.0
-  atr_pct_max: 0.08
-  fallback_use_atr_pct: true
+# US Stocks Trend Momentum (Long) - Refactored
+base_preset: presets/stocks_us_liquid.yaml
+
+limit: 250 # Override base limit for broader scan
+
 trend:
   direction: "long"
   timeframe: "daily"
@@ -32,14 +19,7 @@ trend:
   confirmation_momentum:
     enabled: true
     horizons: {Perf.1M: 5.0, Perf.3M: 10.0}
-sort_by: market_cap_basic
-sort_order: desc
-final_sort_by: volume
-final_sort_order: desc
-limit: 250
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
+
+export_metadata:
+  symbol: "us_stocks_trend_momentum"
+  data_category: "universe_selector"

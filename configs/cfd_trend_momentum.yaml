@@ -33,3 +33,6 @@ timeout: 10
 export:
   enabled: false
   type: json
+export_metadata:
+  symbol: "cfd_trend_momentum"
+  data_category: "universe_selector"

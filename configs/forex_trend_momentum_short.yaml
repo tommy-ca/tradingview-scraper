@@ -37,3 +37,6 @@ timeout: 10
 export:
   enabled: false
   type: json
+export_metadata:
+  symbol: "forex_trend_momentum_short"
+  data_category: "universe_selector"
