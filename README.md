@@ -182,6 +182,7 @@ The following research reports outline advanced capabilities and feasibility stu
 - [Multi-Timeframe Technical Filtering](docs/research/mtf_technical_filtering_20251220.md) - Strategy for refining trend candidates using 15m/1h/1d indicator alignment.
 - [Alternative Technical Indicators via Scanner API](docs/research/alternative_technicals_20251220.md) - Validation of 30+ pre-calculated indicators for deep structural analysis.
 - [Historical Data Loader Pattern](docs/research/historical_loader_20251220.md) - Interface for date-range based data acquisition for backtesting.
+- [Multi-Market Data Loading Research](docs/research/dataloader_multi_market_20251220.md) - Validation across Crypto, Forex, Stocks, Indices, and Commodities.
 
 ## Examples
 

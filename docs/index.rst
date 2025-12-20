@@ -27,6 +27,7 @@ Research & Development:
    research/mtf_technical_filtering_20251220
    research/alternative_technicals_20251220
    research/historical_loader_20251220
+   research/dataloader_multi_market_20251220
 
 
 Indices and tables
