@@ -8,9 +8,9 @@ This plan outlines the steps to implement a robust retry mechanism with exponent
 - [x] Task: Conductor - User Manual Verification 'Research & Design' (Protocol in workflow.md)
 
 ## Phase 2: Implementation (TDD)
-- [ ] Task: TDD - Write tests for exponential backoff calculation logic
-- [ ] Task: TDD - Implement exponential backoff utility
-- [ ] Task: TDD - Write tests for `Streamer` reconnection trigger
+- [x] Task: TDD - Write tests for exponential backoff calculation logic
+- [x] Task: TDD - Implement exponential backoff utility (2e87bc3)
+- [~] Task: TDD - Write tests for Streamer reconnection trigger
 - [ ] Task: TDD - Implement reconnection logic in `Streamer.stream`
 - [ ] Task: TDD - Write tests for state restoration after reconnect
 - [ ] Task: TDD - Implement state restoration (re-subscribing to symbols)
