@@ -28,8 +28,10 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 --- 
 
-## [ ] Track: DataLoader Multi-Market Testing & Sample Datasets
-*Link: [./conductor/tracks/dataloader_multi_market_20251220/](./conductor/tracks/dataloader_multi_market_20251220/)*
+## [ ] Track: Deep Historical Data Lookback & Inception Research
+*Link: [./conductor/tracks/deep_history_research_20251220/](./conductor/tracks/deep_history_research_20251220/)*
+
+
 
 
 
