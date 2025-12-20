@@ -1,0 +1,53 @@
+# Bitget Top 50 Perp Base Universe Preset
+# Strictly limited to Top 50 by Market Cap
+
+exchanges: ["BITGET"]
+markets: ["crypto"]
+
+# Instrument type filters
+include_perps_only: true
+exclude_perps: false
+exclude_dated_futures: true
+base_from_spot_only: false
+
+# Liquidity filters
+volume:
+  min: 0
+  value_traded_min: 7500000
+
+# Volatility filters
+volatility:
+  max: 15.0
+  atr_pct_max: 0.12
+  fallback_use_atr_pct: true
+
+# Data columns
+columns: [name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D, Volatility.W, Volatility.M, Perf.W, Perf.1M, Perf.3M, ATR]
+
+# Sorting and limits
+sort_by: market_cap_calc
+sort_order: desc
+final_sort_by: market_cap_calc
+final_sort_order: desc
+dedupe_by_symbol: true
+prefilter_limit: 1500
+limit: 50
+base_universe_limit: 50
+base_universe_sort_by: market_cap_calc
+pagination_size: 50
+
+# Ensure key symbols
+ensure_symbols: [BITGET:BTCUSDT.P, BITGET:ETHUSDT.P, BITGET:SOLUSDT.P, BITGET:ADAUSDT.P, BITGET:DOGEUSDT.P, BITGET:LINKUSDT.P, BITGET:LTCUSDT.P, BITGET:DOTUSDT.P, BITGET:AVAXUSDT.P, BITGET:TRXUSDT.P]
+exclude_stable_bases: true
+prefer_perps: true
+perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
+
+market_cap_file: market_caps_crypto.json
+market_cap_limit: null
+market_cap_require_hit: false
+
+retries: 2
+timeout: 10
+export:
+  enabled: false
+  type: json

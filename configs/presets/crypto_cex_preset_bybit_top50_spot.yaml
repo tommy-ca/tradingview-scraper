@@ -1,9 +1,7 @@
-# OKX Spot Base Universe Preset (Tier 2 - Medium Liquidity)
-# This preset defines the base universe filtering parameters for OKX spot markets.
-# Trend configs should apply their own recommendation/adx/momentum filters on top.
+# Bybit Top 50 Spot Base Universe Preset
+# Strictly limited to Top 50 by Market Cap
 
-# Exchange identification
-exchanges: ["OKX"]
+exchanges: ["BYBIT"]
 markets: ["crypto"]
 
 # Instrument type filters
@@ -15,48 +13,44 @@ base_from_spot_only: true
 # Quote currency restrictions
 allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
 
-# Liquidity filters (Tier 2 - Medium thresholds)
+# Liquidity filters
 volume:
   min: 0
-  value_traded_min: 3000000   # $3M minimum daily value traded
+  value_traded_min: 2000000
 
-# Volatility filters (standardized)
+# Volatility filters
 volatility:
-  max: 15.0                   # 15% max daily volatility
-  atr_pct_max: 0.12           # 12% ATR/price ratio max
+  max: 15.0
+  atr_pct_max: 0.12
   fallback_use_atr_pct: true
 
 # Data columns
 columns: [name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D, Volatility.W, Volatility.M, Perf.W, Perf.1M, Perf.3M, ATR]
 
 # Sorting and limits
-sort_by: Value.Traded
+sort_by: market_cap_calc
 sort_order: desc
-final_sort_by: Value.Traded
+final_sort_by: market_cap_calc
 final_sort_order: desc
 dedupe_by_symbol: true
 prefilter_limit: 1500
 limit: 50
 base_universe_limit: 50
-base_universe_sort_by: Value.Traded
+base_universe_sort_by: market_cap_calc
 pagination_size: 50
 
-# Ensure key symbols are included
-ensure_symbols: [OKX:BTCUSDT, OKX:ETHUSDT, OKX:SOLUSDT, OKX:ADAUSDT, OKX:DOGEUSDT, OKX:LINKUSDT, OKX:LTCUSDT, OKX:DOTUSDT, OKX:AVAXUSDT, OKX:TRXUSDT]
+# Ensure key symbols
+ensure_symbols: [BYBIT:BTCUSDT, BYBIT:ETHUSDT, BYBIT:SOLUSDT, BYBIT:ADAUSDT, BYBIT:DOGEUSDT, BYBIT:LINKUSDT, BYBIT:LTCUSDT, BYBIT:DOTUSDT, BYBIT:AVAXUSDT, BYBIT:TRXUSDT]
 exclude_stable_bases: true
 prefer_perps: false
 perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
 
-# External data
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null
 market_cap_require_hit: false
 
-# API settings
 retries: 2
 timeout: 10
-
-# Export (disabled by default in presets)
 export:
   enabled: false
   type: json

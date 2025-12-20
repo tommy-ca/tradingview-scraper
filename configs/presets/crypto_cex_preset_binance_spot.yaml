@@ -30,7 +30,7 @@ volatility:
 columns: [name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D, Volatility.W, Volatility.M, Perf.W, Perf.1M, Perf.3M, ATR]
 
 # Sorting and limits
-sort_by: market_cap_calc
+sort_by: Value.Traded
 sort_order: desc
 final_sort_by: Value.Traded
 final_sort_order: desc
