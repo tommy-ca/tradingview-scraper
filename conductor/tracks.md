@@ -31,6 +31,12 @@ This file tracks all major tracks for the project. Each track has its own detail
 ## [ ] Track: Historical Candle Resolution & Depth Mapping
 *Link: [./conductor/tracks/resolution_research_20251220/](./conductor/tracks/resolution_research_20251220/)*
 
+---
+
+## [ ] Track: Consolidation of Research Learnings into Library & Tests
+*Link: [./conductor/tracks/research_consolidation_20251220/](./conductor/tracks/research_consolidation_20251220/)*
+
+
 
 
 

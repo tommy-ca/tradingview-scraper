@@ -55,6 +55,24 @@ class TestDataLoaderMarkets(unittest.TestCase):
         data = self.loader.load(symbol, self.start_dt, self.end_dt, self.interval)
         self._verify_data(symbol, data)
 
+    def test_non_standard_resolutions(self):
+        # 3m and 3h were discovered in research
+        symbol = "BINANCE:BTCUSDT"
+
+        print("\n>>> Testing 3m resolution <<<")
+        # Load last hour of 3m data
+        start_3m = datetime.now() - timedelta(hours=1)
+        end_3m = datetime.now()
+        data_3m = self.loader.load(symbol, start_3m, end_3m, "3m")
+        self.assertTrue(len(data_3m) > 0)
+
+        print("\n>>> Testing 3h resolution <<<")
+        # Load last day of 3h data
+        start_3h = datetime.now() - timedelta(days=1)
+        end_3h = datetime.now()
+        data_3h = self.loader.load(symbol, start_3h, end_3h, "3h")
+        self.assertTrue(len(data_3h) > 0)
+
 
 if __name__ == "__main__":
     unittest.main()

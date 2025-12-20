@@ -172,6 +172,14 @@ For consistent and reproducible development environments, this project uses [uv]
 
 All CI/CD workflows and local shell scripts (`scripts/*.sh`) are optimized to use `uv` for speed and consistency.
 
+## Available Resolutions
+
+The library supports both standard and discovery resolutions via the `Streamer` and `DataLoader` classes:
+
+*   **Standard:** `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`, `1M`
+*   **Discovery:** `3m`, `45m`, `2h`, `3h`
+*   **Notes:** Second-level resolutions (`1s`, `5s`) are not supported on the free tier. Intraday lookback is capped at ~8,500 candles.
+
 ## Research & Development
 
 The following research reports outline advanced capabilities and feasibility studies for institutional trading:
@@ -463,7 +471,42 @@ for packet in data_generator:
 - No built-in support for open interest/funding fields; only TA indicators and OHLC(+volume) are handled.
 - Add your own retry/backoff around `Streamer.stream` for robustness; current code stops on socket close.
 
-### 7. Getting Calendar events
+### 7. Historical Data Loading (Backtesting)
+The `DataLoader` class provides a standardized interface for fetching specific date ranges, while `PersistentDataLoader` adds a local Parquet-based caching layer (Data Lakehouse) to overcome API limits.
+
+#### Range-based Loading (DataLoader)
+```python
+from datetime import datetime, timedelta
+from tradingview_scraper.symbols.stream.loader import DataLoader
+
+loader = DataLoader()
+start_dt = datetime.now() - timedelta(days=3)
+end_dt = datetime.now()
+
+# Supports standard (1m, 1h, 1d) and discovery (3m, 45m, 3h) resolutions
+data = loader.load("BINANCE:BTCUSDT", start=start_dt, end=end_dt, interval="15m")
+print(f"Loaded {len(data)} candles.")
+```
+
+#### Stateful Ingestion (PersistentDataLoader)
+```python
+from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
+
+# Automatically manages a local Parquet lakehouse in data/lakehouse
+pd_loader = PersistentDataLoader()
+
+# Sync the last 8500 candles (API limit) into local storage
+pd_loader.sync("BINANCE:BTCUSDT", interval="1m")
+
+# Load from local storage, falling back to API if range is missing
+df = pd_loader.load("BINANCE:BTCUSDT", start="2025-12-15", end="2025-12-20", interval="1m")
+print(df.head())
+
+# Self-heal missing data segments
+pd_loader.repair("BINANCE:BTCUSDT", interval="1m")
+```
+
+### 8. Getting Calendar events
 
 
 #### Scraping Earnings events

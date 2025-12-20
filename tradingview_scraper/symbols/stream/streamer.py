@@ -91,7 +91,7 @@ class Streamer:
             numb_candles (int): The number of candles to fetch. Default is 10.
         """
         self._current_subscription = (exchange_symbol, timeframe, numb_candles)
-        timeframe_map = {"1m": "1", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "2h": "120", "4h": "240", "1d": "1D", "1w": "1W", "1M": "1M"}
+        timeframe_map = {"1m": "1", "3m": "3", "5m": "5", "15m": "15", "30m": "30", "45m": "45", "1h": "60", "2h": "120", "3h": "180", "4h": "240", "1d": "1D", "1w": "1W", "1M": "1M"}
         resolve_symbol = json.dumps({"adjustment": "splits", "symbol": exchange_symbol})
         self.stream_obj.send_message("quote_add_symbols", [quote_session, f"={resolve_symbol}"])
         self.stream_obj.send_message("resolve_symbol", [chart_session, "sds_sym_1", f"={resolve_symbol}"])
