@@ -15,7 +15,7 @@ allowed_spot_quotes:
 - FDUSD
 volume:
   min: 0
-  value_traded_min: 3000000
+  value_traded_min: 500000
 volatility:
   max: 15.0
   atr_pct_max: 0.12

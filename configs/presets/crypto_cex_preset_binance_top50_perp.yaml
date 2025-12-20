@@ -40,6 +40,17 @@ limit: 50
 base_universe_limit: 50
 base_universe_sort_by: Value.Traded
 pagination_size: 50
+ensure_symbols:
+- BINANCE:BTCUSDT.P
+- BINANCE:ETHUSDT.P
+- BINANCE:SOLUSDT.P
+- BINANCE:ADAUSDT.P
+- BINANCE:DOGEUSDT.P
+- BINANCE:LINKUSDT.P
+- BINANCE:LTCUSDT.P
+- BINANCE:DOTUSDT.P
+- BINANCE:AVAXUSDT.P
+- BINANCE:TRXUSDT.P
 exclude_stable_bases: true
 prefer_perps: true
 perp_exchange_priority:
