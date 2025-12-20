@@ -29,6 +29,7 @@ Research & Development:
    research/historical_loader_20251220
    research/dataloader_multi_market_20251220
    research/deep_history_feasibility_20251220
+   research/lakehouse_ingestor_20251220
 
 
 Indices and tables
