@@ -701,14 +701,12 @@ class FuturesUniverseSelector:
         checks["combined"] = combined
         return checks
 
-    def _apply_post_filters(self, rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _apply_basic_filters(self, rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
         include_set = set(s.upper() for s in self.config.include_symbols)
         exclude_set = set(s.upper() for s in self.config.exclude_symbols)
         exchange_set = set(self.config.exchanges)
 
-        # Stage 1: Apply symbol/type filters + liquidity + volatility checks
-        base_candidates: List[Dict[str, Any]] = []
-
+        filtered: List[Dict[str, Any]] = []
         for row in rows:
             symbol = row.get("symbol", "").upper()
             exchange = self._extract_exchange(symbol)
@@ -747,31 +745,13 @@ class FuturesUniverseSelector:
             if exchange_set and exchange not in exchange_set:
                 continue
 
-            # Evaluate liquidity and volatility
-            passes = {}
-            liquidity_ok = self._evaluate_liquidity(row)
-            passes["liquidity"] = liquidity_ok
+            filtered.append(row)
+        return filtered
 
-            volatility_ok, _ = self._evaluate_volatility(row)
-            passes["volatility"] = volatility_ok
-
-            # Only add to base candidates if liquidity and volatility pass
-            if liquidity_ok and volatility_ok:
-                row["passes"] = passes
-                base_candidates.append(row)
-
-        # Apply base universe limit if configured
-        if self.config.base_universe_limit and base_candidates:
-            sort_field = self.config.base_universe_sort_by
-            base_candidates.sort(key=lambda x: x.get(sort_field) or 0, reverse=True)
-            base_candidates = base_candidates[: self.config.base_universe_limit]
-
-        # Stage 2: Apply trend filters to base candidates
+    def _apply_strategy_filters(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         filtered: List[Dict[str, Any]] = []
-
-        for row in base_candidates:
-            passes = row.get("passes", {})
-
+        for row in rows:
+            passes = row.get("passes", {}) if "passes" in row else {}
             trend_checks = self._evaluate_trend(row)
             passes.update({f"trend_{k}": v for k, v in trend_checks.items()})
 
@@ -790,12 +770,10 @@ class FuturesUniverseSelector:
                     passes.update({f"execute_screen_{k}": v for k, v in execute_checks.items()})
                     screens_combined = screens_combined and execute_checks.get("combined", True)
 
-            passes["all"] = passes.get("liquidity", False) and passes.get("volatility", False) and trend_checks.get("combined", True) and screens_combined
+            passes["all"] = trend_checks.get("combined", True) and screens_combined
             row["passes"] = passes
-
             if passes["all"]:
                 filtered.append(row)
-
         return filtered
 
     def _apply_momentum_composite(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -926,8 +904,8 @@ class FuturesUniverseSelector:
 
         return rows
 
-    def _dedupe_by_base(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        sort_field = self.config.final_sort_by or self.config.sort_by or "volume"
+    def _aggregate_by_base(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        sort_field = self.config.final_sort_by or self.config.sort_by or "Value.Traded"
         descending = (self.config.final_sort_order or "desc").lower() == "desc"
         best_by_base: Dict[str, Dict[str, Any]] = {}
         priority = [p.upper() for p in self.config.perp_exchange_priority]
@@ -1138,18 +1116,41 @@ class FuturesUniverseSelector:
                 aggregated.extend(market_rows)
                 errors.extend(market_errors)
 
-        filtered = self._apply_post_filters(aggregated)
+        # 1. Basic Filters (Symbol, type, stable exclusion)
+        rows = self._apply_basic_filters(aggregated)
 
-        filtered = self._apply_market_cap_filter(filtered)
+        # 2. Market Cap Guard (Rank and Floor)
+        rows = self._apply_market_cap_filter(rows)
+
+        # 3. Volatility Filter
+        rows = [r for r in rows if self._evaluate_volatility(r)[0]]
+
+        # 4. Liquidity Filter (Floor)
+        rows = [r for r in rows if self._evaluate_liquidity(r)]
+
+        # 5. Aggregation (Deduplicate by base currency)
+        if self.config.dedupe_by_symbol:
+            rows = self._aggregate_by_base(rows)
+
+        # 6. Sorting & Limiting (Base Universe)
+        base_sort_field = self.config.base_universe_sort_by or "Value.Traded"
+        rows.sort(key=lambda x: x.get(base_sort_field) or 0, reverse=True)
+
+        if self.config.base_universe_limit:
+            rows = rows[: self.config.base_universe_limit]
+
+        # 7. Strategy Filters (Trend, Screens)
+        # Note: If no trend rules are enabled, this just returns the same rows with 'all: true'
+        filtered = self._apply_strategy_filters(rows)
 
         if self.config.momentum_composite_fields:
             filtered = self._apply_momentum_composite(filtered)
 
         if self.config.attach_perp_counterparts:
+            # Note: attach_perp_counterparts has its own internal dedupe and sort logic
+            # which we might want to refactor later to use the common methods.
             trimmed = self._attach_perp_counterparts(filtered)
         else:
-            if self.config.dedupe_by_symbol:
-                filtered = self._dedupe_by_base(filtered)
             final_sorted = self._sort_rows(filtered)
             trimmed = final_sorted[: self.config.limit]
 

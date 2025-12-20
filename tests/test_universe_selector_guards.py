@@ -82,3 +82,32 @@ def test_liquidity_priority_with_guards():
 
         symbols = [r["symbol"] for r in final]
         assert symbols == ["BINANCE:ETHUSDT", "BINANCE:SOLUSDT"]
+
+
+def test_aggregation_by_base():
+    """
+    Test that symbols with the same base (e.g. BTCUSDT, BTCUSDC) are aggregated
+    by picking the one with the highest liquidity.
+    """
+    config = SelectorConfig(
+        markets=["crypto"],
+        dedupe_by_symbol=True,  # In the selector, this means aggregate by base
+        final_sort_by="Value.Traded",
+    )
+
+    selector = FuturesUniverseSelector(config)
+
+    rows = [
+        {"symbol": "BINANCE:BTCUSDT", "Value.Traded": 1000},
+        {"symbol": "BINANCE:BTCUSDC", "Value.Traded": 500},  # Should be dropped
+        {"symbol": "BINANCE:ETHUSDT", "Value.Traded": 800},
+    ]
+
+    # We use _aggregate_by_base for this
+    aggregated = selector._aggregate_by_base(rows)
+
+    symbols = {r["symbol"] for r in aggregated}
+    assert "BINANCE:BTCUSDT" in symbols
+    assert "BINANCE:BTCUSDC" not in symbols
+    assert "BINANCE:ETHUSDT" in symbols
+    assert len(aggregated) == 2
