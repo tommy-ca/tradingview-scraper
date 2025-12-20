@@ -9,7 +9,57 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: review and update current universe selectors
+## [ ] Track: Arbitrage and Multi-Quote Pair Exploration
+*Link: [./conductor/tracks/arbitrage_exploration_20251220/](./conductor/tracks/arbitrage_exploration_20251220/)*
+
+---
+
+## [x] Track: Real-Time Data Streamer Research & Lakehouse Feasibility
+*Link: [./conductor/tracks/streamer_research_20251220/](./conductor/tracks/streamer_research_20251220/)*
+
+---
+
+## [x] Track: Historical Data and Technical Indicator Research
+*Link: [./conductor/tracks/historical_technicals_research_20251220/](./conductor/tracks/historical_technicals_research_20251220/)*
+
+---
+
+## [x] Track: Deep Historical Data Lookback & Inception Research
+*Link: [./conductor/tracks/deep_history_research_20251220/](./conductor/tracks/deep_history_research_20251220/)*
+
+---
+
+## [x] Track: Historical Candle Resolution & Depth Mapping
+*Link: [./conductor/tracks/resolution_research_20251220/](./conductor/tracks/resolution_research_20251220/)*
+
+---
+
+## [x] Track: Multi-Timeframe Technical Filtering for Trend Candidates
+*Link: [./conductor/tracks/mtf_technical_filtering_20251220/](./conductor/tracks/mtf_technical_filtering_20251220/)*
+
+---
+
+## [x] Track: Consolidation of Research Learnings into Library & Tests
+*Link: [./conductor/tracks/research_consolidation_20251220/](./conductor/tracks/research_consolidation_20251220/)*
+
+---
+
+## [x] Track: API Resilience & Rate-Limit Management
+*Link: [./conductor/tracks/api_resilience_20251220/](./conductor/tracks/api_resilience_20251220/)*
+
+---
+
+## [x] Track: Stress & Performance Load Testing
+*Link: [./conductor/tracks/performance_testing_20251220/](./conductor/tracks/performance_testing_20251220/)*
+
+---
+
+## [x] Track: Lakehouse Data Quality & Gap Management
+*Link: [./conductor/tracks/lakehouse_quality_20251220/](./conductor/tracks/lakehouse_quality_20251220/)*
+
+---
+
+## [-] Track: review and update current universe selectors (Superseded)
 *Link: [./conductor/tracks/universe_selectors_20251220/](./conductor/tracks/universe_selectors_20251220/)*
 
 ---
