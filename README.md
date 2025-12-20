@@ -195,6 +195,7 @@ The following research reports outline advanced capabilities and feasibility stu
 - [Persistent Data Loading & Lakehouse Ingestion](docs/research/lakehouse_ingestor_20251220.md) - Implementation of a stateful loader for deep historical accumulation.
 - [Lakehouse Data Quality & Gap Management](docs/research/lakehouse_gap_management_20251220.md) - Automated detection and repair of missing historical data.
 - [Historical Candle Resolution & Depth Matrix](docs/research/resolution_matrix_20251220.md) - Mapping of all verified TradingView timeframes and their limits.
+- [Stress & Performance Load Testing](docs/research/performance_load_tests_20251220.md) - Benchmarks for storage latency and concurrent ingestion throughput.
 
 ## Examples
 

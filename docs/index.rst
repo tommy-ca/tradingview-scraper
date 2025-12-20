@@ -32,6 +32,7 @@ Research & Development:
    research/lakehouse_ingestor_20251220
    research/lakehouse_gap_management_20251220
    research/resolution_matrix_20251220
+   research/performance_load_tests_20251220
 
 
 Indices and tables

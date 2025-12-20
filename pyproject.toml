@@ -30,6 +30,7 @@ dependencies = [
     "websocket-client>=1.8.0",
     "python-dotenv>=1.0.1",
     "tenacity>=8.3.0",
+    "pyarrow>=14.0.1",
 ]
 
 [project.urls]
@@ -42,6 +43,8 @@ dev = [
     "ruff",
     "pre-commit",
     "ty",
+    "pytest-benchmark",
+    "locust",
 ]
 
 [tool.setuptools.packages.find]
