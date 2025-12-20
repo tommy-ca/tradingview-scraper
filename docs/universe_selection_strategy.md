@@ -1,0 +1,49 @@
+# Crypto Universe Selection Strategy
+
+This document outlines the logic behind the universe selection presets used in the scanning infrastructure, specifically differentiating between **Volume-based** and **Market Cap-based** universes.
+
+## 1. The Core Conflict: Volume vs. Market Cap
+
+When selecting a "Top 50" universe for trading scans, there are two primary approaches:
+
+### A. Market Cap (The "Blue Chip" Approach)
+*   **Definition:** Selects the top 50 assets by total network value.
+*   **Characteristics:** Stable, slow-moving, high institutional interest.
+*   **Pros:** Filters out "flavor of the week" scams; ensures long-term viability.
+*   **Cons:** Misses high-momentum breakout assets that haven't yet reached a high market cap. A high market cap coin can have low volatility and low volume, making it poor for trend trading.
+*   **Best For:** Mean Reversion strategies, Portfolio Rebalancing, Index Tracking.
+
+### B. Value Traded (The "Action" Approach)
+*   **Definition:** Selects the top 50 assets by 24h USD trading volume (`Value.Traded`).
+*   **Characteristics:** High liquidity, high attention, volatile.
+*   **Pros:** Captures exactly where the market attention is *right now*. Essential for momentum and trend-following strategies.
+*   **Cons:** Can include "garbage" coins (memecoins, pump-and-dumps) that are temporarily popular but fundamentally unsound.
+*   **Best For:** Trend Following, Momentum, Breakout strategies.
+
+## 2. Updated Preset Structure
+
+To accommodate both needs, the presets have been split:
+
+### Generic Presets (`crypto_cex_preset_{exchange}_{spot|perp}.yaml`)
+*   **Sorting:** `Value.Traded` (Descending)
+*   **Purpose:** These are the default for **Trend Scans**.
+*   **Logic:** You cannot trade a trend if there is no volume. A trend strategy should be indifferent to the "prestige" of a coin (Market Cap) and focused entirely on the "action" (Liquidity/Volume). If a mid-cap coin is trading more volume than a major cap, it is a better candidate for trend following.
+
+### Top 50 Presets (`crypto_cex_preset_{exchange}_top50_{spot|perp}.yaml`)
+*   **Sorting:** `market_cap_calc` (Descending)
+*   **Purpose:** These are for **Fundamental/Base Universe Scans** or Conservative Strategies.
+*   **Logic:** Use this when you want to restrict exposure to established assets, regardless of their current activity level.
+
+## 3. Recommendation
+
+**For the current Trend Scanning Suite:**
+> **Use the Volume-Based (Generic) Presets.**
+
+**Reasoning:**
+The scans identified candidates like `PIPPIN`, `XMR`, and high-volatility moves in `AVAX` and `NEAR`.
+*   Some of these were **missing** from the strict Top 50 Market Cap universe because their valuation hadn't caught up to their volume.
+*   Restricting a Trend Bot to Market Cap limits its potential to catch early movers.
+*   Liquidity (Value Traded) is a sufficient safety filter (e.g., >$5M daily volume) to avoid illiquid traps, making the Market Cap filter redundant for short-term safety.
+
+**Conclusion:**
+Keep the `crypto_cex_trend_...` configurations pointing to the generic (Volume-sorted) presets. Use the `top50` presets only for reporting or specific mean-reversion strategies that require high stability.

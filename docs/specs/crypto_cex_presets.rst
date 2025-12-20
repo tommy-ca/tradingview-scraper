@@ -39,6 +39,9 @@ Base universes
 - Perps: ``crypto_cex_base_top50_perp.yaml`` – `include_perps_only: true`, excludes dated, Value.Traded >= 7.5M, volume >= 2M, Vol.D <= 20% or ATR/close <= 15%, dedupe by base, prefer perps, limit 50, sorted by Value.Traded; majors ensured via `.P` symbols.
 - Dated futures: ``crypto_cex_base_top50_dated.yaml`` – `include_dated_futures_only: true`, excludes perps, quote whitelist, Value.Traded >= 5M, Vol.D <= 25% or ATR/close <= 20%, dedupe by base, limit 50, sorted by Value.Traded (currently yields 0 under these floors).
 - Per-exchange splits for spot/perps/dated: ``crypto_cex_base_top50_<exchange>.yaml``, ``..._<exchange>_perp.yaml``, ``..._<exchange>_dated.yaml`` (BINANCE/OKX/BYBIT/BITGET). Spot floors per exchange: BINANCE/OKX/BYBIT Value.Traded >= 1.5M; BITGET >= 1.0M (volume >= 2M, same vol caps as multi-spot). Perps use Value.Traded >= 7.5M (volume >= 2M). Dated use Value.Traded >= 5M.
+- **Binance Top 50**:
+    - **Spot (`binance_top50_spot_base`)**: Strictly limits to Top 50 by **Market Cap** (`market_cap_calc`). Value.Traded >= 5M, Vol.D <= 15%.
+    - **Perps (`binance_top50_perp_base`)**: Strictly limits to Top 50 by **Value Traded** (liquidity). Value.Traded >= 15M, Vol.D <= 15%.
 - Merged views: ``outputs/crypto_trend_runs/merged_base_universe_spot.json`` and ``..._perp.json`` aggregate per-exchange spot/perp bases into normalized symbols with their tradable exchange symbols; dated is empty at current floors.
 
 Usage
@@ -58,7 +61,7 @@ Indicator Field Categories (crypto overview availability)
 - Liquidity/size: ``volume``, ``Value.Traded``, ``market_cap_calc`` (and basic/diluted variants)
 
 Screener vs. Overview field availability
----------------------------------------
+----------------------------------------
 - Screener (crypto) fields are limited: ``name``, ``symbol``, ``close``, ``change``, ``change_abs``, ``volume``, ``market_cap_calc``, ``Recommend.All``. Use these for server-side filters.
 - Overview provides richer fields used in presets: ``Perf.W``, ``Perf.1M``, ``Perf.3M``, ``Perf.6M``, ``ADX``, ``Volatility.*``, ``ATR``, ``RSI``, ``Stoch.K``, and liquidity proxies like ``Value.Traded``. (Fundamental fields may be present but are often not meaningful for crypto.)
 

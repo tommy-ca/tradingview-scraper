@@ -61,8 +61,14 @@ Functional Requirements
 - Interfaces
   - Python: ``FuturesUniverseSelector(config: Mapping, screener: Screener = None, overview: Overview = None)`` with ``run() -> Dict``.
   - CLI: ``python -m tradingview_scraper.futures_universe_selector --config path --export json --limit 100 --dry-run``.
-- Error handling & resilience
-  - Handle HTTP failures, empty payloads, schema mismatches; surface clear messages and partial results when possible.
+
+Strategies
+----------
+See :doc:`strategies` for detailed definitions of specific setups like "Confirmed Short" and standard base universes.
+
+Error handling & resilience
+---------------------------
+- Handle HTTP failures, empty payloads, schema mismatches; surface clear messages and partial results when possible.
   - Retry with backoff for transient network errors; configurable retry count and timeout.
   - Dry-run mode returns the built Screener payloads without remote calls.
 - Observability
@@ -132,9 +138,8 @@ Optional Multi-Screen Blocks
 ----------------------------
 - ``trend_screen`` / ``confirm_screen`` / ``execute_screen`` are optional sequential filters (recommendation/ADX/momentum plus osc/volatility) evaluated after base liquidity/volatility/trend checks. They currently support daily/weekly/monthly fields; intraday remains out of scope.
  
- Preset Configurations
- ---------------------
-
+Preset Configurations
+---------------------
 - ``configs/futures_trend_momentum.yaml``: broad commodities, volume >= 5k, ADX >= 20, Rec >= 0.2, momentum across daily/W/1M with 3M confirmation; limit 100 sorted by volume.
 - ``configs/futures_metals_trend_momentum.yaml``: COMEX/NYMEX metals, volume >= 1k, volatility guard (Vol.D <= 8% or ATR/close <= 10%), ADX >= 20, Perf.1M >= 1%, Perf.3M >= 3%.
 - ``configs/index_futures_trend_momentum.yaml``: major equity index futures across CME/CBOT/EUREX/ICEUS/HKEX/SGX, volume >= 10k, ADX >= 15, Perf.1M >= 1%, Perf.3M >= 2%.
@@ -184,7 +189,7 @@ Open Items / Risks
 - Authentication: if endpoints require cookies/JWT in some environments, allow passing headers via config.
 
 Implementation Notes (spec-driven checkpoints)
----------------------------------------------
+----------------------------------------------
 - Step 1: config schema and validation utilities with defaults.
 - Step 2: payload builder for Screener (futures), including pagination setup.
 - Step 3: post-filter engine (trend, volatility, liquidity) with per-filter annotations.

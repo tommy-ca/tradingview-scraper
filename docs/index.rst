@@ -11,6 +11,10 @@ Welcome to tradingview-scraper's documentation!
    :caption: Contents:
 
    modules.rst
+   specs/crypto_cex_presets
+   specs/futures_universe_selector
+   specs/market_discovery
+   specs/strategies
 
 
 Indices and tables
