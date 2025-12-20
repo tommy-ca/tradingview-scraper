@@ -26,5 +26,11 @@ This file tracks all major tracks for the project. Each track has its own detail
 ## [ ] Track: Alternative Technical Indicators & Detailed Analysis Research
 *Link: [./conductor/tracks/alternative_technicals_research_20251220/](./conductor/tracks/alternative_technicals_research_20251220/)*
 
+---
+
+## [ ] Track: Historical Data Loader Pattern for Backtesting
+*Link: [./conductor/tracks/historical_data_loader_20251220/](./conductor/tracks/historical_data_loader_20251220/)*
+
+
 
 
