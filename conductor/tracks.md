@@ -23,8 +23,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Link: [./conductor/tracks/universe_selector_guards_20251220/](./conductor/tracks/universe_selector_guards_20251220/)*
 ---
 
-## [ ] Track: Historical Data and Technical Indicator Research
-*Link: [./conductor/tracks/historical_technicals_research_20251220/](./conductor/tracks/historical_technicals_research_20251220/)*
+## [ ] Track: Multi-Timeframe Technical Filtering for Trend Candidates
+*Link: [./conductor/tracks/mtf_technical_filtering_20251220/](./conductor/tracks/mtf_technical_filtering_20251220/)*
+
 
 
 

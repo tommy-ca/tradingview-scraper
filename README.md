@@ -179,6 +179,7 @@ The following research reports outline advanced capabilities and feasibility stu
 - [Binance Multi-Quote Arbitrage Exploration](docs/research/arbitrage_research_20251220.md) - Analysis of spreads between USDT, USDC, and FDUSD pairs.
 - [Real-Time Streamer & Data Lakehouse Feasibility](docs/research/streamer_research_20251220.md) - Technical deep-dive into WebSocket schemas and ingestion architecture.
 - [Historical OHLCV & Technical Indicator Precision](docs/research/historical_technicals_20251220.md) - Research on 1m/1h data depth and multi-indicator retrieval.
+- [Multi-Timeframe Technical Filtering](docs/research/mtf_technical_filtering_20251220.md) - Strategy for refining trend candidates using 15m/1h/1d indicator alignment.
 
 ## Examples
 
