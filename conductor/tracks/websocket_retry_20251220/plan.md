@@ -20,4 +20,4 @@ This plan outlines the steps to implement a robust retry mechanism with exponent
 - [x] Task: Update `README.md` or documentation with new retry configuration options
 - [x] Task: Add an example script demonstrating a resilient long-running stream
 - [x] Task: Final project-wide linting and type checking
-- [~] Task: Conductor - User Manual Verification 'Finalization & Documentation' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Finalization & Documentation' (Protocol in workflow.md)

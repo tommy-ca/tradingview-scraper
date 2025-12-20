@@ -11,11 +11,11 @@ base_from_spot_only: false
 
 volume:
   min: 0
-  value_traded_min: 15000000
+  value_traded_min: 5000000
 
 volatility:
-  max: 15.0
-  atr_pct_max: 0.12
+  max: 20.0
+  atr_pct_max: 0.15
   fallback_use_atr_pct: true
 
 columns: [name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D, Volatility.W, Volatility.M, Perf.W, Perf.1M, Perf.3M, ATR]

@@ -3,9 +3,9 @@
 This plan outlines the steps to audit and enhance the universe selection logic for Crypto, US Equities, Forex, and Futures markets.
 
 ## Phase 1: Analysis & Research
-- [ ] Task: Audit `tradingview_scraper/cfd_universe_selector.py` selection logic
-- [ ] Task: Audit `tradingview_scraper/futures_universe_selector.py` selection logic
-- [ ] Task: Review YAML files in `configs/` for outdated filtering criteria
+- [x] Task: Audit `tradingview_scraper/cfd_universe_selector.py` selection logic
+- [x] Task: Audit `tradingview_scraper/futures_universe_selector.py` selection logic
+- [~] Task: Review YAML files in `configs/` for outdated filtering criteria
 - [ ] Task: Conductor - User Manual Verification 'Analysis & Research' (Protocol in workflow.md)
 
 ## Phase 2: Implementation - Python Logic (TDD)
