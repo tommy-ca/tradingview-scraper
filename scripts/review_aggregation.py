@@ -1,78 +1,83 @@
 import logging
+import os
+import re
 
 import pandas as pd
 
-from tradingview_scraper.futures_universe_selector import (
-    FuturesUniverseSelector,
-    SelectorConfig,
-    TrendConfig,
-    TrendRuleConfig,
-    VolatilityConfig,
-    VolumeConfig,
-)
+from tradingview_scraper.futures_universe_selector import FuturesUniverseSelector, load_config
 
 logging.basicConfig(level=logging.INFO)
 
 EXCHANGES = ["BINANCE", "OKX", "BYBIT", "BITGET"]
 
 
-def analyze_exchange(exchange: str):
-    print(f"\n{'=' * 20} Exploring {exchange} {'=' * 20}")
+def get_product_type(symbol: str) -> str:
+    if symbol.upper().endswith(".P"):
+        return "PERP"
 
-    # 1. Fetch RAW Top 200 (With basic symbol type filters enabled now)
-    config = SelectorConfig(
-        markets=["crypto"],
-        exchanges=[exchange],
-        limit=200,
-        sort_by="Value.Traded",
-        sort_order="desc",
-        allowed_spot_quotes=["USDT", "USDC", "USD", "DAI", "BUSD", "FDUSD"],
-        exclude_dated_futures=True,
-        market_cap_rank_limit=None,
-        market_cap_floor=0,
-        volume=VolumeConfig(value_traded_min=0, min=0, per_exchange={}),
-        volatility=VolatilityConfig(min=None, max=None, atr_pct_max=None, fallback_use_atr_pct=False),
-        trend=TrendConfig(recommendation=TrendRuleConfig(enabled=False), adx=TrendRuleConfig(enabled=False), momentum=TrendRuleConfig(enabled=False)),
-        dedupe_by_symbol=False,
-    )
+    # Logic for dated futures
+    core = symbol.split(":", 1)[-1].upper().replace(".P", "")
+    patterns = [r"[0-9]{1,2}[A-Z][0-9]{2,4}$", r"[A-Z]{1,3}[0-9]{2,4}$"]
+    if any(re.search(pat, core) for pat in patterns):
+        return "DATED"
+
+    return "SPOT"
+
+
+def analyze_config(config_file: str):
+    print(f"\n>>> Analyzing Config: {config_file} <<<")
+
+    if not os.path.exists(config_file):
+        print(f"Config file {config_file} not found")
+        return
+
+    config = load_config(config_file)
+    config.limit = 200
+    config.base_universe_limit = 200
+    config.trend.recommendation.enabled = False
+    config.trend.adx.enabled = False
+    config.trend.momentum.enabled = False
+    config.dedupe_by_symbol = False
 
     selector = FuturesUniverseSelector(config)
-    # Ensure market_cap_calc is included
-    selector.config.columns = ["name", "close", "volume", "change", "Value.Traded", "market_cap_calc", "Recommend.All", "ADX", "Volatility.D"]
 
-    raw_data = selector.run().get("data", [])
-    df_raw = pd.DataFrame(raw_data)
+    data_resp = selector.run()
+    raw_data = data_resp.get("data", [])
+    df = pd.DataFrame(raw_data)
 
-    print(f"Raw Count: {len(df_raw)}")
-    if not df_raw.empty:
-        print("\n--- RAW Top 5 (Liquid) ---")
-        print(df_raw[["symbol", "Value.Traded", "market_cap_calc"]].head(5).to_string(index=False))
+    if df.empty:
+        print(f"No data found for {config_file}")
+        return
 
-        print("\n--- RAW Bottom 5 (Least Liquid in Top 200) ---")
-        print(df_raw[["symbol", "Value.Traded", "market_cap_calc"]].tail(5).to_string(index=False))
+    df["type"] = df["symbol"].apply(get_product_type)
 
-    # 2. Apply Aggregation (The "Understanding" part)
-    aggregated = selector._aggregate_by_base(raw_data)
-    df_agg = pd.DataFrame(aggregated)
-    if not df_agg.empty:
-        # Sort by Value.Traded desc like the pipeline does
-        df_agg = df_agg.sort_values("Value.Traded", ascending=False)
+    for ptype in ["PERP", "SPOT"]:
+        df_type = df[df["type"] == ptype].copy()
+        if df_type.empty:
+            continue
 
-        print(f"\nAggregated/Deduped Count: {len(df_agg)}")
-        print("\n--- AGGREGATED Top 10 ---")
-        print(df_agg[["symbol", "Value.Traded", "market_cap_calc"]].head(10).to_string(index=False))
+        print(f"\n--- {ptype} Markets in this config (Count: {len(df_type)}) ---")
 
-        print("\n--- AGGREGATED Bottom 10 ---")
-        print(df_agg[["symbol", "Value.Traded", "market_cap_calc"]].tail(10).to_string(index=False))
+        # Apply Aggregation
+        aggregated = selector._aggregate_by_base(df_type.to_dict("records"))
+        df_agg = pd.DataFrame(aggregated)
 
-    return df_raw, df_agg
+        if not df_agg.empty:
+            sort_field = "Value.Traded" if "Value.Traded" in df_agg.columns else "volume"
+            df_agg = df_agg.sort_values(sort_field, ascending=False)
+
+            print(f"Unique Bases in {ptype}: {len(df_agg)}")
+            print(f"\nTop 5 {ptype} (Aggregated):")
+            print(df_agg[["symbol", sort_field]].head(5).to_string(index=False))
+            print(f"\nBottom 5 {ptype} (Aggregated):")
+            print(df_agg[["symbol", sort_field]].tail(5).to_string(index=False))
 
 
 def explore_all():
-    all_raw = {}
-    all_agg = {}
     for ex in EXCHANGES:
-        all_raw[ex], all_agg[ex] = analyze_exchange(ex)
+        for suffix in ["", "_perp"]:
+            cfg_path = f"configs/crypto_cex_base_top50_{ex.lower()}{suffix}.yaml"
+            analyze_config(cfg_path)
 
 
 if __name__ == "__main__":
