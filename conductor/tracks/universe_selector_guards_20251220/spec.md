@@ -12,13 +12,14 @@ This track aims to refine the `FuturesUniverseSelector` to prioritize liquidity 
 - Verify that the resulting base universes meet both liquidity and market cap quality standards.
 
 ## Functional Requirements
-- **Selector Refactor:** Update `FuturesUniverseSelector` to:
-    - Load and rank assets from `market_cap_file`.
-    - Apply the "Rank Guard" (Top N) during the `_apply_post_filters` stage.
-    - Apply the "Floor Guard" ($ minimum) using the `market_cap_calc` column.
-- **Config Updates:** Update YAML configs to specify `market_cap_rank_limit` (e.g., 200) and `market_cap_floor` (e.g., 500,000,000).
-- **Liquidity Priority:** Ensure `value_traded_min` remains the most critical filter for inclusion in the final limited universe.
-- **State Validation:** Verify that the "Guard" logic doesn't inadvertently shrink the universe below the desired count if liquidity is otherwise high.
+- **Selector Refactor:** Update `FuturesUniverseSelector` to implement an explicit pipeline:
+    1.  **Basic Filters:** Exchange, symbol, and instrument type (Perp/Dated) filtering.
+    2.  **Market Cap Guard:** Apply Rank-based (Top N from file) and Floor-based ($ minimum) guards.
+    3.  **Volatility Filter:** Enforce standard volatility and ATR-based bounds.
+    4.  **Liquidity Filter:** Enforce `Value.Traded` minimums.
+    5.  **Aggregation:** Deduplicate symbols by base currency (e.g., pick most liquid between BTCUSDT and BTCUSDC) *before* limiting the universe.
+    6.  **Universe Limiting:** Sort by `Value.Traded` and apply `base_universe_limit` or `limit`.
+- **Config Updates:** Ensure YAML configs specify appropriate `market_cap_rank_limit` and `market_cap_floor`.
 
 ## Acceptance Criteria
 - [ ] `FuturesUniverseSelector` correctly implements the Hybrid Market Cap Guard.
