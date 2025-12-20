@@ -130,7 +130,7 @@ class Screener:
             ValueError: If the market is not supported.
         """
         if market not in self.SUPPORTED_MARKETS:
-            raise ValueError(f"Unsupported market: {market}. " f"Supported markets: {', '.join(self.SUPPORTED_MARKETS.keys())}")
+            raise ValueError(f"Unsupported market: {market}. Supported markets: {', '.join(self.SUPPORTED_MARKETS.keys())}")
 
     def _get_default_columns(self, market: str) -> List[str]:
         """

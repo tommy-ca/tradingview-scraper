@@ -43,7 +43,7 @@ class StreamHandler:
             "Pragma": "no-cache",
             "Sec-WebSocket-Extensions": "permessage-deflate; client_max_window_bits",
             "Upgrade": "websocket",
-            "User-Agent": ("Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 " "(KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"),
+            "User-Agent": ("Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"),
         }
         self.ws = create_connection(websocket_url, headers=self.request_header)
         self._initialize(jwt_token=jwt_token)

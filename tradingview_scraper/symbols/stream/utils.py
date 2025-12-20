@@ -33,7 +33,7 @@ def validate_symbols(exchange_symbol):
     Returns:
         bool: True if all provided symbols are valid.
     """
-    validate_url = "https://scanner.tradingview.com/symbol?" "symbol={exchange}%3A{symbol}&fields=market&no_404=false"
+    validate_url = "https://scanner.tradingview.com/symbol?symbol={exchange}%3A{symbol}&fields=market&no_404=false"
 
     if not exchange_symbol:
         raise ValueError("exchange_symbol cannot be empty")

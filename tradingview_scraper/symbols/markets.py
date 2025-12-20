@@ -90,7 +90,7 @@ class Markets:
             ValueError: If the market is not supported.
         """
         if market not in self.SCANNER_ENDPOINTS:
-            raise ValueError(f"Unsupported market: {market}. " f"Supported markets: {', '.join(self.SCANNER_ENDPOINTS.keys())}")
+            raise ValueError(f"Unsupported market: {market}. Supported markets: {', '.join(self.SCANNER_ENDPOINTS.keys())}")
 
     def _validate_sort_by(self, sort_by: str) -> str:
         """
@@ -110,7 +110,7 @@ class Markets:
         elif sort_by in self.SORT_CRITERIA.values():
             return sort_by
         else:
-            raise ValueError(f"Unsupported sort criteria: {sort_by}. " f"Supported criteria: {', '.join(self.SORT_CRITERIA.keys())}")
+            raise ValueError(f"Unsupported sort criteria: {sort_by}. Supported criteria: {', '.join(self.SORT_CRITERIA.keys())}")
 
     def _build_payload(self, filters: Optional[List[Dict]] = None, columns: Optional[List[str]] = None, sort_by: str = "market_cap", sort_order: str = "desc", limit: int = 50) -> Dict:
         """

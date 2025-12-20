@@ -14,10 +14,10 @@ This plan outlines the steps to implement a robust retry mechanism with exponent
 - [x] Task: TDD - Implement reconnection logic in `Streamer.stream` (6a11061)
 - [x] Task: TDD - Write tests for state restoration after reconnect (ed85fe5)
 - [x] Task: TDD - Implement state restoration (re-subscribing to symbols) (6a11061)
-- [~] Task: Conductor - User Manual Verification 'Implementation' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Implementation' (Protocol in workflow.md)
 
 ## Phase 3: Finalization & Documentation
-- [ ] Task: Update `README.md` or documentation with new retry configuration options
-- [ ] Task: Add an example script demonstrating a resilient long-running stream
-- [ ] Task: Final project-wide linting and type checking
-- [ ] Task: Conductor - User Manual Verification 'Finalization & Documentation' (Protocol in workflow.md)
+- [x] Task: Update `README.md` or documentation with new retry configuration options
+- [x] Task: Add an example script demonstrating a resilient long-running stream
+- [x] Task: Final project-wide linting and type checking
+- [~] Task: Conductor - User Manual Verification 'Finalization & Documentation' (Protocol in workflow.md)

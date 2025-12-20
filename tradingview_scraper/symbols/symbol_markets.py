@@ -119,7 +119,7 @@ class SymbolMarkets:
         """
         # Validate scanner
         if scanner not in self.SCANNER_ENDPOINTS:
-            return {"status": "failed", "error": f"Unsupported scanner: {scanner}. " f"Supported scanners: {', '.join(self.SCANNER_ENDPOINTS.keys())}"}
+            return {"status": "failed", "error": f"Unsupported scanner: {scanner}. Supported scanners: {', '.join(self.SCANNER_ENDPOINTS.keys())}"}
 
         # Build payload
         payload = self._build_payload(symbol=symbol, columns=columns, limit=limit)

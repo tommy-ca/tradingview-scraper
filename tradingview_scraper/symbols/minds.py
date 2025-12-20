@@ -90,7 +90,7 @@ class Minds:
             ValueError: If sort option is invalid.
         """
         if sort not in self.SORT_OPTIONS:
-            raise ValueError(f"Unsupported sort option: {sort}. " f"Supported options: {', '.join(self.SORT_OPTIONS.keys())}")
+            raise ValueError(f"Unsupported sort option: {sort}. Supported options: {', '.join(self.SORT_OPTIONS.keys())}")
         return self.SORT_OPTIONS[sort]
 
     def _parse_mind(self, item: Dict) -> Dict:

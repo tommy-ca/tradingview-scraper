@@ -367,7 +367,11 @@ from tradingview_scraper.symbols.stream import Streamer
 streamer = Streamer(
     export_result=True,            # return dict and write files
     export_type="json",           # or "csv"
-    websocket_jwt_token="<TV JWT>"  # required for indicators
+    websocket_jwt_token="<TV JWT>", # required for indicators
+    max_retries=5,                # optional: max reconnection attempts (default: 5)
+    initial_delay=1.0,            # optional: initial delay in seconds (default: 1.0)
+    max_delay=60.0,               # optional: maximum delay in seconds (default: 60.0)
+    backoff_factor=2.0            # optional: exponential backoff factor (default: 2.0)
 )
 
 result = streamer.stream(
@@ -380,6 +384,7 @@ result = streamer.stream(
 print(result["ohlc"][:2])
 ```
 - Returns `{"ohlc": [...], "indicator": {...}}` once it sees `numb_price_candles` (and all requested indicators). Use this for backfill slices; loop multiple calls to walk backward in time.
+- **Robustness:** `Streamer` now includes an automatic reconnection mechanism with exponential backoff. It will automatically re-subscribe to your symbols and indicators after a connection loss.
 
 #### Quick start: live stream with warm start
 ```python

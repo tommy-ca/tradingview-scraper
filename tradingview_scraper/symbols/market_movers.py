@@ -92,7 +92,7 @@ class MarketMovers:
             ValueError: If the market is not supported.
         """
         if market not in self.SUPPORTED_MARKETS:
-            raise ValueError(f"Unsupported market: {market}. " f"Supported markets: {', '.join(self.SUPPORTED_MARKETS)}")
+            raise ValueError(f"Unsupported market: {market}. Supported markets: {', '.join(self.SUPPORTED_MARKETS)}")
 
     def _validate_category(self, category: str, market: str) -> None:
         """
@@ -106,7 +106,7 @@ class MarketMovers:
             ValueError: If the category is not supported.
         """
         if market.startswith("stocks") and category not in self.STOCK_CATEGORIES:
-            raise ValueError(f"Unsupported category: {category}. " f"Supported categories for stocks: {', '.join(self.STOCK_CATEGORIES)}")
+            raise ValueError(f"Unsupported category: {category}. Supported categories for stocks: {', '.join(self.STOCK_CATEGORIES)}")
 
     def _build_scanner_payload(self, market: str, category: str, fields: Optional[List[str]] = None, limit: int = 50) -> Dict:
         """
