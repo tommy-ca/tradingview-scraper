@@ -21,3 +21,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [~] Track: update and verify the base universe selected are using top market cap filter, review and improve the base universe selector
 *Link: [./conductor/tracks/universe_selector_guards_20251220/](./conductor/tracks/universe_selector_guards_20251220/)*
+---
+
+## [x] Track: Update Trend Following Strategy Universe Selectors
+*Link: [./conductor/tracks/update_trend_strategy_20251220/](./conductor/tracks/update_trend_strategy_20251220/)*

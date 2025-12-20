@@ -1,6 +1,6 @@
 # Crypto CEX perp trend (daily) – BITGET only, Short direction
 # Uses base_preset for universe filters, applies trend filters on top
-base_preset: presets/crypto_cex_preset_bitget_perp.yaml
+base_preset: presets/crypto_cex_preset_bitget_top50_perp.yaml
 
 # Trend filters (short direction)
 trend:
@@ -24,3 +24,6 @@ trend:
 export_metadata:
   symbol: bitget_perp_short
   data_category: universe_selector
+limit: 50
+base_universe_limit: 50
+exclude_dated_futures: true

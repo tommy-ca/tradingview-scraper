@@ -29,11 +29,13 @@ sort_by: market_cap_calc
 sort_order: desc
 final_sort_by: Value.Traded
 final_sort_order: desc
-prefilter_limit: 1500
-limit: 100
+prefilter_limit: 50
+limit: 50
 pagination_size: 50
 retries: 2
 timeout: 10
 export:
   enabled: false
   type: json
+base_universe_limit: 50
+exclude_dated_futures: true

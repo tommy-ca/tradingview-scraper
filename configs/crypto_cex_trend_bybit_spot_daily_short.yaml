@@ -1,6 +1,6 @@
 # Crypto CEX spot trend (daily) – BYBIT only, Short direction
 # Uses base_preset for universe filters, applies trend filters on top
-base_preset: presets/crypto_cex_preset_bybit_spot.yaml
+base_preset: presets/crypto_cex_preset_bybit_top50_spot.yaml
 
 # Trend filters (short direction)
 trend:
@@ -24,3 +24,6 @@ trend:
 export_metadata:
   symbol: bybit_spot_short
   data_category: universe_selector
+limit: 50
+base_universe_limit: 50
+exclude_dated_futures: true

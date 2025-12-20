@@ -241,7 +241,7 @@ class SelectorConfig(BaseModel):
     group_duplicates: bool = False
     base_from_spot_only: bool = False
     attach_perp_counterparts: bool = False
-    quote_priority: List[str] = Field(default_factory=lambda: ["USDT", "USDC", "USD", "BUSD", "FDUSD"])
+    quote_priority: List[str] = Field(default_factory=lambda: ["USDT", "USDC", "FDUSD", "BUSD", "DAI", "USD"])
     allowed_spot_quotes: List[str] = Field(default_factory=list)
     include_stable_bases: bool = False
     base_currencies: List[str] = Field(default_factory=list)  # Filter by base currency
@@ -473,7 +473,8 @@ class FuturesUniverseSelector:
 
         # Priority matches for institutional quotes to avoid greedy stablecoin matching (e.g. WIFUSDT)
         # We check these first because some broader stables (like FUSDT) can overlap with legitimate bases
-        for stable in ["USDT", "USDC", "USD", "DAI", "BUSD", "FDUSD"]:
+        # CRITICAL: Longer composite quotes like FDUSD/BUSD MUST be checked before 'USD'
+        for stable in ["USDT", "USDC", "FDUSD", "BUSD", "DAI", "USD"]:
             if core.endswith(stable) and len(core) > len(stable):
                 return core[: -len(stable)], stable
 
@@ -939,7 +940,7 @@ class FuturesUniverseSelector:
         priority = [p.upper() for p in self.config.perp_exchange_priority]
 
         # Use config.quote_priority if available
-        quote_prio_list = self.config.quote_priority or ["USDT", "USDC", "USD", "BUSD", "FDUSD"]
+        quote_prio_list = self.config.quote_priority or ["USDT", "USDC", "FDUSD", "BUSD", "DAI", "USD"]
         quote_priority_map = {q.upper(): idx for idx, q in enumerate(quote_prio_list)}
 
         def exchange_rank(symbol: str) -> int:

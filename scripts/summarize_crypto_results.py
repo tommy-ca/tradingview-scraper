@@ -4,65 +4,100 @@ import os
 
 import pandas as pd
 
+# Targeted Crypto Venues
+CRYPTO_EXCHANGES = {"BINANCE", "OKX", "BYBIT", "BITGET"}
 
-def summarize_results():
-    files = sorted(glob.glob("export/universe_selector_*_base_*.json"), key=os.path.getmtime, reverse=True)[:8]
 
-    matrix_summary = []
+def summarize_crypto_signals():
+    # Capture all latest results
+    files = sorted(glob.glob("export/universe_selector_*.json"), key=os.path.getmtime, reverse=True)
 
-    print("\n" + "=" * 120)
-    print("DETAILED CRYPTO BASE UNIVERSE SUMMARY (With Alternates)")
-    print("=" * 120)
-
+    seen_categories = set()
+    latest_files = []
     for f in files:
+        basename = os.path.basename(str(f)).upper()
+        parts = basename.split("_")
+        if len(parts) < 5:
+            continue
+
+        # We only want strategy signals: LONG or SHORT
+        direction = parts[4]
+        if direction not in ["LONG", "SHORT"]:
+            continue
+
+        # Filter for Crypto only
+        if not any(ex in basename for ex in CRYPTO_EXCHANGES):
+            continue
+
+        category = "_".join(parts[2:-1])
+        if category not in seen_categories:
+            latest_files.append(f)
+            seen_categories.add(category)
+
+    crypto_groups = {}
+
+    for f in latest_files:
         with open(f, "r") as j:
-            rows = json.load(j)
+            try:
+                rows = json.load(j)
+            except (json.JSONDecodeError, OSError):
+                continue
 
-            basename = os.path.basename(str(f))
+            basename = os.path.basename(str(f)).upper()
             parts = basename.split("_")
-            if len(parts) >= 5:
-                exchange = parts[2].upper()
-                ptype = parts[4].upper()
-            else:
-                continue
+            exchange = parts[2]
+            ptype = parts[3]
+            direction = parts[4]
 
-            df = pd.DataFrame(rows)
-            if df.empty:
-                continue
+            key = (exchange, ptype)
+            if key not in crypto_groups:
+                crypto_groups[key] = []
 
-            if "alternates" not in df.columns:
-                df["alternates"] = [[] for _ in range(len(df))]
+            for r in rows:
+                if not isinstance(r, dict):
+                    continue
+                op = {
+                    "Symbol": r.get("symbol"),
+                    "Direction": direction,
+                    "Total VT": r.get("Value.Traded") or r.get("volume", 0),
+                    "Perf.W": r.get("Perf.W", 0),
+                    "Perf.1M": r.get("Perf.1M", 0),
+                    "Rec": r.get("Recommend.All", 0),
+                    "Alts": ", ".join(r.get("alternates", [])) if r.get("alternates") else "-",
+                }
+                crypto_groups[key].append(op)
 
-            total_bases = len(df)
-            bases_with_alts = df["alternates"].apply(lambda x: len(x) if isinstance(x, list) else 0).gt(0).sum()
-            total_alts = df["alternates"].apply(lambda x: len(x) if isinstance(x, list) else 0).sum()
+    print("\n" + "=" * 140)
+    print("CRYPTO TREND SIGNALS REVIEW (Long/Short Strategy Only)")
+    print("=" * 140)
 
-            matrix_summary.append({"Exchange": exchange, "Type": ptype, "Unique Bases": total_bases, "Bases w/ Alts": bases_with_alts, "Total Alts": total_alts})
+    for exchange, ptype in sorted(crypto_groups.keys()):
+        ops = crypto_groups[(exchange, ptype)]
+        if not ops:
+            continue
+        print(f"\n>>> {exchange} {ptype} <<<")
+        df = pd.DataFrame(ops).sort_values(["Direction", "Total VT"], ascending=[False, False])
 
-            # Show Top 10 for this specific universe
-            print(f"\n>>> {exchange} {ptype} (Top 10 by Summed VT) <<<")
+        # Total VT formatting
+        df["Total VT"] = df["Total VT"].apply(lambda x: f"${x / 1e6:.1f}M" if x > 1000 else f"{x:.0f}")
 
-            display_cols = ["symbol", "Value.Traded"]
-            if "alternates" in df.columns:
-                # Create a readable 'alternatives' string
-                df["alts_str"] = df["alternates"].apply(lambda x: ", ".join(x) if isinstance(x, list) and x else "-")
-                display_cols.append("alts_str")
+        print(df[["Symbol", "Direction", "Total VT", "Perf.W", "Perf.1M", "Rec", "Alts"]].to_string(index=False))
+        print("-" * 120)
 
-            top_10 = df.head(10)[display_cols].copy()
-            top_10.columns = ["Symbol", "Total VT", "Alternatives"]
-            top_10["Total VT"] = top_10["Total VT"].apply(lambda x: f"${x / 1e6:.1f}M")
+    # Matrix Table
+    print("\n" + "=" * 80)
+    print("CRYPTO SIGNAL MATRIX")
+    print("=" * 80)
+    matrix_data = []
+    for (ex, pt), ops in crypto_groups.items():
+        longs = sum(1 for o in ops if o["Direction"] == "LONG")
+        shorts = sum(1 for o in ops if o["Direction"] == "SHORT")
+        matrix_data.append({"Exchange": ex, "Type": pt, "Longs": longs, "Shorts": shorts, "Total": len(ops)})
 
-            print(top_10.to_string(index=False))
-            print("-" * 80)
-
-    # Final Matrix Table
-    print("\n" + "=" * 100)
-    print("AGGREGATION MATRIX OVERVIEW")
-    print("=" * 100)
-    df_matrix = pd.DataFrame(matrix_summary)
-    print(df_matrix.to_string(index=False))
-    print("=" * 100)
+    if matrix_data:
+        print(pd.DataFrame(matrix_data).sort_values("Exchange").to_string(index=False))
+    print("=" * 80)
 
 
 if __name__ == "__main__":
-    summarize_results()
+    summarize_crypto_signals()

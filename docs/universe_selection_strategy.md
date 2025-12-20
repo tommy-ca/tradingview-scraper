@@ -33,16 +33,30 @@ Instead of choosing between Volume or Market Cap, we now use a dual-layer approa
 3.  **Strict Quote Whitelist:** Only USD-denominated quotes (`USDT`, `USDC`, `USD`, `DAI`, `BUSD`, `FDUSD`) are allowed. This eliminates local fiat noise (IDR, TRY, JPY) that can inflate "Value Traded" rankings.
 4.  **Dated Futures Exclusion:** Delivery contracts are excluded to ensure the universe focuses on perpetuals and spot markets.
 
-### 3. Aggregation & Uniqueness
+## 3. Aggregation & Summed Liquidity
 
 Symbols with the same base asset (e.g., `BTCUSDT`, `BTCUSDC`, `BTCUSD.P`, `1000PEPEUSDT.P`) are automatically aggregated into a single entry per base currency.
 
-**Selection Priority for the Representative Symbol:**
-1.  **Quote Priority:** Prefers `USDT` > `USDC` > `USD` > `BUSD` (favoring Linear over Inverse).
-2.  **Product Type:** Prefers Perpetual contracts over Spot (if `prefer_perps` is enabled).
-3.  **Tie-breaker:** Highest `Value.Traded` wins.
+**Summed Liquidity Scoring:**
+The `Value.Traded` and `volume` fields for the representative asset now reflect the **summed total** across all grouped duplicates. This provides an accurate measure of total market depth for the base asset, ensuring major assets are correctly ranked even if their liquidity is fragmented across multiple quotes.
 
-This ensures the generated "Base Universe" is unique, institutional-grade, and liquid.
+**Selection Priority for the Representative Symbol:**
+1.  **Quote Priority:** Prefers `USDT` > `USDC` > `USD` > `DAI` > `BUSD` > `FDUSD` (favoring Linear over Inverse).
+2.  **Product Type:** Prefers Perpetual contracts over Spot (if `prefer_perps` is enabled).
+3.  **Tie-breaker:** Highest individual `Value.Traded` wins.
+
+**Alternatives Tracking:**
+Grouped duplicates are preserved in the `alternates` field, providing downstream strategies with all tradeable pairs for arbitrage or cross-exchange execution.
+
+## 4. Institutional Standards (Trend Strategy)
+
+As of December 2025, all crypto trend-following strategies follow these standardized "Institutional Grade" limits:
+- **Base Universe Width:** Standardized to **Top 50 unique bases** per venue.
+- **Liquidity Floors (Summed VT):**
+    - **Binance:** $1M (Spot) / $5M (Perp)
+    - **Bybit/OKX/Bitget:** $500k (Spot) / $1M (Perp)
+- **Dated Futures:** Explicitly excluded (`exclude_dated_futures: true`) to avoid illiquid expiry-based noise.
+- **Market Cap Guard:** Top 200 Rank Guard + $10M Floor Guard.
 
 ## 3. Recommendation
 

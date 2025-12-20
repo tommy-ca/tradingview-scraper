@@ -38,7 +38,7 @@ ensure_symbols: []
 exclude_stable_bases: true
 prefer_perps: false
 perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
-prefilter_limit: 1500
+prefilter_limit: 50
 limit: 50
 pagination_size: 50
 retries: 2
@@ -46,3 +46,5 @@ timeout: 10
 export:
   enabled: false
   type: json
+base_universe_limit: 50
+exclude_dated_futures: true

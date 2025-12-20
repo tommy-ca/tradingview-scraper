@@ -31,9 +31,9 @@ sort_by: Value.Traded
 sort_order: desc
 final_sort_by: Value.Traded
 final_sort_order: desc
-prefilter_limit: 1500
-limit: 100
-base_universe_limit: 100
+prefilter_limit: 50
+limit: 50
+base_universe_limit: 50
 base_universe_sort_by: Value.Traded
 pagination_size: 50
 retries: 2
@@ -44,3 +44,4 @@ export:
 export_metadata:
   symbol: crypto_perp_short
   data_category: universe_selector
+exclude_dated_futures: true

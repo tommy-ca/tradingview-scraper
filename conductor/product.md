@@ -12,5 +12,7 @@ A Python library designed to scrape various data from TradingView.com, including
 ## Key Features
 * **Comprehensive Data Extraction:** Scrape a wide range of data points including technical indicators, community ideas, and financial news directly from TradingView.
 * **Real-time Streaming:** Support for low-latency, real-time data streaming via WebSockets, providing live OHLCV and technical indicator updates for active monitoring and automated trading.
-* **High-Quality Universe Selection:** Sophisticated multi-stage pipeline for selecting tradeable universes based on liquidity (Value.Traded), volatility, and market cap.
-* **Dual-Layer Guards:** Enforces strict quality control using a "Hybrid Market Cap Guard" (Rank-based Top N and Floor-based $ minimum) to ensure stability and institutional-grade asset selection.
+*   **High-Quality Universe Selection:** Sophisticated multi-stage pipeline for selecting tradeable universes based on liquidity (Value.Traded), volatility, and market cap.
+*   **Dual-Layer Guards:** Enforces strict quality control using a "Hybrid Market Cap Guard" (Rank-based Top N and Floor-based $ minimum) to ensure stability and institutional-grade asset selection.
+*   **Intelligent Asset Aggregation:** Automatically groups duplicate base assets across multiple quotes and instruments (Spot vs. Perps), providing a unique universe with summed liquidity metrics for accurate ranking and arbitrage opportunity discovery.
+
