@@ -237,6 +237,8 @@ class SelectorConfig(BaseModel):
     perp_exchange_priority: List[str] = Field(default_factory=list)
     market_cap_file: Optional[str] = None
     market_cap_limit: Optional[int] = None
+    market_cap_rank_limit: Optional[int] = None
+    market_cap_floor: Optional[float] = None
     market_cap_require_hit: bool = False
     base_universe_limit: Optional[int] = None
     base_universe_sort_by: str = "Value.Traded"
@@ -874,27 +876,38 @@ class FuturesUniverseSelector:
         return self._market_cap_map
 
     def _apply_market_cap_filter(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        # Guard B: Floor-based (Dollar value from Screener)
+        if self.config.market_cap_floor is not None:
+            rows = [r for r in rows if (r.get("market_cap_calc") or 0) >= self.config.market_cap_floor]
+
         if not self.config.market_cap_file:
             return rows
+
         cap_map = self._load_market_cap_map()
         if not cap_map:
             return rows
-        annotated: List[Dict[str, Any]] = []
+
+        # Guard A: Rank-based (from external file)
+        if self.config.market_cap_rank_limit:
+            # select top bases by cap to establish the "Allowed Rank" set
+            tops = sorted(((b, v) for b, v in cap_map.items()), key=lambda x: x[1], reverse=True)[: self.config.market_cap_rank_limit]
+            allowed_bases = {b for b, _ in tops}
+            rows = [r for r in rows if self._base_symbol(r.get("symbol", "")) in allowed_bases]
+
+        # Annotate with external market cap for visibility/debugging
         for row in rows:
             base = self._base_symbol(row.get("symbol", ""))
             cap_val = cap_map.get(base)
-            if cap_val is None:
-                continue
-            row["market_cap_external"] = cap_val
-            annotated.append(row)
-        if not annotated:
-            return rows if not self.config.market_cap_require_hit else []
-        if self.config.market_cap_limit:
-            # select top bases by cap
+            if cap_val is not None:
+                row["market_cap_external"] = cap_val
+
+        # market_cap_limit is the old field, keep it for backward compatibility if rank_limit is not set
+        if self.config.market_cap_limit and not self.config.market_cap_rank_limit:
             tops = sorted(((b, v) for b, v in cap_map.items()), key=lambda x: x[1], reverse=True)[: self.config.market_cap_limit]
             allowed_bases = {b for b, _ in tops}
-            annotated = [r for r in annotated if self._base_symbol(r.get("symbol", "")) in allowed_bases]
-        return annotated
+            rows = [r for r in rows if self._base_symbol(r.get("symbol", "")) in allowed_bases]
+
+        return rows
 
     def _dedupe_by_base(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         sort_field = self.config.final_sort_by or self.config.sort_by or "volume"
