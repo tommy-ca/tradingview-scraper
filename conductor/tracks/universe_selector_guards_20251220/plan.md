@@ -9,13 +9,11 @@ This plan outlines the steps to refactor the universe selector to enforce dual-l
 - [x] Task: Verify that `Value.Traded` remains the primary sorting and limiting factor
 - [x] Task: Conductor - User Manual Verification 'Logic Refactor' (Protocol in workflow.md)
 
-## Phase 2: Configuration & Integration
-- [ ] Task: Update `configs/presets/*.yaml` with the new hybrid guard parameters (e.g., Rank < 200, Floor > $100M)
-- [ ] Task: Update exchange-specific `configs/crypto_cex_base_top50_*.yaml` files
-- [ ] Task: Rerun `scripts/run_base_scans.sh` to generate new universes
-- [ ] Task: Conductor - User Manual Verification 'Configuration & Integration' (Protocol in workflow.md)
+## Phase 2: Configuration & Integration [checkpoint: 50d9054]
+- [x] Task: Update `configs/presets/*.yaml` with the new hybrid guard parameters (e.g., Rank < 200, Floor > $10M)
+- [x] Task: Update exchange-specific `configs/crypto_cex_base_top50_*.yaml` files
+- [x] Task: Rerun `scripts/run_base_scans.sh` to generate new universes
+- [~] Task: Conductor - User Manual Verification 'Configuration & Integration' (Protocol in workflow.md)
 
 ## Phase 3: Verification & Reporting
-- [ ] Task: Update `scripts/verify_universe_quality.py` to check for both liquidity floor and market cap guards
-- [ ] Task: Generate a final report showing the quality and consistency of the selected universes
-- [ ] Task: Conductor - User Manual Verification 'Verification & Reporting' (Protocol in workflow.md)
+- [~] Task: Update `scripts/verify_universe_quality.py` to check for both liquidity floor and market cap guards
