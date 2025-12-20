@@ -1,10 +1,29 @@
-# Base universe (perps) – Bitget only, no strategy filters
-markets: ["crypto"]
-exchanges: ["BITGET"]
+markets:
+- crypto
+exchanges:
+- BITGET
 include_perps_only: true
 exclude_perps: false
 exclude_dated_futures: true
-columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "Perf.YTD", "ATR"]
+columns:
+- name
+- close
+- volume
+- Value.Traded
+- market_cap_calc
+- change
+- Recommend.All
+- ADX
+- Volatility.D
+- Volatility.W
+- Volatility.M
+- Perf.W
+- Perf.1M
+- Perf.3M
+- Perf.6M
+- Perf.Y
+- Perf.YTD
+- ATR
 volume:
   min: 0
   value_traded_min: 1000000
@@ -13,9 +32,9 @@ volatility:
   atr_pct_max: 0.15
   fallback_use_atr_pct: true
 trend:
-  direction: "long"
-  timeframe: "daily"
-  logic: "AND"
+  direction: long
+  timeframe: daily
+  logic: AND
   recommendation:
     enabled: false
   adx:
@@ -33,11 +52,33 @@ final_sort_order: desc
 dedupe_by_symbol: true
 attach_perp_counterparts: false
 base_from_spot_only: false
-allowed_spot_quotes: []
-ensure_symbols: [BITGET:BTCUSDT.P, BITGET:ETHUSDT.P, BITGET:SOLUSDT.P, BITGET:ADAUSDT.P, BITGET:DOGEUSDT.P, BITGET:LINKUSDT.P, BITGET:LTCUSDT.P, BITGET:DOTUSDT.P, BITGET:AVAXUSDT.P, BITGET:TRXUSDT.P, BITGET:MATICUSDT.P, BITGET:POLUSDT.P]
+allowed_spot_quotes:
+- USDT
+- USDC
+- USD
+- DAI
+- BUSD
+- FDUSD
+ensure_symbols:
+- BITGET:BTCUSDT.P
+- BITGET:ETHUSDT.P
+- BITGET:SOLUSDT.P
+- BITGET:ADAUSDT.P
+- BITGET:DOGEUSDT.P
+- BITGET:LINKUSDT.P
+- BITGET:LTCUSDT.P
+- BITGET:DOTUSDT.P
+- BITGET:AVAXUSDT.P
+- BITGET:TRXUSDT.P
+- BITGET:MATICUSDT.P
+- BITGET:POLUSDT.P
 exclude_stable_bases: true
 prefer_perps: true
-perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
+perp_exchange_priority:
+- BINANCE
+- OKX
+- BYBIT
+- BITGET
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null
 market_cap_rank_limit: 200
@@ -51,7 +92,7 @@ timeout: 10
 export:
   enabled: false
   type: json
-
 export_metadata:
   symbol: bitget_top50_perp_base
   data_category: universe_selector
+base_universe_sort_by: Value.Traded

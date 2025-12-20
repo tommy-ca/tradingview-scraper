@@ -15,12 +15,12 @@ def verify_universe(file_path, target_count=50, min_value_traded=500000, market_
         return False
 
     with open(file_path, "r") as f:
-        data = json.load(f)
+        payload = json.load(f)
 
-    if isinstance(data, dict):
-        symbols = data.get("data", [])
+    if isinstance(payload, dict):
+        symbols = payload.get("data", [])
     else:
-        symbols = data
+        symbols = payload
 
     count = len(symbols)
 
@@ -31,23 +31,37 @@ def verify_universe(file_path, target_count=50, min_value_traded=500000, market_
         logging.warning("Universe is empty.")
         return True
 
+    all_ok = True
+
     # 1. Liquidity check
-    low_liquidity = [s for s in symbols if s.get("Value.Traded", 0) < min_value_traded]
+    low_liquidity = [s["symbol"] for s in symbols if s.get("Value.Traded", 0) < min_value_traded]
+    if low_liquidity:
+        logging.error(f"  Found {len(low_liquidity)} symbols below liquidity floor {min_value_traded}: {low_liquidity[:5]}")
+        all_ok = False
 
     # 2. Market Cap Floor check (Guard B)
     low_cap = []
-    for s in symbols:
+    suspicious = []
+    for i, s in enumerate(symbols):
         calc = s.get("market_cap_calc") or 0
         ext = s.get("market_cap_external") or 0
         if max(calc, ext) < market_cap_floor:
             low_cap.append(s["symbol"])
 
-    if low_cap:
-        logging.error(f"Found {len(low_cap)} symbols below market cap floor {market_cap_floor}: {low_cap[:5]}...")
-        return False
+        # junk check: top assets should have external market cap ranking
+        if i < 10 and not s.get("market_cap_external"):
+            suspicious.append(s["symbol"])
 
-    logging.info("Quality check passed.")
-    return True
+    if low_cap:
+        logging.error(f"  Found {len(low_cap)} symbols below market cap floor {market_cap_floor}: {low_cap[:5]}...")
+        all_ok = False
+
+    if suspicious:
+        logging.warning(f"  Found {len(suspicious)} high-volume symbols missing external market cap data: {suspicious}")
+
+    if all_ok:
+        logging.info("  Quality check passed.")
+    return all_ok
 
 
 def main():

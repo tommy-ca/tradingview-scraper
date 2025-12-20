@@ -24,3 +24,5 @@ This plan outlines the steps to refactor the universe selector to enforce dual-l
 - [x] Task: Update `scripts/verify_universe_quality.py` to check for both liquidity floor and market cap guards
 - [x] Task: Generate a final report showing the quality and consistency of the selected universes
 - [x] Task: Synchronize project-level documentation (`product.md`, `tech-stack.md`)
+- [ ] Task: Update all YAML configurations with strict quote whitelists and dated futures exclusions
+- [ ] Task: Update `docs/universe_selection_strategy.md` with the finalized aggregation and filtering logic

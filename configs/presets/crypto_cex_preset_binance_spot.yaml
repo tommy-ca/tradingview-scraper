@@ -1,35 +1,41 @@
-# Binance Spot Base Universe Preset (Tier 1 - Highest Liquidity)
-# This preset defines the base universe filtering parameters for Binance spot markets.
-# Trend configs should apply their own recommendation/adx/momentum filters on top.
-
-# Exchange identification
-exchanges: ["BINANCE"]
-markets: ["crypto"]
-
-# Instrument type filters
+exchanges:
+- BINANCE
+markets:
+- crypto
 include_perps_only: false
 exclude_perps: true
 exclude_dated_futures: true
 base_from_spot_only: true
-
-# Quote currency restrictions
-allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
-
-# Liquidity filters (Tier 1 - Highest thresholds)
+allowed_spot_quotes:
+- USDT
+- USDC
+- USD
+- DAI
+- BUSD
+- FDUSD
 volume:
   min: 0
-  value_traded_min: 5000000   # $5M minimum daily value traded
-
-# Volatility filters (standardized)
+  value_traded_min: 5000000
 volatility:
-  max: 15.0                   # 15% max daily volatility
-  atr_pct_max: 0.12           # 12% ATR/price ratio max
+  max: 15.0
+  atr_pct_max: 0.12
   fallback_use_atr_pct: true
-
-# Data columns
-columns: [name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D, Volatility.W, Volatility.M, Perf.W, Perf.1M, Perf.3M, ATR]
-
-# Sorting and limits
+columns:
+- name
+- close
+- volume
+- Value.Traded
+- market_cap_calc
+- change
+- Recommend.All
+- ADX
+- Volatility.D
+- Volatility.W
+- Volatility.M
+- Perf.W
+- Perf.1M
+- Perf.3M
+- ATR
 sort_by: Value.Traded
 sort_order: desc
 final_sort_by: Value.Traded
@@ -40,23 +46,31 @@ limit: 50
 base_universe_limit: 50
 base_universe_sort_by: Value.Traded
 pagination_size: 50
-
-# Ensure key symbols are included
-ensure_symbols: [BINANCE:BTCUSDT, BINANCE:ETHUSDT, BINANCE:BNBUSDT, BINANCE:SOLUSDT, BINANCE:XRPUSDT, BINANCE:ADAUSDT, BINANCE:DOGEUSDT, BINANCE:LINKUSDT, BINANCE:LTCUSDT, BINANCE:DOTUSDT, BINANCE:AVAXUSDT, BINANCE:TRXUSDT]
+ensure_symbols:
+- BINANCE:BTCUSDT
+- BINANCE:ETHUSDT
+- BINANCE:BNBUSDT
+- BINANCE:SOLUSDT
+- BINANCE:XRPUSDT
+- BINANCE:ADAUSDT
+- BINANCE:DOGEUSDT
+- BINANCE:LINKUSDT
+- BINANCE:LTCUSDT
+- BINANCE:DOTUSDT
+- BINANCE:AVAXUSDT
+- BINANCE:TRXUSDT
 exclude_stable_bases: true
 prefer_perps: false
-perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
-
-# External data
+perp_exchange_priority:
+- BINANCE
+- OKX
+- BYBIT
+- BITGET
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null
 market_cap_require_hit: false
-
-# API settings
 retries: 2
 timeout: 10
-
-# Export (disabled by default in presets)
 export:
   enabled: false
   type: json

@@ -42,10 +42,13 @@ STABLE_BASES = {
     "EUR",
     "GBP",
     "BIDR",
+    "IDR",
     "TRY",
     "BRL",
     "MXN",
     "ZAR",
+    "ARS",
+    "COP",
     "UST",
     "USTC",
     "CHF",
@@ -228,15 +231,17 @@ class SelectorConfig(BaseModel):
     final_sort_order: str = "desc"
     momentum_composite_fields: List[str] = Field(default_factory=list)
     momentum_composite_field_name: str = "momentum_zscore"
+    limit: int = 50
+    pagination_size: int = 1000
+    retries: int = 3
+    timeout: int = 30
     prefilter_limit: Optional[int] = None
-    limit: int = 100
-    pagination_size: int = 50
-    retries: int = 2
-    timeout: int = 10
-    dedupe_by_symbol: bool = False
-    attach_perp_counterparts: bool = False
+    dedupe_by_symbol: bool = True
     base_from_spot_only: bool = False
+    attach_perp_counterparts: bool = False
+    quote_priority: List[str] = Field(default_factory=lambda: ["USDT", "USDC", "USD", "BUSD", "FDUSD"])
     allowed_spot_quotes: List[str] = Field(default_factory=list)
+    include_stable_bases: bool = False
     base_currencies: List[str] = Field(default_factory=list)  # Filter by base currency
     ensure_symbols: List[str] = Field(default_factory=list)
     exclude_stable_bases: bool = False
@@ -921,7 +926,10 @@ class FuturesUniverseSelector:
         descending = (self.config.final_sort_order or "desc").lower() == "desc"
         best_by_base: Dict[str, Dict[str, Any]] = {}
         priority = [p.upper() for p in self.config.perp_exchange_priority]
-        quote_priority = {q.upper(): idx for idx, q in enumerate(self.config.allowed_spot_quotes)} if self.config.allowed_spot_quotes else None
+
+        # Use config.quote_priority if available
+        quote_prio_list = self.config.quote_priority or ["USDT", "USDC", "USD", "BUSD", "FDUSD"]
+        quote_priority_map = {q.upper(): idx for idx, q in enumerate(quote_prio_list)}
 
         def exchange_rank(symbol: str) -> int:
             exchange = self._extract_exchange(symbol) or ""
@@ -932,25 +940,38 @@ class FuturesUniverseSelector:
         for row in rows:
             symbol = row.get("symbol", "")
             base = self._base_symbol(symbol)
+
+            # Stable-to-Stable exclusion: If base is also in STABLE_BASES, exclude unless it's a stablecoin scan
+            if base in STABLE_BASES and not self.config.include_stable_bases:
+                continue
+
             current = best_by_base.get(base)
             if current is None:
                 best_by_base[base] = row
                 continue
 
-            candidate_value = row.get(sort_field)
-            best_value = current.get(sort_field)
+            candidate_value = row.get(sort_field) or 0
+            best_value = current.get(sort_field) or 0
 
-            if self.config.base_from_spot_only and quote_priority is not None:
-                _, cand_quote = self._extract_base_quote(symbol)
-                _, best_quote = self._extract_base_quote(current.get("symbol", ""))
-                cand_rank = quote_priority.get(cand_quote or "", len(quote_priority))
-                best_rank = quote_priority.get(best_quote or "", len(quote_priority))
-                if cand_rank < best_rank:
+            # 1. Quote Priority (e.g. USDT > USDC)
+            _, cand_quote = self._extract_base_quote(symbol)
+            _, current_quote = self._extract_base_quote(current.get("symbol", ""))
+
+            cand_q_rank = quote_priority_map.get(cand_quote, 999)
+            curr_q_rank = quote_priority_map.get(current_quote, 999)
+
+            if cand_q_rank < curr_q_rank:
+                # Prefer candidate if its liquidity is at least 30% of best
+                if candidate_value > best_value * 0.3:
                     best_by_base[base] = row
                     continue
-                if best_rank < cand_rank:
+            elif cand_q_rank > curr_q_rank:
+                # Prefer current if its liquidity is at least 30% of candidate
+                if best_value > candidate_value * 0.3:
                     continue
 
+            # 2. Prefer Linear Perps over Inverse Perps (if both are perps)
+            # 3. Perp vs Spot preference
             if self.config.prefer_perps:
                 cand_perp = self._is_perp(symbol)
                 best_perp = self._is_perp(current.get("symbol", ""))
@@ -959,17 +980,16 @@ class FuturesUniverseSelector:
                     continue
                 if best_perp and not cand_perp:
                     continue
-                if cand_perp and best_perp and priority:
-                    if exchange_rank(symbol) < exchange_rank(current.get("symbol", "")):
-                        best_by_base[base] = row
-                        continue
 
-            try:
-                if candidate_value is None:
-                    continue
-                if best_value is None:
+            # 4. Exchange Rank preference
+            if exchange_rank(symbol) < exchange_rank(current.get("symbol", "")):
+                # Only switch if liquidity is comparable
+                if candidate_value > best_value * 0.5:
                     best_by_base[base] = row
                     continue
+
+            # 5. Tie-break by Value.Traded
+            try:
                 if descending:
                     if candidate_value > best_value:
                         best_by_base[base] = row

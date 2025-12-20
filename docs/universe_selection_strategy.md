@@ -20,19 +20,29 @@ When selecting a "Top 50" universe for trading scans, there are two primary appr
 *   **Cons:** Can include "garbage" coins (memecoins, pump-and-dumps) that are temporarily popular but fundamentally unsound.
 *   **Best For:** Trend Following, Momentum, Breakout strategies.
 
-## 2. Updated Preset Structure
+## 2. Refined Hybrid Strategy (2025-12-20 Update)
 
-To accommodate both needs, the presets have been split:
+To ensure both **Liquidity Priority** and **Institutional Stability**, we have implemented a multi-stage pipeline:
 
-### Generic Presets (`crypto_cex_preset_{exchange}_{spot|perp}.yaml`)
-*   **Sorting:** `Value.Traded` (Descending)
-*   **Purpose:** These are the default for **Trend Scans**.
-*   **Logic:** You cannot trade a trend if there is no volume. A trend strategy should be indifferent to the "prestige" of a coin (Market Cap) and focused entirely on the "action" (Liquidity/Volume). If a mid-cap coin is trading more volume than a major cap, it is a better candidate for trend following.
+### The "Liquidity Floor + Market Cap Rank" Guard
+Instead of choosing between Volume or Market Cap, we now use a dual-layer approach:
+1.  **Liquidity Floor:** Every asset must pass a minimum `Value.Traded` ($1M - $5M depending on config) to be considered executable.
+2.  **Hybrid Market Cap Guard:**
+    *   **Rank Guard:** Only assets in the Top 200 (or 300) of the global market cap (using `market_caps_crypto.json`) are included.
+    *   **Floor Guard:** Enforces an absolute minimum market cap ($10M) using the maximum of TradingView's `market_cap_calc` or external data.
+3.  **Strict Quote Whitelist:** Only USD-denominated quotes (`USDT`, `USDC`, `USD`, `DAI`, `BUSD`, `FDUSD`) are allowed. This eliminates local fiat noise (IDR, TRY, JPY) that can inflate "Value Traded" rankings.
+4.  **Dated Futures Exclusion:** Delivery contracts are excluded to ensure the universe focuses on perpetuals and spot markets.
 
-### Top 50 Presets (`crypto_cex_preset_{exchange}_top50_{spot|perp}.yaml`)
-*   **Sorting:** `market_cap_calc` (Descending)
-*   **Purpose:** These are for **Fundamental/Base Universe Scans** or Conservative Strategies.
-*   **Logic:** Use this when you want to restrict exposure to established assets, regardless of their current activity level.
+### 3. Aggregation & Uniqueness
+
+Symbols with the same base asset (e.g., `BTCUSDT`, `BTCUSDC`, `BTCUSD.P`, `1000PEPEUSDT.P`) are automatically aggregated into a single entry per base currency.
+
+**Selection Priority for the Representative Symbol:**
+1.  **Quote Priority:** Prefers `USDT` > `USDC` > `USD` > `BUSD` (favoring Linear over Inverse).
+2.  **Product Type:** Prefers Perpetual contracts over Spot (if `prefer_perps` is enabled).
+3.  **Tie-breaker:** Highest `Value.Traded` wins.
+
+This ensures the generated "Base Universe" is unique, institutional-grade, and liquid.
 
 ## 3. Recommendation
 

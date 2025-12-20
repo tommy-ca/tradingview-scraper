@@ -1,32 +1,34 @@
-# Bitget Perp Base Universe Preset (Tier 3 - Lower Liquidity)
-# This preset defines the base universe filtering parameters for Bitget perpetual futures markets.
-# Trend configs should apply their own recommendation/adx/momentum filters on top.
-
-# Exchange identification
-exchanges: ["BITGET"]
-markets: ["crypto"]
-
-# Instrument type filters
+exchanges:
+- BITGET
+markets:
+- crypto
 include_perps_only: true
 exclude_perps: false
 exclude_dated_futures: true
 base_from_spot_only: false
-
-# Liquidity filters (Tier 3 - Lower thresholds for perps)
 volume:
   min: 0
-  value_traded_min: 7500000   # $7.5M minimum daily value traded for perps
-
-# Volatility filters (standardized)
+  value_traded_min: 7500000
 volatility:
-  max: 15.0                   # 15% max daily volatility
-  atr_pct_max: 0.12           # 12% ATR/price ratio max
+  max: 15.0
+  atr_pct_max: 0.12
   fallback_use_atr_pct: true
-
-# Data columns
-columns: [name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D, Volatility.W, Volatility.M, Perf.W, Perf.1M, Perf.3M, ATR]
-
-# Sorting and limits
+columns:
+- name
+- close
+- volume
+- Value.Traded
+- market_cap_calc
+- change
+- Recommend.All
+- ADX
+- Volatility.D
+- Volatility.W
+- Volatility.M
+- Perf.W
+- Perf.1M
+- Perf.3M
+- ATR
 sort_by: Value.Traded
 sort_order: desc
 final_sort_by: Value.Traded
@@ -37,23 +39,36 @@ limit: 50
 base_universe_limit: 50
 base_universe_sort_by: Value.Traded
 pagination_size: 50
-
-# Ensure key symbols are included
-ensure_symbols: [BITGET:BTCUSDT.P, BITGET:ETHUSDT.P, BITGET:SOLUSDT.P, BITGET:ADAUSDT.P, BITGET:DOGEUSDT.P, BITGET:LINKUSDT.P, BITGET:LTCUSDT.P, BITGET:DOTUSDT.P, BITGET:AVAXUSDT.P, BITGET:TRXUSDT.P]
+ensure_symbols:
+- BITGET:BTCUSDT.P
+- BITGET:ETHUSDT.P
+- BITGET:SOLUSDT.P
+- BITGET:ADAUSDT.P
+- BITGET:DOGEUSDT.P
+- BITGET:LINKUSDT.P
+- BITGET:LTCUSDT.P
+- BITGET:DOTUSDT.P
+- BITGET:AVAXUSDT.P
+- BITGET:TRXUSDT.P
 exclude_stable_bases: true
 prefer_perps: true
-perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
-
-# External data
+perp_exchange_priority:
+- BINANCE
+- OKX
+- BYBIT
+- BITGET
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null
 market_cap_require_hit: false
-
-# API settings
 retries: 2
 timeout: 10
-
-# Export (disabled by default in presets)
 export:
   enabled: false
   type: json
+allowed_spot_quotes:
+- USDT
+- USDC
+- USD
+- DAI
+- BUSD
+- FDUSD

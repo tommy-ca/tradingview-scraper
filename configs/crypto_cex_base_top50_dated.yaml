@@ -1,11 +1,39 @@
-# Base universe (dated futures) for strategies: top 50 expiry-coded contracts by Value.Traded.
-markets: ["crypto"]
-exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
+markets:
+- crypto
+exchanges:
+- BINANCE
+- OKX
+- BYBIT
+- BITGET
 include_perps_only: false
 exclude_perps: true
 include_dated_futures_only: true
-allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
-columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "Perf.YTD", "ATR"]
+allowed_spot_quotes:
+- USDT
+- USDC
+- USD
+- DAI
+- BUSD
+- FDUSD
+columns:
+- name
+- close
+- volume
+- Value.Traded
+- market_cap_calc
+- change
+- Recommend.All
+- ADX
+- Volatility.D
+- Volatility.W
+- Volatility.M
+- Perf.W
+- Perf.1M
+- Perf.3M
+- Perf.6M
+- Perf.Y
+- Perf.YTD
+- ATR
 volume:
   min: 0
   value_traded_min: 5000000
@@ -14,9 +42,9 @@ volatility:
   atr_pct_max: 0.2
   fallback_use_atr_pct: true
 trend:
-  direction: "long"
-  timeframe: "daily"
-  logic: "AND"
+  direction: long
+  timeframe: daily
+  logic: AND
   recommendation:
     enabled: false
   adx:
@@ -37,7 +65,11 @@ base_from_spot_only: false
 ensure_symbols: []
 exclude_stable_bases: true
 prefer_perps: false
-perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
+perp_exchange_priority:
+- BINANCE
+- OKX
+- BYBIT
+- BITGET
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null
 market_cap_require_hit: false
@@ -49,3 +81,5 @@ timeout: 10
 export:
   enabled: false
   type: json
+exclude_dated_futures: true
+base_universe_sort_by: Value.Traded

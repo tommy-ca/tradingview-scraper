@@ -19,6 +19,8 @@ This track aims to refine the `FuturesUniverseSelector` to prioritize liquidity 
     4.  **Liquidity Filter:** Enforce `Value.Traded` minimums.
     5.  **Aggregation:** Deduplicate symbols by base currency (e.g., pick most liquid between BTCUSDT and BTCUSDC) *before* limiting the universe.
     6.  **Universe Limiting:** Sort by `Value.Traded` and apply `base_universe_limit` or `limit`.
+- **Strict Quote Whitelist:** Limit "Base" universes to institutional-grade quotes: `["USDT", "USDC", "USD", "DAI", "BUSD", "FDUSD"]`. This eliminates local fiat noise (IDR, TRY, ARS, etc.).
+- **Dated Futures Exclusion:** Explicitly exclude dated delivery contracts from base universes to focus on tradeable perpetuals and spot.
 - **Config Updates:** Ensure YAML configs specify appropriate `market_cap_rank_limit` and `market_cap_floor`.
 
 ## Acceptance Criteria

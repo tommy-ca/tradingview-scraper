@@ -1,55 +1,76 @@
-# Bybit Top 50 Perp Base Universe Preset
-# Strictly limited to Top 50 by Market Cap
-
-exchanges: ["BYBIT"]
-markets: ["crypto"]
-
-# Instrument type filters
+exchanges:
+- BYBIT
+markets:
+- crypto
 include_perps_only: true
 exclude_perps: false
 exclude_dated_futures: true
 base_from_spot_only: false
-
-# Liquidity filters
 volume:
   min: 0
   value_traded_min: 7500000
-
-# Volatility filters
 volatility:
   max: 15.0
   atr_pct_max: 0.12
   fallback_use_atr_pct: true
-
-# Data columns
-columns: [name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D, Volatility.W, Volatility.M, Perf.W, Perf.1M, Perf.3M, ATR]
-
-# Sorting and limits
-sort_by: market_cap_calc
+columns:
+- name
+- close
+- volume
+- Value.Traded
+- market_cap_calc
+- change
+- Recommend.All
+- ADX
+- Volatility.D
+- Volatility.W
+- Volatility.M
+- Perf.W
+- Perf.1M
+- Perf.3M
+- ATR
+sort_by: Value.Traded
 sort_order: desc
-final_sort_by: market_cap_calc
+final_sort_by: Value.Traded
 final_sort_order: desc
 dedupe_by_symbol: true
 prefilter_limit: 1500
 limit: 50
 base_universe_limit: 50
-base_universe_sort_by: market_cap_calc
+base_universe_sort_by: Value.Traded
 pagination_size: 50
-
-# Ensure key symbols
-ensure_symbols: [BYBIT:BTCUSDT.P, BYBIT:ETHUSDT.P, BYBIT:SOLUSDT.P, BYBIT:ADAUSDT.P, BYBIT:DOGEUSDT.P, BYBIT:LINKUSDT.P, BYBIT:LTCUSDT.P, BYBIT:DOTUSDT.P, BYBIT:AVAXUSDT.P, BYBIT:TRXUSDT.P]
+ensure_symbols:
+- BYBIT:BTCUSDT.P
+- BYBIT:ETHUSDT.P
+- BYBIT:SOLUSDT.P
+- BYBIT:ADAUSDT.P
+- BYBIT:DOGEUSDT.P
+- BYBIT:LINKUSDT.P
+- BYBIT:LTCUSDT.P
+- BYBIT:DOTUSDT.P
+- BYBIT:AVAXUSDT.P
+- BYBIT:TRXUSDT.P
 exclude_stable_bases: true
 prefer_perps: true
-perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
-
+perp_exchange_priority:
+- BINANCE
+- OKX
+- BYBIT
+- BITGET
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null
 market_cap_rank_limit: 200
 market_cap_floor: 10000000.0
 market_cap_require_hit: false
-
 retries: 2
 timeout: 10
 export:
   enabled: false
   type: json
+allowed_spot_quotes:
+- USDT
+- USDC
+- USD
+- DAI
+- BUSD
+- FDUSD

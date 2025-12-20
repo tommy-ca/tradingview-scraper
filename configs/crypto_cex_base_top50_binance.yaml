@@ -1,12 +1,22 @@
-# Binance Top 50 Spot Base Universe
 base_preset: presets/crypto_cex_preset_binance_top50_spot.yaml
-
-# No strategy filters, just base universe
 trend:
-  recommendation: {enabled: false}
-  adx: {enabled: false}
-  momentum: {enabled: false}
-
+  recommendation:
+    enabled: false
+  adx:
+    enabled: false
+  momentum:
+    enabled: false
 export_metadata:
   symbol: binance_top50_spot_base
   data_category: universe_selector
+allowed_spot_quotes:
+- USDT
+- USDC
+- USD
+- DAI
+- BUSD
+- FDUSD
+exclude_dated_futures: true
+sort_by: Value.Traded
+final_sort_by: Value.Traded
+base_universe_sort_by: Value.Traded
