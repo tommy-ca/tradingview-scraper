@@ -21,11 +21,10 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [~] Track: update and verify the base universe selected are using top market cap filter, review and improve the base universe selector
 *Link: [./conductor/tracks/universe_selector_guards_20251220/](./conductor/tracks/universe_selector_guards_20251220/)*
----
+--- 
 
-## [ ] Track: Multi-Timeframe Technical Filtering for Trend Candidates
-*Link: [./conductor/tracks/mtf_technical_filtering_20251220/](./conductor/tracks/mtf_technical_filtering_20251220/)*
-
+## [ ] Track: Alternative Technical Indicators & Detailed Analysis Research
+*Link: [./conductor/tracks/alternative_technicals_research_20251220/](./conductor/tracks/alternative_technicals_research_20251220/)*
 
 
 
