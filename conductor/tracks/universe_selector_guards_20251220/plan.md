@@ -8,6 +8,11 @@ This plan outlines the steps to refactor the universe selector to enforce dual-l
 - [x] Task: Implement hybrid guard logic in `FuturesUniverseSelector._apply_market_cap_filter`
 - [x] Task: Verify that `Value.Traded` remains the primary sorting and limiting factor
 - [x] Task: Conductor - User Manual Verification 'Logic Refactor' (Protocol in workflow.md)
+- [x] Task: Refactor `FuturesUniverseSelector.run` to implement an explicit processing pipeline:
+    - [x] Task: Implement `_apply_basic_filters` (Exchange, type, stable exclusion)
+    - [x] Task: Implement `_aggregate_by_base` (BTCUSDT vs BTCUSDC selection)
+    - [x] Task: Re-order `run()` method to: Basic -> Market Cap -> Volatility -> Liquidity -> Aggregation -> Limiting
+- [x] Task: TDD - Add test case for BTCUSDT/BTCUSDC aggregation in `tests/test_universe_selector_guards.py`
 
 ## Phase 2: Configuration & Integration [checkpoint: 50d9054]
 - [x] Task: Update `configs/presets/*.yaml` with the new hybrid guard parameters (e.g., Rank < 200, Floor > $10M)
