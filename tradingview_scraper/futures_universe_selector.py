@@ -471,6 +471,12 @@ class FuturesUniverseSelector:
         # Strip common numeric multipliers (e.g., 1000PEPE -> PEPE)
         core = re.sub(r"^[0-9]+", "", core)
 
+        # Priority matches for institutional quotes to avoid greedy stablecoin matching (e.g. WIFUSDT)
+        # We check these first because some broader stables (like FUSDT) can overlap with legitimate bases
+        for stable in ["USDT", "USDC", "USD", "DAI", "BUSD", "FDUSD"]:
+            if core.endswith(stable) and len(core) > len(stable):
+                return core[: -len(stable)], stable
+
         for stable in sorted(STABLE_BASES, key=len, reverse=True):
             if core.endswith(stable) and len(core) > len(stable):
                 return core[: -len(stable)], stable
@@ -928,6 +934,8 @@ class FuturesUniverseSelector:
         descending = (self.config.final_sort_order or "desc").lower() == "desc"
         best_by_base: Dict[str, Dict[str, Any]] = {}
         all_members: Dict[str, List[str]] = {}
+        agg_vt: Dict[str, float] = {}
+        agg_vol: Dict[str, float] = {}
         priority = [p.upper() for p in self.config.perp_exchange_priority]
 
         # Use config.quote_priority if available
@@ -947,6 +955,10 @@ class FuturesUniverseSelector:
             # Stable-to-Stable exclusion: If base is also in STABLE_BASES, exclude unless it's a stablecoin scan
             if base in STABLE_BASES and not self.config.include_stable_bases:
                 continue
+
+            # Track total base metrics across all quotes/instruments
+            agg_vt[base] = agg_vt.get(base, 0.0) + float(row.get("Value.Traded") or 0.0)
+            agg_vol[base] = agg_vol.get(base, 0.0) + float(row.get("volume") or 0.0)
 
             if base not in all_members:
                 all_members[base] = []
@@ -1021,9 +1033,13 @@ class FuturesUniverseSelector:
                 continue
 
         results = list(best_by_base.values())
-        if self.config.group_duplicates:
-            for row in results:
-                base = self._base_symbol(row.get("symbol", ""))
+        for row in results:
+            base = self._base_symbol(row.get("symbol", ""))
+            # Override with aggregated metrics
+            row["Value.Traded"] = agg_vt.get(base, row.get("Value.Traded"))
+            row["volume"] = agg_vol.get(base, row.get("volume"))
+
+            if self.config.group_duplicates:
                 row["alternates"] = [s for s in all_members.get(base, []) if s != row.get("symbol")]
 
         return results
@@ -1175,6 +1191,10 @@ class FuturesUniverseSelector:
                 aggregated.extend(market_rows)
                 errors.extend(market_errors)
 
+        # Global Ensure: Track symbols that MUST be in the result if they exist in raw data
+        ensure_set = {s.upper() for s in self.config.ensure_symbols}
+        ensured_rows = [r for r in aggregated if r.get("symbol", "").upper() in ensure_set]
+
         # 1. Basic Filters (Symbol, type, stable exclusion)
         rows = self._apply_basic_filters(aggregated)
 
@@ -1186,6 +1206,12 @@ class FuturesUniverseSelector:
 
         # 4. Liquidity Filter (Floor)
         rows = [r for r in rows if self._evaluate_liquidity(r)]
+
+        # Add back ensured rows if they were filtered out
+        seen_symbols = {r.get("symbol") for r in rows}
+        for er in ensured_rows:
+            if er.get("symbol") not in seen_symbols:
+                rows.append(er)
 
         # 5. Aggregation (Deduplicate by base currency)
         if self.config.dedupe_by_symbol:
