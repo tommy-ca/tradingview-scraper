@@ -1,38 +1,39 @@
-# Base universe: Binance/OKX/Bybit/Bitget perps only, top 100 by market cap then volume
-# TS mean reversion (long): daily oversold bounce; rank by Perf.W ascending
-markets: ["crypto"]
-exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
-include_perps_only: true
-exclude_perps: false
-columns: ["name", "close", "volume", "Value.Traded", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR", "RSI", "Stoch.K"]
-volume:
-  min: 30000000
-volatility:
-  max: 6.0
-  atr_pct_max: 0.08
-  fallback_use_atr_pct: true
+# Crypto CEX TS Mean Reversion (Long) - Refactored
+# Target: Liquid perps that are oversold (Dip Buy)
+base_preset: presets/crypto_cex_preset_binance_top50_perp.yaml # Use robust base
+
+# Override base limit
+limit: 50
+
+# Stage 2: Broad Trend Context (Optional)
+# We want assets that aren't completely dead (neutral to bullish long term)
 trend:
   direction: "long"
   timeframe: "daily"
   logic: "AND"
   recommendation:
     enabled: true
-    min: -0.05
+    min: -0.1 # Allow slight sell rating, but avoid strong sell
   adx:
+    enabled: false
+  momentum:
+    enabled: false
+
+# Stage 3: Oversold Screen (The actual Mean Reversion logic)
+# Use 'short' direction to find values BELOW thresholds
+trend_screen:
+  timeframe: "daily"
+  direction: "short" 
+  logic: "AND"
+  osc:
     enabled: true
-    min: 0
-    max: 35
+    # Find assets with RSI < 40 OR Stoch.K < 30
+    # Logic is AND by default for fields, but let's try to find deep oversold
+    horizons: {RSI: 40, Stoch.K: 30}
   momentum:
     enabled: true
-    horizons: {change: -0.2, Perf.W: -0.5, Perf.1M: -10.0, RSI: 55, Stoch.K: 60}
-sort_by: market_cap_calc
-sort_order: desc
-final_sort_by: volume
-final_sort_order: desc
-limit: 100
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
+    horizons: {Perf.W: -5.0} # Drop of > 5% in a week
+
+export_metadata:
+  symbol: "crypto_mean_reversion"
+  data_category: "universe_selector"
