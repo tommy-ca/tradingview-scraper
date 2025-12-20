@@ -9,10 +9,15 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: review and update current universe selectors
+## [ ] Track: review and update current universe selectors
 *Link: [./conductor/tracks/universe_selectors_20251220/](./conductor/tracks/universe_selectors_20251220/)*
 
 ---
 
-## [ ] Track: explore and review top50 base universe filters for crypto cex per exchange
+## [x] Track: explore and review top50 base universe filters for crypto cex per exchange
 *Link: [./conductor/tracks/crypto_top50_review_20251220/](./conductor/tracks/crypto_top50_review_20251220/)*
+
+---
+
+## [~] Track: update and verify the base universe selected are using top market cap filter, review and improve the base universe selector
+*Link: [./conductor/tracks/universe_selector_guards_20251220/](./conductor/tracks/universe_selector_guards_20251220/)*
