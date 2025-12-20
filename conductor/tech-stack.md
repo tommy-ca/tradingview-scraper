@@ -10,6 +10,7 @@
 ## Data Processing & Validation
 * **pandas:** Used for data manipulation and as an export format for structured data.
 * **pydantic:** Employed for data validation and settings management.
+* **Market Cap Metadata:** External `market_caps_crypto.json` provides global asset ranking for hybrid guards.
 
 ## Real-time & WebSockets
 * **websockets & websocket-client:** Provide the foundation for real-time data streaming from TradingView.
