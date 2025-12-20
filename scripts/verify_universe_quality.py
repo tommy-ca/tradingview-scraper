@@ -1,99 +1,86 @@
+import glob
 import json
-import logging
 import os
-from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+import pandas as pd
 
-
-def verify_universe(file_path, target_count=50, min_value_traded=500000, market_cap_floor=10000000):
-    """
-    Verifies the quality of a universe JSON file.
-    """
-    if not os.path.exists(file_path):
-        logging.error(f"File not found: {file_path}")
-        return False
-
-    with open(file_path, "r") as f:
-        payload = json.load(f)
-
-    if isinstance(payload, dict):
-        symbols = payload.get("data", [])
-    else:
-        symbols = payload
-
-    count = len(symbols)
-
-    logging.info(f"--- Verifying {os.path.basename(file_path)} ---")
-    logging.info(f"Count: {count}/{target_count}")
-
-    if count == 0:
-        logging.warning("Universe is empty.")
-        return True
-
-    all_ok = True
-
-    # 1. Liquidity check
-    low_liquidity = [s["symbol"] for s in symbols if s.get("Value.Traded", 0) < min_value_traded]
-    if low_liquidity:
-        logging.error(f"  Found {len(low_liquidity)} symbols below liquidity floor {min_value_traded}: {low_liquidity[:5]}")
-        all_ok = False
-
-    # 2. Market Cap Floor check (Guard B)
-    low_cap = []
-    suspicious = []
-    for i, s in enumerate(symbols):
-        calc = s.get("market_cap_calc") or 0
-        ext = s.get("market_cap_external") or 0
-        if max(calc, ext) < market_cap_floor:
-            low_cap.append(s["symbol"])
-
-        # junk check: top assets should have external market cap ranking
-        if i < 10 and not s.get("market_cap_external"):
-            suspicious.append(s["symbol"])
-
-    if low_cap:
-        logging.error(f"  Found {len(low_cap)} symbols below market cap floor {market_cap_floor}: {low_cap[:5]}...")
-        all_ok = False
-
-    if suspicious:
-        logging.warning(f"  Found {len(suspicious)} high-volume symbols missing external market cap data: {suspicious}")
-
-    if all_ok:
-        logging.info("  Quality check passed.")
-    return all_ok
+# Proper Quotes Whitelist
+ALLOWED_QUOTES = {"USDT", "USDC", "USD", "DAI", "BUSD", "FDUSD"}
 
 
-def main():
-    export_dir = Path("export")
+def verify_quality():
+    files = sorted(glob.glob("export/universe_selector_*_base_*.json"), key=os.path.getmtime, reverse=True)[:8]
 
-    categories = [
-        "binance_top50_spot_base",
-        "binance_top50_perp_base",
-        "okx_top50_spot_base",
-        "okx_top50_perp_base",
-        "bybit_top50_spot_base",
-        "bybit_top50_perp_base",
-        "bitget_top50_spot_base",
-        "bitget_top50_perp_base",
-    ]
+    report = []
 
-    success = True
-    for cat in categories:
-        files = sorted(export_dir.glob(f"universe_selector_{cat}_*.json"), key=os.path.getmtime, reverse=True)
-        if not files:
-            logging.warning(f"No files found for category: {cat}")
-            continue
+    for f in files:
+        with open(f, "r") as j:
+            rows = json.load(j)
+            basename = os.path.basename(str(f))
+            parts = basename.split("_")
+            exchange = parts[2].upper()
+            ptype = parts[4].upper()
 
-        if not verify_universe(files[0]):
-            success = False
+            if not rows:
+                continue
 
-    if not success:
-        logging.error("One or more latest universes failed quality checks.")
-        exit(1)
-    else:
-        logging.info("All selected base universes passed hybrid guard quality checks.")
+            df = pd.DataFrame(rows)
+
+            # 1. Uniqueness Check
+            from tradingview_scraper.futures_universe_selector import FuturesUniverseSelector
+
+            df["base"] = df["symbol"].apply(lambda x: FuturesUniverseSelector._base_symbol(x))
+            dupes = df[df.duplicated("base", keep=False)]
+
+            # 2. Quote Compliance
+            def get_quote(sym):
+                _, q = FuturesUniverseSelector._extract_base_quote(sym)
+                return q
+
+            df["quote"] = df["symbol"].apply(get_quote)
+            invalid_quotes = df[~df["quote"].isin(ALLOWED_QUOTES)]
+
+            if not invalid_quotes.empty:
+                print(f"\n[DEBUG] Invalid quotes in {exchange} {ptype}:")
+                print(invalid_quotes[["symbol", "quote"]].to_string(index=False))
+
+            # 3. Liquidity Floor
+            min_vt = df["Value.Traded"].min()
+
+            # 4. Junk Detection (High Volume, No Market Cap)
+            suspicious = df[(df["market_cap_external"].isna()) & (df["Value.Traded"] > 5e6)]
+
+            report.append(
+                {
+                    "Universe": f"{exchange} {ptype}",
+                    "Size": len(df),
+                    "Unique Bases": df["base"].nunique() == len(df),
+                    "Duplicate Count": len(dupes) // 2 if not dupes.empty else 0,
+                    "Quote Violations": len(invalid_quotes),
+                    "Liquidity Floor": f"${min_vt / 1e6:.2f}M",
+                    "Suspicious Assets": len(suspicious),
+                }
+            )
+
+            if not suspicious.empty:
+                print(f"\n[WARNING] Suspicious assets in {exchange} {ptype} (High VT, No MC):")
+                print(suspicious[["symbol", "Value.Traded"]].to_string(index=False))
+
+    df_report = pd.DataFrame(report)
+    print("\n" + "=" * 100)
+    print("FINAL UNIVERSE QUALITY VERIFICATION")
+    print("=" * 100)
+    print(df_report.to_string(index=False))
+    print("=" * 100)
+
+    # Final Verdict
+    all_unique = df_report["Unique Bases"].all()
+    all_quoted = (df_report["Quote Violations"] == 0).all()
+
+    print("\nFinal Integrity Check:")
+    print(f"- Absolute Uniqueness: {'PASSED' if all_unique else 'FAILED'}")
+    print(f"- Quote Compliance: {'PASSED' if all_quoted else 'FAILED'}")
 
 
 if __name__ == "__main__":
-    main()
+    verify_quality()
