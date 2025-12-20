@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from websocket import WebSocketConnectionClosedException
 
@@ -38,3 +38,43 @@ def test_streamer_reconnects_on_connection_closed():
 
             # Verify MockStreamHandler was called twice (initial + reconnect)
             assert MockStreamHandler.call_count == 2
+
+
+def test_streamer_restores_state_on_reconnect():
+    """
+    Test that Streamer re-subscribes to symbols and indicators after reconnection.
+    """
+    with patch("tradingview_scraper.symbols.stream.streamer.StreamHandler") as MockStreamHandler:
+        mock_handler = MockStreamHandler.return_value
+        mock_ws = mock_handler.ws
+
+        # Simulate connection loss on first recv, then success
+        mock_ws.recv.side_effect = [WebSocketConnectionClosedException("Connection lost"), '~m~20~m~{"m":"timescale_update","p":[{},{"sds_1":{"s":[{"i":0,"v":[1600000000,1,2,3,4,10]}]}}]}']
+
+        streamer = Streamer(export_result=False)
+
+        # Set up initial subscription
+        indicators = [("STD;RSI", "37.0")]
+
+        # Mock methods to track calls but keep original functionality to set state
+        original_add_sym = streamer._add_symbol_to_sessions
+        streamer._add_symbol_to_sessions = MagicMock(side_effect=original_add_sym)
+
+        original_add_ind = streamer._add_indicators
+        streamer._add_indicators = MagicMock(side_effect=original_add_ind)
+
+        with patch("tradingview_scraper.symbols.stream.streamer.sleep"):
+            # Initial call to stream would set the state
+            data_gen = streamer.stream(exchange="BINANCE", symbol="BTCUSDT", timeframe="1h", indicators=indicators)
+
+            # Trigger iteration to run get_data() and encounter exception
+            next(data_gen)
+
+            # Check if _add_symbol_to_sessions was called again during reconnection
+            # It should be called twice: once in stream(), once in get_data() retry loop
+            assert streamer._add_symbol_to_sessions.call_count == 2
+            streamer._add_symbol_to_sessions.assert_called_with(mock_handler.quote_session, mock_handler.chart_session, "BINANCE:BTCUSDT", "1h", 10)
+
+            # Check if _add_indicators was called again
+            assert streamer._add_indicators.call_count == 2
+            streamer._add_indicators.assert_called_with(indicators)
