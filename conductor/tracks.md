@@ -28,8 +28,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 --- 
 
-## [ ] Track: Lakehouse Data Quality & Gap Management
-*Link: [./conductor/tracks/lakehouse_quality_20251220/](./conductor/tracks/lakehouse_quality_20251220/)*
+## [ ] Track: Historical Candle Resolution & Depth Mapping
+*Link: [./conductor/tracks/resolution_research_20251220/](./conductor/tracks/resolution_research_20251220/)*
 
 
 
