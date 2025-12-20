@@ -16,7 +16,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -458,7 +458,12 @@ class FuturesUniverseSelector:
     def _extract_base_quote(symbol: str) -> Tuple[str, str]:
         if not symbol:
             return "", ""
+        # Strip exchange prefix and perp suffix
         core = symbol.split(":", 1)[-1].upper().replace(".P", "")
+
+        # Strip common numeric multipliers (e.g., 1000PEPE -> PEPE)
+        core = re.sub(r"^[0-9]+", "", core)
+
         for stable in sorted(STABLE_BASES, key=len, reverse=True):
             if core.endswith(stable) and len(core) > len(stable):
                 return core[: -len(stable)], stable
@@ -1160,6 +1165,16 @@ class FuturesUniverseSelector:
         else:
             final_sorted = self._sort_rows(filtered)
             trimmed = final_sorted[: self.config.limit]
+
+        # Final Uniqueness Guard: Ensure no duplicate symbols in final output
+        seen_final: Set[str] = set()
+        unique_final: List[Dict[str, Any]] = []
+        for r in trimmed:
+            sym = r.get("symbol")
+            if sym and sym not in seen_final:
+                unique_final.append(r)
+                seen_final.add(sym)
+        trimmed = unique_final
 
         if self.config.export.enabled:
             self._export_results(trimmed)

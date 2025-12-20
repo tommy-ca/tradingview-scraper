@@ -99,3 +99,21 @@ def test_aggregation_by_base():
     assert "BINANCE:BTCFUSD" not in symbols
     assert "BINANCE:ETHUSDT" in symbols
     assert len(aggregated) == 2
+
+
+def test_aggregation_by_scaled_base():
+    """
+    Test that scaled symbols like 1000PEPE and PEPE are aggregated.
+    """
+    config = SelectorConfig(markets=["crypto"], dedupe_by_symbol=True, final_sort_by="Value.Traded")
+    selector = FuturesUniverseSelector(config)
+
+    rows = [
+        {"symbol": "BINANCE:PEPEUSDT", "Value.Traded": 1000},
+        {"symbol": "OKX:1000PEPEUSDT.P", "Value.Traded": 2000},  # Higher liquidity
+    ]
+
+    aggregated = selector._aggregate_by_base(rows)
+
+    assert len(aggregated) == 1
+    assert aggregated[0]["symbol"] == "OKX:1000PEPEUSDT.P"
