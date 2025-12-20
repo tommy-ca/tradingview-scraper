@@ -21,6 +21,7 @@ from websocket import WebSocketConnectionClosedException
 
 from tradingview_scraper.symbols.exceptions import DataNotFoundError
 from tradingview_scraper.symbols.stream import StreamHandler
+from tradingview_scraper.symbols.stream.retry import RetryHandler
 from tradingview_scraper.symbols.stream.utils import fetch_indicator_metadata, validate_symbols
 from tradingview_scraper.symbols.utils import save_csv_file, save_json_file
 
@@ -44,7 +45,16 @@ class Streamer:
             Yields parsed real-time data from the TradingView WebSocket connection.
     """
 
-    def __init__(self, export_result=False, export_type="json", websocket_jwt_token: str = "unauthorized_user_token"):
+    def __init__(
+        self,
+        export_result=False,
+        export_type="json",
+        websocket_jwt_token: str = "unauthorized_user_token",
+        max_retries: int = 5,
+        initial_delay: float = 1.0,
+        max_delay: float = 60.0,
+        backoff_factor: float = 2.0,
+    ):
         """
         Initializes the Streamer class with export options and WebSocket authentication token.
 
@@ -52,12 +62,22 @@ class Streamer:
             export_result (bool): Flag to determine if the result should be exported.
             export_type (str): Type of export ('json' or 'csv').
             websocket_jwt_token (str): WebSocket JWT token for authentication.
+            max_retries (int): Maximum number of reconnection attempts.
+            initial_delay (float): Initial delay for exponential backoff.
+            max_delay (float): Maximum delay for exponential backoff.
+            backoff_factor (float): Factor for exponential backoff.
         """
         self.export_result = export_result
         self.export_type = export_type
+        self.websocket_jwt_token = websocket_jwt_token
+        self.retry_handler = RetryHandler(max_retries=max_retries, initial_delay=initial_delay, max_delay=max_delay, backoff_factor=backoff_factor)
         self.study_id_to_name_map = {}  # Maps study IDs (st9, st10) to indicator names
-        ws_url = "wss://data.tradingview.com/socket.io/websocket?from=chart%2FVEPYsueI%2F&type=chart"
-        self.stream_obj = StreamHandler(websocket_url=ws_url, jwt_token=websocket_jwt_token)
+        self.ws_url = "wss://data.tradingview.com/socket.io/websocket?from=chart%2FVEPYsueI%2F&type=chart"
+        self.stream_obj = StreamHandler(websocket_url=self.ws_url, jwt_token=websocket_jwt_token)
+
+        # State for reconnection
+        self._current_subscription = None
+        self._current_indicators = None
 
     def _add_symbol_to_sessions(self, quote_session: str, chart_session: str, exchange_symbol: str, timeframe: str = "1m", numb_candles: int = 10):
         """
@@ -70,6 +90,7 @@ class Streamer:
             timeframe (str): The timeframe for the data (e.g., '1m', '5m'). Default is '1m'.
             numb_candles (int): The number of candles to fetch. Default is 10.
         """
+        self._current_subscription = (exchange_symbol, timeframe, numb_candles)
         timeframe_map = {"1m": "1", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "2h": "120", "4h": "240", "1d": "1D", "1w": "1W", "1M": "1M"}
         resolve_symbol = json.dumps({"adjustment": "splits", "symbol": exchange_symbol})
         self.stream_obj.send_message("quote_add_symbols", [quote_session, f"={resolve_symbol}"])
@@ -95,6 +116,7 @@ class Streamer:
             indicators (list): List of tuples, each containing (indicator_id, indicator_version).
                               Example: [("STD;RSI", "37.0"), ("STD;MACD", "31.0")]
         """
+        self._current_indicators = indicators
         for idx, (indicator_id, indicator_version) in enumerate(indicators):
             logging.info(f"Processing indicator {idx + 1}/{len(indicators)}: {indicator_id} v{indicator_version}")
 
@@ -312,30 +334,58 @@ class Streamer:
         Yields:
             dict: Parsed JSON data received from the server.
         """
-        try:
-            while True:
-                try:
-                    sleep(1)
-                    result = self.stream_obj.ws.recv()
-                    # Check if the result is a heartbeat or actual data
-                    if re.match(r"~m~\d+~m~~h~\d+$", result):
-                        self.stream_obj.ws.recv()  # Echo back the message
-                        logging.debug("Received heartbeat: %s", result)
-                        self.stream_obj.ws.send(result)
-                    else:
-                        split_result = [x for x in re.split(r"~m~\d+~m~", result) if x]
-                        for item in split_result:
-                            if item:
-                                yield json.loads(item)  # Yield parsed JSON data
+        attempt = 0
+        while True:
+            try:
+                while True:
+                    try:
+                        sleep(0.1)
+                        result = self.stream_obj.ws.recv()
+                        # Check if the result is a heartbeat or actual data
+                        if re.match(r"~m~\d+~m~~h~\d+$", result):
+                            self.stream_obj.ws.recv()  # Echo back the message
+                            logging.debug("Received heartbeat: %s", result)
+                            self.stream_obj.ws.send(result)
+                        else:
+                            split_result = [x for x in re.split(r"~m~\d+~m~", result) if x]
+                            for item in split_result:
+                                if item:
+                                    yield json.loads(item)  # Yield parsed JSON data
+                        # Reset attempt counter on successful receive
+                        attempt = 0
 
-                except WebSocketConnectionClosedException:
-                    logging.error("WebSocket connection closed. Attempting to reconnect...")
+                    except WebSocketConnectionClosedException:
+                        logging.error("WebSocket connection closed. Attempting to reconnect...")
+                        break
+                    except Exception as e:
+                        logging.error("An error occurred during receive: %s", str(e))
+                        break
+
+                # Reconnection logic
+                if attempt >= self.retry_handler.max_retries:
+                    logging.error("Max retries reached. Stopping stream.")
                     break
-                except Exception as e:
-                    logging.error("An error occurred: %s", str(e))
+
+                delay = self.retry_handler.get_delay(attempt)
+                logging.info("Waiting %.2f seconds before reconnection attempt %d/%d...", delay, attempt + 1, self.retry_handler.max_retries)
+                sleep(delay)
+                attempt += 1
+
+                # Re-establish connection
+                self.stream_obj = StreamHandler(websocket_url=self.ws_url, jwt_token=self.websocket_jwt_token)
+
+                # Re-subscribe
+                if self._current_subscription:
+                    self._add_symbol_to_sessions(self.stream_obj.quote_session, self.stream_obj.chart_session, *self._current_subscription)
+                if self._current_indicators:
+                    self._add_indicators(self._current_indicators)
+
+            except Exception as e:
+                logging.error("Failed to reconnect: %s", str(e))
+                if attempt >= self.retry_handler.max_retries:
                     break
-        finally:
-            self.stream_obj.ws.close()
+                attempt += 1
+                sleep(self.retry_handler.get_delay(attempt))
 
 
 # Signal handler for keyboard interrupt
