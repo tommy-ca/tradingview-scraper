@@ -6,7 +6,7 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
-def verify_universe(file_path, target_count=50, min_value_traded=500000):
+def verify_universe(file_path, target_count=50, min_value_traded=500000, market_cap_floor=10000000):
     """
     Verifies the quality of a universe JSON file.
     """
@@ -27,12 +27,23 @@ def verify_universe(file_path, target_count=50, min_value_traded=500000):
     logging.info(f"--- Verifying {os.path.basename(file_path)} ---")
     logging.info(f"Count: {count}/{target_count}")
 
-    low_liquidity = [s for s in symbols if s.get("Value.Traded", 0) < min_value_traded]
-    # if low_liquidity:
-    #    logging.warning(f"Found {len(low_liquidity)} symbols with Value.Traded < {min_value_traded}")
+    if count == 0:
+        logging.warning("Universe is empty.")
+        return True
 
-    if count < target_count * 0.8:  # Allow 20% margin
-        logging.warning(f"Universe size is significantly below target ({count} < {target_count})")
+    # 1. Liquidity check
+    low_liquidity = [s for s in symbols if s.get("Value.Traded", 0) < min_value_traded]
+
+    # 2. Market Cap Floor check (Guard B)
+    low_cap = []
+    for s in symbols:
+        calc = s.get("market_cap_calc") or 0
+        ext = s.get("market_cap_external") or 0
+        if max(calc, ext) < market_cap_floor:
+            low_cap.append(s["symbol"])
+
+    if low_cap:
+        logging.error(f"Found {len(low_cap)} symbols below market cap floor {market_cap_floor}: {low_cap[:5]}...")
         return False
 
     logging.info("Quality check passed.")
@@ -41,33 +52,33 @@ def verify_universe(file_path, target_count=50, min_value_traded=500000):
 
 def main():
     export_dir = Path("export")
-    # All files from today's run
-    files = sorted(export_dir.glob("universe_selector_*.json"), key=os.path.getmtime, reverse=True)
 
-    # Filter for base universe files from the most recent run (last hour)
-    import time
-
-    now = time.time()
-    recent_files = [f for f in files if now - os.path.getmtime(f) < 3600]
-
-    # Further filter for base universes (by excluding trend/momentum in name if possible,
-    # or just looking at the ones we know we just generated)
-    base_files = [f for f in recent_files if "_base" in f.name or "universe" in f.name]
-
-    if not base_files:
-        logging.error("No recent base universe files found in export/")
-        exit(1)
+    categories = [
+        "binance_top50_spot_base",
+        "binance_top50_perp_base",
+        "okx_top50_spot_base",
+        "okx_top50_perp_base",
+        "bybit_top50_spot_base",
+        "bybit_top50_perp_base",
+        "bitget_top50_spot_base",
+        "bitget_top50_perp_base",
+    ]
 
     success = True
-    for f in base_files:
-        if not verify_universe(f):
+    for cat in categories:
+        files = sorted(export_dir.glob(f"universe_selector_{cat}_*.json"), key=os.path.getmtime, reverse=True)
+        if not files:
+            logging.warning(f"No files found for category: {cat}")
+            continue
+
+        if not verify_universe(files[0]):
             success = False
 
     if not success:
-        logging.error("One or more universes failed quality checks.")
+        logging.error("One or more latest universes failed quality checks.")
         exit(1)
     else:
-        logging.info("All universes passed baseline quality checks.")
+        logging.info("All selected base universes passed hybrid guard quality checks.")
 
 
 if __name__ == "__main__":

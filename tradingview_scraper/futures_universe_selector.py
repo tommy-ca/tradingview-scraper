@@ -355,6 +355,9 @@ class FuturesUniverseSelector:
         if self.config.volume.value_traded_min > 0 and "Value.Traded" not in columns:
             columns.append("Value.Traded")
 
+        if self.config.market_cap_floor is not None and "market_cap_calc" not in columns:
+            columns.append("market_cap_calc")
+
         if self.config.trend.timeframe in {"daily", "weekly"} and "Perf.W" not in columns:
             columns.append("Perf.W")
         return columns
@@ -857,7 +860,15 @@ class FuturesUniverseSelector:
                         sym = item.get("symbol") or item.get("base")
                         cap_val = item.get("market_cap") or item.get("cap")
                         if sym and isinstance(cap_val, (int, float)):
-                            caps[str(sym).upper().replace(".P", "")] = float(cap_val)
+                            core = str(sym).upper().replace(".P", "")
+                            if ":" in core:
+                                core = core.split(":", 1)[-1]
+                            # strip any stable quote suffix from the market cap key
+                            for stable in sorted(STABLE_BASES, key=len, reverse=True):
+                                if core.endswith(stable) and len(core) > len(stable):
+                                    core = core[: -len(stable)]
+                                    break
+                            caps[core] = float(cap_val)
             elif path_obj.suffix.lower() in {".csv", ".tsv"}:
                 with path_obj.open("r", encoding="utf-8") as handle:
                     reader = csv.DictReader(handle)
@@ -866,7 +877,14 @@ class FuturesUniverseSelector:
                         cap_val = row.get("market_cap") or row.get("cap")
                         if sym and cap_val is not None:
                             try:
-                                caps[str(sym).upper().replace(".P", "")] = float(cap_val)
+                                core = str(sym).upper().replace(".P", "")
+                                if ":" in core:
+                                    core = core.split(":", 1)[-1]
+                                for stable in sorted(STABLE_BASES, key=len, reverse=True):
+                                    if core.endswith(stable) and len(core) > len(stable):
+                                        core = core[: -len(stable)]
+                                        break
+                                caps[core] = float(cap_val)
                             except (TypeError, ValueError):
                                 continue
         except Exception as exc:  # pragma: no cover - defensive
@@ -876,33 +894,32 @@ class FuturesUniverseSelector:
         return self._market_cap_map
 
     def _apply_market_cap_filter(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        # Guard B: Floor-based (Dollar value from Screener)
-        if self.config.market_cap_floor is not None:
-            rows = [r for r in rows if (r.get("market_cap_calc") or 0) >= self.config.market_cap_floor]
-
-        if not self.config.market_cap_file:
-            return rows
-
+        initial_count = len(rows)
         cap_map = self._load_market_cap_map()
-        if not cap_map:
-            return rows
 
-        # Guard A: Rank-based (from external file)
-        if self.config.market_cap_rank_limit:
-            # select top bases by cap to establish the "Allowed Rank" set
-            tops = sorted(((b, v) for b, v in cap_map.items()), key=lambda x: x[1], reverse=True)[: self.config.market_cap_rank_limit]
-            allowed_bases = {b for b, _ in tops}
-            rows = [r for r in rows if self._base_symbol(r.get("symbol", "")) in allowed_bases]
-
-        # Annotate with external market cap for visibility/debugging
+        # Annotate with external market cap for visibility/debugging and for floor guard
         for row in rows:
             base = self._base_symbol(row.get("symbol", ""))
             cap_val = cap_map.get(base)
             if cap_val is not None:
                 row["market_cap_external"] = cap_val
 
-        # market_cap_limit is the old field, keep it for backward compatibility if rank_limit is not set
-        if self.config.market_cap_limit and not self.config.market_cap_rank_limit:
+        # Guard B: Floor-based (Screener OR External)
+        if self.config.market_cap_floor is not None:
+            rows = [r for r in rows if max(r.get("market_cap_calc") or 0, r.get("market_cap_external") or 0) >= self.config.market_cap_floor]
+            logger.info("Floor guard (%s) reduced rows from %d to %d", self.config.market_cap_floor, initial_count, len(rows))
+
+        # Guard A: Rank-based (from external file)
+        if cap_map and self.config.market_cap_rank_limit:
+            # select top bases by cap to establish the "Allowed Rank" set
+            tops = sorted(((b, v) for b, v in cap_map.items()), key=lambda x: x[1], reverse=True)[: self.config.market_cap_rank_limit]
+            allowed_bases = {b for b, _ in tops}
+            before_rank = len(rows)
+            rows = [r for r in rows if self._base_symbol(r.get("symbol", "")) in allowed_bases]
+            logger.info("Rank guard (%d) reduced rows from %d to %d", self.config.market_cap_rank_limit, before_rank, len(rows))
+
+        # market_cap_limit is the old field, keep it for backward compatibility
+        if cap_map and self.config.market_cap_limit and not self.config.market_cap_rank_limit:
             tops = sorted(((b, v) for b, v in cap_map.items()), key=lambda x: x[1], reverse=True)[: self.config.market_cap_limit]
             allowed_bases = {b for b, _ in tops}
             rows = [r for r in rows if self._base_symbol(r.get("symbol", "")) in allowed_bases]
