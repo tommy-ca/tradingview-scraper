@@ -16,6 +16,14 @@ Welcome to tradingview-scraper's documentation!
    specs/market_discovery
    specs/strategies
 
+Research & Development:
+-----------------------
+.. toctree::
+   :maxdepth: 1
+
+   research/arbitrage_research_20251220
+   research/streamer_research_20251220
+
 
 Indices and tables
 ==================

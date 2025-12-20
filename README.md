@@ -146,8 +146,38 @@ To get started with the TradingView Scraper library, follow these simple steps:
    pip install --upgrade --no-cache tradingview-scraper
    ```
 
-Here’s a revised version of the Examples section, focusing on clarity, ease of understanding, and providing essential information about default values:
+## Development with uv
 
+For consistent and reproducible development environments, this project uses [uv](https://github.com/astral-sh/uv).
+
+1. **Install uv**:
+   ```sh
+   curl -LsSf https://astral-sh.uv.io/install.sh | sh
+   ```
+
+2. **Sync dependencies**:
+   ```sh
+   uv sync --extra dev
+   ```
+
+3. **Run tests**:
+   ```sh
+   uv run pytest
+   ```
+
+4. **Run scanners**:
+   ```sh
+   uv run python -m tradingview_scraper.futures_universe_selector --config configs/futures_trend_momentum.yaml
+   ```
+
+All CI/CD workflows and local shell scripts (`scripts/*.sh`) are optimized to use `uv` for speed and consistency.
+
+## Research & Development
+
+The following research reports outline advanced capabilities and feasibility studies for institutional trading:
+
+- [Binance Multi-Quote Arbitrage Exploration](docs/research/arbitrage_research_20251220.md) - Analysis of spreads between USDT, USDC, and FDUSD pairs.
+- [Real-Time Streamer & Data Lakehouse Feasibility](docs/research/streamer_research_20251220.md) - Technical deep-dive into WebSocket schemas and ingestion architecture.
 
 ## Examples
 

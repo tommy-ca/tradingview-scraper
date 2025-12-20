@@ -46,7 +46,7 @@ The `Value.Traded` and `volume` fields for the representative asset now reflect 
 3.  **Tie-breaker:** Highest individual `Value.Traded` wins.
 
 **Alternatives Tracking:**
-Grouped duplicates are preserved in the `alternates` field, providing downstream strategies with all tradeable pairs for arbitrage or cross-exchange execution.
+Grouped duplicates are preserved in the `alternates` field, providing downstream strategies with all tradeable pairs for arbitrage or cross-exchange execution. See [Arbitrage Research](research/arbitrage_research_20251220.md) for more details.
 
 ## 4. Institutional Standards (Trend Strategy)
 
