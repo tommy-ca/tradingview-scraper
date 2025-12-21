@@ -9,7 +9,7 @@ Consolidate the multi-asset quantitative pipeline into a unified, high-performan
 
 ### Phase 1: Unified Orchestrator & Async Discovery
 Goal: Transition from shell-based batching to a Python-native async architecture.
-- [ ] Task: Create `tradingview_scraper/pipeline.py` (Unified Orchestrator Class).
+- [x] Task: Create `tradingview_scraper/pipeline.py` (Unified Orchestrator Class). 24bdb00
 - [ ] Task: Implement `AsyncScreener` to parallelize REST calls to TradingView.
 - [ ] Task: Migrate existing configurations to be driven by the new `Pipeline` entry point.
 
