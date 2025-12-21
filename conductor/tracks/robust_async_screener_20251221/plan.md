@@ -16,7 +16,7 @@ Goal: Ensure the async screener is as reliable and feature-rich as the sync vers
 ### Phase 2: Performance & Pagination
 Goal: Handle large-scale scans efficiently.
 - [x] Task: Implement internal pagination in `AsyncScreener.screen` to support limits > 50. db08abc
-- [ ] Task: Add a concurrency semaphore to `screen_many` to manage API pressure.
+- [x] Task: Add a concurrency semaphore to `screen_many` to manage API pressure. 88b35e4
 
 ### Phase 3: Validation
 - [ ] Task: Verify parity via integrated tests comparing sync vs async results.
