@@ -115,6 +115,42 @@ class TestAsyncScreener(unittest.TestCase):
         self.assertEqual(len(result["data"]), 120)
         self.assertEqual(mock_post.call_count, 3)
 
+    @patch("aiohttp.ClientSession.post")
+    def test_screen_many_concurrency(self, mock_post):
+        # Setup mock response
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.json = AsyncMock(return_value={"data": []})
+
+        # We need a custom side effect to track simultaneous active requests
+        active_requests = 0
+        max_seen = 0
+
+        def mock_post_side_effect(*args, **kwargs):
+            nonlocal active_requests, max_seen
+
+            async def mock_context():
+                nonlocal active_requests, max_seen
+                active_requests += 1
+                max_seen = max(max_seen, active_requests)
+                await asyncio.sleep(0.1)  # Simulate network delay
+                active_requests -= 1
+                return mock_resp
+
+            cm = MagicMock()
+            cm.__aenter__ = mock_context
+            cm.__aexit__ = AsyncMock(return_value=None)
+            return cm
+
+        mock_post.side_effect = mock_post_side_effect
+
+        payloads = [{"market": "crypto", "filters": [], "columns": ["close"]} for _ in range(10)]
+
+        # Run with max_concurrent=2
+        asyncio.run(self.screener.screen_many(payloads, max_concurrent=2))
+
+        self.assertLessEqual(max_seen, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

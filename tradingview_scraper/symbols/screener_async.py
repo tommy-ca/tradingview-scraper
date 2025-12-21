@@ -235,25 +235,27 @@ class AsyncScreener:
 
         return {"status": "success", "data": all_data}
 
-    async def screen_many(self, payloads: List[Dict]) -> List[Dict]:
+    async def screen_many(self, payloads: List[Dict], max_concurrent: int = 5) -> List[Dict]:
         """
         Perform multiple screen requests in parallel.
 
         Each payload should contain: market, filters, columns, and optionally sort_by, sort_order, limit, range_start.
         """
-        async with aiohttp.ClientSession() as session:
-            tasks = []
-            for p in payloads:
-                tasks.append(
-                    self.screen(
-                        session=session,
-                        market=p["market"],
-                        filters=p["filters"],
-                        columns=p["columns"],
-                        sort_by=p.get("sort_by"),
-                        sort_order=p.get("sort_order", "desc"),
-                        limit=p.get("limit", 50),
-                        range_start=p.get("range_start", 0),
-                    )
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def _bounded_screen(session, p):
+            async with semaphore:
+                return await self.screen(
+                    session=session,
+                    market=p["market"],
+                    filters=p["filters"],
+                    columns=p["columns"],
+                    sort_by=p.get("sort_by"),
+                    sort_order=p.get("sort_order", "desc"),
+                    limit=p.get("limit", 50),
+                    range_start=p.get("range_start", 0),
                 )
+
+        async with aiohttp.ClientSession() as session:
+            tasks = [_bounded_screen(session, p) for p in payloads]
             return await asyncio.gather(*tasks)
