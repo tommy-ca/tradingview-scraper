@@ -11,7 +11,7 @@ Bring the `AsyncScreener` to full feature parity with the synchronous `Screener`
 Goal: Ensure the async screener is as reliable and feature-rich as the sync version.
 - [x] Task: Sync all `SUPPORTED_MARKETS` and `DEFAULT_COLUMNS` constants to `screener_async.py`. 2caac14
 - [x] Task: Implement async retry logic using `tenacity` for HTTP errors and rate limits. f59cd0b
-- [ ] Task: Integrate result export logic (`save_json_file`, `save_csv_file`).
+- [x] Task: Integrate result export logic (`save_json_file`, `save_csv_file`). d95af00
 
 ### Phase 2: Performance & Pagination
 Goal: Handle large-scale scans efficiently.
