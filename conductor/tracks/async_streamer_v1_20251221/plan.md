@@ -15,9 +15,9 @@ Goal: Implement the low-level async connection and heartbeat logic.
 
 ### Phase 2: Async Streamer Implementation
 Goal: Implement the user-facing async streamer interface.
-- [ ] Task: Create `tradingview_scraper/symbols/stream/streamer_async.py` (AsyncStreamer).
-- [ ] Task: Implement `.get_data()` as an async generator.
-- [ ] Task: Implement `.stream()` method with parity for indicators and symbol validation.
+- [x] Task: Create `tradingview_scraper/symbols/stream/streamer_async.py` (AsyncStreamer). 21dd2d3
+- [x] Task: Implement `.get_data()` as an async generator. 21dd2d3
+- [x] Task: Implement `.stream()` method with parity for indicators and symbol validation. 21dd2d3
 
 ### Phase 3: Resilience & Recovery
 Goal: Ensure robust operation and state recovery.
