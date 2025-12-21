@@ -23,6 +23,6 @@ Goal: Clean up duplicate logic.
 - [x] Task: Move shared parsing logic to `tradingview_scraper/symbols/stream/utils.py`. b8df62a
 - [x] Task: Refactor both screeners to use centralized utilities. b8df62a
 
-### Phase 4: Validation
-- [ ] Task: Final parity audit and benchmark.
-- [ ] Task: Final Report.
+### Phase 4: Validation [checkpoint: ddfb03d]
+- [x] Task: Final parity audit and benchmark. ddfb03d
+- [x] Task: Final Report. ddfb03d
