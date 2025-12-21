@@ -49,8 +49,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Data Schema Normalization & Tardis.dev Comparison
-*Link: [./conductor/tracks/schema_normalization_20251220/](./conductor/tracks/schema_normalization_20251220/)*
+## [ ] Track: Metadata Service & Lakehouse Catalog Research
+*Link: [./conductor/tracks/metadata_service_research_20251220/](./conductor/tracks/metadata_service_research_20251220/)*
+
 
 
 ---
