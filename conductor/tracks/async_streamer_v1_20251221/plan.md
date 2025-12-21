@@ -25,6 +25,6 @@ Goal: Ensure robust operation and state recovery.
 - [x] Task: Implement state-restoration logic (re-subscription) after reconnections. 446f7ad
 
 ### Phase 4: Validation
-- [ ] Task: Create unit tests for `AsyncStreamHandler` and `AsyncStreamer`.
-- [ ] Task: Add an async stream example to `examples/`.
-- [ ] Task: Final Report.
+- [x] Task: Create unit tests for `AsyncStreamHandler` and `AsyncStreamer`. 2b7c268
+- [x] Task: Add an async stream example to `examples/`. f806df7
+- [~] Task: Final Report.
