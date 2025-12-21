@@ -1,8 +1,10 @@
+import asyncio
 import json
 import logging
+import re
 import secrets
 import string
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import aiohttp
 
@@ -21,6 +23,8 @@ class AsyncStreamHandler:
         self.session: Optional[aiohttp.ClientSession] = None
         self.quote_session = ""
         self.chart_session = ""
+        self.data_queue = asyncio.Queue()
+        self._listen_task: Optional[asyncio.Task] = None
 
         self.request_header = {
             "Accept-Encoding": "gzip, deflate, br, zstd",
@@ -109,7 +113,51 @@ class AsyncStreamHandler:
             "rtc",
         ]
 
+    async def start_listening(self):
+        """
+        Starts the background task to listen for messages and handle heartbeats.
+        """
+        self._listen_task = asyncio.create_task(self._listen_loop())
+
+    async def _listen_loop(self):
+        while True:
+            if not self.ws or self.ws.closed:
+                break
+
+            msg = await self.ws.receive()
+
+            if msg.type == aiohttp.WSMsgType.TEXT:
+                raw_data = msg.data
+
+                # Heartbeat handling: ~m~<length>~m~~h~<id>
+                if "~h~" in raw_data:
+                    logger.debug(f"Received heartbeat: {raw_data}, echoing back")
+                    await self.ws.send_str(raw_data)
+                    continue
+
+                # Split messages (TradingView sometimes batches them)
+                messages = [x for x in re.split(r"~m~\d+~m~", raw_data) if x]
+                for m in messages:
+                    try:
+                        await self.data_queue.put(json.loads(m))
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to decode message: {m}")
+            elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSING):
+                break
+
+    async def get_next_message(self) -> Dict[str, Any]:
+        """
+        Retrieves the next data message from the queue.
+        """
+        return await self.data_queue.get()
+
     async def close(self):
+        if self._listen_task:
+            self._listen_task.cancel()
+            try:
+                await self._listen_task
+            except asyncio.CancelledError:
+                pass
         if self.ws:
             await self.ws.close()
         if self.session:
