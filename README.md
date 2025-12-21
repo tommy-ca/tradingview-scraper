@@ -196,6 +196,7 @@ The following research reports outline advanced capabilities and feasibility stu
 - [Lakehouse Data Quality & Gap Management](docs/research/lakehouse_gap_management_20251220.md) - Automated detection and repair of missing historical data.
 - [Historical Candle Resolution & Depth Matrix](docs/research/resolution_matrix_20251220.md) - Mapping of all verified TradingView timeframes and their limits.
 - [Stress & Performance Load Testing](docs/research/performance_load_tests_20251220.md) - Benchmarks for storage latency and concurrent ingestion throughput.
+- [Data Schema Normalization & Gap Analysis](docs/research/schema_gap_analysis_20251220.md) - Comparison with Tardis.dev standards and proposal for a normalized data model.
 
 ## Examples
 
