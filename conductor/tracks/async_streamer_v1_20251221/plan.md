@@ -10,8 +10,8 @@ Migrate the WebSocket streamer to a fully asynchronous architecture using `aioht
 ### Phase 1: Async WebSocket Core
 Goal: Implement the low-level async connection and heartbeat logic.
 - [x] Task: Create `tradingview_scraper/symbols/stream/stream_handler_async.py` (AsyncStreamHandler). fa51120
-- [ ] Task: Implement background heartbeat task in `AsyncStreamHandler`.
-- [ ] Task: Implement async message framing and session initialization.
+- [x] Task: Implement background heartbeat task in `AsyncStreamHandler`. 5cef5d7
+- [x] Task: Implement async message framing and session initialization. 5cef5d7
 
 ### Phase 2: Async Streamer Implementation
 Goal: Implement the user-facing async streamer interface.
