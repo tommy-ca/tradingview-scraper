@@ -78,5 +78,5 @@ timeout: 10
 export:
   enabled: false
   type: json
-exclude_dated_futures: true
+exclude_dated_futures: false
 base_universe_sort_by: Value.Traded

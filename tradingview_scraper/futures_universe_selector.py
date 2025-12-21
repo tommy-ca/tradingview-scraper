@@ -468,6 +468,11 @@ class FuturesUniverseSelector:
         # Strip exchange prefix and perp suffix
         core = symbol.split(":", 1)[-1].upper().replace(".P", "")
 
+        # Strip Dated Futures suffixes (e.g. Z2025, 27MAR2026)
+        dated_patterns = [r"[0-9]{1,2}[A-Z]{1,3}[0-9]{2,4}$", r"[A-Z][0-9]{2,4}$"]
+        for pat in dated_patterns:
+            core = re.sub(pat, "", core)
+
         # Strip common numeric multipliers (e.g., 1000PEPE -> PEPE)
         core = re.sub(r"^[0-9]+", "", core)
 
