@@ -62,6 +62,50 @@ class AsyncStreamer:
             await self.stream_obj.send_message("create_study", ind_study["p"])
             await self.stream_obj.send_message("quote_hibernate_all", [self.stream_obj.quote_session])
 
+    def _serialize_ohlc(self, raw_data):
+        ohlc_data = raw_data.get("p", [{}, {}, {}])[1].get("sds_1", {}).get("s", [])
+
+        json_data = []
+        for entry in ohlc_data:
+            json_entry = {
+                "index": entry["i"],
+                "timestamp": entry["v"][0],
+                "open": entry["v"][1],
+                "high": entry["v"][2],
+                "low": entry["v"][3],
+                "close": entry["v"][4],
+            }
+            if len(entry["v"]) > 5:
+                json_entry["volume"] = entry["v"][5]
+            json_data.append(json_entry)
+        return json_data
+
+    def _extract_ohlc_from_stream(self, pkt: dict):
+        json_data = []
+        if pkt.get("m") == "timescale_update":
+            json_data = self._serialize_ohlc(pkt)
+        return json_data
+
+    def _extract_indicator_from_stream(self, pkt: dict):
+        indicator_data = {}
+        if pkt.get("m") == "du":
+            p_data = pkt.get("p")
+            if isinstance(p_data, list) and len(p_data) > 1:
+                study_data = p_data[1]
+                if isinstance(study_data, dict):
+                    for k, v in study_data.items():
+                        if k.startswith("st") and k in self.study_id_to_name_map:
+                            if "st" in v and len(v["st"]) > 10:
+                                indicator_name = self.study_id_to_name_map[k]
+                                json_data = []
+                                for val in v["st"]:
+                                    tmp = {"index": val["i"], "timestamp": val["v"][0]}
+                                    tmp.update({str(idx): v for idx, v in enumerate(val["v"][1:])})
+                                    json_data.append(tmp)
+
+                                indicator_data[indicator_name] = json_data
+        return indicator_data
+
     async def get_data(self) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Yields parsed data packets from the WebSocket handler with reconnection support.
