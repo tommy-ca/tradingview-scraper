@@ -106,9 +106,13 @@ class AsyncStreamer:
                                 indicator_data[indicator_name] = json_data
         return indicator_data
 
-    async def get_data(self) -> AsyncGenerator[Dict[str, Any], None]:
+    async def get_data(self, formatted: bool = True) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Yields parsed data packets from the WebSocket handler with reconnection support.
+
+        Args:
+            formatted: If True, yields structured dictionaries (OHLC/Indicator).
+                       If False, yields raw TradingView packets.
         """
         attempt = 0
         while True:
@@ -118,7 +122,15 @@ class AsyncStreamer:
                     if msg is None:  # Sentinel for connection lost
                         logger.error("WebSocket connection lost. Attempting to reconnect...")
                         break
-                    yield msg
+
+                    if formatted:
+                        ohlc = self._extract_ohlc_from_stream(msg)
+                        indicators = self._extract_indicator_from_stream(msg)
+                        if ohlc or indicators:
+                            yield {"ohlc": ohlc, "indicator": indicators}
+                    else:
+                        yield msg
+
                     attempt = 0  # Reset attempt on success
 
                 # Reconnection logic

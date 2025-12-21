@@ -1,13 +1,32 @@
 import unittest
+from unittest.mock import AsyncMock
 
 from tradingview_scraper.symbols.stream.streamer_async import AsyncStreamer
 
 
-class TestAsyncStreamerSerialization(unittest.TestCase):
-    def setUp(self):
+class TestAsyncStreamerSerialization(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
         self.streamer = AsyncStreamer()
         # Mock study map for indicator testing
         self.streamer.study_id_to_name_map = {"st9": "STD;RSI"}
+
+    async def test_get_data_formatted(self):
+        # Mock handler to return a raw OHLC packet
+        mock_handler = AsyncMock()
+        packet = {"m": "timescale_update", "p": [{}, {"sds_1": {"s": [{"i": 0, "v": [1600000000, 100.0, 105.0, 95.0, 102.0, 1000]}]}}]}
+        mock_handler.get_next_message.side_effect = [packet, None]
+        self.streamer.stream_obj = mock_handler
+
+        gen = self.streamer.get_data()
+
+        # We expect get_data to yield formatted dictionaries if updated
+        # In current state, it yields the raw packet
+        msg = await gen.__anext__()
+
+        # If formatted, it should have "ohlc" or "indicator" keys
+        self.assertIn("ohlc", msg)
+        self.assertEqual(len(msg["ohlc"]), 1)
+        self.assertEqual(msg["ohlc"][0]["close"], 102.0)
 
     def test_serialize_ohlc(self):
         packet = {"m": "timescale_update", "p": [{}, {"sds_1": {"s": [{"i": 0, "v": [1600000000, 100.0, 105.0, 95.0, 102.0, 1000]}]}}]}
