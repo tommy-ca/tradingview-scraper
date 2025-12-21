@@ -3,6 +3,13 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    retry_if_result,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 from tradingview_scraper.symbols.utils import generate_user_agent
 
@@ -82,6 +89,16 @@ class AsyncScreener:
         else:
             return self.DEFAULT_STOCK_COLUMNS
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential_jitter(initial=1, max=30),
+        retry=(
+            retry_if_exception_type(aiohttp.ClientError)
+            | retry_if_result(lambda res: res.get("status") == "failed" and "HTTP 429" in res.get("error", ""))
+            | retry_if_result(lambda res: res.get("status") == "failed" and any(code in res.get("error", "") for code in ["500", "502", "503", "504"]))
+        ),
+        reraise=True,
+    )
     async def screen(
         self,
         session: aiohttp.ClientSession,
