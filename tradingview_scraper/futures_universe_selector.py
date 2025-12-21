@@ -1152,6 +1152,75 @@ class FuturesUniverseSelector:
                 data_category=self.config.export_metadata.data_category,
             )
 
+    def process_data(self, raw_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Processes raw screened data through the selector's post-filtering and aggregation pipeline.
+        """
+        # Global Ensure: Track symbols that MUST be in the result if they exist in raw data
+        ensure_set = {s.upper() for s in self.config.ensure_symbols}
+        ensured_rows = [r for r in raw_data if r.get("symbol", "").upper() in ensure_set]
+
+        # 1. Basic Filters (Symbol, type, stable exclusion)
+        rows = self._apply_basic_filters(raw_data)
+
+        # 2. Market Cap Guard (Rank and Floor)
+        rows = self._apply_market_cap_filter(rows)
+
+        # 3. Volatility Filter
+        rows = [r for r in rows if self._evaluate_volatility(r)[0]]
+
+        # 4. Liquidity Filter (Floor)
+        rows = [r for r in rows if self._evaluate_liquidity(r)]
+
+        # Add back ensured rows if they were filtered out
+        seen_symbols = {r.get("symbol") for r in rows}
+        for er in ensured_rows:
+            if er.get("symbol") not in seen_symbols:
+                rows.append(er)
+
+        # 5. Aggregation (Deduplicate by base currency)
+        if self.config.dedupe_by_symbol:
+            rows = self._aggregate_by_base(rows)
+
+        # 6. Sorting & Limiting (Base Universe)
+        base_sort_field = self.config.base_universe_sort_by or "Value.Traded"
+        rows.sort(key=lambda x: x.get(base_sort_field) or 0, reverse=True)
+
+        if self.config.base_universe_limit:
+            rows = rows[: self.config.base_universe_limit]
+
+        # 7. Strategy Filters (Trend, Screens)
+        filtered = self._apply_strategy_filters(rows)
+
+        if self.config.momentum_composite_fields:
+            filtered = self._apply_momentum_composite(filtered)
+
+        if self.config.attach_perp_counterparts:
+            trimmed = self._attach_perp_counterparts(filtered)
+        else:
+            final_sorted = self._sort_rows(filtered)
+            trimmed = final_sorted[: self.config.limit]
+
+        # Final Uniqueness Guard: Ensure no duplicate symbols in final output
+        seen_final: Set[str] = set()
+        unique_final: List[Dict[str, Any]] = []
+        for r in trimmed:
+            sym = r.get("symbol")
+            if sym and sym not in seen_final:
+                unique_final.append(r)
+                seen_final.add(sym)
+        trimmed = unique_final
+
+        if self.config.export.enabled:
+            self._export_results(trimmed)
+
+        return {
+            "status": "success",
+            "data": trimmed,
+            "total_candidates": len(raw_data),
+            "total_selected": len(trimmed),
+        }
+
     def run(self, dry_run: bool = False) -> Dict[str, Any]:
         """Execute the selector pipeline."""
         columns = self._build_columns()
@@ -1197,80 +1266,11 @@ class FuturesUniverseSelector:
                 aggregated.extend(market_rows)
                 errors.extend(market_errors)
 
-        # Global Ensure: Track symbols that MUST be in the result if they exist in raw data
-        ensure_set = {s.upper() for s in self.config.ensure_symbols}
-        ensured_rows = [r for r in aggregated if r.get("symbol", "").upper() in ensure_set]
-
-        # 1. Basic Filters (Symbol, type, stable exclusion)
-        rows = self._apply_basic_filters(aggregated)
-
-        # 2. Market Cap Guard (Rank and Floor)
-        rows = self._apply_market_cap_filter(rows)
-
-        # 3. Volatility Filter
-        rows = [r for r in rows if self._evaluate_volatility(r)[0]]
-
-        # 4. Liquidity Filter (Floor)
-        rows = [r for r in rows if self._evaluate_liquidity(r)]
-
-        # Add back ensured rows if they were filtered out
-        seen_symbols = {r.get("symbol") for r in rows}
-        for er in ensured_rows:
-            if er.get("symbol") not in seen_symbols:
-                rows.append(er)
-
-        # 5. Aggregation (Deduplicate by base currency)
-        if self.config.dedupe_by_symbol:
-            rows = self._aggregate_by_base(rows)
-
-        # 6. Sorting & Limiting (Base Universe)
-        base_sort_field = self.config.base_universe_sort_by or "Value.Traded"
-        rows.sort(key=lambda x: x.get(base_sort_field) or 0, reverse=True)
-
-        if self.config.base_universe_limit:
-            rows = rows[: self.config.base_universe_limit]
-
-        # 7. Strategy Filters (Trend, Screens)
-        # Note: If no trend rules are enabled, this just returns the same rows with 'all: true'
-        filtered = self._apply_strategy_filters(rows)
-
-        if self.config.momentum_composite_fields:
-            filtered = self._apply_momentum_composite(filtered)
-
-        if self.config.attach_perp_counterparts:
-            # Note: attach_perp_counterparts has its own internal dedupe and sort logic
-            # which we might want to refactor later to use the common methods.
-            trimmed = self._attach_perp_counterparts(filtered)
-        else:
-            final_sorted = self._sort_rows(filtered)
-            trimmed = final_sorted[: self.config.limit]
-
-        # Final Uniqueness Guard: Ensure no duplicate symbols in final output
-        seen_final: Set[str] = set()
-        unique_final: List[Dict[str, Any]] = []
-        for r in trimmed:
-            sym = r.get("symbol")
-            if sym and sym not in seen_final:
-                unique_final.append(r)
-                seen_final.add(sym)
-        trimmed = unique_final
-
-        if self.config.export.enabled:
-            self._export_results(trimmed)
-
-        status = "success" if not errors else "partial_success"
-        return {
-            "status": status,
-            "data": trimmed,
-            "filters_applied": {
-                "filters": filters,
-                "columns": columns,
-                "trend_logic": self.config.trend.logic,
-            },
-            "errors": errors,
-            "total_candidates": len(aggregated),
-            "total_selected": len(trimmed),
-        }
+        result = self.process_data(aggregated)
+        if errors:
+            result["status"] = "partial_success"
+            result["errors"] = errors
+        return result
 
 
 def _format_markdown_table(rows: List[Mapping[str, Any]], columns: Optional[List[str]] = None) -> str:

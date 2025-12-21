@@ -1,7 +1,9 @@
+import asyncio
 import logging
 from typing import Dict, List, Optional
 
 from tradingview_scraper.futures_universe_selector import FuturesUniverseSelector, load_config
+from tradingview_scraper.symbols.screener_async import AsyncScreener
 from tradingview_scraper.symbols.stream.metadata import MetadataCatalog
 
 logger = logging.getLogger(__name__)
@@ -16,22 +18,17 @@ class QuantitativePipeline:
     def __init__(self, lakehouse_path: str = "data/lakehouse"):
         self.lakehouse_path = lakehouse_path
         self.catalog = MetadataCatalog(base_path=lakehouse_path)
+        self.screener = AsyncScreener()
 
-    def run_discovery(self, config_paths: List[str], limit: Optional[int] = None) -> List[Dict]:
+    async def run_discovery_async(self, config_paths: List[str], limit: Optional[int] = None) -> List[Dict]:
         """
-        Stage 1 & 2: Discover high-liquidity symbols and apply strategy filters.
-
-        Args:
-            config_paths: List of paths to YAML configuration files.
-            limit: Optional override for the number of symbols to resolve per config.
-
-        Returns:
-            List of dictionaries containing signal data.
+        Stage 1 & 2: Discover high-liquidity symbols and apply strategy filters in parallel.
         """
-        all_signals = []
+        selectors = {}
+        all_payloads = []
+        payload_map = []  # To map raw results back to configs
 
         for path in config_paths:
-            logger.info(f"Running discovery for config: {path}")
             try:
                 cfg = load_config(path)
                 if limit:
@@ -39,25 +36,59 @@ class QuantitativePipeline:
                     cfg.base_universe_limit = limit
 
                 selector = FuturesUniverseSelector(cfg)
-                resp = selector.run()
+                # Use dry_run to extract payloads
+                dry_res = selector.run(dry_run=True)
+                payloads = dry_res.get("payloads", [])
 
-                if resp.get("status") in ["success", "partial_success"]:
-                    signals = resp.get("data", [])
-                    # Determine direction from filename
-                    direction = "LONG" if "short" not in path.lower() else "SHORT"
+                for p in payloads:
+                    all_payloads.append(p)
+                    payload_map.append(path)
 
-                    for s in signals:
-                        s["direction"] = direction
-
-                    all_signals.extend(signals)
-                    logger.info(f"  Generated {len(signals)} signals from {path}.")
-                else:
-                    err = resp.get("error") or resp.get("errors")
-                    logger.warning(f"  Discovery had issues for {path}: {err}")
+                selectors[path] = selector
             except Exception as e:
-                logger.error(f"  Discovery failed for {path}: {e}")
+                logger.error(f"Failed to initialize selector for {path}: {e}")
+
+        if not all_payloads:
+            return []
+
+        # Execute all screens in parallel
+        logger.info(f"Executing {len(all_payloads)} parallel screens across {len(config_paths)} configs...")
+        raw_results = await self.screener.screen_many(all_payloads)
+
+        # Aggregate raw data by config path
+        aggregated_raw = {path: [] for path in config_paths}
+        for i, res in enumerate(raw_results):
+            path = payload_map[i]
+            if res["status"] == "success":
+                aggregated_raw[path].extend(res["data"])
+            else:
+                logger.warning(f"Screen failed for payload {i} ({path}): {res.get('error')}")
+
+        # Post-process via selectors
+        all_signals = []
+        for path, raw_data in aggregated_raw.items():
+            if not raw_data:
+                continue
+
+            try:
+                selector = selectors[path]
+                processed = selector.process_data(raw_data)
+                signals = processed.get("data", [])
+
+                direction = "LONG" if "short" not in path.lower() else "SHORT"
+                for s in signals:
+                    s["direction"] = direction
+
+                all_signals.extend(signals)
+                logger.info(f"  Generated {len(signals)} signals from {path}.")
+            except Exception as e:
+                logger.error(f"Post-processing failed for {path}: {e}")
 
         return all_signals
+
+    def run_discovery(self, config_paths: List[str], limit: Optional[int] = None) -> List[Dict]:
+        """Synchronous wrapper for discovery."""
+        return asyncio.run(self.run_discovery_async(config_paths, limit=limit))
 
     def run_full_pipeline(self, config_paths: List[str], limit: Optional[int] = None):
         """

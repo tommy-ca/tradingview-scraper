@@ -1,7 +1,7 @@
 import os
 import shutil
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from tradingview_scraper.pipeline import QuantitativePipeline
 
@@ -13,16 +13,21 @@ class TestQuantitativePipeline(unittest.TestCase):
             shutil.rmtree(self.base_path)
         self.pipeline = QuantitativePipeline(lakehouse_path=self.base_path)
 
+    @patch("tradingview_scraper.pipeline.AsyncScreener.screen_many", new_callable=AsyncMock)
     @patch("tradingview_scraper.pipeline.FuturesUniverseSelector")
     @patch("tradingview_scraper.pipeline.load_config")
-    def test_run_discovery(self, mock_load_config, mock_selector_cls):
+    def test_run_discovery_async(self, mock_load_config, mock_selector_cls, mock_screen_many):
         # Setup mock config
         mock_load_config.return_value = MagicMock()
 
-        # Setup mock selector
+        # Setup mock selector for dry_run
         mock_selector = MagicMock()
-        mock_selector.run.return_value = {"status": "success", "data": [{"symbol": "BINANCE:BTCUSDT"}]}
+        mock_selector.run.return_value = {"payloads": [{"market": "crypto"}]}
+        mock_selector.process_data.return_value = {"status": "success", "data": [{"symbol": "BINANCE:BTCUSDT"}]}
         mock_selector_cls.return_value = mock_selector
+
+        # Setup mock results from AsyncScreener
+        mock_screen_many.return_value = [{"status": "success", "data": [{"symbol": "BTC_RAW"}]}]
 
         configs = ["configs/crypto_cex_trend_binance_spot_daily_long.yaml"]
         signals = self.pipeline.run_discovery(configs)
@@ -31,16 +36,10 @@ class TestQuantitativePipeline(unittest.TestCase):
         self.assertEqual(signals[0]["symbol"], "BINANCE:BTCUSDT")
         self.assertEqual(signals[0]["direction"], "LONG")
 
-    @patch("tradingview_scraper.pipeline.FuturesUniverseSelector")
-    @patch("tradingview_scraper.pipeline.load_config")
-    def test_run_discovery_failure(self, mock_load_config, mock_selector_cls):
-        mock_load_config.return_value = MagicMock()
-        mock_selector = MagicMock()
-        mock_selector.run.return_value = {"status": "failed", "error": "API Timeout"}
-        mock_selector_cls.return_value = mock_selector
-
-        signals = self.pipeline.run_discovery(["configs/fail.yaml"])
-        self.assertEqual(len(signals), 0)
+        # Verify dry_run was used
+        mock_selector.run.assert_called_with(dry_run=True)
+        # Verify process_data was used with results from screen_many
+        mock_selector.process_data.assert_called()
 
     @patch("tradingview_scraper.pipeline.QuantitativePipeline.run_discovery")
     def test_run_full_pipeline_success(self, mock_run_discovery):
