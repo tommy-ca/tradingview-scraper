@@ -127,8 +127,23 @@ class Overview:
         "ATR",
     ]
 
+    STRUCTURAL_FIELDS = [
+        "pricescale",
+        "minmov",
+        "minmove2",
+        "currency",
+        "base_currency",
+        "root",
+        "timezone",
+        "session",
+        "expiration",
+        "contract_type",
+        "pointvalue",
+        "fractional",
+    ]
+
     # All fields combined
-    ALL_FIELDS = BASIC_FIELDS + PRICE_FIELDS + MARKET_FIELDS + VALUATION_FIELDS + DIVIDEND_FIELDS + FINANCIAL_FIELDS + PERFORMANCE_FIELDS + VOLATILITY_FIELDS + TECHNICAL_FIELDS
+    ALL_FIELDS = BASIC_FIELDS + PRICE_FIELDS + MARKET_FIELDS + VALUATION_FIELDS + DIVIDEND_FIELDS + FINANCIAL_FIELDS + PERFORMANCE_FIELDS + VOLATILITY_FIELDS + TECHNICAL_FIELDS + STRUCTURAL_FIELDS
 
     def __init__(self, export_result: bool = False, export_type: str = "json"):
         """
