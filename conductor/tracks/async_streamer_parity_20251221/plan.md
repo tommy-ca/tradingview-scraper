@@ -18,10 +18,10 @@ Goal: Implement one-shot collection and export.
 - [x] Task: Implement `export_result` support (persistence to JSON/CSV). 20200b4
 - [x] Task: Implement `collect(n_candles)` helper method for batch retrieval. 20200b4
 
-### Phase 3: Structural Consolidation
+### Phase 3: Structural Consolidation [checkpoint: b8df62a]
 Goal: Clean up duplicate logic.
-- [ ] Task: Move shared parsing logic to `tradingview_scraper/symbols/stream/utils.py`.
-- [ ] Task: Refactor both screeners to use centralized utilities.
+- [x] Task: Move shared parsing logic to `tradingview_scraper/symbols/stream/utils.py`. b8df62a
+- [x] Task: Refactor both screeners to use centralized utilities. b8df62a
 
 ### Phase 4: Validation
 - [ ] Task: Final parity audit and benchmark.
