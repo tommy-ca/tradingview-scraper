@@ -21,8 +21,8 @@ Goal: Implement the user-facing async streamer interface.
 
 ### Phase 3: Resilience & Recovery
 Goal: Ensure robust operation and state recovery.
-- [ ] Task: Implement `AsyncRetryHandler` using `asyncio.sleep`.
-- [ ] Task: Implement state-restoration logic (re-subscription) after reconnections.
+- [x] Task: Implement `AsyncRetryHandler` using `asyncio.sleep`. 98b4cf8
+- [~] Task: Implement state-restoration logic (re-subscription) after reconnections.
 
 ### Phase 4: Validation
 - [ ] Task: Create unit tests for `AsyncStreamHandler` and `AsyncStreamer`.
