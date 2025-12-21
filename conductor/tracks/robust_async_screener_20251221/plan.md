@@ -19,5 +19,5 @@ Goal: Handle large-scale scans efficiently.
 - [x] Task: Add a concurrency semaphore to `screen_many` to manage API pressure. 88b35e4
 
 ### Phase 3: Validation
-- [ ] Task: Verify parity via integrated tests comparing sync vs async results.
-- [ ] Task: Final Report.
+- [x] Task: Verify parity via integrated tests comparing sync vs async results. 77a73c9
+- [x] Task: Final Report. 1bc6533
