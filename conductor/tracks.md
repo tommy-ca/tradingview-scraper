@@ -89,8 +89,24 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Link: [./conductor/tracks/research_consolidation_20251220/](./conductor/tracks/research_consolidation_20251220/)*
 ---
 
-## [ ] Track: Stress & Performance Load Testing
-*Link: [./conductor/tracks/performance_testing_20251220/](./conductor/tracks/performance_testing_20251220/)*
+## [~] Track: E2E Quantitative Orchestration & Robust Risk
+*Link: [./conductor/tracks/e2e_quantitative_orchestration_20251221/](./conductor/tracks/e2e_quantitative_orchestration_20251221/)*
+
+---
+
+## [ ] Track: Hierarchical Risk Parity (HRP) Implementation
+*Link: [./conductor/tracks/hierarchical_risk_parity_20251221/](./conductor/tracks/hierarchical_risk_parity_20251221/)*
+
+---
+
+## [ ] Track: Entropy & Predictability Research
+*Link: [./conductor/tracks/entropy_predictability_research_20251221/](./conductor/tracks/entropy_predictability_research_20251221/)*
+
+---
+
+## [ ] Track: Signal/Noise Based Filtering Research
+*Link: [./conductor/tracks/signal_noise_filtering_20251221/](./conductor/tracks/signal_noise_filtering_20251221/)*
+
 
 
 
