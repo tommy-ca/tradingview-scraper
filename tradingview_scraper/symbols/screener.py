@@ -292,12 +292,16 @@ class Screener:
 
                 # Extract data
                 data = json_response.get("data", [])
+                if data is None:
+                    data = []
 
                 # Format the data
                 formatted_data = []
                 for item in data:
+                    if not item or not isinstance(item, dict):
+                        continue
                     symbol_data = item.get("d", [])
-                    if len(symbol_data) > 0:
+                    if symbol_data and len(symbol_data) > 0:
                         # Map data to field names
                         formatted_item = {
                             "symbol": item.get("s", ""),
