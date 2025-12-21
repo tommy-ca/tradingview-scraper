@@ -1,10 +1,11 @@
 import json
 import logging
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
 from tradingview_scraper.symbols.stream.retry_async import AsyncRetryHandler
 from tradingview_scraper.symbols.stream.stream_handler_async import AsyncStreamHandler
 from tradingview_scraper.symbols.stream.utils import fetch_indicator_metadata, validate_symbols
+from tradingview_scraper.symbols.utils import save_csv_file, save_json_file
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,10 @@ class AsyncStreamer:
             await self.stream_obj.send_message("quote_hibernate_all", [self.stream_obj.quote_session])
 
     def _serialize_ohlc(self, raw_data):
-        ohlc_data = raw_data.get("p", [{}, {}, {}])[1].get("sds_1", {}).get("s", [])
+        p_data = raw_data.get("p", [{}, {}, {}])
+        if len(p_data) < 2:
+            return []
+        ohlc_data = p_data[1].get("sds_1", {}).get("s", [])
 
         json_data = []
         for entry in ohlc_data:
@@ -109,17 +113,13 @@ class AsyncStreamer:
     async def get_data(self, formatted: bool = True) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Yields parsed data packets from the WebSocket handler with reconnection support.
-
-        Args:
-            formatted: If True, yields structured dictionaries (OHLC/Indicator).
-                       If False, yields raw TradingView packets.
         """
         attempt = 0
         while True:
             try:
                 while True:
                     msg = await self.stream_obj.get_next_message()
-                    if msg is None:  # Sentinel for connection lost
+                    if msg is None:
                         logger.error("WebSocket connection lost. Attempting to reconnect...")
                         break
 
@@ -131,9 +131,8 @@ class AsyncStreamer:
                     else:
                         yield msg
 
-                    attempt = 0  # Reset attempt on success
+                    attempt = 0
 
-                # Reconnection logic
                 if attempt >= self.retry_handler.max_retries:
                     logger.error("Max retries reached. Stopping stream.")
                     break
@@ -141,12 +140,10 @@ class AsyncStreamer:
                 await self.retry_handler.sleep(attempt)
                 attempt += 1
 
-                # Re-establish connection
                 self.stream_obj = AsyncStreamHandler(websocket_url=self.ws_url, jwt_token=self.websocket_jwt_token)
                 await self.stream_obj.connect()
                 await self.stream_obj.start_listening()
 
-                # Re-subscribe
                 if self._current_subscription:
                     await self._add_symbol_to_sessions(self.stream_obj.quote_session, self.stream_obj.chart_session, *self._current_subscription)
                 if self._current_indicators:
@@ -161,9 +158,9 @@ class AsyncStreamer:
 
     async def stream(
         self, exchange: str, symbol: str, timeframe: str = "1m", numb_price_candles: int = 10, indicators: Optional[List[Tuple[str, str]]] = None, auto_close: bool = False
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> Union[AsyncGenerator[Dict[str, Any], None], Dict[str, Any]]:
         """
-        Starts the async stream and returns the data generator.
+        Starts the async stream and returns either a data generator or a collected summary.
         """
         exchange_symbol = f"{exchange}:{symbol}"
         validate_symbols(exchange_symbol)
@@ -176,7 +173,57 @@ class AsyncStreamer:
         if indicators:
             await self._add_indicators(indicators)
 
+        if self.export_result:
+            return await self.collect(numb_price_candles, indicators, auto_close, symbol)
+
         return self.get_data()
+
+    async def collect(self, numb_price_candles: int = 10, indicators: Optional[List[Tuple[str, str]]] = None, auto_close: bool = False, symbol: str = "data") -> Dict[str, Any]:
+        """
+        Collects a fixed amount of data and optionally exports it.
+        """
+        ind_flag = indicators is not None and len(indicators) > 0
+        ohlc_json_data = []
+        indicator_json_data = {}
+        expected_indicator_count = len(indicators) if (ind_flag and indicators is not None) else 0
+
+        logger.info(f"Starting data collection for {numb_price_candles} candles and {expected_indicator_count} indicators")
+
+        count = 0
+        async for pkt in self.get_data(formatted=True):
+            count += 1
+            if pkt.get("ohlc"):
+                ohlc_json_data = pkt["ohlc"]
+            if pkt.get("indicator"):
+                indicator_json_data.update(pkt["indicator"])
+
+            ohlc_ready = len(ohlc_json_data) >= numb_price_candles
+            indicators_ready = not ind_flag or len(indicator_json_data) >= expected_indicator_count
+
+            if ohlc_ready and indicators_ready:
+                break
+
+            if count > 30:
+                break
+
+        if self.export_result:
+            self._export(json_data=ohlc_json_data, symbol=symbol, data_category="ohlc")
+            if ind_flag:
+                self._export(json_data=indicator_json_data, symbol=symbol, data_category="indicator")
+
+        if auto_close:
+            await self.close()
+
+        return {"ohlc": ohlc_json_data, "indicator": indicator_json_data}
+
+    def _export(self, json_data, symbol, data_category):
+        """
+        Exports data to a specified format (JSON or CSV).
+        """
+        if self.export_type == "json":
+            save_json_file(data=json_data, symbol=symbol, data_category=data_category)
+        elif self.export_type == "csv":
+            save_csv_file(data=json_data, symbol=symbol, data_category=data_category)
 
     async def close(self):
         await self.stream_obj.close()
