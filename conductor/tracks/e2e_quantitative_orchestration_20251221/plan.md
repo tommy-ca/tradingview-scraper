@@ -17,7 +17,7 @@ Goal: Transition from shell-based batching to a Python-native async architecture
 Goal: Improve optimizer stability and adaptive capabilities.
 - [x] Task: Implement `MarketRegimeDetector` (Volatility-based switch). 945e843
 - [x] Task: Integrate **Ledoit-Wolf Shrinkage** for covariance estimation. 62c4076
-- [ ] Task: Update the Barbell Optimizer to adjust its "Safe Core" vs "Aggressor" split based on detected regimes.
+- [x] Task: Update the Barbell Optimizer to adjust its "Safe Core" vs "Aggressor" split based on detected regimes. c618e48
 
 ### Phase 3: Scaling & Final Validation
 Goal: Execute across the full universe and finalize the V1 architecture.
