@@ -145,6 +145,8 @@ class AsyncStreamHandler:
             elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSING):
                 break
 
+        await self.data_queue.put(None)  # Signal end of stream/connection lost
+
     async def get_next_message(self) -> Dict[str, Any]:
         """
         Retrieves the next data message from the queue.
