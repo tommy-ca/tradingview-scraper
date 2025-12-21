@@ -21,14 +21,15 @@ class TestAsyncStreamer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(streamer.websocket_jwt_token, self.jwt_token)
 
     @patch("tradingview_scraper.symbols.stream.streamer_async.AsyncStreamHandler")
-    async def test_get_data_generator(self, MockHandler):
+    async def test_get_data_generator_raw(self, MockHandler):
         mock_handler = MockHandler.return_value
         mock_handler.get_next_message = AsyncMock(side_effect=[{"m": "timescale_update", "p": []}, {"m": "du", "p": []}])
 
         streamer = AsyncStreamer()
         streamer.stream_obj = mock_handler
 
-        gen = streamer.get_data()
+        # Use formatted=False to get raw packets
+        gen = streamer.get_data(formatted=False)
 
         msg1 = await gen.__anext__()
         self.assertEqual(msg1["m"], "timescale_update")
@@ -48,7 +49,7 @@ class TestAsyncStreamer(unittest.IsolatedAsyncioTestCase):
         streamer = AsyncStreamer()
         streamer.stream_obj = mock_handler
 
-        # Test stream
+        # Test stream (non-export mode returns generator)
         await streamer.stream(exchange="BINANCE", symbol="BTCUSDT")
 
         # Verify connect and start_listening called

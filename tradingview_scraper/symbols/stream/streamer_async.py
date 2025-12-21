@@ -140,10 +140,12 @@ class AsyncStreamer:
                 await self.retry_handler.sleep(attempt)
                 attempt += 1
 
+                # Re-establish connection
                 self.stream_obj = AsyncStreamHandler(websocket_url=self.ws_url, jwt_token=self.websocket_jwt_token)
                 await self.stream_obj.connect()
                 await self.stream_obj.start_listening()
 
+                # Re-subscribe
                 if self._current_subscription:
                     await self._add_symbol_to_sessions(self.stream_obj.quote_session, self.stream_obj.chart_session, *self._current_subscription)
                 if self._current_indicators:
@@ -157,7 +159,14 @@ class AsyncStreamer:
                 await self.retry_handler.sleep(attempt)
 
     async def stream(
-        self, exchange: str, symbol: str, timeframe: str = "1m", numb_price_candles: int = 10, indicators: Optional[List[Tuple[str, str]]] = None, auto_close: bool = False
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str = "1m",
+        numb_price_candles: int = 10,
+        indicators: Optional[List[Tuple[str, str]]] = None,
+        auto_close: bool = False,
+        formatted: bool = True,
     ) -> Union[AsyncGenerator[Dict[str, Any], None], Dict[str, Any]]:
         """
         Starts the async stream and returns either a data generator or a collected summary.
@@ -176,7 +185,7 @@ class AsyncStreamer:
         if self.export_result:
             return await self.collect(numb_price_candles, indicators, auto_close, symbol)
 
-        return self.get_data()
+        return self.get_data(formatted=formatted)
 
     async def collect(self, numb_price_candles: int = 10, indicators: Optional[List[Tuple[str, str]]] = None, auto_close: bool = False, symbol: str = "data") -> Dict[str, Any]:
         """
