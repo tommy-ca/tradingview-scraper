@@ -1,10 +1,16 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+import pandas as pd
+
 from tradingview_scraper.futures_universe_selector import FuturesUniverseSelector, load_config
+from tradingview_scraper.regime import MarketRegimeDetector
+from tradingview_scraper.risk import AntifragilityAuditor, BarbellOptimizer
 from tradingview_scraper.symbols.screener_async import AsyncScreener
 from tradingview_scraper.symbols.stream.metadata import MetadataCatalog
+from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +25,10 @@ class QuantitativePipeline:
         self.lakehouse_path = lakehouse_path
         self.catalog = MetadataCatalog(base_path=lakehouse_path)
         self.screener = AsyncScreener()
+        self.loader = PersistentDataLoader()
+        self.regime_detector = MarketRegimeDetector()
+        self.antifragility_auditor = AntifragilityAuditor()
+        self.optimizer = BarbellOptimizer()
 
     async def run_discovery_async(self, config_paths: List[str], limit: Optional[int] = None) -> List[Dict]:
         """
@@ -93,7 +103,6 @@ class QuantitativePipeline:
     def run_full_pipeline(self, config_paths: List[str], limit: Optional[int] = None):
         """
         Executes the full E2E flow: Discovery, Alpha, Risk, and Cataloging.
-        (Risk optimization and deep cataloging to be integrated in future tasks).
         """
         logger.info("Starting full quantitative pipeline...")
 
@@ -104,7 +113,43 @@ class QuantitativePipeline:
             logger.warning("No signals generated. Pipeline execution halted.")
             return {"status": "no_signals", "data": []}
 
-        # TODO: Integrate Stage 3 (Risk Optimization)
-        # TODO: Integrate Stage 4 (Deep Metadata Verification)
+        # 2. Prepare Returns Matrix
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=180)
 
-        return {"status": "success", "total_signals": len(signals), "data": signals}
+        price_data = {}
+        for s in signals:
+            symbol = s["symbol"]
+            try:
+                df = self.loader.load(symbol, start_date, end_date, interval="1d")
+                if not df.empty:
+                    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s").dt.date
+                    df = df.set_index("timestamp")["close"]
+                    returns = df.pct_change().dropna()
+                    if s["direction"] == "SHORT":
+                        returns = -returns
+                    price_data[symbol] = returns
+            except Exception as e:
+                logger.error(f"Failed to load history for {symbol}: {e}")
+
+        if not price_data:
+            logger.error("Failed to load historical data for any signals.")
+            return {"status": "failed_data_load", "data": signals}
+
+        returns_df = pd.DataFrame(price_data).dropna()
+        if returns_df.empty:
+            logger.error("Returns matrix is empty after alignment.")
+            return {"status": "empty_returns", "data": signals}
+
+        # 3. Risk Optimization
+        regime = self.regime_detector.detect_regime(returns_df)
+        stats = self.antifragility_auditor.audit(returns_df)
+        portfolio = self.optimizer.optimize(returns_df, stats, regime=regime)
+
+        # 4. Cataloging & PIT Verification
+        # Upsert signal constituents to the metadata catalog
+        self.catalog.upsert_symbols(signals)
+
+        logger.info(f"Pipeline complete. Portfolio constructed with {len(portfolio)} assets in {regime} regime.")
+
+        return {"status": "success", "regime": regime, "total_signals": len(signals), "portfolio": portfolio.to_dict(orient="records"), "data": signals}

@@ -69,6 +69,14 @@ class BarbellOptimizer:
         aggressors = antifragility_stats.sort_values("Antifragility_Score", ascending=False).head(n_agg)["Symbol"].tolist()
 
         core_candidates = [s for s in returns.columns if s not in aggressors]
+
+        # Safety: If all assets are aggressors, fallback to equal weight across all
+        if not core_candidates:
+            logger.warning("No core candidates found. Falling back to equal weight aggressor portfolio.")
+            agg_w = 1.0 / len(aggressors)
+            portfolio = [{"Symbol": s, "Type": "AGGRESSOR (Antifragile)", "Weight": agg_w} for s in aggressors]
+            return pd.DataFrame(portfolio)
+
         core_returns = returns[core_candidates]
 
         # 2. Optimize Core (Max Diversification)
@@ -89,3 +97,35 @@ class BarbellOptimizer:
             portfolio.append({"Symbol": symbol, "Type": "AGGRESSOR (Antifragile)", "Weight": agg_w})
 
         return pd.DataFrame(portfolio).sort_values("Weight", ascending=False)
+
+
+class AntifragilityAuditor:
+    """
+    Analyzes historical returns for convexity, skewness, and tail potential.
+    """
+
+    def audit(self, returns: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculates antifragility metrics for each asset.
+        """
+        stats = []
+        for symbol in returns.columns:
+            res = returns[symbol]
+
+            skew = res.skew()
+            kurt = res.kurtosis()
+            vol = res.std() * np.sqrt(252)
+
+            threshold = res.quantile(0.95)
+            tail_gain = res[res > threshold].mean() if not res[res > threshold].empty else 0
+
+            stats.append({"Symbol": symbol, "Vol": vol, "Skew": skew, "Kurtosis": kurt, "Tail_Gain": tail_gain})
+
+        df = pd.DataFrame(stats)
+
+        # Antifragility Score: Favor Positive Skew and High Tail Gain
+        df["Antifragility_Score"] = (df["Skew"] - df["Skew"].min()) / (df["Skew"].max() - df["Skew"].min() + 1e-9) + (df["Tail_Gain"] - df["Tail_Gain"].min()) / (
+            df["Tail_Gain"].max() - df["Tail_Gain"].min() + 1e-9
+        )
+
+        return df
