@@ -19,7 +19,7 @@ Goal: Improve optimizer stability and adaptive capabilities.
 - [x] Task: Integrate **Ledoit-Wolf Shrinkage** for covariance estimation. 62c4076
 - [x] Task: Update the Barbell Optimizer to adjust its "Safe Core" vs "Aggressor" split based on detected regimes. c618e48
 
-### Phase 3: Scaling & Final Validation
+### Phase 3: Scaling & Final Validation [checkpoint: 81fdd29]
 Goal: Execute across the full universe and finalize the V1 architecture.
-- [ ] Task: Execute full E2E run for Top 200 symbols (Crypto + Global).
-- [ ] Task: Author the `Quantitative Workflow V1` final documentation.
+- [x] Task: Execute full E2E run for Top 200 symbols (Crypto + Global). ee2ee43
+- [x] Task: Author the `Quantitative Workflow V1` final documentation. ee2ee43
