@@ -16,15 +16,71 @@ class AsyncScreener:
 
     SUPPORTED_MARKETS = {
         "america": "https://scanner.tradingview.com/america/scan",
+        "australia": "https://scanner.tradingview.com/australia/scan",
+        "canada": "https://scanner.tradingview.com/canada/scan",
+        "germany": "https://scanner.tradingview.com/germany/scan",
+        "india": "https://scanner.tradingview.com/india/scan",
+        "israel": "https://scanner.tradingview.com/israel/scan",
+        "italy": "https://scanner.tradingview.com/italy/scan",
+        "luxembourg": "https://scanner.tradingview.com/luxembourg/scan",
+        "mexico": "https://scanner.tradingview.com/mexico/scan",
+        "spain": "https://scanner.tradingview.com/spain/scan",
+        "turkey": "https://scanner.tradingview.com/turkey/scan",
+        "uk": "https://scanner.tradingview.com/uk/scan",
         "crypto": "https://scanner.tradingview.com/crypto/scan",
         "forex": "https://scanner.tradingview.com/forex/scan",
         "cfd": "https://scanner.tradingview.com/cfd/scan",
         "futures": "https://scanner.tradingview.com/futures/scan",
+        "bonds": "https://scanner.tradingview.com/bonds/scan",
         "global": "https://scanner.tradingview.com/global/scan",
     }
 
+    # Default columns for stock screener
+    DEFAULT_STOCK_COLUMNS = [
+        "name",
+        "close",
+        "change",
+        "change_abs",
+        "volume",
+        "Recommend.All",
+        "market_cap_basic",
+        "price_earnings_ttm",
+        "earnings_per_share_basic_ttm",
+    ]
+
+    # Default columns for crypto screener
+    DEFAULT_CRYPTO_COLUMNS = [
+        "name",
+        "close",
+        "change",
+        "change_abs",
+        "volume",
+        "market_cap_calc",
+        "Recommend.All",
+    ]
+
+    # Default columns for forex screener
+    DEFAULT_FOREX_COLUMNS = [
+        "name",
+        "close",
+        "change",
+        "change_abs",
+        "Recommend.All",
+    ]
+
     def __init__(self):
         self.headers = {"User-Agent": generate_user_agent()}
+
+    def _get_default_columns(self, market: str) -> List[str]:
+        """
+        Get default columns based on market type.
+        """
+        if market == "crypto":
+            return self.DEFAULT_CRYPTO_COLUMNS
+        elif market == "forex":
+            return self.DEFAULT_FOREX_COLUMNS
+        else:
+            return self.DEFAULT_STOCK_COLUMNS
 
     async def screen(
         self,
