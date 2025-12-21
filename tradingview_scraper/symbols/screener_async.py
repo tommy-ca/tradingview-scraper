@@ -267,4 +267,14 @@ class AsyncScreener:
 
         async with aiohttp.ClientSession() as session:
             tasks = [_bounded_screen(session, p) for p in payloads]
-            return await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Post-process to handle captured exceptions
+            final_results = []
+            for i, res in enumerate(results):
+                if isinstance(res, Exception):
+                    logger.error(f"Async scan {i} failed with exception: {res}")
+                    final_results.append({"status": "failed", "error": str(res)})
+                else:
+                    final_results.append(res)
+            return final_results
