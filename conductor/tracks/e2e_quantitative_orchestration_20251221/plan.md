@@ -16,7 +16,7 @@ Goal: Transition from shell-based batching to a Python-native async architecture
 ### Phase 2: Robust Risk & Regime Intelligence
 Goal: Improve optimizer stability and adaptive capabilities.
 - [x] Task: Implement `MarketRegimeDetector` (Volatility-based switch). 945e843
-- [ ] Task: Integrate **Ledoit-Wolf Shrinkage** for covariance estimation.
+- [x] Task: Integrate **Ledoit-Wolf Shrinkage** for covariance estimation. 62c4076
 - [ ] Task: Update the Barbell Optimizer to adjust its "Safe Core" vs "Aggressor" split based on detected regimes.
 
 ### Phase 3: Scaling & Final Validation
