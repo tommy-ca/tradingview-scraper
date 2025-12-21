@@ -151,6 +151,45 @@ class TestAsyncScreener(unittest.TestCase):
 
         self.assertLessEqual(max_seen, 2)
 
+    @patch("aiohttp.ClientSession.post")
+    @patch("requests.post")
+    def test_sync_async_parity(self, mock_sync_post, mock_async_post):
+        # Setup identical mock response for both
+        raw_data = {"data": [{"s": "BINANCE:BTCUSDT", "d": [100, 50]}]}
+
+        # Sync mock
+        mock_sync_resp = MagicMock()
+        mock_sync_resp.status_code = 200
+        mock_sync_resp.json.return_value = raw_data
+        mock_sync_post.return_value = mock_sync_resp
+
+        # Async mock
+        mock_async_resp = MagicMock()
+        mock_async_resp.status = 200
+        mock_async_resp.json = AsyncMock(return_value=raw_data)
+
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_async_resp)
+        cm.__aexit__ = AsyncMock(return_value=None)
+        mock_async_post.return_value = cm
+
+        # Run sync
+        sync_screener = Screener()
+        sync_result = sync_screener.screen(market="crypto", columns=["close", "volume"])
+
+        # Run async
+        async def run_async():
+            async with aiohttp.ClientSession() as session:
+                return await self.screener.screen(session, market="crypto", columns=["close", "volume"])
+
+        async_result = asyncio.run(run_async())
+
+        # Verify parity
+        self.assertEqual(sync_result["status"], async_result["status"])
+        self.assertEqual(sync_result["data"], async_result["data"])
+        self.assertEqual(sync_result["data"][0]["symbol"], "BINANCE:BTCUSDT")
+        self.assertEqual(sync_result["data"][0]["close"], 100)
+
 
 if __name__ == "__main__":
     unittest.main()

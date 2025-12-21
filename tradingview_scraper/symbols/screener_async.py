@@ -126,8 +126,8 @@ class AsyncScreener:
         self,
         session: aiohttp.ClientSession,
         market: str,
-        filters: List[Dict[str, Any]],
-        columns: List[str],
+        filters: Optional[List[Dict[str, Any]]] = None,
+        columns: Optional[List[str]] = None,
         sort_by: Optional[str] = None,
         sort_order: str = "desc",
         limit: int = 50,
@@ -137,6 +137,12 @@ class AsyncScreener:
         url = self.SUPPORTED_MARKETS.get(market)
         if not url:
             return {"status": "failed", "error": f"Unsupported market: {market}"}
+
+        if columns is None:
+            columns = self._get_default_columns(market)
+
+        if filters is None:
+            filters = []
 
         payload = {
             "columns": columns,
@@ -178,8 +184,8 @@ class AsyncScreener:
         self,
         session: aiohttp.ClientSession,
         market: str,
-        filters: List[Dict[str, Any]],
-        columns: List[str],
+        filters: Optional[List[Dict[str, Any]]] = None,
+        columns: Optional[List[str]] = None,
         sort_by: Optional[str] = None,
         sort_order: str = "desc",
         limit: int = 50,
@@ -190,6 +196,9 @@ class AsyncScreener:
         """
         if columns is None:
             columns = self._get_default_columns(market)
+
+        if filters is None:
+            filters = []
 
         all_data = []
         remaining = limit
