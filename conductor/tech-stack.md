@@ -5,6 +5,7 @@
 
 ## Scraping & HTTP
 * **requests:** For making synchronous HTTP requests to TradingView.
+* **aiohttp:** For high-performance asynchronous HTTP requests in the quantitative pipeline.
 * **beautifulsoup4:** For parsing and extracting data from HTML responses.
 
 ## Data Processing & Validation
