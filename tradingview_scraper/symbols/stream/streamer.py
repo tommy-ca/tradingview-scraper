@@ -22,7 +22,12 @@ from websocket import WebSocketConnectionClosedException
 from tradingview_scraper.symbols.exceptions import DataNotFoundError
 from tradingview_scraper.symbols.stream import StreamHandler
 from tradingview_scraper.symbols.stream.retry import RetryHandler
-from tradingview_scraper.symbols.stream.utils import fetch_indicator_metadata, validate_symbols
+from tradingview_scraper.symbols.stream.utils import (
+    extract_indicator_from_stream,
+    extract_ohlc_from_stream,
+    fetch_indicator_metadata,
+    validate_symbols,
+)
 from tradingview_scraper.symbols.utils import save_csv_file, save_json_file
 
 # Configure logging
@@ -143,93 +148,11 @@ class Streamer:
                 logging.error(f"Failed to add indicator {indicator_id} v{indicator_version}: {e}")
                 continue
 
-    def _serialize_ohlc(self, raw_data):
-        """
-        Serializes OHLC data from the raw packet.
-
-        Args:
-            raw_data (dict): The raw data packet.
-
-        Returns:
-            list: A list of serialized OHLC data.
-        """
-        ohlc_data = raw_data.get("p", [{}, {}, {}])[1].get("sds_1", {}).get("s", [])
-
-        json_data = []
-        for entry in ohlc_data:
-            json_entry = {"index": entry["i"], "timestamp": entry["v"][0], "open": entry["v"][1], "high": entry["v"][2], "low": entry["v"][3], "close": entry["v"][4]}
-            # some packets may not have volume data to avoid KeyError
-            if len(entry["v"]) > 5:
-                json_entry["volume"] = entry["v"][5]
-            json_data.append(json_entry)
-        return json_data
-
-    def _serialize_indicator(self, raw_data: dict):
-        """
-        Serializes indicator data from the raw packet.
-
-        Args:
-            raw_data (dict): The raw data packet.
-
-        Returns:
-            list: A list of serialized indicator data or an empty list if an error occurs.
-        """
-        try:
-            indicator_data = raw_data["p"][1]["st9"]["st"]
-
-            converted_data = []
-            for item in indicator_data:
-                timestamp, smoothing, close, *other_values = item["v"]
-                converted_data.append({"index": item["i"], "timestamp": timestamp, "smoothing": smoothing, "close": close})
-
-            return converted_data
-        except (KeyError, TypeError) as e:
-            logging.error("Error processing packet: %s", e)
-            return []
-
     def _extract_ohlc_from_stream(self, pkt: dict):
-        """
-        Extracts OHLC data from the data stream.
-
-        Args:
-            pkt (dict): The incoming packet.
-
-        Raises:
-            DataNotFoundError: If no 'OHLC' packet is found within the first 15 packets.
-        """
-        json_data = []
-        if pkt.get("m") == "timescale_update":
-            json_data = self._serialize_ohlc(pkt)
-        return json_data
+        return extract_ohlc_from_stream(pkt)
 
     def _extract_indicator_from_stream(self, pkt: dict):
-        """
-        Extracts indicator data from the data stream for multiple indicators.
-
-        Args:
-            pkt (dict): The incoming packet.
-
-        Returns:
-            dict: A dictionary with indicator IDs as keys and their data as values.
-        """
-        indicator_data = {}
-        if pkt.get("m") == "du":
-            for item in pkt.get("p", []):
-                if isinstance(item, dict):
-                    for k, v in pkt.get("p")[1].items():
-                        if k.startswith("st") and k in self.study_id_to_name_map:
-                            if "st" in v and len(v["st"]) > 10:
-                                indicator_name = self.study_id_to_name_map[k]
-                                json_data = []
-                                for val in v["st"]:
-                                    tmp = {"index": val["i"], "timestamp": val["v"][0]}
-                                    tmp.update({str(idx): v for idx, v in enumerate(val["v"][1:])})
-                                    json_data.append(tmp)
-
-                                indicator_data[indicator_name] = json_data
-                                logging.debug(f"Indicator {indicator_name} (study {k}) data extracted: {len(json_data)} points")
-
-        return indicator_data
+        return extract_indicator_from_stream(pkt, self.study_id_to_name_map)
 
     def stream(self, exchange: str, symbol: str, timeframe: str = "1m", numb_price_candles: int = 10, indicators: Optional[List[Tuple[str, str]]] = None, auto_close: bool = False):
         """
@@ -280,11 +203,6 @@ class Streamer:
                 # Check if we have sufficient data
                 ohlc_ready = len(ohlc_json_data) >= numb_price_candles
                 indicators_ready = not ind_flag or len(indicator_json_data) >= expected_indicator_count
-
-                # if ind_flag is True and len(ohlc_json_data)>0 and len(indicator_json_data)>0:
-                #     break
-                # elif ind_flag is False and len(ohlc_json_data)>0:
-                #     break
 
                 # Check if we have sufficient data
                 if ohlc_ready and indicators_ready:
@@ -392,7 +310,7 @@ class Streamer:
                     self._add_indicators(self._current_indicators)
 
             except Exception as e:
-                logging.error("Failed to reconnect: %s", str(e))
+                logging.error(f"Failed to reconnect: {e}")
                 if attempt >= self.retry_handler.max_retries:
                     break
                 attempt += 1

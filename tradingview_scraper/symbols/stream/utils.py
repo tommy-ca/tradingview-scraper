@@ -11,8 +11,70 @@ This module contains functions to:
 
 import logging
 import time
+from typing import Any, Dict, List
 
 import requests
+
+
+def serialize_ohlc(raw_data: dict) -> List[Dict[str, Any]]:
+    """
+    Serializes OHLC data from a raw TradingView packet.
+    """
+    p_data = raw_data.get("p", [{}, {}, {}])
+    if not isinstance(p_data, list) or len(p_data) < 2:
+        return []
+
+    # Handle both timescale_update and du formats
+    sds_data = p_data[1].get("sds_1", {})
+    ohlc_data = sds_data.get("s", [])
+
+    json_data = []
+    for entry in ohlc_data:
+        json_entry = {
+            "index": entry["i"],
+            "timestamp": entry["v"][0],
+            "open": entry["v"][1],
+            "high": entry["v"][2],
+            "low": entry["v"][3],
+            "close": entry["v"][4],
+        }
+        if len(entry["v"]) > 5:
+            json_entry["volume"] = entry["v"][5]
+        json_data.append(json_entry)
+    return json_data
+
+
+def extract_ohlc_from_stream(pkt: dict) -> List[Dict[str, Any]]:
+    """
+    Extracts OHLC data from a TradingView packet if it's a timescale update.
+    """
+    if pkt.get("m") == "timescale_update":
+        return serialize_ohlc(pkt)
+    return []
+
+
+def extract_indicator_from_stream(pkt: dict, study_id_map: Dict[str, str]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Extracts indicator data from a TradingView packet.
+    """
+    indicator_data = {}
+    if pkt.get("m") == "du":
+        p_data = pkt.get("p")
+        if isinstance(p_data, list) and len(p_data) > 1:
+            study_data = p_data[1]
+            if isinstance(study_data, dict):
+                for k, v in study_data.items():
+                    if k.startswith("st") and k in study_id_map:
+                        if isinstance(v, dict) and "st" in v and len(v["st"]) > 10:
+                            indicator_name = study_id_map[k]
+                            json_data = []
+                            for val in v["st"]:
+                                tmp = {"index": val["i"], "timestamp": val["v"][0]}
+                                tmp.update({str(idx): v for idx, v in enumerate(val["v"][1:])})
+                                json_data.append(tmp)
+
+                            indicator_data[indicator_name] = json_data
+    return indicator_data
 
 
 def validate_symbols(exchange_symbol):
