@@ -11,7 +11,7 @@ Consolidate the multi-asset quantitative pipeline into a unified, high-performan
 Goal: Transition from shell-based batching to a Python-native async architecture.
 - [x] Task: Create `tradingview_scraper/pipeline.py` (Unified Orchestrator Class). 24bdb00
 - [x] Task: Implement `AsyncScreener` to parallelize REST calls to TradingView. e7f267f
-- [ ] Task: Migrate existing configurations to be driven by the new `Pipeline` entry point.
+- [x] Task: Migrate existing configurations to be driven by the new `Pipeline` entry point. 8340c68
 
 ### Phase 2: Robust Risk & Regime Intelligence
 Goal: Improve optimizer stability and adaptive capabilities.
