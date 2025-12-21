@@ -13,10 +13,10 @@ Goal: Transform raw WebSocket packets into structured dictionaries.
 - [x] Task: Update `get_data()` to yield formatted data. 2114916
 - [x] Task: Verify parity via unit tests comparing sync/async dictionary output. 060f513
 
-### Phase 2: Functional Parity
+### Phase 2: Functional Parity [checkpoint: 20200b4]
 Goal: Implement one-shot collection and export.
-- [ ] Task: Implement `export_result` support (persistence to JSON/CSV).
-- [ ] Task: Implement `collect(n_candles)` helper method for batch retrieval.
+- [x] Task: Implement `export_result` support (persistence to JSON/CSV). 20200b4
+- [x] Task: Implement `collect(n_candles)` helper method for batch retrieval. 20200b4
 
 ### Phase 3: Structural Consolidation
 Goal: Clean up duplicate logic.
