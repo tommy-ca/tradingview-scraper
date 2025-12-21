@@ -10,8 +10,8 @@ Achieve 100% logic parity between the legacy synchronous `Streamer` and the new 
 ### Phase 1: Data Serialization Parity
 Goal: Transform raw WebSocket packets into structured dictionaries.
 - [x] Task: Implement OHLC and Indicator serialization logic in `AsyncStreamer`. 51a91cb
-- [ ] Task: Update `get_data()` to yield formatted data.
-- [ ] Task: Verify parity via unit tests comparing sync/async dictionary output.
+- [x] Task: Update `get_data()` to yield formatted data. 2114916
+- [~] Task: Verify parity via unit tests comparing sync/async dictionary output.
 
 ### Phase 2: Functional Parity
 Goal: Implement one-shot collection and export.
