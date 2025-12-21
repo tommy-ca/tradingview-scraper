@@ -86,6 +86,35 @@ class TestAsyncScreener(unittest.TestCase):
         self.assertEqual(results[0]["status"], "success")
         self.assertEqual(results[0]["data"][0]["symbol"], "BINANCE:BTCUSDT")
 
+    @patch("aiohttp.ClientSession.post")
+    def test_screen_pagination(self, mock_post):
+        # Setup mock response that respects the requested limit in the payload
+        def mock_post_side_effect(url, json, headers, timeout):
+            requested_limit = json["range"][1] - json["range"][0]
+            mock_resp = MagicMock()
+            mock_resp.status = 200
+            data_page = [{"s": f"SYM_{i}", "d": [100]} for i in range(requested_limit)]
+            mock_resp.json = AsyncMock(return_value={"data": data_page})
+
+            # Setup __aenter__ for the context manager
+            cm = MagicMock()
+            cm.__aenter__ = AsyncMock(return_value=mock_resp)
+            cm.__aexit__ = AsyncMock(return_value=None)
+            return cm
+
+        mock_post.side_effect = mock_post_side_effect
+
+        async def run_test():
+            async with aiohttp.ClientSession() as session:
+                # Request 120 items (should trigger 3 requests: 50, 50, 20)
+                return await self.screener.screen(session, "crypto", [], ["close"], limit=120)
+
+        result = asyncio.run(run_test())
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(len(result["data"]), 120)
+        self.assertEqual(mock_post.call_count, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -122,7 +122,7 @@ class AsyncScreener:
         ),
         reraise=True,
     )
-    async def screen(
+    async def _single_screen(
         self,
         session: aiohttp.ClientSession,
         market: str,
@@ -167,20 +167,73 @@ class AsyncScreener:
                                     formatted_item[field] = symbol_data[idx]
                             formatted_data.append(formatted_item)
 
-                    # Export if requested
-                    if self.export_result:
-                        self._export(
-                            data=formatted_data,
-                            symbol=f"{market}_screener",
-                            data_category="screener",
-                        )
-
                     return {"status": "success", "data": formatted_data}
                 else:
                     text = await response.text()
                     return {"status": "failed", "error": f"HTTP {response.status}: {text}"}
         except Exception as e:
             return {"status": "failed", "error": str(e)}
+
+    async def screen(
+        self,
+        session: aiohttp.ClientSession,
+        market: str,
+        filters: List[Dict[str, Any]],
+        columns: List[str],
+        sort_by: Optional[str] = None,
+        sort_order: str = "desc",
+        limit: int = 50,
+        range_start: int = 0,
+    ) -> Dict:
+        """
+        Screen instruments with automatic pagination for limits > 50.
+        """
+        if columns is None:
+            columns = self._get_default_columns(market)
+
+        all_data = []
+        remaining = limit
+        current_offset = range_start
+        page_size = 50
+
+        while remaining > 0:
+            batch_limit = min(page_size, remaining)
+            res = await self._single_screen(
+                session=session,
+                market=market,
+                filters=filters,
+                columns=columns,
+                sort_by=sort_by,
+                sort_order=sort_order,
+                limit=batch_limit,
+                range_start=current_offset,
+            )
+
+            if res["status"] != "success":
+                # If we have some data, return partial success
+                if all_data:
+                    break
+                return res
+
+            page_data = res.get("data", [])
+            all_data.extend(page_data)
+
+            if len(page_data) < batch_limit:
+                # End of results
+                break
+
+            remaining -= len(page_data)
+            current_offset += len(page_data)
+
+        # Export if requested
+        if self.export_result:
+            self._export(
+                data=all_data,
+                symbol=f"{market}_screener",
+                data_category="screener",
+            )
+
+        return {"status": "success", "data": all_data}
 
     async def screen_many(self, payloads: List[Dict]) -> List[Dict]:
         """
