@@ -48,6 +48,27 @@ class TestAsyncScreener(unittest.TestCase):
         self.assertEqual(mock_post.call_count, 3)
 
     @patch("aiohttp.ClientSession.post")
+    @patch("tradingview_scraper.symbols.screener_async.save_json_file")
+    def test_screen_export_json(self, mock_save_json, mock_post):
+        # Setup mock response
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.json = AsyncMock(return_value={"data": [{"s": "BINANCE:BTCUSDT", "d": [100]}]})
+        mock_post.return_value.__aenter__.return_value = mock_resp
+
+        # Initialize screener with export enabled
+        self.screener.export_result = True
+        self.screener.export_type = "json"
+
+        async def run_test():
+            async with aiohttp.ClientSession() as session:
+                return await self.screener.screen(session, "crypto", [], ["close"])
+
+        asyncio.run(run_test())
+
+        mock_save_json.assert_called_once()
+
+    @patch("aiohttp.ClientSession.post")
     def test_screen_many(self, mock_post):
         # Setup mock response
         mock_resp = MagicMock()

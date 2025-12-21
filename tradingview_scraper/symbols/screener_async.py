@@ -11,7 +11,11 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from tradingview_scraper.symbols.utils import generate_user_agent
+from tradingview_scraper.symbols.utils import (
+    generate_user_agent,
+    save_csv_file,
+    save_json_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +79,12 @@ class AsyncScreener:
         "Recommend.All",
     ]
 
-    def __init__(self):
+    def __init__(self, export_result: bool = False, export_type: str = "json"):
+        """
+        Initialize the AsyncScreener.
+        """
+        self.export_result = export_result
+        self.export_type = export_type
         self.headers = {"User-Agent": generate_user_agent()}
 
     def _get_default_columns(self, market: str) -> List[str]:
@@ -88,6 +97,20 @@ class AsyncScreener:
             return self.DEFAULT_FOREX_COLUMNS
         else:
             return self.DEFAULT_STOCK_COLUMNS
+
+    def _export(
+        self,
+        data: List[Dict],
+        symbol: Optional[str] = None,
+        data_category: Optional[str] = None,
+    ) -> None:
+        """
+        Export screened data to file.
+        """
+        if self.export_type == "json":
+            save_json_file(data=data, symbol=symbol, data_category=data_category)
+        elif self.export_type == "csv":
+            save_csv_file(data=data, symbol=symbol, data_category=data_category)
 
     @retry(
         stop=stop_after_attempt(5),
@@ -143,6 +166,14 @@ class AsyncScreener:
                                 if idx < len(symbol_data):
                                     formatted_item[field] = symbol_data[idx]
                             formatted_data.append(formatted_item)
+
+                    # Export if requested
+                    if self.export_result:
+                        self._export(
+                            data=formatted_data,
+                            symbol=f"{market}_screener",
+                            data_category="screener",
+                        )
 
                     return {"status": "success", "data": formatted_data}
                 else:
