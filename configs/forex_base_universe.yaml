@@ -1,0 +1,37 @@
+# Forex base universe (G7/G8 majors only) used by strategy layers
+base_preset: presets/forex_liquid.yaml
+
+include_perps_only: false
+exclude_perps: true
+include_stable_bases: true
+base_currencies: [USD, EUR, JPY, GBP, AUD, CAD, CHF, NZD]
+allowed_spot_quotes: [USD, EUR, JPY, GBP, AUD, CAD, CHF, NZD]
+
+# Disable strategy filters at the base layer
+trend:
+  recommendation:
+    enabled: false
+  adx:
+    enabled: false
+  momentum:
+    enabled: false
+
+# Keep moderate volatility guard focused on majors
+volatility:
+  max: 6.0
+  atr_pct_max: 0.05
+  fallback_use_atr_pct: true
+
+# Capacity and paging
+limit: 300
+base_universe_limit: 300
+prefilter_limit: 2000
+pagination_size: 200
+
+sort_by: volume
+final_sort_by: volume
+base_universe_sort_by: volume
+
+export_metadata:
+  symbol: forex_base_universe
+  data_category: universe_selector

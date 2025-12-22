@@ -1,42 +1,27 @@
-# Base universe: Forex short trend (Relaxed)
-markets: ["forex"]
-exchanges: ["FX_IDC", "THINKMARKETS", "BLACKBULL", "ICMARKETS", "ACTIVTRADES", "FUSIONMARKETS", "OANDA", "TRADENATIONSB", "TRADENATION", "FXOPEN", "FX", "SKILLING", "FPMARKETS", "VELOCITY", "CAPITALCOM", "VANTAGE", "PEPPERSTONE", "FXCM", "ICE"]
-allowed_spot_quotes: ["USD", "EUR", "JPY", "GBP", "CHF", "AUD", "CAD", "NZD"]
-base_currencies: ["USD", "EUR", "JPY", "GBP", "CHF", "CAD", "AUD", "NZD"]
-columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
-volume:
-  min: 0
-volatility:
-  max: 10.0
-  atr_pct_max: 0.1
-  fallback_use_atr_pct: true
+# Forex Trend Momentum (Short) layered on base universe
+base_preset: forex_base_universe.yaml
+
 trend:
   direction: "short"
   timeframe: "daily"
   logic: "AND"
   recommendation:
-    enabled: true
-    min: -0.1
+    enabled: false
   adx:
     enabled: true
-    min: 20
+    min: 8
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: -0.2, Perf.1M: -0.5}
+    horizons: {change: 0.3, Perf.W: 0.3, Perf.1M: 0.1, Perf.3M: 0.2}
   confirmation_momentum:
-    enabled: true
-    horizons: {Perf.3M: -1.0}
-sort_by: volume
-sort_order: desc
-final_sort_by: volume
-final_sort_order: desc
+    enabled: false
+
 limit: 100
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
+prefilter_limit: 2000
+pagination_size: 200
+sort_by: volume
+final_sort_by: volume
+
 export_metadata:
   symbol: "forex_trend_momentum_short"
   data_category: "universe_selector"
