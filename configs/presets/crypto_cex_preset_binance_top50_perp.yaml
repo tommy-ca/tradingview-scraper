@@ -8,10 +8,10 @@ exclude_dated_futures: true
 base_from_spot_only: false
 volume:
   min: 0
-  value_traded_min: 5000000
+  value_traded_min: 1500000
 volatility:
-  max: 20.0
-  atr_pct_max: 0.15
+  max: 30.0
+  atr_pct_max: 0.25
   fallback_use_atr_pct: true
 columns:
 - name
@@ -61,7 +61,7 @@ perp_exchange_priority:
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null
 market_cap_rank_limit: 200
-market_cap_floor: 10000000.0
+market_cap_floor: 5000000.0
 market_cap_require_hit: false
 retries: 2
 timeout: 10
@@ -75,3 +75,8 @@ allowed_spot_quotes:
 - DAI
 - BUSD
 - FDUSD
+
+filters:
+- left: Perf.Y
+  operation: egreater
+  right: -1000000

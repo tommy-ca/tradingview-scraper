@@ -9,10 +9,9 @@ trend:
     enabled: false
   adx:
     enabled: true
-    min: 8
+    min: 5
   momentum:
-    enabled: true
-    horizons: {change: 0.3, Perf.W: 0.3, Perf.1M: 0.1, Perf.3M: 0.2}
+    enabled: false
   confirmation_momentum:
     enabled: false
 

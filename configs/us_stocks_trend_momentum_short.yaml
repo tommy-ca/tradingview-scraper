@@ -1,48 +1,27 @@
-# US stocks trend momentum short - High Quality (Relaxed)
-# Base: market_cap_basic desc then volume, top 250
-markets: ["america"]
-exchanges: []
-include_perps_only: false
-exclude_perps: false
-filters:
-  - left: "type"
-    operation: "in_range"
-    right: ["stock", "dr"]
-columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR", "market_cap_basic"]
-volume:
-  min: 500000
-  value_traded_min: 10000000
-volatility:
-  max: 6.0
-  atr_pct_max: 0.08
-  fallback_use_atr_pct: true
+# US stocks trend momentum short layered on base
+base_preset: us_stocks_base_universe.yaml
+
+limit: 250
+prefilter_limit: 3000
+pagination_size: 200
+sort_by: market_cap_basic
+final_sort_by: volume
+
 trend:
   direction: "short"
   timeframe: "daily"
   logic: "AND"
   recommendation:
-    enabled: true
-    min: -0.2
+    enabled: false
   adx:
     enabled: true
-    min: 15
+    min: 12
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: -1.0, Perf.1M: -2.0}
+    horizons: {change: -0.3, Perf.W: -1.0, Perf.1M: -2.0, Perf.3M: -4.0}
   confirmation_momentum:
-    enabled: true
-    horizons: {Perf.1M: -2.0, Perf.3M: -5.0}
-sort_by: market_cap_basic
-sort_order: desc
-final_sort_by: volume
-final_sort_order: desc
-limit: 250
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
+    enabled: false
+
 export_metadata:
   symbol: "us_stocks_trend_momentum_short"
   data_category: "universe_selector"

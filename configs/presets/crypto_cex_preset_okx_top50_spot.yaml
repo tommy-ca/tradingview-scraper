@@ -15,10 +15,10 @@ allowed_spot_quotes:
 - FDUSD
 volume:
   min: 0
-  value_traded_min: 500000
+  value_traded_min: 250000
 volatility:
-  max: 15.0
-  atr_pct_max: 0.12
+  max: 35.0
+  atr_pct_max: 0.3
   fallback_use_atr_pct: true
 columns:
 - name
@@ -68,10 +68,15 @@ perp_exchange_priority:
 market_cap_file: market_caps_crypto.json
 market_cap_limit: null
 market_cap_rank_limit: 200
-market_cap_floor: 10000000.0
+market_cap_floor: 5000000.0
 market_cap_require_hit: false
 retries: 2
 timeout: 10
 export:
   enabled: false
   type: json
+
+filters:
+- left: Perf.Y
+  operation: egreater
+  right: -1000000

@@ -16,6 +16,16 @@ allowed_spot_quotes:
 - DAI
 - BUSD
 - FDUSD
+volume:
+  value_traded_min: 300000
+volatility:
+  max: 35.0
+  atr_pct_max: 0.3
+market_cap_floor: 5000000.0
+base_universe_limit: 100
+prefilter_limit: 2000
+pagination_size: 200
+limit: 50
 exclude_dated_futures: true
 sort_by: Value.Traded
 final_sort_by: Value.Traded

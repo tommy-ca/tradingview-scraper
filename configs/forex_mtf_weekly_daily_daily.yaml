@@ -1,74 +1,69 @@
-# Forex MTF: weekly trend -> daily confirm -> daily execute
-markets: ["forex"]
-exchanges: []
+# Forex MTF: weekly trend -> daily confirm -> daily execute (layered on base universe)
+base_preset: forex_base_universe.yaml
+
 columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "ATR", "RSI", "Stoch.K"]
-volume:
-  min: 0
-volatility:
-  max: 6.0
-  atr_pct_max: 0.08
-  fallback_use_atr_pct: true
+
 trend:
   timeframe: "weekly"
   direction: "long"
   logic: "AND"
   recommendation:
     enabled: true
-    min: 0.15
+    min: 0.05
   adx:
     enabled: true
-    min: 15
+    min: 10
   momentum:
     enabled: true
-    horizons: {Perf.W: 0.3, Perf.1M: 0.5, Perf.3M: 0.8}
+    horizons: {Perf.W: 0.1, Perf.1M: 0.2, Perf.3M: 0.3}
   confirmation_momentum:
     enabled: false
+
 trend_screen:
   timeframe: "weekly"
   direction: "long"
   logic: "AND"
   recommendation:
     enabled: true
-    min: 0.15
+    min: 0.05
   adx:
     enabled: true
-    min: 15
+    min: 10
   momentum:
     enabled: true
-    horizons: {Perf.W: 0.3, Perf.1M: 0.5, Perf.3M: 0.8}
+    horizons: {Perf.W: 0.1, Perf.1M: 0.2, Perf.3M: 0.3}
+
 confirm_screen:
   timeframe: "daily"
   direction: "long"
   logic: "AND"
   adx:
     enabled: true
-    min: 12
+    min: 8
   momentum:
     enabled: true
-    horizons: {Perf.W: 0.1, Perf.1M: 0.3}
+    horizons: {Perf.W: 0.0, Perf.1M: 0.1}
   osc:
     enabled: false
+
 execute_screen:
   timeframe: "daily"
   direction: "long"
   logic: "AND"
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: 0.0}
+    horizons: {change: -0.2, Perf.W: -0.1}
   osc:
-    enabled: true
-    horizons: {RSI: 65, Stoch.K: 80}
+    enabled: false
   volatility:
-    enabled: true
-    horizons: {Volatility.D: 8.0}
+    enabled: false
+
+limit: 150
+prefilter_limit: 2000
+pagination_size: 200
 sort_by: volume
-sort_order: desc
 final_sort_by: volume
-final_sort_order: desc
-limit: 100
-pagination_size: 50
-retries: 2
-timeout: 10
+
 export:
   enabled: false
   type: json

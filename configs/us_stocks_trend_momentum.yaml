@@ -1,24 +1,26 @@
-# US Stocks Trend Momentum (Long) - Refactored
-base_preset: presets/stocks_us_liquid.yaml
+# US Stocks Trend Momentum (Long) layered on base
+base_preset: us_stocks_base_universe.yaml
 
-limit: 250 # Override base limit for broader scan
+limit: 250
+prefilter_limit: 3000
+pagination_size: 200
+sort_by: market_cap_basic
+final_sort_by: volume
 
 trend:
   direction: "long"
   timeframe: "daily"
   logic: "AND"
   recommendation:
-    enabled: true
-    min: 0.4
+    enabled: false
   adx:
     enabled: true
-    min: 20
+    min: 12
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: 1.0, Perf.1M: 5.0}
+    horizons: {change: 0.0, Perf.W: 0.5, Perf.1M: 2.0, Perf.3M: 4.0}
   confirmation_momentum:
-    enabled: true
-    horizons: {Perf.1M: 5.0, Perf.3M: 10.0}
+    enabled: false
 
 export_metadata:
   symbol: "us_stocks_trend_momentum"
