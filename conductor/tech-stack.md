@@ -15,11 +15,13 @@
 * **Market Cap Metadata:** External `market_caps_crypto.json` provides global asset ranking for hybrid guards.
 
 ## Real-time & WebSockets
-* **websockets & websocket-client:** Provide the foundation for real-time data streaming from TradingView.
+* **aiohttp:** Primary library for asynchronous WebSocket streaming (`AsyncStreamHandler`).
+* **websockets & websocket-client:** Legacy foundations for real-time data streaming.
 
 ## Configuration & Tooling
 * **python-dotenv:** For managing environment variables and secrets.
 * **setuptools:** Used for packaging and distribution.
+* **tenacity:** For robust retry logic across synchronous and asynchronous API requests.
 * **uv:** Employed for fast, reproducible dependency management and locking.
 
 ## Quality Assurance

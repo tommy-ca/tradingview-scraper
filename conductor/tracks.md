@@ -89,7 +89,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Link: [./conductor/tracks/research_consolidation_20251220/](./conductor/tracks/research_consolidation_20251220/)*
 ---
 
-## [~] Track: E2E Quantitative Orchestration & Robust Risk
+## [x] Track: E2E Quantitative Orchestration & Robust Risk
 *Link: [./conductor/tracks/e2e_quantitative_orchestration_20251221/](./conductor/tracks/e2e_quantitative_orchestration_20251221/)*
 
 ---
@@ -106,6 +106,30 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [ ] Track: Signal/Noise Based Filtering Research
 *Link: [./conductor/tracks/signal_noise_filtering_20251221/](./conductor/tracks/signal_noise_filtering_20251221/)*
+
+---
+
+## [ ] Track: Unified Screener Infrastructure
+*Link: [./conductor/tracks/unified_screener_infrastructure_20251221/](./conductor/tracks/unified_screener_infrastructure_20251221/)*
+
+---
+
+## [x] Track: Robust Async Screener Parity
+*Link: [./conductor/tracks/robust_async_screener_20251221/](./conductor/tracks/robust_async_screener_20251221/)*
+
+---
+
+## [x] Track: Async Streamer V1 Implementation
+*Link: [./conductor/tracks/async_streamer_v1_20251221/](./conductor/tracks/async_streamer_v1_20251221/)*
+
+---
+
+## [x] Track: Async Streamer Feature Parity
+*Link: [./conductor/tracks/async_streamer_parity_20251221/](./conductor/tracks/async_streamer_parity_20251221/)*
+
+
+
+
 
 
 
