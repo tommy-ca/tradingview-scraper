@@ -10,10 +10,25 @@ This module contains functions to:
 """
 
 import logging
+import os
+import threading
 import time
 from typing import Any, Dict, List
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+SESSION_TIMEOUT = float(os.getenv("STREAMER_HTTP_TIMEOUT", "5"))
+VALIDATE_CONCURRENCY = int(os.getenv("STREAMER_VALIDATE_CONCURRENCY", "2"))
+_retry_strategy = Retry(total=2, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
+_http_adapter = HTTPAdapter(pool_connections=10, pool_maxsize=VALIDATE_CONCURRENCY + 2, max_retries=_retry_strategy)
+_validate_session = requests.Session()
+_validate_session.mount("https://", _http_adapter)
+_validate_session.mount("http://", _http_adapter)
+_validate_lock = threading.Lock()
+_validated_symbols_cache = set()
+_validate_semaphore = threading.Semaphore(max(1, VALIDATE_CONCURRENCY))
 
 
 def serialize_ohlc(raw_data: dict) -> List[Dict[str, Any]]:
@@ -111,9 +126,17 @@ def validate_symbols(exchange_symbol):
         exchange, symbol = parts
         retries = 3
 
+        with _validate_lock:
+            if item in _validated_symbols_cache:
+                continue
+
         for attempt in range(retries):
             try:
-                res = requests.get(validate_url.format(exchange=exchange, symbol=symbol), timeout=5)
+                with _validate_semaphore:
+                    res = _validate_session.get(
+                        validate_url.format(exchange=exchange, symbol=symbol),
+                        timeout=(SESSION_TIMEOUT, SESSION_TIMEOUT),
+                    )
                 res.raise_for_status()
             except requests.RequestException as exc:
                 status = getattr(exc.response, "status_code", None)
@@ -128,10 +151,12 @@ def validate_symbols(exchange_symbol):
                 )
 
                 if attempt < retries - 1:
-                    time.sleep(1)  # Wait briefly before retrying
+                    time.sleep(0.5)  # Wait briefly before retrying
                 else:
                     raise ValueError(f"Invalid exchange:symbol '{item}' after {retries} attempts") from exc
             else:
+                with _validate_lock:
+                    _validated_symbols_cache.add(item)
                 break  # Successful request; exit retry loop
 
     return True

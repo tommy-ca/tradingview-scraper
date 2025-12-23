@@ -14,6 +14,7 @@ import logging
 import re
 import signal
 import sys
+from datetime import datetime
 from time import sleep
 from typing import List, Optional, Tuple
 
@@ -59,6 +60,9 @@ class Streamer:
         initial_delay: float = 1.0,
         max_delay: float = 60.0,
         backoff_factor: float = 2.0,
+        idle_packet_limit: int = 10,
+        max_packet_limit: int = 60,
+        idle_timeout_seconds: float = 15.0,
     ):
         """
         Initializes the Streamer class with export options and WebSocket authentication token.
@@ -78,11 +82,33 @@ class Streamer:
         self.retry_handler = RetryHandler(max_retries=max_retries, initial_delay=initial_delay, max_delay=max_delay, backoff_factor=backoff_factor)
         self.study_id_to_name_map = {}  # Maps study IDs (st9, st10) to indicator names
         self.ws_url = "wss://data.tradingview.com/socket.io/websocket?from=chart%2FVEPYsueI%2F&type=chart"
-        self.stream_obj = StreamHandler(websocket_url=self.ws_url, jwt_token=websocket_jwt_token)
+        self.stream_obj = None
+        self.idle_packet_limit = idle_packet_limit
+        self.max_packet_limit = max_packet_limit
+        self.idle_timeout_seconds = idle_timeout_seconds
 
-        # State for reconnection
+        # State for reconnection/subscription tracking
         self._current_subscription = None
         self._current_indicators = None
+
+        # Always start with a fresh connection
+        self._reset_stream_handler()
+
+    def _reset_stream_handler(self):
+        """Close any existing handler and open a fresh WebSocket."""
+        try:
+            if self.stream_obj:
+                self.stream_obj.close()
+        except Exception as e:
+            logging.debug("Error closing previous stream handler: %s", e)
+        self.stream_obj = StreamHandler(websocket_url=self.ws_url, jwt_token=self.websocket_jwt_token)
+        self.study_id_to_name_map = {}
+        self._current_subscription = None
+        self._current_indicators = None
+
+    def _is_connection_active(self) -> bool:
+        """Check whether the current StreamHandler WebSocket is connected."""
+        return bool(self.stream_obj and getattr(self.stream_obj, "ws", None) and getattr(self.stream_obj.ws, "connected", False))
 
     def _add_symbol_to_sessions(self, quote_session: str, chart_session: str, exchange_symbol: str, timeframe: str = "1m", numb_candles: int = 10):
         """
@@ -173,50 +199,73 @@ class Streamer:
         exchange_symbol = f"{exchange}:{symbol}"
         validate_symbols(exchange_symbol)
 
-        ind_flag = indicators is not None and len(indicators) > 0
+        ind_flag = bool(indicators)
+
+        # Always start each subscription with a fresh connection to avoid stale state when reusing the Streamer.
+        if self._current_subscription is not None or not self._is_connection_active():
+            logging.debug("Resetting stream connection before subscribing to %s", exchange_symbol)
+            self._reset_stream_handler()
 
         self._add_symbol_to_sessions(self.stream_obj.quote_session, self.stream_obj.chart_session, exchange_symbol, timeframe, numb_price_candles)
 
-        if ind_flag:
+        if ind_flag and indicators:
             self._add_indicators(indicators)
 
         if self.export_result is True:
             ohlc_json_data = []
             indicator_json_data = {}
-            expected_indicator_count = len(indicators) if ind_flag else 0
+            expected_indicator_count = len(indicators or []) if ind_flag else 0
 
             logging.info(f"Starting data collection for {numb_price_candles} candles and {expected_indicator_count} indicators")
 
+            idle_packets = 0
             for i, pkt in enumerate(self.get_data()):
-                # Extract OHLC data
                 received_data = self._extract_ohlc_from_stream(pkt)
+                received_indicator_data = self._extract_indicator_from_stream(pkt)
+
                 if received_data:
                     ohlc_json_data = received_data
+                    idle_packets = 0
                     logging.debug(f"OHLC data updated: {len(ohlc_json_data)} candles")
-
-                # Extract indicator data
-                received_indicator_data = self._extract_indicator_from_stream(pkt)
                 if received_indicator_data:
                     indicator_json_data.update(received_indicator_data)
+                    idle_packets = 0
                     logging.info(f"Indicator data received: {len(indicator_json_data)}/{expected_indicator_count} indicators")
 
-                # Check if we have sufficient data
                 ohlc_ready = len(ohlc_json_data) >= numb_price_candles
                 indicators_ready = not ind_flag or len(indicator_json_data) >= expected_indicator_count
 
-                # Check if we have sufficient data
                 if ohlc_ready and indicators_ready:
                     break
 
-                if i > 15:
-                    logging.warning(f"Timeout reached after {i} packets. Collected: OHLC={len(ohlc_json_data)}, Indicators={len(indicator_json_data)}")
+                if received_data is None and not received_indicator_data:
+                    idle_packets += 1
+
+                if idle_packets >= self.idle_packet_limit:
+                    logging.warning(
+                        "Idle timeout after %s packets without new data. Collected: OHLC=%s, Indicators=%s",
+                        idle_packets,
+                        len(ohlc_json_data),
+                        len(indicator_json_data),
+                    )
                     if not ohlc_json_data:
-                        raise DataNotFoundError("No 'OHLC' packet found within the timeout period.")
+                        raise DataNotFoundError("No 'OHLC' packet found within idle timeout.")
+                    break
+
+                if i + 1 >= self.max_packet_limit:
+                    logging.warning(
+                        "Reached max packet limit (%s). Collected: OHLC=%s, Indicators=%s",
+                        self.max_packet_limit,
+                        len(ohlc_json_data),
+                        len(indicator_json_data),
+                    )
+                    if not ohlc_json_data:
+                        raise DataNotFoundError("No 'OHLC' packet found before max packet limit.")
                     break
 
             # Check for empty indicator data and log errors
             if ind_flag:
-                for indicator_id, _ in indicators:
+                for indicator_id, _ in indicators or []:
                     if indicator_id not in indicator_json_data:
                         logging.error(f"❌ Unable to scrape indicator: {indicator_id} - No data received")
                     elif not indicator_json_data[indicator_id]:
@@ -241,6 +290,8 @@ class Streamer:
         """
         if hasattr(self, "stream_obj") and self.stream_obj:
             self.stream_obj.close()
+        self._current_subscription = None
+        self._current_indicators = None
 
     def _export(self, json_data, symbol, data_category):
         """
@@ -264,28 +315,50 @@ class Streamer:
             dict: Parsed JSON data received from the server.
         """
         attempt = 0
+        idle_packets = 0
+        last_data_time = None
         while True:
             try:
                 while True:
                     try:
                         sleep(0.1)
                         result = self.stream_obj.ws.recv()
+                        result_str = result.decode() if isinstance(result, (bytes, bytearray)) else str(result)
                         # Check if the result is a heartbeat or actual data
-                        if re.match(r"~m~\d+~m~~h~\d+$", result):
+                        if re.match(r"~m~\d+~m~~h~\d+$", result_str):
                             self.stream_obj.ws.recv()  # Echo back the message
-                            logging.debug("Received heartbeat: %s", result)
-                            self.stream_obj.ws.send(result)
+                            logging.debug("Received heartbeat: %s", result_str)
+                            self.stream_obj.ws.send(result_str)
+                            idle_packets += 1
                         else:
-                            split_result = [x for x in re.split(r"~m~\d+~m~", result) if x]
+                            split_result = [x for x in re.split(r"~m~\d+~m~", result_str) if x]
+                            if not split_result:
+                                idle_packets += 1
                             for item in split_result:
                                 if item:
+                                    idle_packets = 0
+                                    last_data_time = datetime.now().timestamp()
                                     yield json.loads(item)  # Yield parsed JSON data
                         # Reset attempt counter on successful receive
                         attempt = 0
 
+                        now_ts = datetime.now().timestamp()
+                        if last_data_time is None:
+                            last_data_time = now_ts
+                        if now_ts - last_data_time >= self.idle_timeout_seconds:
+                            if last_data_time is not None:
+                                logging.warning("Idle timeout reached, but data collected. Stopping stream.")
+                                return
+                            raise DataNotFoundError("Idle timeout: no data packets received within time limit.")
+                        if idle_packets >= self.idle_packet_limit and last_data_time is not None and now_ts - last_data_time >= 1:
+                            # Only trigger packet-based idle if we have waited at least 1s since last data
+                            raise DataNotFoundError("Idle timeout: no data packets received (packet limit).")
+
                     except WebSocketConnectionClosedException:
                         logging.error("WebSocket connection closed. Attempting to reconnect...")
                         break
+                    except DataNotFoundError:
+                        raise
                     except Exception as e:
                         logging.error("An error occurred during receive: %s", str(e))
                         break
@@ -299,6 +372,8 @@ class Streamer:
                 logging.info("Waiting %.2f seconds before reconnection attempt %d/%d...", delay, attempt + 1, self.retry_handler.max_retries)
                 sleep(delay)
                 attempt += 1
+                idle_packets = 0
+                last_data_time = None
 
                 # Re-establish connection
                 self.stream_obj = StreamHandler(websocket_url=self.ws_url, jwt_token=self.websocket_jwt_token)
@@ -309,11 +384,15 @@ class Streamer:
                 if self._current_indicators:
                     self._add_indicators(self._current_indicators)
 
+            except DataNotFoundError:
+                raise
             except Exception as e:
                 logging.error(f"Failed to reconnect: {e}")
                 if attempt >= self.retry_handler.max_retries:
                     break
                 attempt += 1
+                idle_packets = 0
+                last_data_time = None
                 sleep(self.retry_handler.get_delay(attempt))
 
 

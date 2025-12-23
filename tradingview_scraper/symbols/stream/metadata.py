@@ -12,8 +12,10 @@ DEFAULT_EXCHANGE_METADATA = {
     "OKX": {"timezone": "UTC", "is_crypto": True, "country": "Global"},
     "BYBIT": {"timezone": "UTC", "is_crypto": True, "country": "Global"},
     "BITGET": {"timezone": "UTC", "is_crypto": True, "country": "Global"},
+    "THINKMARKETS": {"timezone": "UTC", "is_crypto": False, "country": "Global"},
     "NASDAQ": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
     "NYSE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
+    "AMEX": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
     "CME": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States"},
     "CME_MINI": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States"},
     "CBOT": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States"},
@@ -21,7 +23,13 @@ DEFAULT_EXCHANGE_METADATA = {
     "NYMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States"},
     "ICE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
     "LSE": {"timezone": "Europe/London", "is_crypto": False, "country": "United Kingdom"},
+    "EUREX": {"timezone": "Europe/Paris", "is_crypto": False, "country": "France"},
+    "XETRA": {"timezone": "Europe/Berlin", "is_crypto": False, "country": "Germany"},
+    "TSX": {"timezone": "Asia/Tokyo", "is_crypto": False, "country": "Japan"},
+    "SSE": {"timezone": "Asia/Shanghai", "is_crypto": False, "country": "China"},
     "FX_IDC": {"timezone": "UTC", "is_crypto": False, "country": "Global"},
+    "OANDA": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
+    "OTC": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
 }
 
 
