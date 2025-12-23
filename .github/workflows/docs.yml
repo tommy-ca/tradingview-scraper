@@ -15,18 +15,15 @@ jobs:
       uses: astral-sh/setup-uv@v4
       with:
         enable-cache: true
-
-    - name: Set up Python 3.8
-      run: uv python install 3.8
+        cache-dependency-glob: "uv.lock"
+        cache-suffix: "3.10"
+        python-version: "3.10"
 
     - name: Install requirements
-      run: |
-        uv sync --extra dev
+      run: uv sync --extra dev
     
     - name: Build docs
-      run: |
-        cd docs
-        uv run make html
+      run: uv run make -C docs html
     # https://github.com/peaceiris/actions-gh-pages
     - name: Deploy
       if: success()

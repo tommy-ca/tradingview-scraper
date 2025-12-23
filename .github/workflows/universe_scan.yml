@@ -23,6 +23,9 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          cache-suffix: "3.12"
+          python-version: "3.12"
       - name: Install dependencies
         run: uv sync --extra dev
       - name: Run Futures Trend Scan (Long)
@@ -48,6 +51,9 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          cache-suffix: "3.12"
+          python-version: "3.12"
       - name: Install dependencies
         run: uv sync --extra dev
       - name: Run Futures Metals Trend Scan (Long)
@@ -73,6 +79,9 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          cache-suffix: "3.12"
+          python-version: "3.12"
       - name: Install dependencies
         run: uv sync --extra dev
       - name: Run CFD Trend Scan (Long)
@@ -98,6 +107,9 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          cache-suffix: "3.12"
+          python-version: "3.12"
       - name: Install dependencies
         run: uv sync --extra dev
       - name: Run Forex Trend Scan (Long)
@@ -123,6 +135,9 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          cache-suffix: "3.12"
+          python-version: "3.12"
       - name: Install dependencies
         run: uv sync --extra dev
       - name: Run US ETF Trend Scan (Long)
@@ -148,6 +163,9 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          cache-suffix: "3.12"
+          python-version: "3.12"
       - name: Install dependencies
         run: uv sync --extra dev
       - name: Run US Stocks Trend Scan (Long)
