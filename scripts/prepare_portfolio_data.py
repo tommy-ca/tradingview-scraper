@@ -1,6 +1,11 @@
 import glob
 import json
 import logging
+import math
+import os
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -12,46 +17,67 @@ logger = logging.getLogger("portfolio_data_prep")
 
 
 def prepare_portfolio_universe():
-    # 1. Identify candidates from latest exports (Today's run)
-    files = glob.glob("export/universe_selector_*.json")
-    # Filter for today's timestamp in filename (20251221)
-    files = [f for f in files if "20251221" in f]
-
+    # 1. Identify candidates
     candidates = []
 
-    for f in files:
-        logger.info(f"Reading file: {f}")
-        with open(f, "r") as j:
-            try:
-                raw_data = json.load(j)
-                # Handle both {'data': [...]} and [...] formats
-                if isinstance(raw_data, dict):
-                    items = raw_data.get("data", [])
-                elif isinstance(raw_data, list):
-                    items = raw_data
-                else:
-                    items = []
+    # Check for pre-selected candidates file first
+    preselected_file = "data/lakehouse/portfolio_candidates.json"
+    if os.path.exists(preselected_file):
+        logger.info(f"Loading candidates from {preselected_file}")
+        with open(preselected_file, "r") as f:
+            candidates = json.load(f)
+    else:
+        # Fallback to scanning exports (Old behavior)
+        files = glob.glob("export/universe_selector_*.json")
+        # Filter for today's timestamp in filename (20251221) - Update to match current date or just take all recent?
+        # Let's just take all for now if fallback is needed, or keep existing logic.
+        # But since we generated candidates, we expect to use them.
 
-                logger.info(f"  Found {len(items)} items in {f}")
-                for item in items:
-                    if not isinstance(item, dict):
-                        continue
-                    # check 'all' flag
-                    if item.get("passes", {}).get("all", False):
-                        direction = "LONG" if "_long" in f.lower() or ("short" not in f.lower() and "mr" not in f.lower()) else "SHORT"
-                        # Special handling for trend_momentum which might be long by default
-                        if "_short" in f.lower():
-                            direction = "SHORT"
-
-                        candidates.append(
-                            {"symbol": item["symbol"], "direction": direction, "market": item.get("type", "unknown"), "adx": item.get("ADX", 0), "value_traded": item.get("Value.Traded", 0)}
-                        )
-            except Exception as e:
-                logger.error(f"  Error parsing {f}: {e}")
-                continue
+        # files = [f for f in files if "20251221" in f] # OLD
+        # Let's verify date dynamically if needed, but for now assuming candidates file exists.
+        pass
 
     if not candidates:
-        logger.error("No candidates found in exports. (Check if 'passes.all' is true in any JSON)")
+        # 1. Identify candidates from latest exports (Original Logic as backup)
+        files = glob.glob("export/universe_selector_*.json")
+        today_str = datetime.now().strftime("%Y%m%d")
+        files = [f for f in files if today_str in f]
+
+        for f in files:
+            logger.info(f"Reading file: {f}")
+            with open(f, "r") as j:
+                try:
+                    raw_data = json.load(j)
+                    # Handle both {'data': [...]} and [...] formats
+                    if isinstance(raw_data, dict):
+                        items = raw_data.get("data", [])
+                    elif isinstance(raw_data, list):
+                        items = raw_data
+                    else:
+                        items = []
+
+                    logger.info(f"  Found {len(items)} items in {f}")
+                    for item in items:
+                        if not isinstance(item, dict):
+                            continue
+                        # check 'all' flag - NO, we want raw universe for portfolio usually?
+                        # Or do we only want those passing filter?
+                        # The candidates file we built already filtered top 10.
+                        # Here we probably want passing ones.
+                        if item.get("passes", {}).get("all", False):
+                            direction = "LONG" if "_long" in f.lower() or ("short" not in f.lower() and "mr" not in f.lower()) else "SHORT"
+                            if "_short" in f.lower():
+                                direction = "SHORT"
+
+                            candidates.append(
+                                {"symbol": item["symbol"], "direction": direction, "market": item.get("type", "unknown"), "adx": item.get("ADX", 0), "value_traded": item.get("Value.Traded", 0)}
+                            )
+                except Exception as e:
+                    logger.error(f"  Error parsing {f}: {e}")
+                    continue
+
+    if not candidates:
+        logger.error("No candidates found.")
         return
 
     # Deduplicate by symbol (taking first found direction and metadata)
@@ -60,39 +86,103 @@ def prepare_portfolio_universe():
         if c["symbol"] not in unique_candidates:
             unique_candidates[c["symbol"]] = c
 
-    universe = list(unique_candidates.values())
-    logger.info(f"Portfolio Universe: {len(universe)} symbols identified.")
+    # Sort by value_traded descending to keep the most liquid first
+    universe = sorted(unique_candidates.values(), key=lambda x: x.get("value_traded", 0), reverse=True)
+
+    max_symbols = int(os.getenv("PORTFOLIO_MAX_SYMBOLS", "50"))
+    if max_symbols > 0:
+        universe = universe[:max_symbols]
+    logger.info(f"Portfolio Universe: {len(universe)} symbols after limiting (max={max_symbols}).")
 
     # 2. Fetch Historical Data
     loader = PersistentDataLoader()
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=180)
+    lookback_days = int(os.getenv("PORTFOLIO_LOOKBACK_DAYS", "120"))
+    start_date = end_date - timedelta(days=lookback_days)
 
     # We'll store returns and sidecar metadata here
     price_data = {}
     alpha_meta = {}
+    lock = threading.Lock()
+    jwt_token = os.getenv("TRADINGVIEW_JWT_TOKEN", "unauthorized_user_token")
+    batch_size = int(os.getenv("PORTFOLIO_BATCH_SIZE", "1"))
 
-    for c in universe:
-        symbol = c["symbol"]
+    def run_with_retry(func, action: str, retries: int = 2, base_sleep: int = 10):
+        """Retry helper to throttle on 429 errors."""
+        for attempt in range(retries + 1):
+            try:
+                return func()
+            except Exception as e:
+                is_429 = "429" in str(e)
+                if is_429 and attempt < retries:
+                    sleep_for = base_sleep * (attempt + 1)
+                    logger.warning(f"{action} hit 429; sleeping {sleep_for}s before retry ({attempt + 1}/{retries}).")
+                    time.sleep(sleep_for)
+                    continue
+                raise
+
+    def fetch_and_store(candidate):
+        symbol = candidate["symbol"]
+        local_loader = PersistentDataLoader(websocket_jwt_token=jwt_token)
+
+        if os.getenv("PORTFOLIO_BACKFILL", "0") == "1":
+            try:
+                # Limit backfill depth to 200 days max to prevent large pulls / 429s
+                bf_depth = min(lookback_days + 20, 200)
+                logger.info(f"Backfilling {symbol} (depth={bf_depth})...")
+                run_with_retry(lambda: local_loader.sync(symbol, interval="1d", depth=bf_depth), f"Backfill {symbol}")
+            except Exception as e:
+                logger.error(f"Backfill failed for {symbol}: {e}")
+
+        if os.getenv("PORTFOLIO_GAPFILL", "0") == "1":
+            try:
+                logger.info(f"Gap filling {symbol} (max_depth=200)...")
+                run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=200), f"Gap fill {symbol}")
+            except Exception as e:
+                logger.error(f"Gap fill failed for {symbol}: {e}")
+
         logger.info(f"Loading history for {symbol}...")
         try:
-            # Load 1d data
-            df = loader.load(symbol, start_date, end_date, interval="1d")
-            if not df.empty:
-                df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s").dt.date
-                df = df.set_index("timestamp")["close"]
+            df = local_loader.load(symbol, start_date, end_date, interval="1d")
+            if df.empty:
+                return
 
-                # Calculate returns
-                returns = df.pct_change().dropna()
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s").dt.date
+            df = df.set_index("timestamp")["close"]
 
-                # Apply Signal Inversion for SHORTS
-                if c["direction"] == "SHORT":
-                    returns = -returns
+            returns = df.pct_change().dropna()
+            if candidate["direction"] == "SHORT":
+                returns = -returns
 
+            with lock:
                 price_data[symbol] = returns
-                alpha_meta[symbol] = {"adx": c["adx"], "value_traded": c["value_traded"], "direction": c["direction"]}
+                alpha_meta[symbol] = {
+                    "adx": candidate.get("adx", 0),
+                    "value_traded": candidate.get("value_traded", 0),
+                    "direction": candidate.get("direction", "LONG"),
+                }
         except Exception as e:
-            logger.error(f"Failed to load {symbol}: {e}")
+            logger.error(f"Failed to load {symbol}: {e} Keys: {list(candidate.keys())}")
+
+    total_batches = math.ceil(len(universe) / batch_size) if batch_size > 0 else 1
+
+    for batch_idx in range(total_batches):
+        batch = universe[batch_idx * batch_size : (batch_idx + 1) * batch_size]
+        logger.info(
+            "Processing batch %s/%s (%s symbols) [batch_size=%s, lookback_days=%s]",
+            batch_idx + 1,
+            total_batches,
+            len(batch),
+            batch_size,
+            lookback_days,
+        )
+        with ThreadPoolExecutor(max_workers=max(1, batch_size)) as executor:
+            futures = [executor.submit(fetch_and_store, c) for c in batch]
+            for fut in as_completed(futures):
+                try:
+                    fut.result()
+                except Exception as e:  # pragma: no cover - already logged
+                    logger.error(f"Worker error: {e}")
 
     # 3. Align and Save
     returns_df = pd.DataFrame(price_data).dropna()

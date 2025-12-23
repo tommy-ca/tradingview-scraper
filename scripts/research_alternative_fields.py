@@ -1,93 +1,32 @@
-import json
-import time
-
-import pandas as pd
-
-from tradingview_scraper.symbols.technicals import Indicators
+from tradingview_scraper.symbols.screener import Screener
 
 
-def research_alternative_fields():
-    # Large set of fields to test, based on indicators.txt and TV Technicals page
-    fields_to_test = [
-        # Oscillators & Summaries
-        "Recommend.All",
-        "Recommend.Other",
-        "Recommend.MA",
-        "RSI",
-        "Stoch.K",
-        "CCI20",
-        "ADX",
-        "AO",
-        "Mom",
-        "MACD.macd",
-        "MACD.signal",
-        "W.R",
-        "BBPower",
-        "UO",
-        # Moving Averages
-        "EMA10",
-        "SMA10",
-        "EMA20",
-        "SMA20",
-        "EMA30",
-        "SMA30",
-        "EMA50",
-        "SMA50",
-        "EMA100",
-        "SMA100",
-        "EMA200",
-        "SMA200",
-        "Ichimoku.BLine",
-        "VWMA",
-        "HullMA9",
-        # Pivots (Daily usually)
-        "Pivot.M.Classic.Middle",
-        "Pivot.M.Fibonacci.Middle",
-        "Pivot.M.Camarilla.Middle",
-    ]
+def check():
+    screener = Screener()
+    # Let's try to request "all" known fields or guess names
+    # Common TV fields: "listed_date", "start_date", "genesis_date", "ipo_date"
+    # Also "provider_id", "source_id"
 
-    ind = Indicators()
-    symbol = "BTCUSDT"
-    exchange = "BINANCE"
-    timeframes = ["15m", "1h", "1d"]
+    candidates = ["listed_date", "start_date", "genesis_date", "ipo_date", "launch_date", "creation_date", "first_trade_date"]
 
-    print(f"[INFO] Researching alternative technical fields for {exchange}:{symbol}...")
+    print(f"Checking for candidates: {candidates}")
 
-    research_results = {}
+    filters = [{"left": "exchange", "operation": "equal", "right": "BINANCE"}, {"left": "name", "operation": "equal", "right": "BTCUSDT"}]
 
-    for tf in timeframes:
-        print(f"  Fetching {tf} data...")
+    # We have to be careful, if we request an unknown column, TV might return error
+    # Let's try one by one?
+
+    for field in candidates:
         try:
-            res = ind.scrape(exchange=exchange, symbol=symbol, timeframe=tf, indicators=fields_to_test)
+            res = screener.screen(market="crypto", filters=filters, columns=["name", field], limit=1)
             if res["status"] == "success":
-                research_results[tf] = res["data"]
+                print(f"Field '{field}' exists: {res['data'][0]}")
             else:
-                print(f"  [FAILED] No data for {tf}")
+                # print(f"Field '{field}' failed: {res.get('error')}")
+                pass
         except Exception as e:
-            print(f"  [ERROR] {tf} request failed: {e}")
-        time.sleep(1)
-
-    # Analyze which fields actually returned data
-    analysis = []
-    for field in fields_to_test:
-        row = {"Field": field}
-        for tf in timeframes:
-            val = research_results.get(tf, {}).get(field)
-            row[tf] = "OK" if val is not None else "MISSING"
-        analysis.append(row)
-
-    df = pd.DataFrame(analysis)
-    print("\n" + "=" * 100)
-    print("FIELD AVAILABILITY ACROSS TIMEFRAMES")
-    print("=" * 100)
-    print(df.to_string(index=False))
-
-    output_file = "docs/research/alternative_fields_availability.json"
-    with open(output_file, "w") as f:
-        json.dump(research_results, f, indent=2)
-
-    print(f"\n[DONE] Detailed data saved to {output_file}")
+            pass
 
 
 if __name__ == "__main__":
-    research_alternative_fields()
+    check()

@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Union
+from typing import Optional, Union
 
 import pandas as pd
 
@@ -100,7 +100,7 @@ class PersistentDataLoader:
         streamer = Streamer(export_result=True, websocket_jwt_token=self.loader.websocket_jwt_token)
         parts = symbol.split(":")
         res = streamer.stream(parts[0], parts[1], timeframe=interval, numb_price_candles=depth, auto_close=True)
-        candles = res.get("ohlc", [])
+        candles = res.get("ohlc", []) if isinstance(res, dict) else []
 
         if candles:
             count_before = len(self.storage.load_candles(symbol, interval))
@@ -112,7 +112,7 @@ class PersistentDataLoader:
 
         return 0
 
-    def repair(self, symbol: str, interval: str = "1h") -> int:
+    def repair(self, symbol: str, interval: str = "1h", max_depth: Optional[int] = None) -> int:
         """
         Detects and attempts to fill gaps in local storage for a symbol.
         """
@@ -130,6 +130,10 @@ class PersistentDataLoader:
             if depth > 8500:
                 logger.warning(f"Gap at {datetime.fromtimestamp(gap_start)} is too deep ({depth} candles). Max reach is ~8500.")
                 depth = 8500
+
+            if max_depth and depth > max_depth:
+                logger.info(f"Gap depth {depth} capped to limit {max_depth}.")
+                depth = max_depth
 
             logger.info(f"Attempting to fill gap: {datetime.fromtimestamp(gap_start)} to {datetime.fromtimestamp(gap_end)} (Depth: {depth})")
             filled = self.sync(symbol, interval, depth=depth)
