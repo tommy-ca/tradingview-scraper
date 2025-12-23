@@ -214,6 +214,7 @@ class SelectorConfig(BaseModel):
     exchanges: List[str] = Field(default_factory=list)
     filters: List[Dict[str, Any]] = Field(default_factory=list)
     include_symbols: List[str] = Field(default_factory=list)
+    include_symbol_files: List[str] = Field(default_factory=list)
     exclude_symbols: List[str] = Field(default_factory=list)
     include_perps_only: bool = False
     exclude_perps: bool = False
@@ -318,23 +319,67 @@ def _load_config_file(path: str) -> Dict[str, Any]:
     return raw
 
 
+def _load_symbol_file(path: Path) -> List[str]:
+    if not path.exists():
+        logger.warning("symbol list file not found: %s", path)
+        return []
+
+    try:
+        content = path.read_text(encoding="utf-8").strip()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("failed reading symbol list %s: %s", path, exc)
+        return []
+
+    if not content:
+        return []
+
+    # Try JSON array first
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, list):
+            symbols = [s for s in parsed if isinstance(s, str)]
+        else:
+            symbols = []
+    except Exception:
+        # Fallback: newline/comma-separated text
+        parts = content.replace(",", "\n").splitlines()
+        symbols = [p.strip() for p in parts if p.strip()]
+
+    return [s.upper() for s in symbols]
+
+
 def load_config(
     source: Optional[Union[str, Mapping[str, Any]]] = None,
     overrides: Optional[Mapping[str, Any]] = None,
 ) -> SelectorConfig:
     """Load selector config from a file or mapping."""
     raw: Dict[str, Any] = {}
+    base_dir: Optional[Path] = None
     if isinstance(source, Mapping):
         raw = dict(source)
     elif isinstance(source, str):
         raw = _load_config_file(source)
+        base_dir = Path(source).parent
     elif source is not None:
         raise TypeError("source must be a mapping, path string, or None")
 
     if overrides:
         raw = _merge(raw, overrides)
 
-    return SelectorConfig.model_validate(raw)
+    config = SelectorConfig.model_validate(raw)
+
+    if config.include_symbol_files:
+        extra: List[str] = []
+        for symfile in config.include_symbol_files:
+            sym_path = Path(symfile)
+            if not sym_path.is_absolute() and base_dir:
+                sym_path = base_dir / sym_path
+            extra.extend(_load_symbol_file(sym_path))
+        if extra:
+            merged = list(dict.fromkeys([s.upper() for s in (config.include_symbols + extra)]))
+            config.include_symbols = merged
+
+    return config
 
 
 class FuturesUniverseSelector:
@@ -478,8 +523,8 @@ class FuturesUniverseSelector:
 
         # Priority matches for institutional quotes to avoid greedy stablecoin matching (e.g. WIFUSDT)
         # We check these first because some broader stables (like FUSDT) can overlap with legitimate bases
-        # CRITICAL: Longer composite quotes like FDUSD/BUSD MUST be checked before 'USD'
-        for stable in ["USDT", "USDC", "FDUSD", "BUSD", "DAI", "USD"]:
+        # Use longer, common quotes explicitly to avoid matching the shorter "USD" fragment too early
+        for stable in ["USDT", "USDC", "FUSDT", "FDUSD", "FUSD", "BUSD", "DAI"]:
             if core.endswith(stable) and len(core) > len(stable):
                 return core[: -len(stable)], stable
 
@@ -769,9 +814,11 @@ class FuturesUniverseSelector:
             if self.config.exclude_perps and is_perp:
                 continue
 
-            if include_set and symbol not in include_set:
-                continue
-            if symbol in exclude_set:
+            if include_set:
+                base_match = base_symbol in include_set
+                if symbol not in include_set and not base_match:
+                    continue
+            if symbol in exclude_set or base_symbol in exclude_set:
                 continue
             if exchange_set and exchange not in exchange_set:
                 continue
