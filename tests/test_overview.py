@@ -56,6 +56,7 @@ class TestOverview:
             + len(overview.PERFORMANCE_FIELDS)
             + len(overview.VOLATILITY_FIELDS)
             + len(overview.TECHNICAL_FIELDS)
+            + len(overview.STRUCTURAL_FIELDS)
         )
         assert len(overview.ALL_FIELDS) == total_fields
 

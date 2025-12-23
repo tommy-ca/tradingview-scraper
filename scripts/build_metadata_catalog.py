@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 from tradingview_scraper.symbols.overview import Overview
 
@@ -12,13 +12,14 @@ logger = logging.getLogger("build_metadata_catalog")
 def fetch_tv_metadata(symbols: List[str]) -> List[dict]:
     """
     Fetches structural metadata from TradingView for a list of symbols.
+    Enhanced with validation and type consistency.
     """
     from tradingview_scraper.symbols.stream.metadata import DEFAULT_EXCHANGE_METADATA
 
     ov = Overview()
     results = []
 
-    # Fields we care about for the catalog
+    # Fields we care about for catalog
     fields = [
         "pricescale",
         "minmov",
@@ -49,11 +50,16 @@ def fetch_tv_metadata(symbols: List[str]) -> List[dict]:
             if res["status"] == "success":
                 data = res["data"]
 
-                pricescale = data.get("pricescale", 1)
-                minmov = data.get("minmov", 1)
-                tick_size = minmov / pricescale if pricescale else None
+                # Validate and normalize critical fields
+                pricescale = _validate_numeric_field(data.get("pricescale"), "pricescale", 1)
+                minmov = _validate_numeric_field(data.get("minmov"), "minmov", 1)
+                tick_size = minmov / pricescale if pricescale and pricescale > 0 else None
 
                 exchange = data.get("exchange")
+                if not exchange:
+                    logger.warning(f"Missing exchange for {symbol}, skipping")
+                    continue
+
                 ex_defaults = DEFAULT_EXCHANGE_METADATA.get(exchange, {})
 
                 # Timezone Resolution: API > Exchange Default > UTC
@@ -63,6 +69,16 @@ def fetch_tv_metadata(symbols: List[str]) -> List[dict]:
                 session = data.get("session")
                 if not session:
                     session = "24x7" if data.get("type") in ["spot", "swap"] else "Unknown"
+
+                # Validate required fields
+                validation_errors = _validate_symbol_record(symbol, data, exchange, pricescale, minmov, tick_size)
+                if validation_errors:
+                    for error in validation_errors:
+                        logger.warning(f"Validation error for {symbol}: {error}")
+                    # Only skip if critical errors, otherwise log and continue
+                    critical_errors = [e for e in validation_errors if "critical" in e.lower()]
+                    if critical_errors:
+                        continue
 
                 record = {
                     "symbol": symbol,
@@ -91,7 +107,75 @@ def fetch_tv_metadata(symbols: List[str]) -> List[dict]:
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}")
 
+    logger.info(f"Successfully processed {len(results)}/{len(symbols)} symbols")
     return results
+
+
+def _validate_numeric_field(value, field_name: str, default: int) -> int:
+    """
+    Validates and normalizes numeric fields to ensure type consistency.
+    """
+    if value is None or value == "":
+        return default
+
+    try:
+        # Convert to int for type consistency
+        normalized = int(float(value))
+        if normalized <= 0:
+            logger.warning(f"Invalid {field_name} value: {value}, using default: {default}")
+            return default
+        return normalized
+    except (ValueError, TypeError):
+        logger.warning(f"Could not parse {field_name} value: {value}, using default: {default}")
+        return default
+
+
+def _validate_symbol_record_for_upsert(record: dict) -> bool:
+    """
+    Validates a symbol record before upserting to catalog.
+    """
+    required_fields = ["symbol", "type"]
+
+    for field in required_fields:
+        if not record.get(field):
+            logger.warning(f"Missing required field '{field}' for symbol {record.get('symbol', 'UNKNOWN')}")
+            return False
+
+    # Validate numeric fields
+    numeric_fields = ["pricescale", "minmov"]
+    for field in numeric_fields:
+        value = record.get(field)
+        if value is not None and (not isinstance(value, (int, float)) or value <= 0):
+            logger.warning(f"Invalid {field} value for symbol {record['symbol']}: {value}")
+            return False
+
+    return True
+
+
+def _validate_symbol_record(symbol: str, data: dict, exchange: str, pricescale: int, minmov: int, tick_size: Optional[float]) -> List[str]:
+    """
+    Validates a symbol record and returns a list of validation errors.
+    """
+    errors = []
+
+    # Critical validations
+    if not exchange:
+        errors.append("CRITICAL: Missing exchange")
+    if not data.get("type"):
+        errors.append("CRITICAL: Missing type")
+    if pricescale is None or pricescale <= 0:
+        errors.append("CRITICAL: Invalid pricescale")
+    if minmov is None or minmov <= 0:
+        errors.append("CRITICAL: Invalid minmov")
+
+    # Warning validations
+    if tick_size is None or tick_size <= 0:
+        errors.append("WARNING: Invalid tick_size calculation")
+
+    if not data.get("description"):
+        errors.append("WARNING: Missing description")
+
+    return errors
 
 
 def main():
@@ -166,7 +250,19 @@ def main():
 
         # Symbol Catalog
         catalog = MetadataCatalog()  # Defaults to data/lakehouse
-        catalog.upsert_symbols(catalog_data)
+
+        # Pre-validate data before upserting
+        validated_data = []
+        for record in catalog_data:
+            if _validate_symbol_record_for_upsert(record):
+                validated_data.append(record)
+            else:
+                logger.warning(f"Skipping invalid record: {record.get('symbol', 'UNKNOWN')}")
+
+        if validated_data:
+            catalog.upsert_symbols(validated_data)
+        else:
+            logger.warning("No valid data to upsert")
 
         # Exchange Catalog Bootstrap
         ex_catalog = ExchangeCatalog()
