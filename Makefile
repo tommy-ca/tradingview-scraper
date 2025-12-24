@@ -6,7 +6,7 @@ BACKFILL ?= 1
 GAPFILL ?= 1
 SUMMARY_DIR ?= summaries
 
-.PHONY: help update-indexes clean-exports scans-local scans-crypto scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick
+.PHONY: help update-indexes clean-exports scans-local scans-crypto scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run
 
 help:
 	@echo "Make targets:"
@@ -53,6 +53,25 @@ validate:
 
 audit:
 	$(PY) scripts/validate_portfolio_artifacts.py --only-logic
+
+optimize:
+	$(PY) scripts/optimize_portfolio.py
+
+optimize-v2:
+	CLUSTER_CAP=0.25 $(PY) scripts/optimize_clustered_v2.py
+
+clustered:
+	$(PY) scripts/optimize_portfolio_clustered.py
+
+barbell:
+	$(PY) scripts/optimize_barbell.py
+
+corr-report:
+	mkdir -p $(SUMMARY_DIR)
+	$(PY) scripts/correlation_report.py --hrp --out-dir $(SUMMARY_DIR) --min-col-frac 0.2
+
+report:
+	$(PY) scripts/generate_portfolio_report.py
 
 clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
