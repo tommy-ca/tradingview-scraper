@@ -13,10 +13,11 @@ Outputs: `export/universe_selector_*.json` (futures, metals, CFD, forex, US stoc
 
 ### 2) Run Summaries
 ```
-uv run scripts/summarize_results.py
-uv run scripts/summarize_crypto_results.py
+uv run scripts/summarize_results.py | tee summaries/summary_results.txt
+uv run scripts/summarize_crypto_results.py | tee summaries/summary_crypto.txt
+uv run scripts/correlation_report.py --out-dir summaries  # adds corr regime/pairs/HRP report
 ```
-Outputs: console tables; optional to add JSON/CSV if needed.
+Outputs: console tables plus saved reports in `summaries/`.
 
 ### 3) Prepare Portfolio Data
 ```
@@ -45,7 +46,9 @@ Output: `data/lakehouse/portfolio_barbell.json` (core + aggressors).
 ### Quick One-Liner (Quick Mode)
 ```
 bash scripts/run_local_scans.sh && bash scripts/run_crypto_scans.sh && \
-uv run scripts/summarize_results.py && uv run scripts/summarize_crypto_results.py && \
+uv run scripts/summarize_results.py | tee summaries/summary_results.txt && \
+uv run scripts/summarize_crypto_results.py | tee summaries/summary_crypto.txt && \
+uv run scripts/correlation_report.py --out-dir summaries && \
 PORTFOLIO_BATCH_SIZE=5 PORTFOLIO_LOOKBACK_DAYS=100 PORTFOLIO_BACKFILL=0 PORTFOLIO_GAPFILL=0 \
 uv run scripts/prepare_portfolio_data.py && \
 uv run scripts/optimize_portfolio.py && \
