@@ -25,9 +25,9 @@ def select_top_universe():
             mtype = "UNKNOWN"
 
             for p in clean:
-                if p.upper() in ["BINANCE", "BYBIT", "OKX", "BITGET", "NASDAQ", "NYSE", "AMEX", "CME", "FOREX", "US"]:
+                if p.upper() in ["BINANCE", "BYBIT", "OKX", "BITGET", "NASDAQ", "NYSE", "AMEX", "CME", "FOREX", "US", "BOND"]:
                     exchange = p.upper()
-                if p.upper() in ["SPOT", "PERP", "FUTURES", "STOCKS", "ETF"]:
+                if p.upper() in ["SPOT", "PERP", "FUTURES", "STOCKS", "ETF", "BONDS"]:
                     mtype = p.upper()
 
             category = f"{exchange}_{mtype}"

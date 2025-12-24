@@ -6,42 +6,13 @@ BACKFILL ?= 1
 GAPFILL ?= 1
 SUMMARY_DIR ?= summaries
 
-.PHONY: help update-indexes clean-exports scans-local scans-crypto scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run
+.PHONY: help update-indexes clean-exports scans-local scans-crypto scans-bonds scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run
 
-help:
-	@echo "Make targets:"
-	@echo "  make update-indexes      # refresh SP500/NDX lists"
-	@echo "  make clean-all           # remove export/ and summaries/"
-	@echo "  make scans               # run local + crypto scanners"
-	@echo "  make summaries           # run summarizers"
-	@echo "  make validate            # validate portfolio artifacts"
-	@echo "  make prep               # prepare portfolio data"
-	@echo "  make optimize            # run MPT optimizers"
-	@echo "  make clustered           # run Cluster-aware optimizer"
-	@echo "  make barbell             # run Taleb barbell optimizer"
-	@echo "  make corr-report         # correlation/HRP report"
-	@echo "  make clean-run           # Full pipeline from scratch"
-	@echo "  make pipeline            # Full production pipeline"
+scans-bonds:
+	$(PY) -m tradingview_scraper.bond_universe_selector --config configs/bond_etf_trend_momentum.yaml --export json
 
-update-indexes:
-	$(PY) scripts/update_index_lists.py
+scans: scans-local scans-crypto scans-bonds
 
-clean-exports:
-	rm -f export/*.json
-
-clean-summaries:
-	rm -rf $(SUMMARY_DIR)/*
-
-clean-all: clean-exports clean-summaries
-	@echo "All exports and summaries cleaned."
-
-scans-local:
-	bash scripts/run_local_scans.sh
-
-scans-crypto:
-	bash scripts/run_crypto_scans.sh
-
-scans: scans-local scans-crypto
 
 summaries:
 	mkdir -p $(SUMMARY_DIR)
