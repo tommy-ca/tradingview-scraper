@@ -222,6 +222,30 @@ class ClusteredOptimizerV2:
         self.returns = original_returns  # Restore
         return pd.DataFrame(final_alloc).sort_values("Weight", ascending=False)
 
+    def get_cluster_summary(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Aggregates asset-level results into a cluster-level summary.
+        """
+        if df.empty:
+            return pd.DataFrame()
+
+        summary = []
+        for c_id, group in df.groupby("Cluster_ID"):
+            lead_asset = group.sort_values("Weight", ascending=False).iloc[0]
+            summary.append(
+                {
+                    "Cluster_ID": str(c_id),
+                    "Cluster_Label": lead_asset["Cluster_Label"],
+                    "Total_Weight": float(group["Weight"].sum()),
+                    "Asset_Count": int(len(group)),
+                    "Lead_Asset": lead_asset["Symbol"],
+                    "Markets": list(group["Market"].unique()),
+                    "Type": group["Type"].iloc[0] if "Type" in group.columns else "CORE",
+                }
+            )
+
+        return pd.DataFrame(summary).sort_values("Total_Weight", ascending=False)
+
 
 def main():
     opt = ClusteredOptimizerV2(
@@ -231,7 +255,7 @@ def main():
         stats_path="data/lakehouse/antifragility_stats.json",
     )
 
-    profiles = {
+    profiles_raw = {
         "min_variance": opt.run_profile("Min Variance", "min_var"),
         "risk_parity": opt.run_profile("Risk Parity", "risk_parity"),
         "max_sharpe": opt.run_profile("Max Sharpe", "max_sharpe"),
@@ -239,28 +263,33 @@ def main():
     }
 
     # Prepare clusters metadata for implementation
-    cluster_metadata = {}
+    cluster_registry = {}
     for c_id, symbols in opt.clusters.items():
         valid_symbols = [s for s in symbols if s in opt.returns.columns]
         if not valid_symbols:
             continue
-        cluster_metadata[c_id] = {
+        cluster_registry[c_id] = {
             "symbols": valid_symbols,
             "size": len(valid_symbols),
             "markets": list(set(opt.meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols)),
         }
 
     # Save all
-    output = {"profiles": {}, "clusters": cluster_metadata}
-    for name, df in profiles.items():
-        output["profiles"][name] = df.to_dict(orient="records")
+    output = {"profiles": {}, "cluster_registry": cluster_registry}
+    for name, df in profiles_raw.items():
+        cluster_sum = opt.get_cluster_summary(df)
+        output["profiles"][name] = {"assets": df.to_dict(orient="records"), "clusters": cluster_sum.to_dict(orient="records")}
+
         print(f"\n--- {name.upper()} PROFILE ---")
+        print("TOP ASSETS:")
         print(df.head(10).to_string(index=False))
+        print("\nCLUSTER SUMMARY:")
+        print(cluster_sum.to_string(index=False))
 
     with open("data/lakehouse/portfolio_optimized_v2.json", "w") as f:
         json.dump(output, f, indent=2)
 
-    logger.info("Saved all profiles to data/lakehouse/portfolio_optimized_v2.json")
+    logger.info("Saved all profiles and cluster details to data/lakehouse/portfolio_optimized_v2.json")
 
 
 if __name__ == "__main__":
