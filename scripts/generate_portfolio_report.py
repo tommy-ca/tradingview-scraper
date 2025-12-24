@@ -11,6 +11,7 @@ def generate_markdown_report(data_path: str, output_path: str):
     md = []
     md.append("# 📊 Clustered Portfolio Analysis Report")
     md.append(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    md.append("\n**See Also:** [Deeper Cluster Analysis](./cluster_analysis.md)")
     md.append("\n---")
 
     for profile_name, profile_data in profiles.items():
