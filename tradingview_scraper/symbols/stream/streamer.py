@@ -344,10 +344,12 @@ class Streamer:
                         result_str = result.decode() if isinstance(result, (bytes, bytearray)) else str(result)
                         # Check if the result is a heartbeat or actual data
                         if re.match(r"~m~\d+~m~~h~\d+$", result_str):
-                            self.stream_obj.ws.recv()  # Echo back the message
+                            # Echo back the message (The result_str already contains the full heartbeat message)
                             logging.debug("Received heartbeat: %s", result_str)
-                            self.stream_obj.ws.send(result_str)
+                            if self.stream_obj and self.stream_obj.ws:
+                                self.stream_obj.ws.send(result_str)
                             idle_packets += 1
+
                         else:
                             split_result = [x for x in re.split(r"~m~\d+~m~", result_str) if x]
                             if not split_result:

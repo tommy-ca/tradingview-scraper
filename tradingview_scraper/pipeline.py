@@ -136,7 +136,14 @@ class QuantitativePipeline:
             logger.error("Failed to load historical data for any signals.")
             return {"status": "failed_data_load", "data": signals}
 
-        returns_df = pd.DataFrame(price_data).dropna()
+        # Handle alignment more robustly: Fill NaNs with 0 (neutral returns)
+        # instead of dropping rows where ANY symbol is missing (very aggressive).
+        returns_df = pd.DataFrame(price_data).fillna(0.0)
+
+        # Drop columns that are mostly zeros/missing (e.g. less than 20% history)
+        min_count = int(len(returns_df) * 0.2)
+        returns_df = returns_df.dropna(axis=1, thresh=min_count)
+
         if returns_df.empty:
             logger.error("Returns matrix is empty after alignment.")
             return {"status": "empty_returns", "data": signals}

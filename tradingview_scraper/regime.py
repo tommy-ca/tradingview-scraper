@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 import pandas as pd
 
@@ -24,18 +25,24 @@ class MarketRegimeDetector:
         Returns:
             str: 'QUIET', 'NORMAL', or 'CRISIS'
         """
-        if returns.empty:
+        if returns.empty or len(returns) < 2:
             return "NORMAL"
 
         # 1. Calculate Rolling Volatility (using cross-sectional average for global proxy)
-        market_returns = returns.mean(axis=1)
-        # Use a short lookback for 'current' vol
-        current_vol = market_returns.tail(5).std()
-        # Use a longer lookback for 'baseline' vol
-        baseline_vol = market_returns.std()
+        # mean(axis=1) on a DataFrame returns a Series
+        mean_returns = returns.mean(axis=1)
+        if not isinstance(mean_returns, pd.Series) or len(mean_returns) < 2:
+            return "NORMAL"
 
-        if baseline_vol == 0:
-            return "QUIET"
+        market_returns = cast(pd.Series, mean_returns)
+
+        # Use a short lookback for 'current' vol
+        current_vol = float(market_returns.tail(5).std())
+        # Use a longer lookback for 'baseline' vol
+        baseline_vol = float(market_returns.std())
+
+        if pd.isna(current_vol) or pd.isna(baseline_vol) or baseline_vol == 0:
+            return "NORMAL"
 
         vol_ratio = current_vol / baseline_vol
 

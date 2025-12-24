@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -44,11 +45,7 @@ class BarbellOptimizer:
 
     REGIME_SPLITS = {"QUIET": {"core": 0.85, "aggressor": 0.15}, "NORMAL": {"core": 0.90, "aggressor": 0.10}, "CRISIS": {"core": 0.95, "aggressor": 0.05}}
 
-    def _calculate_diversification_ratio(self, weights, returns):
-        volatilities = returns.std() * np.sqrt(252)
-        # Use shrunk covariance for better stability
-        cov_matrix = ShrinkageCovariance().estimate(returns)
-
+    def _calculate_diversification_ratio(self, weights, volatilities, cov_matrix):
         weighted_vol = np.dot(weights, volatilities)
         port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
 
@@ -81,11 +78,18 @@ class BarbellOptimizer:
 
         # 2. Optimize Core (Max Diversification)
         n_core = len(core_candidates)
+        # Pre-calculate volatilities and shrunk covariance matrix
+        volatilities = core_returns.std() * np.sqrt(252)
+        cov_matrix = ShrinkageCovariance().estimate(cast(pd.DataFrame, core_returns))
+
         init_weights = np.array([1.0 / n_core] * n_core)
-        bounds = tuple((0.0, 0.2) for _ in range(n_core))
+        # Dynamic upper bound to ensure feasibility (sum of weights = 1.0)
+        # If n_core is small (e.g. 3), each asset must be allowed at least 1/3 weight.
+        upper_bound = max(0.2, 1.1 / n_core)
+        bounds = tuple((0.0, upper_bound) for _ in range(n_core))
         constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
 
-        res_core = minimize(lambda w: -self._calculate_diversification_ratio(w, core_returns), init_weights, method="SLSQP", bounds=bounds, constraints=constraints)
+        res_core = minimize(lambda w: -self._calculate_diversification_ratio(w, volatilities, cov_matrix), init_weights, method="SLSQP", bounds=bounds, constraints=constraints)
 
         # 3. Merge Results
         portfolio = []
@@ -116,8 +120,9 @@ class AntifragilityAuditor:
             kurt = res.kurtosis()
             vol = res.std() * np.sqrt(252)
 
-            threshold = res.quantile(0.95)
-            tail_gain = res[res > threshold].mean() if not res[res > threshold].empty else 0
+            threshold = float(res.quantile(0.95))
+            tail_subset = res[res > threshold]
+            tail_gain = float(tail_subset.mean()) if len(tail_subset) > 0 else 0.0
 
             stats.append({"Symbol": symbol, "Vol": vol, "Skew": skew, "Kurtosis": kurt, "Tail_Gain": tail_gain})
 
