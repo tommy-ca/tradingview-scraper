@@ -11,7 +11,10 @@ SUMMARY_DIR ?= summaries
 scans-bonds:
 	$(PY) -m tradingview_scraper.bond_universe_selector --config configs/bond_etf_trend_momentum.yaml --export json
 
-scans: scans-local scans-crypto scans-bonds
+scans-forex-mtf:
+	$(PY) -m tradingview_scraper.cfd_universe_selector --config configs/forex_mtf_monthly_weekly_daily.yaml --export json
+
+scans: scans-local scans-crypto scans-bonds scans-forex-mtf
 
 
 summaries:

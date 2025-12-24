@@ -413,6 +413,21 @@ class FuturesUniverseSelector:
             if col not in columns:
                 columns.append(col)
 
+        # Add timeframe-specific columns for screens
+        for screen in [self.config.trend_screen, self.config.confirm_screen, self.config.execute_screen]:
+            if screen:
+                suffix = ""
+                if screen.timeframe == "weekly":
+                    suffix = "|1W"
+                elif screen.timeframe == "monthly":
+                    suffix = "|1M"
+
+                if suffix:
+                    if screen.adx.enabled and f"ADX{suffix}" not in columns:
+                        columns.append(f"ADX{suffix}")
+                    if screen.recommendation.enabled and f"Recommend.All{suffix}" not in columns:
+                        columns.append(f"Recommend.All{suffix}")
+
         if self.config.volume.value_traded_min > 0 and "Value.Traded" not in columns:
             columns.append("Value.Traded")
 
@@ -686,9 +701,15 @@ class FuturesUniverseSelector:
         checks: Dict[str, bool] = {}
         is_long = screen.direction == "long"
 
+        suffix = ""
+        if screen.timeframe == "weekly":
+            suffix = "|1W"
+        elif screen.timeframe == "monthly":
+            suffix = "|1M"
+
         if screen.recommendation.enabled:
             rec_min = screen.recommendation.min
-            rec_value = row.get("Recommend.All")
+            rec_value = row.get(f"Recommend.All{suffix}") or row.get("Recommend.All")
             if rec_min is None:
                 rec_pass = True
             else:
@@ -699,7 +720,7 @@ class FuturesUniverseSelector:
 
         if screen.adx.enabled:
             adx_min = screen.adx.min
-            adx_value = row.get("ADX")
+            adx_value = row.get(f"ADX{suffix}") or row.get("ADX")
             if adx_min is None:
                 checks["adx"] = True
             else:
