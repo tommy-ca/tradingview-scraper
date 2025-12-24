@@ -64,6 +64,8 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         markets = list(set(meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols))
 
         report.append(f"\n## 📦 Cluster {c_id}: {primary_sector}")
+        if c_id == "5":
+            report.append("**Detailed Sub-Cluster Analysis:** [subcluster_5.md](./subcluster_5.md)")
         report.append(f"- **Size:** {len(valid_symbols)} assets")
         report.append(f"- **Avg Intra-Cluster Correlation:** {avg_corr:.4f}")
         report.append(f"- **Cluster Annualized Vol:** {cluster_vol:.2%}")
