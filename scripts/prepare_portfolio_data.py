@@ -164,6 +164,8 @@ def prepare_portfolio_universe():
             with lock:
                 price_data[symbol] = returns
                 alpha_meta[symbol] = {
+                    "description": candidate.get("description", "N/A"),
+                    "sector": candidate.get("sector", "N/A"),
                     "adx": candidate.get("adx", 0),
                     "value_traded": candidate.get("value_traded", 0),
                     "direction": candidate.get("direction", "LONG"),

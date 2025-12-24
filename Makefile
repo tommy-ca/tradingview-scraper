@@ -90,6 +90,9 @@ pipeline: scans summaries prep corr-report optimize barbell
 pipeline-quick:
 	$(MAKE) pipeline BACKFILL=0 GAPFILL=0
 
+report:
+	$(PY) scripts/generate_portfolio_report.py
+
 clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
 	$(MAKE) scans
@@ -99,3 +102,4 @@ clean-run: clean-all
 	$(MAKE) corr-report
 	$(PY) scripts/audit_antifragility.py
 	$(MAKE) optimize-v2
+	$(MAKE) report

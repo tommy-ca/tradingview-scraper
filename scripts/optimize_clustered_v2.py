@@ -93,8 +93,8 @@ class ClusteredOptimizerV2:
 
         return pd.Series(res.x, index=self.cluster_benchmarks.columns)
 
-    def run_profile(self, name: str, across_method: str, cluster_cap: float = 0.25) -> pd.DataFrame:
-        logger.info(f"Running profile: {name} (Across: {across_method}, Cap: {cluster_cap})")
+    def run_profile(self, name: str, across_method: str, cluster_cap: float = 1.0, top_n: int = 0) -> pd.DataFrame:
+        logger.info(f"Running profile: {name} (Across: {across_method}, Cap: {cluster_cap}, Top N: {top_n or 'ALL'})")
         cluster_weights = self.optimize_across_clusters(across_method, cluster_cap=cluster_cap)
 
         final_alloc = []
@@ -109,6 +109,8 @@ class ClusteredOptimizerV2:
                 final_alloc.append(
                     {
                         "Symbol": sym,
+                        "Description": self.meta.get(str(sym), {}).get("description", "N/A"),
+                        "Sector": self.meta.get(str(sym), {}).get("sector", "N/A"),
                         "Cluster_ID": c_id,
                         "Cluster_Label": f"Cluster {c_id}",
                         "Weight": float(c_weight * sym_w_in_cluster),
@@ -119,10 +121,17 @@ class ClusteredOptimizerV2:
                     }
                 )
 
-        return pd.DataFrame(final_alloc).sort_values("Weight", ascending=False)
+        df = pd.DataFrame(final_alloc).sort_values("Weight", ascending=False)
+        if top_n > 0:
+            df = df.head(top_n)
+            # Re-normalize weights to sum to 1.0 if we truncate?
+            # Actually, usually for Top N selection we want to see the real weights.
+            # But the user might want a functional portfolio.
+            # Let's keep the real weights for now so it's clear what was dropped.
+        return df
 
-    def run_barbell(self, cluster_cap: float = 0.20) -> pd.DataFrame:
-        logger.info(f"Running profile: Antifragile Barbell (Clustered Aggressors, Core Cap: {cluster_cap})")
+    def run_barbell(self, cluster_cap: float = 1.0, top_n: int = 0) -> pd.DataFrame:
+        logger.info(f"Running profile: Antifragile Barbell (Clustered Aggressors, Core Cap: {cluster_cap}, Top N: {top_n or 'ALL'})")
         if self.stats is None:
             logger.error("No antifragility stats found for barbell.")
             return pd.DataFrame()
@@ -187,6 +196,8 @@ class ClusteredOptimizerV2:
             final_alloc.append(
                 {
                     "Symbol": sym,
+                    "Description": self.meta.get(str(sym), {}).get("description", "N/A"),
+                    "Sector": self.meta.get(str(sym), {}).get("sector", "N/A"),
                     "Cluster_ID": str(c_id),
                     "Cluster_Label": f"Cluster {c_id} (AGGRESSOR)",
                     "Weight": float(agg_weight_per),
@@ -209,6 +220,8 @@ class ClusteredOptimizerV2:
                 final_alloc.append(
                     {
                         "Symbol": sym,
+                        "Description": self.meta.get(str(sym), {}).get("description", "N/A"),
+                        "Sector": self.meta.get(str(sym), {}).get("sector", "N/A"),
                         "Cluster_ID": c_id,
                         "Cluster_Label": f"Cluster {c_id}",
                         "Weight": float(c_weight * sym_w_in_cluster * 0.90),
@@ -220,7 +233,10 @@ class ClusteredOptimizerV2:
                 )
 
         self.returns = original_returns  # Restore
-        return pd.DataFrame(final_alloc).sort_values("Weight", ascending=False)
+        df = pd.DataFrame(final_alloc).sort_values("Weight", ascending=False)
+        if top_n > 0:
+            df = df.head(top_n)
+        return df
 
     def get_cluster_summary(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -232,6 +248,7 @@ class ClusteredOptimizerV2:
         summary = []
         for c_id, group in df.groupby("Cluster_ID"):
             lead_asset = group.sort_values("Weight", ascending=False).iloc[0]
+            sectors = list(group["Sector"].unique())
             summary.append(
                 {
                     "Cluster_ID": str(c_id),
@@ -239,6 +256,8 @@ class ClusteredOptimizerV2:
                     "Total_Weight": float(group["Weight"].sum()),
                     "Asset_Count": int(len(group)),
                     "Lead_Asset": lead_asset["Symbol"],
+                    "Lead_Description": lead_asset["Description"],
+                    "Sectors": sectors[0] if len(sectors) == 1 else sectors,
                     "Markets": list(group["Market"].unique()),
                     "Type": group["Type"].iloc[0] if "Type" in group.columns else "CORE",
                 }
@@ -255,11 +274,14 @@ def main():
         stats_path="data/lakehouse/antifragility_stats.json",
     )
 
+    cluster_cap = float(os.getenv("CLUSTER_CAP", "1.0"))
+    top_n = int(os.getenv("TOP_N_ASSETS", "0"))
+
     profiles_raw = {
-        "min_variance": opt.run_profile("Min Variance", "min_var"),
-        "risk_parity": opt.run_profile("Risk Parity", "risk_parity"),
-        "max_sharpe": opt.run_profile("Max Sharpe", "max_sharpe"),
-        "barbell": opt.run_barbell(),
+        "min_variance": opt.run_profile("Min Variance", "min_var", cluster_cap=cluster_cap, top_n=top_n),
+        "risk_parity": opt.run_profile("Risk Parity", "risk_parity", cluster_cap=cluster_cap, top_n=top_n),
+        "max_sharpe": opt.run_profile("Max Sharpe", "max_sharpe", cluster_cap=cluster_cap, top_n=top_n),
+        "barbell": opt.run_barbell(cluster_cap=cluster_cap, top_n=top_n),
     }
 
     # Prepare clusters metadata for implementation

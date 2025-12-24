@@ -90,6 +90,8 @@ def select_top_universe():
             final_universe.append(
                 {
                     "symbol": item["symbol"],
+                    "description": item.get("description", "N/A"),
+                    "sector": item.get("sector", "N/A"),
                     "market": cat,
                     "value_traded": item.get("Value.Traded", 0),
                     "adx": item.get("ADX", 0),

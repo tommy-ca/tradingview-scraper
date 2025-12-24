@@ -66,6 +66,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_COLUMNS = [
     "name",
+    "description",
+    "sector",
     "close",
     "volume",
     "change",
