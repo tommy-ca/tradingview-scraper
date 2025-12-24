@@ -68,3 +68,4 @@ docs/_static/
 docs/_templates
 # Only ignore generated JSON in research, keep .md reports
 docs/research/*.json
+summaries/

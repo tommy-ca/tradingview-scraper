@@ -7,6 +7,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
+from typing import List
 
 import pandas as pd
 
@@ -185,9 +186,32 @@ def prepare_portfolio_universe():
                     logger.error(f"Worker error: {e}")
 
     # 3. Align and Save
-    returns_df = pd.DataFrame(price_data).dropna()
+    returns_df = pd.DataFrame(price_data)
+
+    # Drop sparse columns based on min history fraction
+    min_hist_frac = float(os.getenv("PORTFOLIO_MIN_HISTORY_FRAC", "0.8"))
+    min_count = int(len(returns_df) * min_hist_frac) if len(returns_df) else 0
+    before_cols = returns_df.shape[1]
+    if min_count > 0:
+        returns_df = returns_df.dropna(axis=1, thresh=min_count)
+    dropped_sparse = before_cols - returns_df.shape[1]
+    if dropped_sparse:
+        logger.info("Dropped %d sparse symbols (min_history_frac=%.2f)", dropped_sparse, min_hist_frac)
+
+    # Drop rows with any NaN to align dates
+    returns_df = returns_df.dropna()
+
+    # Drop zero-variance columns
+    zero_vars: List[str] = []
+    var = returns_df.var()
+    if isinstance(var, pd.Series):
+        zero_vars = [str(c) for c, v in var.items() if v == 0]
+    if zero_vars:
+        returns_df = returns_df.drop(columns=zero_vars)
+        logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
+
     # Filter alpha_meta to match aligned returns columns
-    alpha_meta = {s: alpha_meta[s] for s in returns_df.columns}
+    alpha_meta = {s: alpha_meta[s] for s in returns_df.columns if s in alpha_meta}
 
     logger.info(f"Returns matrix created: {returns_df.shape} (Dates x Symbols)")
 

@@ -6,7 +6,7 @@ BACKFILL ?= 1
 GAPFILL ?= 1
 SUMMARY_DIR ?= summaries
 
-.PHONY: help update-indexes clean-exports scans-local scans-crypto scans summaries prep optimize barbell pipeline pipeline-quick
+.PHONY: help update-indexes clean-exports scans-local scans-crypto scans summaries prep optimize barbell corr-report pipeline pipeline-quick
 
 help:
 	@echo "Make targets:"
@@ -17,7 +17,8 @@ help:
 	@echo "  make prep               # prepare portfolio data (use BATCH/LOOKBACK/BACKFILL/GAPFILL)"
 	@echo "  make optimize            # run MPT optimizers"
 	@echo "  make barbell             # run Taleb barbell optimizer"
-	@echo "  make pipeline            # scans -> summaries -> prep -> optimize -> barbell"
+	@echo "  make corr-report         # correlation/HRP report to $(SUMMARY_DIR)"
+	@echo "  make pipeline            # scans -> summaries -> prep -> corr-report -> optimize -> barbell"
 	@echo "  make pipeline-quick      # same as pipeline, but BACKFILL=0 GAPFILL=0"
 
 update-indexes:
@@ -49,7 +50,11 @@ optimize:
 barbell:
 	$(PY) scripts/optimize_barbell.py
 
-pipeline: scans summaries prep optimize barbell
+corr-report:
+	mkdir -p $(SUMMARY_DIR)
+	$(PY) scripts/correlation_report.py --out-dir $(SUMMARY_DIR)
+
+pipeline: scans summaries prep corr-report optimize barbell
 
 pipeline-quick:
 	$(MAKE) pipeline BACKFILL=0 GAPFILL=0
