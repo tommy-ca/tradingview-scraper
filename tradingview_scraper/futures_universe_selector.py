@@ -1091,11 +1091,14 @@ class FuturesUniverseSelector:
             # Override with aggregated metrics
             row["Value.Traded"] = agg_vt.get(base, row.get("Value.Traded"))
             row["volume"] = agg_vol.get(base, row.get("volume"))
-
             if self.config.group_duplicates:
                 row["alternates"] = [s for s in all_members.get(base, []) if s != row.get("symbol")]
 
         return results
+
+    def _dedupe_by_base(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Return one representative row per base symbol."""
+        return self._aggregate_by_base(rows)
 
     def _sort_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         final_sorted = rows
