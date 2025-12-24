@@ -115,26 +115,48 @@ class ClusteredOptimizerV2:
         return pd.DataFrame(final_alloc).sort_values("Weight", ascending=False)
 
     def run_barbell(self, cluster_cap: float = 0.20) -> pd.DataFrame:
-        logger.info(f"Running profile: Antifragile Barbell (Clustered Core, Cap: {cluster_cap})")
+        logger.info(f"Running profile: Antifragile Barbell (Clustered Aggressors, Core Cap: {cluster_cap})")
         if self.stats is None:
             logger.error("No antifragility stats found for barbell.")
             return pd.DataFrame()
 
-        # 10% Aggressors
-        aggressors = self.stats.sort_values("Antifragility_Score", ascending=False).head(5)
-        agg_symbols = set(aggressors["Symbol"].tolist())
+        # 1. IDENTIFY AGGRESSOR CLUSTERS
+        # Map symbols to clusters in stats
+        symbol_to_cluster = {}
+        for c_id, symbols in self.clusters.items():
+            for s in symbols:
+                symbol_to_cluster[s] = c_id
+
+        stats_with_clusters = self.stats.copy()
+        stats_with_clusters["Cluster_ID"] = stats_with_clusters["Symbol"].apply(lambda x: symbol_to_cluster.get(str(x)))
+
+        # Calculate best asset per cluster
+        cluster_convexity = stats_with_clusters.sort_values("Antifragility_Score", ascending=False).groupby("Cluster_ID").first()
+        top_aggressor_clusters = cluster_convexity.sort_values("Antifragility_Score", ascending=False).head(5)
+
+        agg_symbols = top_aggressor_clusters["Symbol"].tolist()
+        agg_cluster_ids = top_aggressor_clusters.index.tolist()
+
         agg_weight_total = 0.10
         agg_weight_per = agg_weight_total / len(agg_symbols)
 
-        # 90% Core (using Clustered Risk Parity)
+        # 2. OPTIMIZE CORE (90%)
+        # Exclude all symbols from the Aggressor Clusters to prevent correlated core risk
+        excluded_symbols = []
+        for c_id in agg_cluster_ids:
+            excluded_symbols.extend(self.clusters[str(c_id)])
+
         original_returns = self.returns
-        available_core_symbols = [s for s in pd.Index(self.returns.columns) if s not in agg_symbols]
+        available_core_symbols = [s for s in pd.Index(self.returns.columns) if s not in excluded_symbols]
         self.returns = self.returns[available_core_symbols]
 
-        # Re-benchmark without aggressors
+        # Re-benchmark without excluded clusters
         self.cluster_benchmarks = pd.DataFrame()
         self.intra_cluster_weights = {}
         for c_id, symbols in self.clusters.items():
+            if int(c_id) in agg_cluster_ids:
+                continue
+
             valid_symbols = [s for s in symbols if s in self.returns.columns]
             if not valid_symbols:
                 continue
@@ -154,7 +176,15 @@ class ClusteredOptimizerV2:
         final_alloc = []
         # Add Aggressors
         for sym in agg_symbols:
-            final_alloc.append({"Symbol": sym, "Cluster": "AGGRESSOR", "Weight": agg_weight_per, "Type": "AGGRESSOR (Antifragile)", "Direction": self.meta.get(str(sym), {}).get("direction", "LONG")})
+            final_alloc.append(
+                {
+                    "Symbol": sym,
+                    "Cluster": f"Cluster {symbol_to_cluster.get(sym)} (AGGRESSOR)",
+                    "Weight": agg_weight_per,
+                    "Type": "AGGRESSOR (Antifragile)",
+                    "Direction": self.meta.get(str(sym), {}).get("direction", "LONG"),
+                }
+            )
 
         # Add Core
         for c_col, c_weight in core_cluster_weights.items():
