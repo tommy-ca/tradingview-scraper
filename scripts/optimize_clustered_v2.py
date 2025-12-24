@@ -99,16 +99,23 @@ class ClusteredOptimizerV2:
 
         final_alloc = []
         for c_col, c_weight in cluster_weights.items():
+            if c_weight < 1e-6:
+                continue
             c_id = str(c_col).replace("Cluster_", "")
             intra_w = self.intra_cluster_weights[c_id]
             for sym, sym_w_in_cluster in intra_w.items():
+                if sym_w_in_cluster * c_weight < 1e-6:
+                    continue
                 final_alloc.append(
                     {
                         "Symbol": sym,
-                        "Cluster": f"Cluster {c_id}",
-                        "Weight": c_weight * sym_w_in_cluster,
-                        "Cluster_Weight": c_weight,
+                        "Cluster_ID": c_id,
+                        "Cluster_Label": f"Cluster {c_id}",
+                        "Weight": float(c_weight * sym_w_in_cluster),
+                        "Cluster_Weight": float(c_weight),
+                        "Intra_Cluster_Weight": float(sym_w_in_cluster),
                         "Direction": self.meta.get(str(sym), {}).get("direction", "LONG"),
+                        "Market": self.meta.get(str(sym), {}).get("market", "UNKNOWN"),
                     }
                 )
 
@@ -176,28 +183,39 @@ class ClusteredOptimizerV2:
         final_alloc = []
         # Add Aggressors
         for sym in agg_symbols:
+            c_id = symbol_to_cluster.get(sym)
             final_alloc.append(
                 {
                     "Symbol": sym,
-                    "Cluster": f"Cluster {symbol_to_cluster.get(sym)} (AGGRESSOR)",
-                    "Weight": agg_weight_per,
+                    "Cluster_ID": str(c_id),
+                    "Cluster_Label": f"Cluster {c_id} (AGGRESSOR)",
+                    "Weight": float(agg_weight_per),
+                    "Cluster_Weight": float(agg_weight_per),
                     "Type": "AGGRESSOR (Antifragile)",
                     "Direction": self.meta.get(str(sym), {}).get("direction", "LONG"),
+                    "Market": self.meta.get(str(sym), {}).get("market", "UNKNOWN"),
                 }
             )
 
         # Add Core
         for c_col, c_weight in core_cluster_weights.items():
+            if c_weight < 1e-6:
+                continue
             c_id = str(c_col).replace("Cluster_", "")
             intra_w = self.intra_cluster_weights[c_id]
             for sym, sym_w_in_cluster in intra_w.items():
+                if sym_w_in_cluster * c_weight < 1e-6:
+                    continue
                 final_alloc.append(
                     {
                         "Symbol": sym,
-                        "Cluster": f"Cluster {c_id}",
+                        "Cluster_ID": c_id,
+                        "Cluster_Label": f"Cluster {c_id}",
                         "Weight": float(c_weight * sym_w_in_cluster * 0.90),
+                        "Cluster_Weight": float(c_weight * 0.90),
                         "Type": "CORE (Safe)",
                         "Direction": self.meta.get(str(sym), {}).get("direction", "LONG"),
+                        "Market": self.meta.get(str(sym), {}).get("market", "UNKNOWN"),
                     }
                 )
 
@@ -220,10 +238,22 @@ def main():
         "barbell": opt.run_barbell(),
     }
 
+    # Prepare clusters metadata for implementation
+    cluster_metadata = {}
+    for c_id, symbols in opt.clusters.items():
+        valid_symbols = [s for s in symbols if s in opt.returns.columns]
+        if not valid_symbols:
+            continue
+        cluster_metadata[c_id] = {
+            "symbols": valid_symbols,
+            "size": len(valid_symbols),
+            "markets": list(set(opt.meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols)),
+        }
+
     # Save all
-    output = {}
+    output = {"profiles": {}, "clusters": cluster_metadata}
     for name, df in profiles.items():
-        output[name] = df.to_dict(orient="records")
+        output["profiles"][name] = df.to_dict(orient="records")
         print(f"\n--- {name.upper()} PROFILE ---")
         print(df.head(10).to_string(index=False))
 

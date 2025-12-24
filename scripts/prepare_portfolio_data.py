@@ -167,6 +167,7 @@ def prepare_portfolio_universe():
                     "adx": candidate.get("adx", 0),
                     "value_traded": candidate.get("value_traded", 0),
                     "direction": candidate.get("direction", "LONG"),
+                    "market": candidate.get("market", "UNKNOWN"),
                 }
         except Exception as e:
             skipped_errors.append(symbol)
