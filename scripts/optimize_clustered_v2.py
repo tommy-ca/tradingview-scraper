@@ -93,7 +93,7 @@ class ClusteredOptimizerV2:
 
         return pd.Series(res.x, index=self.cluster_benchmarks.columns)
 
-    def run_profile(self, name: str, across_method: str, cluster_cap: float = 1.0, top_n: int = 0) -> pd.DataFrame:
+    def run_profile(self, name: str, across_method: str, cluster_cap: float = 0.25, top_n: int = 0) -> pd.DataFrame:
         logger.info(f"Running profile: {name} (Across: {across_method}, Cap: {cluster_cap}, Top N: {top_n or 'ALL'})")
         cluster_weights = self.optimize_across_clusters(across_method, cluster_cap=cluster_cap)
 
@@ -130,7 +130,7 @@ class ClusteredOptimizerV2:
             # Let's keep the real weights for now so it's clear what was dropped.
         return df
 
-    def run_barbell(self, cluster_cap: float = 1.0, top_n: int = 0) -> pd.DataFrame:
+    def run_barbell(self, cluster_cap: float = 0.25, top_n: int = 0) -> pd.DataFrame:
         logger.info(f"Running profile: Antifragile Barbell (Clustered Aggressors, Core Cap: {cluster_cap}, Top N: {top_n or 'ALL'})")
         if self.stats is None:
             logger.error("No antifragility stats found for barbell.")
@@ -274,7 +274,7 @@ def main():
         stats_path="data/lakehouse/antifragility_stats.json",
     )
 
-    cluster_cap = float(os.getenv("CLUSTER_CAP", "1.0"))
+    cluster_cap = float(os.getenv("CLUSTER_CAP", "0.25"))
     top_n = int(os.getenv("TOP_N_ASSETS", "0"))
 
     profiles_raw = {

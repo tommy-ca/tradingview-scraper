@@ -71,7 +71,7 @@ optimize:
 	$(PY) scripts/optimize_portfolio.py
 
 optimize-v2:
-	$(PY) scripts/optimize_clustered_v2.py
+	CLUSTER_CAP=0.25 $(PY) scripts/optimize_clustered_v2.py
 
 clustered:
 	$(PY) scripts/optimize_portfolio_clustered.py
