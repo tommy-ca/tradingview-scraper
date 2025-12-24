@@ -51,47 +51,8 @@ summaries:
 validate:
 	$(PY) scripts/validate_portfolio_artifacts.py
 
-validate-crypto:
-	$(PY) scripts/validate_portfolio_artifacts.py --type crypto
-
-validate-trad:
-	$(PY) scripts/validate_portfolio_artifacts.py --type trad
-
-repair-crypto:
-	$(PY) scripts/repair_portfolio_gaps.py --type crypto
-
-repair-trad:
-	$(PY) scripts/repair_portfolio_gaps.py --type trad
-
-prep:
-	PORTFOLIO_BATCH_SIZE=$(BATCH) PORTFOLIO_LOOKBACK_DAYS=$(LOOKBACK) PORTFOLIO_BACKFILL=$(BACKFILL) PORTFOLIO_GAPFILL=$(GAPFILL) \
-	$(PY) scripts/prepare_portfolio_data.py
-
-optimize:
-	$(PY) scripts/optimize_portfolio.py
-
-optimize-v2:
-	CLUSTER_CAP=0.25 $(PY) scripts/optimize_clustered_v2.py
-
-clustered:
-	$(PY) scripts/optimize_portfolio_clustered.py
-
-barbell:
-	$(PY) scripts/optimize_barbell.py
-
-corr-report:
-	mkdir -p $(SUMMARY_DIR)
-	$(PY) scripts/correlation_report.py --hrp --out-dir $(SUMMARY_DIR) --min-col-frac 0.2
-
-reports: summaries corr-report
-
-pipeline: scans summaries prep corr-report optimize barbell
-
-pipeline-quick:
-	$(MAKE) pipeline BACKFILL=0 GAPFILL=0
-
-report:
-	$(PY) scripts/generate_portfolio_report.py
+audit:
+	$(PY) scripts/validate_portfolio_artifacts.py --only-logic
 
 clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
@@ -102,4 +63,6 @@ clean-run: clean-all
 	$(MAKE) corr-report
 	$(PY) scripts/audit_antifragility.py
 	$(MAKE) optimize-v2
+	$(MAKE) audit
 	$(MAKE) report
+
