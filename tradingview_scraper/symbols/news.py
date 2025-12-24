@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 
 from tradingview_scraper.symbols.utils import (
     generate_user_agent,
+    get_session,
     save_csv_file,
     save_json_file,
 )
@@ -23,6 +24,7 @@ class NewsScraper:
         self.export_result = export_result
         self.export_type = export_type
         self.headers = {"user-agent": generate_user_agent()}
+        self.session = get_session()
 
         self.exchanges = self._load_exchanges()
         self.languages = self._load_languages()
@@ -92,7 +94,7 @@ class NewsScraper:
         # construct the URL
         url = f"https://tradingview.com{story_path}"
 
-        response = requests.get(url, headers=self.headers, timeout=5)
+        response = self.session.get(url, headers=self.headers)
         response.raise_for_status()
 
         # Use BeautifulSoup to parse the HTML
@@ -238,7 +240,7 @@ class NewsScraper:
         url = f"https://news-headlines.tradingview.com/v2/view/headlines/symbol?client=web&lang={language}&area={area_code}&provider={provider}&section={section}&streaming=&symbol={exchange}:{symbol}"
 
         try:
-            response = requests.get(url, headers=self.headers, timeout=5)
+            response = self.session.get(url, headers=self.headers)
             response.raise_for_status()  # Raises HTTPError for bad responses (4xx and 5xx)
 
             response_json = response.json()

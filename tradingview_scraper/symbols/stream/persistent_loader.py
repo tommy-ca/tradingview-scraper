@@ -4,9 +4,11 @@ from typing import Optional, Union
 
 import pandas as pd
 
+from tradingview_scraper.symbols.overview import Overview
+from tradingview_scraper.symbols.stream import Streamer
 from tradingview_scraper.symbols.stream.lakehouse import LakehouseStorage
 from tradingview_scraper.symbols.stream.loader import DataLoader
-from tradingview_scraper.symbols.stream.metadata import MetadataCatalog
+from tradingview_scraper.symbols.stream.metadata import DataProfile, MetadataCatalog, get_symbol_profile
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,8 @@ class PersistentDataLoader:
         self.loader = DataLoader(websocket_jwt_token=websocket_jwt_token)
         self.storage = LakehouseStorage(base_path=lakehouse_path)
         self.catalog = MetadataCatalog(base_path=lakehouse_path)
+        self.overview = Overview()
+        self.streamer = Streamer(export_result=True, websocket_jwt_token=websocket_jwt_token)
 
     def _ensure_metadata(self, symbol: str):
         """Checks if metadata exists, otherwise attempts to fetch it."""
@@ -29,13 +33,10 @@ class PersistentDataLoader:
 
         logger.info(f"Metadata missing for {symbol}. Triggering auto-enrichment...")
         try:
-            from tradingview_scraper.symbols.overview import Overview
-
             # Fetch structural and descriptive metadata
             fields = ["pricescale", "minmov", "currency", "base_currency", "exchange", "type", "subtype", "description", "sector", "industry", "country"]
 
-            ov = Overview()
-            res = ov.get_symbol_overview(symbol, fields=fields)
+            res = self.overview.get_symbol_overview(symbol, fields=fields)
 
             if res["status"] == "success":
                 data = res["data"]
@@ -68,7 +69,7 @@ class PersistentDataLoader:
         except Exception as e:
             logger.error(f"Failed to auto-enrich metadata for {symbol}: {e}")
 
-    def sync(self, symbol: str, interval: str = "1h", depth: int = 1000) -> int:
+    def sync(self, symbol: str, interval: str = "1h", depth: int = 1000, **kwargs) -> int:
         """
         Synchronizes local storage with the latest data from the API.
         Fetches the latest N candles and merges them into the lakehouse.
@@ -77,6 +78,7 @@ class PersistentDataLoader:
             symbol (str): Symbol in 'EXCHANGE:SYMBOL' format.
             interval (str): Timeframe interval.
             depth (int): Number of candles to fetch for initial backfill or update.
+            **kwargs: Extra arguments passed to Streamer.stream (e.g., timeout params).
 
         Returns:
             int: Number of new unique candles added.
@@ -95,11 +97,8 @@ class PersistentDataLoader:
         end_dt = datetime.now()
         start_dt = end_dt - timedelta(minutes=self.loader.TIMEFRAME_MINUTES[interval] * depth)
 
-        from tradingview_scraper.symbols.stream import Streamer
-
-        streamer = Streamer(export_result=True, websocket_jwt_token=self.loader.websocket_jwt_token)
         parts = symbol.split(":")
-        res = streamer.stream(parts[0], parts[1], timeframe=interval, numb_price_candles=depth, auto_close=True)
+        res = self.streamer.stream(parts[0], parts[1], timeframe=interval, numb_price_candles=depth, auto_close=True, **kwargs)
         candles = res.get("ohlc", []) if isinstance(res, dict) else []
 
         if candles:
@@ -112,17 +111,72 @@ class PersistentDataLoader:
 
         return 0
 
-    def repair(self, symbol: str, interval: str = "1h", max_depth: Optional[int] = None) -> int:
+    def repair(
+        self,
+        symbol: str,
+        interval: str = "1h",
+        max_depth: Optional[int] = None,
+        max_fills: int = 5,
+        max_time: float = 60.0,
+        max_total_candles: int = 20000,
+        profile: DataProfile = DataProfile.UNKNOWN,
+        **kwargs,
+    ) -> int:
         """
         Detects and attempts to fill gaps in local storage for a symbol.
+
+        Args:
+            max_fills (int): Maximum number of gaps to fill in one run to avoid chasing history.
+            max_time (float): Maximum seconds to spend on one symbol's repair.
+            max_total_candles (int): Maximum total candles to fill for one symbol.
+            profile (DataProfile): Asset class profile for market-aware gap detection.
+            **kwargs: Extra arguments passed to sync -> Streamer.stream.
         """
-        gaps = self.storage.detect_gaps(symbol, interval)
+        # Determine if it's a crypto symbol for smarter gap detection
+        if profile == DataProfile.UNKNOWN:
+            meta = self.catalog.get_instrument(symbol)
+            profile = get_symbol_profile(symbol, meta)
+
+        gaps = self.storage.detect_gaps(symbol, interval, profile=profile)
         if not gaps:
             logger.info(f"No gaps detected for {symbol} ({interval}).")
             return 0
 
         total_filled = 0
-        for gap_start, gap_end in gaps:
+        filled_count = 0
+        start_time = datetime.now()
+
+        # 2010 cutoff timestamp
+        legacy_cutoff = datetime(2010, 1, 1).timestamp()
+
+        # Fill gaps from newest to oldest.
+        # This is more efficient because deeper syncs fill all subsequent gaps.
+        # If a sync returns 0 new candles, we break early (genesis reached).
+        for gap_start, gap_end in reversed(gaps):
+            # Check caps
+            if filled_count >= max_fills:
+                logger.info(f"Reached max gap fill limit ({max_fills}) for {symbol}. Stopping repair.")
+                break
+
+            elapsed = (datetime.now() - start_time).total_seconds()
+            if elapsed >= max_time:
+                logger.warning(f"Reached max time limit ({max_time}s) for {symbol} repair. Stopping.")
+                break
+
+            if total_filled >= max_total_candles:
+                logger.warning(f"Reached max total candles limit ({max_total_candles}) for {symbol}. Stopping.")
+                break
+
+            # Skip legacy gaps (pre-2010)
+            if gap_end < legacy_cutoff:
+                logger.info(f"Skipping legacy gap for {symbol}: {datetime.fromtimestamp(gap_start)} - {datetime.fromtimestamp(gap_end)}")
+                continue
+
+            # Redundancy check: see if gap was already filled by a previous deeper sync
+            if self.storage.contains_timestamp(symbol, interval, gap_start):
+                logger.info(f"Gap at {datetime.fromtimestamp(gap_start)} already filled. Skipping.")
+                continue
+
             now_ts = datetime.now().timestamp()
             diff_mins = (now_ts - gap_start) / 60
             depth = int(diff_mins / self.loader.TIMEFRAME_MINUTES[interval]) + 5
@@ -136,8 +190,14 @@ class PersistentDataLoader:
                 depth = max_depth
 
             logger.info(f"Attempting to fill gap: {datetime.fromtimestamp(gap_start)} to {datetime.fromtimestamp(gap_end)} (Depth: {depth})")
-            filled = self.sync(symbol, interval, depth=depth)
-            total_filled += filled
+            added = self.sync(symbol, interval, depth=depth, **kwargs)
+
+            if added == 0:
+                logger.info(f"Sync returned 0 new candles for {symbol} at depth {depth}. Assuming genesis reached. Stopping repair.")
+                break
+
+            total_filled += added
+            filled_count += 1
 
         return total_filled
 

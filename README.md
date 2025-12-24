@@ -194,6 +194,10 @@ The following research reports outline advanced capabilities and feasibility stu
 - [Deep History & Genesis Reach Feasibility](docs/research/deep_history_feasibility_20251220.md) - Analysis of maximum lookback limits for building crypto data lakehouses.
 - [Persistent Data Loading & Lakehouse Ingestion](docs/research/lakehouse_ingestor_20251220.md) - Implementation of a stateful loader for deep historical accumulation.
 - [Lakehouse Data Quality & Gap Management](docs/research/lakehouse_gap_management_20251220.md) - Automated detection and repair of missing historical data.
+- [Data Resilience & Stabilization (v2)](docs/specs/data_resilience_v2.md) - Specs for WebSocket guardrails, Genesis detection, and mixed-universe alignment.
+- [Portfolio Artifact Validation](scripts/validate_portfolio_artifacts.py) - Categorized health dashboard for mixed asset universes.
+- [Optimization Learnings & Comparison](docs/research/optimization_learnings_20251224.md) - Analysis of MPT, Robust, and Antifragile Barbell models.
+
 - [Historical Candle Resolution & Depth Matrix](docs/research/resolution_matrix_20251220.md) - Mapping of all verified TradingView timeframes and their limits.
 - [Stress & Performance Load Testing](docs/research/performance_load_tests_20251220.md) - Benchmarks for storage latency and concurrent ingestion throughput.
 - [Data Schema Normalization & Gap Analysis](docs/research/schema_gap_analysis_20251220.md) - Comparison with Tardis.dev standards and proposal for a normalized data model.

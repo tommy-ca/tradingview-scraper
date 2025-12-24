@@ -31,17 +31,47 @@ Inputs: `data/lakehouse/portfolio_candidates.json` (from selectors).
 Outputs: `data/lakehouse/portfolio_returns.pkl`, logs of any dropped/missing symbols.
 Knobs: set `BACKFILL/GAPFILL` to 0 for a quick run; caps are enforced in the script.
 
+### 3.5) Validate Artifacts & Targeted Repair
+```
+# View full health dashboard
+make validate
+
+# Targeted validation
+make validate-crypto
+make validate-trad
+
+# Targeted repair
+make repair-crypto
+make repair-trad
+```
+Checks traceability from candidates to lakehouse and returns matrix. Reports on missing files, stale data, and internal gaps.
+- **Smart Logic**: Automatically skips weekend/holiday gaps for non-crypto assets.
+- **Statuses**: `OK` (Ready), `OK (MARKET CLOSED)` (Expected gap), `DEGRADED` (Unexpected gap).
+
 ### 4) Optimize Portfolios
 ```
-uv run scripts/optimize_portfolio.py
-```
-Profiles: Min Variance, Risk Parity, Max Sharpe. Output: `data/lakehouse/portfolio_optimized.json`.
+# Modern Portfolio Theory (Standard)
+make optimize
 
-### 5) Barbell (Taleb-style)
+# Cluster-Aware Allocation (Groups correlated assets into buckets)
+make clustered
+
+# Robust Optimizer (Semi-Variance + Liquidity Penalty)
+uv run scripts/optimize_portfolio_robust.py
+
+# Barbell Strategy (Taleb Strategy)
+make barbell
 ```
-uv run scripts/optimize_barbell.py
+MPT Profiles: Min Variance, Risk Parity, Max Sharpe.
+Clustered: Hierarchical Risk Parity across logical buckets.
+Robust: Penalizes illiquid assets and focus on downside risk.
+Barbell: 90% Safe Core | 10% Convex Aggressors.
+
+### 5) Full Clean Run
 ```
-Output: `data/lakehouse/portfolio_barbell.json` (core + aggressors).
+make clean-run
+```
+Automates the entire sequence: Wipe -> Rescan -> Backfill -> Cluster -> Optimize.
 
 ### Quick One-Liner (Quick Mode)
 ```
@@ -51,6 +81,7 @@ uv run scripts/summarize_crypto_results.py | tee summaries/summary_crypto.txt &&
 uv run scripts/correlation_report.py --out-dir summaries && \
 PORTFOLIO_BATCH_SIZE=5 PORTFOLIO_LOOKBACK_DAYS=100 PORTFOLIO_BACKFILL=0 PORTFOLIO_GAPFILL=0 \
 uv run scripts/prepare_portfolio_data.py && \
+make validate && \
 uv run scripts/optimize_portfolio.py && \
 uv run scripts/optimize_barbell.py
 ```

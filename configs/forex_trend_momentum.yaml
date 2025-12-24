@@ -12,7 +12,7 @@ trend:
     min: 5
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: 0.0, Perf.1M: 0.0, Perf.3M: 0.1}
+    horizons: {change: 0.0, Perf.W: 0.0, Perf.1M: 0.1, Perf.3M: 0.2}
   confirmation_momentum:
     enabled: false
 

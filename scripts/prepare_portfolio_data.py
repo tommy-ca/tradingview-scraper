@@ -5,7 +5,7 @@ import math
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta
 from typing import List
 
@@ -122,23 +122,28 @@ def prepare_portfolio_universe():
                     continue
                 raise
 
+    skipped_empty = []
+    skipped_errors = []
+
     def fetch_and_store(candidate):
         symbol = candidate["symbol"]
         local_loader = PersistentDataLoader(websocket_jwt_token=jwt_token)
 
         if os.getenv("PORTFOLIO_BACKFILL", "0") == "1":
             try:
-                # Limit backfill depth to 200 days max to prevent large pulls / 429s
-                bf_depth = min(lookback_days + 20, 200)
+                # Limit backfill depth to 250 days max to prevent large pulls / 429s
+                bf_depth = min(lookback_days + 20, 250)
                 logger.info(f"Backfilling {symbol} (depth={bf_depth})...")
-                run_with_retry(lambda: local_loader.sync(symbol, interval="1d", depth=bf_depth), f"Backfill {symbol}")
+                # Use a total timeout for backfill
+                run_with_retry(lambda: local_loader.sync(symbol, interval="1d", depth=bf_depth, total_timeout=120), f"Backfill {symbol}")
             except Exception as e:
                 logger.error(f"Backfill failed for {symbol}: {e}")
 
         if os.getenv("PORTFOLIO_GAPFILL", "0") == "1":
             try:
-                logger.info(f"Gap filling {symbol} (max_depth=200)...")
-                run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=200), f"Gap fill {symbol}")
+                logger.info(f"Gap filling {symbol} (max_depth=250)...")
+                # max_time=60s, max_fills=3, total_timeout=60s per gap-fill call
+                run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=250, max_fills=3, max_time=60, total_timeout=60), f"Gap fill {symbol}")
             except Exception as e:
                 logger.error(f"Gap fill failed for {symbol}: {e}")
 
@@ -146,6 +151,7 @@ def prepare_portfolio_universe():
         try:
             df = local_loader.load(symbol, start_date, end_date, interval="1d")
             if df.empty:
+                skipped_empty.append(symbol)
                 return
 
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s").dt.date
@@ -163,6 +169,7 @@ def prepare_portfolio_universe():
                     "direction": candidate.get("direction", "LONG"),
                 }
         except Exception as e:
+            skipped_errors.append(symbol)
             logger.error(f"Failed to load {symbol}: {e} Keys: {list(candidate.keys())}")
 
     total_batches = math.ceil(len(universe) / batch_size) if batch_size > 0 else 1
@@ -179,22 +186,37 @@ def prepare_portfolio_universe():
         )
         with ThreadPoolExecutor(max_workers=max(1, batch_size)) as executor:
             futures = [executor.submit(fetch_and_store, c) for c in batch]
-            for fut in as_completed(futures):
+
+            # Timeout per batch (e.g. 5 minutes per symbol)
+            per_symbol_timeout = 300
+            batch_timeout = len(batch) * per_symbol_timeout
+
+            done, not_done = wait(futures, timeout=batch_timeout, return_when=ALL_COMPLETED)
+
+            for fut in done:
                 try:
                     fut.result()
                 except Exception as e:  # pragma: no cover - already logged
                     logger.error(f"Worker error: {e}")
 
+            if not_done:
+                logger.error(f"Batch timed out after {batch_timeout}s. {len(not_done)} tasks incomplete (moving on).")
+
     # 3. Align and Save
     returns_df = pd.DataFrame(price_data)
 
+    # Fill NaNs with 0.0 before filtering.
+    # This handles weekend gaps for equities/futures without dropping the entire row.
+    returns_df = returns_df.fillna(0.0)
+
     # Drop sparse columns based on min history fraction
-    min_hist_frac = float(os.getenv("PORTFOLIO_MIN_HISTORY_FRAC", "0.8"))
+    min_hist_frac = float(os.getenv("PORTFOLIO_MIN_HISTORY_FRAC", "0.2"))
     min_count = int(len(returns_df) * min_hist_frac) if len(returns_df) else 0
     before_cols = returns_df.shape[1]
+    dropped_sparse = 0
     if min_count > 0:
         returns_df = returns_df.dropna(axis=1, thresh=min_count)
-    dropped_sparse = before_cols - returns_df.shape[1]
+        dropped_sparse = before_cols - returns_df.shape[1]
     if dropped_sparse:
         logger.info("Dropped %d sparse symbols (min_history_frac=%.2f)", dropped_sparse, min_hist_frac)
 
@@ -210,8 +232,29 @@ def prepare_portfolio_universe():
         returns_df = returns_df.drop(columns=zero_vars)
         logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
 
+    # Optional dedupe by base symbol (e.g., across exchanges) when enabled
+    if os.getenv("PORTFOLIO_DEDUPE_BASE", "0") == "1":
+        deduped_cols = []
+        seen_bases = set()
+        for col in returns_df.columns:
+            base = col.split(":")[-1]
+            base = base.replace(".P", "").upper()
+            if base in seen_bases:
+                continue
+            seen_bases.add(base)
+            deduped_cols.append(col)
+        if len(deduped_cols) != len(returns_df.columns):
+            logger.info("Dedupe by base kept %d of %d symbols", len(deduped_cols), len(returns_df.columns))
+            returns_df = returns_df[deduped_cols]
+
     # Filter alpha_meta to match aligned returns columns
     alpha_meta = {s: alpha_meta[s] for s in returns_df.columns if s in alpha_meta}
+
+    # Coverage summary
+    if skipped_empty:
+        logger.info("Skipped empty symbols: %s", ", ".join(sorted(set(skipped_empty))))
+    if skipped_errors:
+        logger.info("Skipped errored symbols: %s", ", ".join(sorted(set(skipped_errors))))
 
     logger.info(f"Returns matrix created: {returns_df.shape} (Dates x Symbols)")
 

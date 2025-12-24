@@ -23,6 +23,7 @@ class DataLoader:
     def __init__(self, websocket_jwt_token: str = "unauthorized_user_token"):
         self.websocket_jwt_token = websocket_jwt_token
         self.catalog = MetadataCatalog()
+        self.streamer = Streamer(export_result=True, websocket_jwt_token=self.websocket_jwt_token, idle_timeout_seconds=5.0, idle_packet_limit=3)
 
     def _calculate_candles_needed(self, start: datetime, end: datetime, interval: str, exchange_symbol: Optional[str] = None) -> int:
         """
@@ -157,11 +158,8 @@ class DataLoader:
         n_candles = self._calculate_candles_needed(start, end, interval, exchange_symbol=exchange_symbol)
         logger.info(f"Requesting {n_candles} candles for {exchange_symbol} to cover range starting {start}")
 
-        # Use aggressive timeouts to fail fast if data ends (genesis reached)
-        streamer = Streamer(export_result=True, websocket_jwt_token=self.websocket_jwt_token, idle_timeout_seconds=5.0, idle_packet_limit=3)
-
         probe_n = min(n_candles, self.PROBE_CANDLE_LIMIT)
-        candles = self._stream_with_retry(streamer, exchange, symbol, interval, probe_n)
+        candles = self._stream_with_retry(self.streamer, exchange, symbol, interval, probe_n)
 
         if len(candles) < probe_n:
             logger.info(
@@ -174,7 +172,7 @@ class DataLoader:
             )
             n_candles = len(candles)
         elif n_candles > probe_n:
-            candles = self._stream_with_retry(streamer, exchange, symbol, interval, n_candles)
+            candles = self._stream_with_retry(self.streamer, exchange, symbol, interval, n_candles)
 
         start_ts = start.timestamp()
         end_ts = end.timestamp()

@@ -9,7 +9,12 @@ from typing import List, Optional
 import pkg_resources
 import requests
 
-from tradingview_scraper.symbols.utils import generate_user_agent, save_csv_file, save_json_file
+from tradingview_scraper.symbols.utils import (
+    generate_user_agent,
+    get_session,
+    save_csv_file,
+    save_json_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +23,7 @@ class Indicators:
     def __init__(self, export_result: bool = False, export_type: str = "json"):
         self.export_result: bool = export_result
         self.export_type: str = export_type
+        self.session = get_session()
 
         self.indicators: List[str] = self._load_indicators()
         self.exchanges: List[str] = self._load_exchanges()
@@ -105,7 +111,7 @@ class Indicators:
         headers = {"user-agent": generate_user_agent()}
 
         try:
-            response = requests.get(url, headers=headers, timeout=5)
+            response = self.session.get(url, headers=headers)
 
             if response.status_code == 200:
                 json_response = response.json()

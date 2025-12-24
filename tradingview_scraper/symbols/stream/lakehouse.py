@@ -1,8 +1,11 @@
 import logging
 import os
+from datetime import datetime
 from typing import List, Optional
 
 import pandas as pd
+
+from tradingview_scraper.symbols.stream.metadata import DataProfile, get_us_holidays
 
 logger = logging.getLogger(__name__)
 
@@ -51,14 +54,20 @@ class LakehouseStorage:
         if not os.path.exists(file_path):
             return pd.DataFrame()
 
-        df = pd.read_parquet(file_path)
+        try:
+            df = pd.read_parquet(file_path)
+            if not isinstance(df, pd.DataFrame):
+                return pd.DataFrame()
 
-        if start_ts is not None:
-            df = df[df["timestamp"] >= start_ts]
-        if end_ts is not None:
-            df = df[df["timestamp"] <= end_ts]
-
-        return df.sort_values("timestamp")
+            if start_ts is not None:
+                df = df[df["timestamp"] >= start_ts]
+            if end_ts is not None:
+                df = df[df["timestamp"] <= end_ts]
+            result_df = pd.DataFrame(df).sort_values(by="timestamp")
+            return result_df
+        except Exception as e:
+            logger.error(f"Error loading candles for {symbol}: {e}")
+            return pd.DataFrame()
 
     def get_last_timestamp(self, symbol: str, interval: str) -> Optional[float]:
         """
@@ -68,15 +77,52 @@ class LakehouseStorage:
         if not os.path.exists(file_path):
             return None
 
-        # We can optimize this by only reading metadata if file is huge
+        try:
+            df = pd.read_parquet(file_path, columns=["timestamp"])
+            if df.empty:
+                return None
+
+            ts = df["timestamp"].max()
+            if hasattr(ts, "item"):  # Handle numpy types
+                ts = ts.item()
+            return float(ts)  # type: ignore
+        except Exception:
+            return None
+
+        try:
+            df = pd.read_parquet(file_path, columns=["timestamp"])
+            if df.empty:
+                return None
+
+            ts = df["timestamp"].max()
+            if hasattr(ts, "item"):  # Handle numpy types
+                ts = ts.item()
+            return float(ts)
+        except Exception:
+            return None
+
+    def contains_timestamp(self, symbol: str, interval: str, timestamp: float) -> bool:
+        """
+        Efficiently checks if a specific timestamp exists in storage for a symbol.
+        """
+        file_path = self._get_path(symbol, interval)
+        if not os.path.exists(file_path):
+            return False
+
+        # Read only the timestamp column to check existence
         df = pd.read_parquet(file_path, columns=["timestamp"])
         if df.empty:
-            return None
-        return df["timestamp"].max()
+            return False
+        return timestamp in df["timestamp"].values
 
-    def detect_gaps(self, symbol: str, interval: str) -> List[tuple]:
+    def detect_gaps(self, symbol: str, interval: str, profile: DataProfile = DataProfile.UNKNOWN) -> List[tuple]:
         """
         Identifies missing data points in the historical time-series.
+
+        Args:
+            symbol (str): Symbol name.
+            interval (str): Timeframe interval.
+            profile (DataProfile): Asset class profile for market-aware filtering.
 
         Returns:
             List[tuple]: List of (start_missing_ts, end_missing_ts) gaps.
@@ -95,12 +141,34 @@ class LakehouseStorage:
 
         expected_diff = interval_mins * 60
         gaps = []
+        holidays = get_us_holidays(datetime.now().year)
 
         timestamps = df["timestamp"].tolist()
         for i in range(1, len(timestamps)):
             diff = timestamps[i] - timestamps[i - 1]
             if diff > expected_diff * 1.5:  # Allow some tolerance
-                gaps.append((timestamps[i - 1] + expected_diff, timestamps[i] - expected_diff))
+                gap_start = timestamps[i - 1] + expected_diff
+                gap_end = timestamps[i] - expected_diff
+
+                # Market-aware filtering
+                if profile != DataProfile.CRYPTO:
+                    start_dt = datetime.fromtimestamp(gap_start)
+                    end_dt = datetime.fromtimestamp(gap_end)
+
+                    # 1. Skip Weekends for Equities/Forex/Futures
+                    if interval == "1d":
+                        # Sunday is 6, Saturday is 5
+                        # If gap is purely weekend (Friday to Monday), skip
+                        if (start_dt.weekday() >= 5 or end_dt.weekday() >= 5) and diff <= expected_diff * 3.5:
+                            continue
+
+                    # 2. Skip US Holidays for Equities/Futures
+                    if profile in [DataProfile.EQUITY, DataProfile.FUTURES]:
+                        start_date_str = start_dt.strftime("%Y-%m-%d")
+                        if start_date_str in holidays:
+                            continue
+
+                gaps.append((gap_start, gap_end))
 
         if gaps:
             logger.info(f"Detected {len(gaps)} gaps for {symbol} ({interval}).")

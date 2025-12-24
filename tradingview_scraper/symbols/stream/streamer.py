@@ -180,7 +180,16 @@ class Streamer:
     def _extract_indicator_from_stream(self, pkt: dict):
         return extract_indicator_from_stream(pkt, self.study_id_to_name_map)
 
-    def stream(self, exchange: str, symbol: str, timeframe: str = "1m", numb_price_candles: int = 10, indicators: Optional[List[Tuple[str, str]]] = None, auto_close: bool = False):
+    def stream(
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str = "1m",
+        numb_price_candles: int = 10,
+        indicators: Optional[List[Tuple[str, str]]] = None,
+        auto_close: bool = False,
+        total_timeout: Optional[float] = None,
+    ):
         """
         Starts streaming data for a given exchange and symbol, with optional indicators.
 
@@ -192,6 +201,7 @@ class Streamer:
             indicators (list, optional): List of tuples, each containing (indicator_id, indicator_version).
                                         Example: [("STD;RSI", "37.0"), ("STD;MACD", "31.0")]
             auto_close (bool): If True, closes the connection after the stream is complete. Default is False.
+            total_timeout (float, optional): Maximum seconds to spend on this stream.
 
         Returns:
             dict: A dictionary containing OHLC and indicator data.
@@ -200,6 +210,7 @@ class Streamer:
         validate_symbols(exchange_symbol)
 
         ind_flag = bool(indicators)
+        start_time = datetime.now()
 
         # Always start each subscription with a fresh connection to avoid stale state when reusing the Streamer.
         if self._current_subscription is not None or not self._is_connection_active():
@@ -237,6 +248,13 @@ class Streamer:
 
                 if ohlc_ready and indicators_ready:
                     break
+
+                # Check total timeout
+                if total_timeout:
+                    elapsed = (datetime.now() - start_time).total_seconds()
+                    if elapsed >= total_timeout:
+                        logging.warning(f"Total timeout ({total_timeout}s) reached for {exchange_symbol}. Returning partial data.")
+                        break
 
                 if received_data is None and not received_indicator_data:
                     idle_packets += 1

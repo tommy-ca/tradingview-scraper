@@ -1,36 +1,93 @@
 import logging
 import os
-from typing import Dict, List, Optional
+from enum import Enum
+from typing import Dict, List, Optional, Set
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+
+class DataProfile(Enum):
+    CRYPTO = "CRYPTO"
+    EQUITY = "EQUITY"
+    FUTURES = "FUTURES"
+    FOREX = "FOREX"
+    UNKNOWN = "UNKNOWN"
+
+
 # Canonical metadata for common exchanges
 DEFAULT_EXCHANGE_METADATA = {
-    "BINANCE": {"timezone": "UTC", "is_crypto": True, "country": "Global"},
-    "OKX": {"timezone": "UTC", "is_crypto": True, "country": "Global"},
-    "BYBIT": {"timezone": "UTC", "is_crypto": True, "country": "Global"},
-    "BITGET": {"timezone": "UTC", "is_crypto": True, "country": "Global"},
-    "THINKMARKETS": {"timezone": "UTC", "is_crypto": False, "country": "Global"},
-    "NASDAQ": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
-    "NYSE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
-    "AMEX": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
-    "CME": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States"},
-    "CME_MINI": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States"},
-    "CBOT": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States"},
-    "COMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States"},
-    "NYMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States"},
-    "ICE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
-    "LSE": {"timezone": "Europe/London", "is_crypto": False, "country": "United Kingdom"},
-    "EUREX": {"timezone": "Europe/Paris", "is_crypto": False, "country": "France"},
-    "XETRA": {"timezone": "Europe/Berlin", "is_crypto": False, "country": "Germany"},
-    "TSX": {"timezone": "Asia/Tokyo", "is_crypto": False, "country": "Japan"},
-    "SSE": {"timezone": "Asia/Shanghai", "is_crypto": False, "country": "China"},
-    "FX_IDC": {"timezone": "UTC", "is_crypto": False, "country": "Global"},
-    "OANDA": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
-    "OTC": {"timezone": "America/New_York", "is_crypto": False, "country": "United States"},
+    "BINANCE": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO},
+    "OKX": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO},
+    "BYBIT": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO},
+    "BITGET": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO},
+    "THINKMARKETS": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
+    "NASDAQ": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY},
+    "NYSE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY},
+    "AMEX": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY},
+    "CME": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
+    "CME_MINI": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
+    "CBOT": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
+    "COMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
+    "NYMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
+    "ICE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
+    "OANDA": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FOREX},
+    "FX_IDC": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
 }
+
+
+def get_us_holidays(year: int) -> Set[str]:
+    """Returns a set of major US market holiday dates (YYYY-MM-DD)."""
+    # Simple hardcoded major holidays for 2025/2026
+    holidays = {
+        f"{year}-01-01",  # New Year's Day
+        f"{year}-01-20",  # MLK Day (2025)
+        f"{year}-02-17",  # Presidents Day (2025)
+        f"{year}-04-18",  # Good Friday (2025)
+        f"{year}-05-26",  # Memorial Day (2025)
+        f"{year}-06-19",  # Juneteenth
+        f"{year}-07-04",  # Independence Day
+        f"{year}-09-01",  # Labor Day (2025)
+        f"{year}-11-27",  # Thanksgiving (2025)
+        f"{year}-12-24",  # Christmas Eve (Early Close/Closed)
+        f"{year}-12-25",  # Christmas
+    }
+    return holidays
+
+
+def get_symbol_profile(symbol: str, meta: Optional[Dict] = None) -> DataProfile:
+    """Determines the data profile for a symbol."""
+    if not symbol:
+        return DataProfile.UNKNOWN
+
+    exchange = symbol.split(":")[0]
+
+    # 1. Check metadata override
+    if meta:
+        if meta.get("is_crypto"):
+            return DataProfile.CRYPTO
+        stype = str(meta.get("type", "")).lower()
+        if stype in ["spot", "swap", "crypto"]:
+            return DataProfile.CRYPTO
+        if stype == "stock":
+            return DataProfile.EQUITY
+        if stype in ["futures", "commodity"]:
+            return DataProfile.FUTURES
+        if stype in ["forex", "fx"]:
+            return DataProfile.FOREX
+
+    # 2. Check exchange defaults
+    if exchange in DEFAULT_EXCHANGE_METADATA:
+        profile = DEFAULT_EXCHANGE_METADATA[exchange].get("profile")
+        if isinstance(profile, DataProfile):
+            return profile
+
+    # 3. Last resort heuristics
+    if ".P" in symbol or "USDT" in symbol:
+        return DataProfile.CRYPTO
+
+    return DataProfile.UNKNOWN
 
 
 class MetadataCatalog:

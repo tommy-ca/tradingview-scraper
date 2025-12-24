@@ -16,16 +16,12 @@ import time
 from typing import Any, Dict, List
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+
+from tradingview_scraper.symbols.utils import get_session
 
 SESSION_TIMEOUT = float(os.getenv("STREAMER_HTTP_TIMEOUT", "5"))
 VALIDATE_CONCURRENCY = int(os.getenv("STREAMER_VALIDATE_CONCURRENCY", "2"))
-_retry_strategy = Retry(total=2, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
-_http_adapter = HTTPAdapter(pool_connections=10, pool_maxsize=VALIDATE_CONCURRENCY + 2, max_retries=_retry_strategy)
-_validate_session = requests.Session()
-_validate_session.mount("https://", _http_adapter)
-_validate_session.mount("http://", _http_adapter)
+_validate_session = get_session()
 _validate_lock = threading.Lock()
 _validated_symbols_cache = set()
 _validate_semaphore = threading.Semaphore(max(1, VALIDATE_CONCURRENCY))
@@ -186,7 +182,7 @@ def fetch_tradingview_indicators(query: str):
     url = "https://www.tradingview.com/pubscripts-suggest-json/?search=" + query
 
     try:
-        response = requests.get(url, timeout=5)
+        response = _validate_session.get(url)
         response.raise_for_status()
         json_data = response.json()
 
@@ -276,7 +272,7 @@ def fetch_indicator_metadata(script_id: str, script_version: str, chart_session:
     url = f"https://pine-facade.tradingview.com/pine-facade/translate/{script_id}/{script_version}"
 
     try:
-        response = requests.get(url, timeout=5)
+        response = _validate_session.get(url)
         response.raise_for_status()
         json_data = response.json()
 

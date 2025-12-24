@@ -65,10 +65,13 @@ The package is organized into the following key components:
 - `exceptions.py` - Custom exception classes
 
 **`tradingview_scraper/symbols/stream/`** - Real-time WebSocket streaming
-- `streamer.py` - Main `Streamer` class for OHLCV and indicator streaming with export capabilities
-- `price.py` - `RealTimeData` class for simple OHLCV and watchlist streaming
-- `stream_handler.py` - Low-level WebSocket connection and message handling
-- `utils.py` - WebSocket utilities, symbol validation, indicator metadata fetching
+- `streamer.py` - Main `Streamer` class for OHLCV and indicator streaming. Features `total_timeout` and partial data recovery.
+- `persistent_loader.py` - Orchestrates historical backfill and `repair()` with market-aware gap detection and genesis (start of history) detection.
+- `lakehouse.py` - Manages Parquet persistence and deduplication. Includes `detect_gaps()` with weekend/holiday skipping.
+- `metadata.py` - Symbol/Exchange catalogs. Defines `DataProfile` (CRYPTO, EQUITY, FUTURES, FOREX) for session-aware logic.
+- `price.py` - `RealTimeData` class for simple OHLCV and watchlist streaming.
+- `stream_handler.py` - Low-level WebSocket connection and message handling.
+- `utils.py` - WebSocket utilities, symbol validation, indicator metadata fetching.
 
 **`tradingview_scraper/utils/`** - Shared utilities
 - Currently empty, reserved for future shared utilities

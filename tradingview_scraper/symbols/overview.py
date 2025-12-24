@@ -6,6 +6,7 @@ import requests
 
 from tradingview_scraper.symbols.utils import (
     generate_user_agent,
+    get_session,
     save_csv_file,
     save_json_file,
 )
@@ -156,6 +157,7 @@ class Overview:
         self.export_result = export_result
         self.export_type = export_type
         self.headers = {"User-Agent": generate_user_agent()}
+        self.session = get_session()
 
     def _validate_symbol(self, symbol: str) -> str:
         """
@@ -218,7 +220,7 @@ class Overview:
             params = {"symbol": symbol, "fields": ",".join(field_list)}
 
             # Make request
-            response = requests.get(self.SYMBOL_API_URL, params=params, headers=self.headers, timeout=10)
+            response = self.session.get(self.SYMBOL_API_URL, params=params, headers=self.headers)
 
             if response.status_code == 200:
                 data = response.json()

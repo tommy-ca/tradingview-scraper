@@ -32,6 +32,7 @@ This document describes the metadata catalog system for TradingView scraper, whi
 | base | str | ✗ | Base currency (e.g., "BTC") |
 | quote | str | ✗ | Quote currency (e.g., "USDT") |
 | type | str | ✓ | Instrument type ("spot", "swap", "futures", "stock", "forex") |
+| profile | str | ✓ | DataProfile enum ("CRYPTO", "EQUITY", "FUTURES", "FOREX") |
 | subtype | str | ✗ | Additional classification (e.g., "perpetual") |
 | description | str | ✗ | Human-readable description |
 | sector | str | ✗ | Economic sector (for stocks) |
@@ -59,6 +60,26 @@ This document describes the metadata catalog system for TradingView scraper, whi
 | is_crypto | bool | ✓ | Crypto exchange flag |
 | description | str | ✓ | Exchange description |
 | updated_at | datetime | ✓ | Last update timestamp |
+
+## Market Resilience & Health
+
+### Data Profiles
+Assets are categorized into `DataProfile` groups to enable market-aware gap detection:
+- **CRYPTO**: 24/7 trading. No expected gaps.
+- **EQUITY**: M-F 09:30-16:00 ET. Skips weekends and US holidays.
+- **FUTURES**: Sun-Fri. Specific daily breaks (e.g., 17:00-18:00 ET).
+- **FOREX**: Sun 17:00 ET - Fri 17:00 ET.
+
+### Health Statuses
+The validation pipeline (`make validate`) assigns one of the following statuses:
+- **OK**: Continuous data with no gaps.
+- **OK (MARKET CLOSED)**: Gaps found, but they match weekends or known US market holidays.
+- **DEGRADED (GAPS)**: Unexpected data holes during active trading hours.
+- **STALE**: Data has not been updated within the last 72 hours.
+- **MISSING**: No local storage file found for the candidate.
+
+### Holiday Management
+The system uses a built-in US Market Holiday list (`get_us_holidays`) to filter false-positive gaps for Equities and Futures.
 
 ## Data Flow
 

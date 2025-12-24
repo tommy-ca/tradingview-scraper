@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy.cluster.hierarchy import leaves_list, linkage
+from scipy.cluster.hierarchy import fcluster, leaves_list, linkage
 from scipy.spatial.distance import squareform
 from sklearn.covariance import LedoitWolf
 
@@ -159,6 +159,32 @@ def main():
     if args.hrp and rets.shape[1] > 1:
         w_hrp = hrp_weights(rets, args.linkage)
         report["hrp_weights"] = w_hrp.to_dict()
+
+        # Extract clusters
+        corr = rets.corr().to_numpy()
+        dist = np.sqrt(0.5 * (np.ones_like(corr) - corr))
+        condensed = squareform(dist, checks=False)
+        link = linkage(condensed, method=args.linkage)
+
+        # Form flat clusters based on distance threshold or max clusters
+        # Using a distance threshold that roughly corresponds to 0.7 correlation
+        # dist = sqrt(0.5 * (1 - 0.7)) = sqrt(0.15) approx 0.38
+        cluster_assignments = fcluster(link, t=0.4, criterion="distance")
+
+        clusters = {}
+        for sym, cluster_id in zip(rets.columns, cluster_assignments):
+            c_id = int(cluster_id)
+            if c_id not in clusters:
+                clusters[c_id] = []
+            clusters[c_id].append(sym)
+
+        report["clusters"] = clusters
+
+        # Save cluster mapping for the optimizer
+        cluster_path = Path("data/lakehouse/portfolio_clusters.json")
+        with open(cluster_path, "w") as f:
+            json.dump(clusters, f, indent=2)
+        print(f"Saved {len(clusters)} clusters to {cluster_path}")
 
     json_path = out_dir / "correlation_report.json"
     json_path.write_text(json.dumps(report, indent=2))

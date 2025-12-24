@@ -1,10 +1,64 @@
 import json
+import logging
 import os
 import random
+import threading
 from datetime import datetime
 from typing import List
 
 import pandas as pd
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+logger = logging.getLogger(__name__)
+
+
+class RequestSession:
+    """
+    A thread-safe requests session with built-in retries and timeouts.
+    """
+
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(RequestSession, cls).__new__(cls)
+                cls._instance._initialize()
+            return cls._instance
+
+    def _initialize(self):
+        self.session = requests.Session()
+        self.timeout = float(os.getenv("TV_HTTP_TIMEOUT", "10.0"))
+        retries = int(os.getenv("TV_HTTP_RETRIES", "3"))
+        backoff = float(os.getenv("TV_HTTP_BACKOFF", "1.0"))
+
+        retry_strategy = Retry(
+            total=retries,
+            backoff_factor=backoff,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET", "POST"],
+        )
+        adapter = HTTPAdapter(pool_connections=20, pool_maxsize=100, max_retries=retry_strategy)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+    def get(self, url, **kwargs):
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = self.timeout
+        return self.session.get(url, **kwargs)
+
+    def post(self, url, **kwargs):
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = self.timeout
+        return self.session.post(url, **kwargs)
+
+
+def get_session():
+    """Returns a global RequestSession instance."""
+    return RequestSession()
 
 
 def ensure_export_directory(path="/export"):

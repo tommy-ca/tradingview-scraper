@@ -18,14 +18,15 @@ uv run scripts/summarize_crypto_results.py
 
 ## 3) Prepare portfolio data (fetch/backfill/gap-fill + returns)
 ```
-# Tune batch/limits as needed; backfill/gapfill capped in script
+# Tune batch/limits as needed; backfill/gapfill capped with timeouts/limits
 PORTFOLIO_BATCH_SIZE=5 \
 PORTFOLIO_LOOKBACK_DAYS=100 \
 PORTFOLIO_BACKFILL=1 \
-PORTFOLIO_GAPFILL=1 \
+PORTFOLIO_GAPFILL=0 \
 uv run scripts/prepare_portfolio_data.py
 ```
 - Env knobs: `PORTFOLIO_BATCH_SIZE`, `PORTFOLIO_LOOKBACK_DAYS`, `PORTFOLIO_BACKFILL`, `PORTFOLIO_GAPFILL` (set 0 to skip backfill/gapfill).
+- **Stabilization Note:** Backfill and Gap-fill now have strict caps (120s backfill timeout, 60s gap-fill timeout, 2010 legacy cutoff). If the script hangs or takes too long, set `PORTFOLIO_GAPFILL=0`.
 - Uses `data/lakehouse/portfolio_candidates.json` (built from selectors) and writes `data/lakehouse/portfolio_returns.pkl` plus sidecar metadata.
 
 ## 4) Rank/build universe for portfolio
