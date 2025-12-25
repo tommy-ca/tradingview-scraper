@@ -93,6 +93,7 @@ def select_top_universe():
                     "description": item.get("description", "N/A"),
                     "sector": item.get("sector", "N/A"),
                     "market": cat,
+                    "close": item.get("close", 0),
                     "value_traded": item.get("Value.Traded", 0),
                     "adx": item.get("ADX", 0),
                     "atr": item.get("ATR", 0),

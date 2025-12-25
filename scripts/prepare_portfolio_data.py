@@ -167,6 +167,7 @@ def prepare_portfolio_universe():
                     "description": candidate.get("description", "N/A"),
                     "sector": candidate.get("sector", "N/A"),
                     "adx": candidate.get("adx", 0),
+                    "close": candidate.get("close", 0),
                     "value_traded": candidate.get("value_traded", 0),
                     "direction": candidate.get("direction", "LONG"),
                     "market": candidate.get("market", "UNKNOWN"),

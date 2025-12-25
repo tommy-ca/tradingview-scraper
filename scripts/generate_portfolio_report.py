@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -41,17 +41,25 @@ def calculate_portfolio_vol(assets: List[Dict[str, Any]], returns_df: Optional[p
         return 0.0
 
     w = np.array([weights_map[s] for s in common_symbols], dtype=float)
-    sub_rets = returns_df[common_symbols]
+    sub_rets = cast(pd.DataFrame, returns_df[common_symbols])
 
-    # Simple manual variance calculation to satisfy linter
-    cov = sub_rets.cov().values * 252
-    port_var = float(np.matmul(w.T, np.matmul(cov, w)))
+    # Pre-calculate covariance to avoid linter confusion with chain calls
+    cov_matrix = sub_rets.cov()
+    annual_cov = cov_matrix.values * 252
+
+    # Portfolio variance: w^T * Cov * w
+    port_var = float(np.dot(w.T, np.dot(annual_cov, w)))
     return float(np.sqrt(port_var)) if port_var > 0 else 0.0
 
 
-def generate_markdown_report(data_path: str, returns_path: str, output_path: str):
+def generate_markdown_report(data_path: str, returns_path: str, candidates_path: str, output_path: str):
     with open(data_path, "r") as f:
         data = json.load(f)
+
+    candidates = []
+    if os.path.exists(candidates_path):
+        with open(candidates_path, "r") as f:
+            candidates = json.load(f)
 
     returns_df: Optional[pd.DataFrame] = None
     if os.path.exists(returns_path):
@@ -63,13 +71,30 @@ def generate_markdown_report(data_path: str, returns_path: str, output_path: str
             pass
 
     profiles = data.get("profiles", {})
+    cluster_registry = data.get("cluster_registry", {})
 
     md = []
-    md.append("# 📊 Clustered Portfolio Analysis Report")
-    md.append(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    md.append("\n**Quick Links:** [Deeper Cluster Analysis](./cluster_analysis.md) | [Risk Rationale](./research/antifragile_barbell_rationale.md)")
+    md.append("# 📊 Quantitative Portfolio Analysis Dashboard")
+    md.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    md.append("\n**Quick Links:** [Risk Rationale](./research/antifragile_barbell_rationale.md) | [Cluster Hierarchy](./cluster_analysis.md)")
     md.append("\n---")
 
+    # 1. SHARED CLUSTER REFERENCE
+    md.append("## 🧩 Shared Cluster Reference")
+    md.append("Hierarchical clustering groups correlated assets into risk units to prevent over-concentration.")
+    md.append("| Cluster | Lead Asset | Size | Primary Markets |")
+    md.append("| :--- | :--- | :--- | :--- |")
+
+    for c_id, c_info in sorted(cluster_registry.items(), key=lambda x: int(x[0])):
+        syms = c_info.get("symbols", [])
+        markets = ", ".join(sorted(c_info.get("markets", [])))
+        # Find lead asset from one of the profiles if available, else first in list
+        lead = syms[0] if syms else "N/A"
+        md.append(f"| **Cluster {c_id}** | `{lead}` | {len(syms)} | {markets} |")
+
+    md.append("\n---")
+
+    # 2. RISK PROFILES
     for profile_name, profile_data in profiles.items():
         pretty_name = profile_name.replace("_", " ").title()
         assets = profile_data.get("assets", [])
@@ -132,6 +157,27 @@ def generate_markdown_report(data_path: str, returns_path: str, output_path: str
 
         md.append("\n---")
 
+    # 3. CANDIDATE UNIVERSE
+    if candidates:
+        md.append("\n## 🔍 Trend Filtered Candidate Universe")
+        md.append("High-liquidity symbols passing multi-timeframe technical filters.")
+        md.append("| Symbol | Market | Direction | ADX | ATR% | Trend |")
+        md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+
+        sorted_candidates = sorted(candidates, key=lambda x: (get_market_category(x.get("market", "")), -x.get("adx", 0)))
+
+        for c in sorted_candidates:
+            adx = float(c.get("adx", 0))
+            close = float(c.get("close", 0))
+            atr = float(c.get("atr", 0))
+            atr_pct = f"{(atr / close) * 100:.2f}%" if close > 0 else "N/A"
+
+            # Simple trend strength indicator
+            trend_icon = "🔥" if adx > 25 else "📈" if adx > 15 else "➡️"
+            market_cat = get_market_category(c.get("market", "UNKNOWN")).split(" ")[0]  # Just emoji
+
+            md.append(f"| `{c['symbol']}` | {market_cat} | **{c.get('direction', 'LONG')}** | {adx:.1f} | {atr_pct} | {trend_icon} |")
+
     with open(output_path, "w") as f:
         f.write("\n".join(md))
 
@@ -139,4 +185,4 @@ def generate_markdown_report(data_path: str, returns_path: str, output_path: str
 
 
 if __name__ == "__main__":
-    generate_markdown_report("data/lakehouse/portfolio_optimized_v2.json", "data/lakehouse/portfolio_returns.pkl", "summaries/portfolio_report.md")
+    generate_markdown_report("data/lakehouse/portfolio_optimized_v2.json", "data/lakehouse/portfolio_returns.pkl", "data/lakehouse/portfolio_candidates.json", "summaries/portfolio_report.md")
