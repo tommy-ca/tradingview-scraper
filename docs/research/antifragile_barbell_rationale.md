@@ -56,10 +56,17 @@ We implement four distinct profiles on top of these hierarchical clusters:
 
 ## 4. Market Regime Adaptation
 
-The Barbell strategy is not static. It adapts the "weight" of the barbell based on a **Regime Detector**:
+The Barbell strategy is not static. It adapts the "weight" of the barbell based on an **Advanced Multi-Factor Regime Detector**:
 
-*   **QUIET (Low Vol):** Increases Aggressors to **15%** to capture "cheap" optionality.
-*   **NORMAL:** Standard **10%** Aggressor allocation.
-*   **CRISIS (High Vol):** Shrinks Aggressors to **5%** and moves 95% into the Core to survive extreme market turbulence.
+### Detection Methodology
+We use a weighted score derived from four statistical pillars:
+1.  **Volatility Shock (50%)**: Ratio of short-term (10d) to long-term (200d) volatility. Detects sudden panics or quiet periods.
+2.  **Spectral Turbulence (50%)**: Uses **Discrete Wavelet Transform (DWT)** to measure the ratio of high-frequency energy (noise/shocks) to low-frequency energy (structural trend).
+3.  **Risk Persistence (30%)**: Measures **Volatility Clustering** via the autocorrelation of absolute returns. Distinguishes between one-day outliers and sustained high-risk regimes.
+4.  **Structural Complexity (20%)**: Calculates **Permutation Entropy** to quantify the "randomness" of market returns. Low entropy indicates strong secular order; high entropy indicates chaotic noise.
 
-By combining **Hierarchical Bucketing** (to handle redundancy) with **Convexity Metrics** (to identify explosive growth), the system produces portfolios that are mathematically designed to thrive in uncertainty.
+### Dynamic Allocation Splits
+The detected regime directly dictates the Barbell split:
+*   **QUIET (Score < 0.7):** Increases Aggressors to **15%** to capture "cheap" optionality.
+*   **NORMAL (0.7 - 1.8):** Standard **10%** Aggressor allocation.
+*   **CRISIS (Score >= 1.8):** Shrinks Aggressors to **5%** and moves 95% into the Core to survive extreme market turbulence.

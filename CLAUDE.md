@@ -42,19 +42,33 @@ uvx ruff format .
 
 # Run pylint (used in CI)
 uv run pylint $(git ls-files '*.py')
+
+# Audit portfolio logic and constraints
+make audit
+
+# Run advanced regime detection research
+make regime-check
 ```
 
-### Building Documentation
+### Analytical Reports
 ```bash
-cd docs
-make html
+# Generate final prettified dashboard
+make report
+
+# Deeper cluster hierarchy analysis
+uv run scripts/analyze_clusters.py
+
+# Nested sub-cluster analysis for specific buckets
+uv run scripts/analyze_subcluster.py --cluster 5
 ```
 
 ## Architecture
 
 ### Core Module Structure
-
-The package is organized into the following key components:
+- `regime.py` - Advanced multi-factor detector (Entropy, DWT, Vol Clustering).
+- `risk.py` - Barbell optimizer and antifragility (convexity) auditing.
+- `pipeline.py` - Unified orchestrator for Discovery -> Alpha -> Risk flow.
+- `bond_universe_selector.py` - Wrapper for US-listed Bond ETF discovery.
 
 **`tradingview_scraper/symbols/`** - Main data scraping modules
 - `ideas.py` - Scrapes trading ideas from TradingView symbol pages

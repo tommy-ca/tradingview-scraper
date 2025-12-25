@@ -1,103 +1,76 @@
-# Production Workflow: Scans → Summaries → Portfolio Prep → Optimization
+# Production Workflow: Discovery → Cluster → Risk → Audit
 
-This is the runbook for a daily/production run across scans, summaries, portfolio data prep, and optimizations (MPT and barbell).
+This runbook documents the daily production cycle, ensuring high-integrity data alignment and de-risked asset allocation using hierarchical clusters.
 
-## Steps and Commands
+## 1. Automated Execution (Recommended)
 
-### 1) Run Scanners
-```
-bash scripts/run_local_scans.sh
-bash scripts/run_crypto_scans.sh
-```
-Outputs: `export/universe_selector_*.json` (futures, metals, CFD, forex, US stocks/ETFs, crypto per exchange/type).
+The entire pipeline is unified via the `make clean-run` target. This is the institutional default for generating new portfolios.
 
-### 2) Run Summaries
-```
-uv run scripts/summarize_results.py | tee summaries/summary_results.txt
-uv run scripts/summarize_crypto_results.py | tee summaries/summary_crypto.txt
-uv run scripts/correlation_report.py --out-dir summaries  # adds corr regime/pairs/HRP report
-```
-Outputs: console tables plus saved reports in `summaries/`.
-
-### 3) Prepare Portfolio Data
-```
-PORTFOLIO_BATCH_SIZE=5 \
-PORTFOLIO_LOOKBACK_DAYS=100 \
-PORTFOLIO_BACKFILL=1 \
-PORTFOLIO_GAPFILL=1 \
-uv run scripts/prepare_portfolio_data.py
-```
-Inputs: `data/lakehouse/portfolio_candidates.json` (from selectors).
-Outputs: `data/lakehouse/portfolio_returns.pkl`, logs of any dropped/missing symbols.
-Knobs: set `BACKFILL/GAPFILL` to 0 for a quick run; caps are enforced in the script.
-
-### 3.5) Validate Artifacts & Targeted Repair
-```
-# View full health dashboard
-make validate
-
-# Targeted validation
-make validate-crypto
-make validate-trad
-
-# Targeted repair
-make repair-crypto
-make repair-trad
-```
-Checks traceability from candidates to lakehouse and returns matrix. Reports on missing files, stale data, and internal gaps.
-- **Smart Logic**: Automatically skips weekend/holiday gaps for non-crypto assets.
-- **Statuses**: `OK` (Ready), `OK (MARKET CLOSED)` (Expected gap), `DEGRADED` (Unexpected gap).
-
-### 4) Optimize Portfolios
-```
-# Modern Portfolio Theory (Standard)
-make optimize
-
-# Cluster-Aware Allocation (Groups correlated assets into buckets)
-make clustered
-
-# Robust Optimizer (Semi-Variance + Liquidity Penalty)
-uv run scripts/optimize_portfolio_robust.py
-
-# Barbell Strategy (Taleb Strategy)
-make barbell
-```
-MPT Profiles: Min Variance, Risk Parity, Max Sharpe.
-Clustered: Hierarchical Risk Parity across logical buckets.
-Robust: Penalizes illiquid assets and focus on downside risk.
-Barbell: 90% Safe Core | 10% Convex Aggressors.
-
-### 5) Full Clean Run
-```
+```bash
 make clean-run
 ```
-Automates the entire sequence: Wipe -> Rescan -> Backfill -> Cluster -> Optimize.
 
-### Quick One-Liner (Quick Mode)
+**What it does:**
+1.  **Wipe**: Clears previous scans and analysis artifacts (`data/lakehouse/portfolio_*`).
+2.  **Discover**: Runs scanners for Equities, Crypto, Bonds, and MTF Forex.
+3.  **Align**: Backfills 200 days of historical data and aligns the returns matrix.
+4.  **Cluster**: Builds hierarchical risk buckets and nested sub-clusters for venue redundancy.
+5.  **Detect**: Runs the Advanced Regime Detector (Entropy, DWT, Vol Clustering).
+6.  **Optimize**: Generates 4 cluster-aware risk profiles (Min Var, RP, Sharpe, Barbell).
+7.  **Audit**: Programmatically verifies all weight caps and insulation constraints.
+8.  **Report**: Generates the prettified dashboard at `summaries/portfolio_report.md`.
+
+---
+
+## 2. Granular Step-by-Step
+
+### Stage 1: discovery & metadata
+```bash
+make scans
+uv run scripts/select_top_universe.py
+uv run scripts/enrich_candidates_metadata.py
 ```
-bash scripts/run_local_scans.sh && bash scripts/run_crypto_scans.sh && \
-uv run scripts/summarize_results.py | tee summaries/summary_results.txt && \
-uv run scripts/summarize_crypto_results.py | tee summaries/summary_crypto.txt && \
-uv run scripts/correlation_report.py --out-dir summaries && \
-PORTFOLIO_BATCH_SIZE=5 PORTFOLIO_LOOKBACK_DAYS=100 PORTFOLIO_BACKFILL=0 PORTFOLIO_GAPFILL=0 \
-uv run scripts/prepare_portfolio_data.py && \
-make validate && \
-uv run scripts/optimize_portfolio.py && \
-uv run scripts/optimize_barbell.py
+- **Goal**: Identify secular long/short candidates and capture sector/industry context.
+
+### Stage 2: Data preparation
+```bash
+make prep BACKFILL=1 GAPFILL=1 LOOKBACK=200
+make validate
 ```
+- **Goal**: Ensure 100% gap-free history for all 100+ candidates. `make validate` provides a color-coded health dashboard.
 
-## Data Quality & Checks
-- Ensure returns matrix has sufficient history: drop symbols with too few days; log them.
-- Validate weights: no NaNs/inf; weights ~ sum to 1; report top allocations.
-- Monitor counts per exchange in crypto summaries; expect heavy short skew currently.
-- Backfill/gapfill caps are set to avoid huge pulls; increase only when needed.
+### Stage 3: Hierarchical Analysis
+```bash
+make corr-report
+uv run scripts/analyze_clusters.py
+uv run scripts/analyze_subcluster.py --cluster 5  # Zoom into Crypto Hub
+```
+- **Goal**: group highly correlated assets (e.g. 70+ crypto tickers) into single units of risk.
 
-## Index Lists (US Bases)
-- `scripts/update_index_lists.py` builds SP500/Nasdaq100 lists from slickcharts/ETF/wiki; outputs to `data/index/sp500_symbols.txt`, `.../nasdaq100_symbols.txt`.
-- Bases consume these lists via `include_symbol_files` (see `configs/us_stocks_base_universe.yaml`, `configs/us_etf_base_universe.yaml`).
+### Stage 4: Risk Optimization & Audit
+```bash
+make regime-check
+make optimize-v2
+make audit
+```
+- **Goal**: Allocate across clusters with a **25% concentration cap**. `make audit` enforces weight normalization and Barbell insulation.
 
-## Operational Notes
-- Use `uv run` to stay within the project environment.
-- Logs: capture step logs if running in automation; abort on non-zero exit.
-- If scanner/summary output is empty for a market, rerun or check rate limits.
-- For faster iterations, set `PORTFOLIO_BACKFILL=0` and `PORTFOLIO_GAPFILL=0`.
+### Stage 5: Decision Support
+```bash
+make report
+```
+- **Goal**: Produce the professional Markdown dashboard with asset-class grouping and visual concentration bars.
+
+---
+
+## 3. Data Quality & Guards
+
+- **Gap Mitigation**: The pipeline automatically skips weekend/holiday gaps for non-crypto assets.
+- **Venue Neutrality**: Nested sub-clustering prevents venue-specific noise from biasing systemic risk.
+- **Fail-Fast Audit**: If a profile breaches the 25% cap or insulation rule, the `make audit` gate will block report generation.
+
+## 4. Operational Controls
+
+- **Lookback**: Default is 200 days for robust correlation.
+- **Batching**: Use `BATCH=2` during backfills to avoid TradingView rate limits.
+- **Regime Tuning**: Scoring thresholds can be adjusted in `tradingview_scraper/regime.py`.

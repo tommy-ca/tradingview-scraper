@@ -6,7 +6,20 @@ BACKFILL ?= 1
 GAPFILL ?= 1
 SUMMARY_DIR ?= summaries
 
-.PHONY: help update-indexes clean-exports scans-local scans-crypto scans-bonds scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run
+.PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run
+
+clean-exports:
+	rm -rf export/*.csv export/*.json
+
+clean-all: clean-exports
+	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md
+	rm -f data/lakehouse/portfolio_*
+
+scans-local:
+	bash scripts/run_local_scans.sh
+
+scans-crypto:
+	bash scripts/run_crypto_scans.sh
 
 scans-bonds:
 	$(PY) -m tradingview_scraper.bond_universe_selector --config configs/bond_etf_trend_momentum.yaml --export json
@@ -21,6 +34,9 @@ summaries:
 	mkdir -p $(SUMMARY_DIR)
 	$(PY) scripts/summarize_results.py | tee $(SUMMARY_DIR)/summary_results.txt
 	$(PY) scripts/summarize_crypto_results.py | tee $(SUMMARY_DIR)/summary_crypto.txt
+
+prep:
+	PORTFOLIO_MAX_SYMBOLS=150 PORTFOLIO_BATCH_SIZE=$(BATCH) PORTFOLIO_LOOKBACK_DAYS=$(LOOKBACK) PORTFOLIO_BACKFILL=$(BACKFILL) PORTFOLIO_GAPFILL=$(GAPFILL) $(PY) scripts/prepare_portfolio_data.py
 
 validate:
 	$(PY) scripts/validate_portfolio_artifacts.py
@@ -47,14 +63,21 @@ corr-report:
 report:
 	$(PY) scripts/generate_portfolio_report.py
 
+regime-check:
+	$(PY) scripts/research_regime_v2.py
+
 clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
 	$(MAKE) scans
 	$(PY) scripts/select_top_universe.py
+	$(PY) scripts/enrich_candidates_metadata.py
 	$(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=200
 	$(MAKE) validate
 	$(MAKE) corr-report
+	$(PY) scripts/analyze_clusters.py
+	$(PY) scripts/analyze_subcluster.py --cluster 5
 	$(PY) scripts/audit_antifragility.py
+	$(MAKE) regime-check
 	$(MAKE) optimize-v2
 	$(MAKE) audit
 	$(MAKE) report
