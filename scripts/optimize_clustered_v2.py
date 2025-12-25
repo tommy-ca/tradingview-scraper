@@ -290,9 +290,16 @@ def main():
         valid_symbols = [s for s in symbols if s in opt.returns.columns]
         if not valid_symbols:
             continue
+
+        # Determine primary sector for registry
+        sectors = [opt.meta.get(s, {}).get("sector", "N/A") for s in valid_symbols]
+        sector_counts = pd.Series(sectors).value_counts()
+        primary_sector = str(sector_counts.index[0]) if not sector_counts.empty else "N/A"
+
         cluster_registry[c_id] = {
             "symbols": valid_symbols,
             "size": len(valid_symbols),
+            "primary_sector": primary_sector,
             "markets": list(set(opt.meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols)),
         }
 

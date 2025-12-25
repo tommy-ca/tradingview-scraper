@@ -39,6 +39,22 @@ def enrich_candidates():
         "OKX:FILUSDT.P": "Crypto Storage",
         "BINANCE:FILUSDT.P": "Crypto Storage",
         "BINANCE:AVAXUSDT.P": "Crypto L1",
+        "CBOT:ZC1!": "Commodities (Grains)",
+        "OANDA:CORNUSD": "Commodities (Grains)",
+        "COMEX:SI1!": "Metals (Silver)",
+        "COMEX:SIH2026": "Metals (Silver)",
+        "COMEX:HG1!": "Metals (Copper)",
+        "COMEX:HGH2026": "Metals (Copper)",
+        "COMEX:HRCH2026": "Metals (Gold)",
+        "OANDA:XCUUSD": "Metals (Copper)",
+        "OANDA:US30USD": "Indices (US30)",
+        "CME:MBTZ2025": "Crypto (BTC)",
+        "THINKMARKETS:EURJPY": "Forex (JPY)",
+        "THINKMARKETS:GBPJPY": "Forex (JPY)",
+        "THINKMARKETS:CHFJPY": "Forex (JPY)",
+        "THINKMARKETS:CADJPY": "Forex (JPY)",
+        "THINKMARKETS:AUDJPY": "Forex (JPY)",
+        "THINKMARKETS:AUDUSD": "Forex (USD)",
     }
 
     # Enrich
@@ -53,6 +69,16 @@ def enrich_candidates():
         # Apply custom overrides if sector is still N/A or empty
         if sym in custom_sectors and (not c.get("sector") or c.get("sector") == "N/A"):
             c["sector"] = custom_sectors[sym]
+
+        # Global fallback for crypto
+        if not c.get("sector") or c.get("sector") == "N/A":
+            m = c.get("market", "").upper()
+            if any(x in m for x in ["BINANCE", "BITGET", "BYBIT", "OKX", "CRYPTO"]):
+                c["sector"] = "Crypto"
+            elif "FOREX" in m:
+                c["sector"] = "Forex"
+            elif "FUTURES" in m:
+                c["sector"] = "Futures"
 
         if meta or sym in custom_sectors:
             enriched_count += 1

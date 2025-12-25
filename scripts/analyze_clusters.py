@@ -5,9 +5,42 @@ from typing import Any, Dict, List, cast
 
 import numpy as np
 import pandas as pd
+import scipy.cluster.hierarchy as sch
+from scipy.spatial.distance import squareform
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("cluster_analysis")
+
+
+def perform_subclustering(symbols: List[str], returns: pd.DataFrame, threshold: float = 0.2) -> Dict[int, List[str]]:
+    """
+    Identifies sub-clusters within a set of symbols using hierarchical linkage.
+    """
+    if len(symbols) < 2:
+        return {1: symbols}
+
+    sub_rets = returns[symbols]
+    corr = sub_rets.corr()
+
+    # Hierarchical Linkage
+    dist_matrix = np.sqrt(0.5 * (1 - corr.values.clip(-1, 1)))
+    dist_matrix = (dist_matrix + dist_matrix.T) / 2
+    np.fill_diagonal(dist_matrix, 0)
+
+    condensed = squareform(dist_matrix, checks=False)
+    link = sch.linkage(y=condensed, method="average")
+
+    # Flat sub-clusters
+    sub_cluster_assignments = sch.fcluster(Z=link, t=threshold, criterion="distance")
+
+    sub_clusters: Dict[int, List[str]] = {}
+    for sym, sc_id in zip(symbols, sub_cluster_assignments):
+        sc_id_int = int(sc_id)
+        if sc_id_int not in sub_clusters:
+            sub_clusters[sc_id_int] = []
+        sub_clusters[sc_id_int].append(sym)
+
+    return sub_clusters
 
 
 def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, output_path: str):
@@ -19,7 +52,11 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         clusters = cast(Dict[str, List[str]], json.load(f))
     with open(meta_path, "r") as f:
         meta = cast(Dict[str, Any], json.load(f))
-    returns_raw = pd.read_pickle(returns_path)
+
+    # Use a safer way to read pickle to avoid linter confusion
+    with open(returns_path, "rb") as f_in:
+        returns_raw = pd.read_pickle(f_in)
+
     if not isinstance(returns_raw, pd.DataFrame):
         returns = pd.DataFrame(returns_raw)
     else:
@@ -38,21 +75,19 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         if not valid_symbols:
             continue
 
-        sub_rets = returns[valid_symbols]
+        sub_rets = cast(pd.DataFrame, returns[valid_symbols])
 
         # Calculate cluster stats
         cluster_corr = sub_rets.corr()
         if len(valid_symbols) > 1:
-            # Extract upper triangle of correlation matrix excluding diagonal
             corr_values = cluster_corr.values[np.triu_indices_from(cluster_corr.values, k=1)]
             avg_corr = float(np.mean(corr_values))
         else:
             avg_corr = 1.0
 
-        mean_rets = sub_rets.mean(axis=1)
-        std_val = mean_rets.std()
-        # Use np.isnan for scalar check
-        cluster_vol = float(std_val * np.sqrt(252)) if not np.isnan(std_val) else 0.0
+        mean_rets = cast(pd.Series, sub_rets.mean(axis=1))
+        std_val = float(mean_rets.std())
+        cluster_vol = std_val * np.sqrt(252) if not np.isnan(std_val) else 0.0
 
         # Sector distribution
         sectors = [meta.get(s, {}).get("sector", "N/A") for s in valid_symbols]
@@ -64,13 +99,28 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         markets = list(set(meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols))
 
         report.append(f"\n## 📦 Cluster {c_id}: {primary_sector}")
-        if c_id == "5":
-            report.append("**Detailed Sub-Cluster Analysis:** [subcluster_5.md](./subcluster_5.md)")
         report.append(f"- **Size:** {len(valid_symbols)} assets")
         report.append(f"- **Avg Intra-Cluster Correlation:** {avg_corr:.4f}")
         report.append(f"- **Cluster Annualized Vol:** {cluster_vol:.2%}")
         report.append(f"- **Sector Homogeneity:** {sector_homogeneity:.1%}")
         report.append(f"- **Markets:** {', '.join(markets)}")
+
+        # Perform Nested Sub-clustering for large clusters
+        if len(valid_symbols) > 10:
+            sub_clusters = perform_subclustering(valid_symbols, returns, threshold=0.2)
+            if len(sub_clusters) > 1:
+                report.append("\n### 🔍 Nested Sub-Cluster Structure")
+                report.append("| Sub-Cluster | Size | Lead Assets | Avg Vol |")
+                report.append("| :--- | :--- | :--- | :--- |")
+                for sc_id, sc_syms in sorted(sub_clusters.items(), key=lambda x: len(x[1]), reverse=True):
+                    sc_rets = sub_rets[sc_syms]
+                    sc_mean = cast(pd.Series, sc_rets.mean(axis=1))
+                    sc_vol_val = float(sc_mean.std())
+                    sc_vol = sc_vol_val * np.sqrt(252) if not np.isnan(sc_vol_val) else 0.0
+                    leads = ", ".join([f"`{s}`" for s in sc_syms[:3]])
+                    if len(sc_syms) > 3:
+                        leads += " ..."
+                    report.append(f"| {sc_id} | {len(sc_syms)} | {leads} | {sc_vol:.2%} |")
 
         report.append("\n### 📋 Members")
         report.append("| Symbol | Description | Sector | Market |")

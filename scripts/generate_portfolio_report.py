@@ -82,15 +82,16 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
     # 1. SHARED CLUSTER REFERENCE
     md.append("## 🧩 Shared Cluster Reference")
     md.append("Hierarchical clustering groups correlated assets into risk units to prevent over-concentration.")
-    md.append("| Cluster | Lead Asset | Size | Primary Markets |")
-    md.append("| :--- | :--- | :--- | :--- |")
+    md.append("| Cluster | Primary Sector | Size | Lead Asset | Primary Markets |")
+    md.append("| :--- | :--- | :--- | :--- | :--- |")
 
     for c_id, c_info in sorted(cluster_registry.items(), key=lambda x: int(x[0])):
         syms = c_info.get("symbols", [])
         markets = ", ".join(sorted(c_info.get("markets", [])))
-        # Find lead asset from one of the profiles if available, else first in list
+        sector = c_info.get("primary_sector", "N/A")
+        # Find lead asset from first in list
         lead = syms[0] if syms else "N/A"
-        md.append(f"| **Cluster {c_id}** | `{lead}` | {len(syms)} | {markets} |")
+        md.append(f"| **Cluster {c_id}** | {sector} | {len(syms)} | `{lead}` | {markets} |")
 
     md.append("\n---")
 
