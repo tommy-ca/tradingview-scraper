@@ -3,9 +3,14 @@ import logging
 import os
 from typing import Any, Dict, List, cast
 
+import matplotlib
+
+matplotlib.use("Agg")  # Non-interactive backend
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.cluster.hierarchy as sch
+import seaborn as sns
 from scipy.spatial.distance import squareform
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -19,7 +24,7 @@ def perform_subclustering(symbols: List[str], returns: pd.DataFrame, threshold: 
     if len(symbols) < 2:
         return {1: symbols}
 
-    sub_rets = returns[symbols]
+    sub_rets = cast(pd.DataFrame, returns[symbols])
     corr = sub_rets.corr()
 
     # Hierarchical Linkage
@@ -28,10 +33,10 @@ def perform_subclustering(symbols: List[str], returns: pd.DataFrame, threshold: 
     np.fill_diagonal(dist_matrix, 0)
 
     condensed = squareform(dist_matrix, checks=False)
-    link = sch.linkage(y=condensed, method="average")
+    link = sch.linkage(condensed, method="average")
 
     # Flat sub-clusters
-    sub_cluster_assignments = sch.fcluster(Z=link, t=threshold, criterion="distance")
+    sub_cluster_assignments = sch.fcluster(link, t=threshold, criterion="distance")
 
     sub_clusters: Dict[int, List[str]] = {}
     for sym, sc_id in zip(symbols, sub_cluster_assignments):
@@ -43,7 +48,46 @@ def perform_subclustering(symbols: List[str], returns: pd.DataFrame, threshold: 
     return sub_clusters
 
 
-def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, output_path: str):
+def visualize_clusters(returns: pd.DataFrame, output_path: str):
+    """
+    Generates a hierarchical clustermap of asset correlations.
+    """
+    if returns.empty:
+        return
+
+    logger.info(f"Generating clustermap for {len(returns.columns)} assets...")
+    corr = returns.corr()
+
+    # Professional Diverging Palette
+    cmap = sns.diverging_palette(230, 20, as_cmap=True)
+
+    # Clustermap with Dendrograms
+    g = sns.clustermap(
+        corr,
+        method="average",
+        metric="euclidean",
+        cmap=cmap,
+        vmin=-1,
+        vmax=1,
+        center=0,
+        square=True,
+        linewidths=0.5,
+        figsize=(20, 20),
+        cbar_kws={"shrink": 0.5},
+        xticklabels=True,
+        yticklabels=True,
+    )
+
+    plt.setp(g.ax_heatmap.get_xticklabels(), rotation=90, fontsize=8)
+    plt.setp(g.ax_heatmap.get_yticklabels(), rotation=0, fontsize=8)
+    g.fig.suptitle("Hierarchical Correlation Clustermap", fontsize=20, y=1.02)
+
+    plt.savefig(output_path, bbox_inches="tight", dpi=150)
+    plt.close()
+    logger.info(f"✅ Clustermap saved to: {output_path}")
+
+
+def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, output_path: str, image_path: str):
     if not os.path.exists(clusters_path) or not os.path.exists(meta_path) or not os.path.exists(returns_path):
         logger.error("Required files missing for cluster analysis.")
         return
@@ -53,7 +97,7 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
     with open(meta_path, "r") as f:
         meta = cast(Dict[str, Any], json.load(f))
 
-    # Use a safer way to read pickle to avoid linter confusion
+    # Use a safer way to read pickle
     with open(returns_path, "rb") as f_in:
         returns_raw = pd.read_pickle(f_in)
 
@@ -62,15 +106,23 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
     else:
         returns = returns_raw
 
+    # Generate Visualization
+    visualize_clusters(returns, image_path)
+
     report = []
     report.append("# 🧩 Hierarchical Cluster Analysis")
     report.append(f"**Date:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
     report.append(f"**Total Clusters:** {len(clusters)}")
     report.append("\n---")
 
+    # Embed Image
+    report.append("## 📈 Correlation Clustermap")
+    report.append(f"![Portfolio Clustermap](./{os.path.basename(image_path)})")
+    report.append("\n---")
+
     summary_data = []
 
-    for c_id, symbols in clusters.items():
+    for c_id, symbols in sorted(clusters.items(), key=lambda x: int(x[0])):
         valid_symbols = [s for s in symbols if s in returns.columns]
         if not valid_symbols:
             continue
@@ -93,8 +145,8 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         sectors = [meta.get(s, {}).get("sector", "N/A") for s in valid_symbols]
         sector_series = pd.Series(sectors)
         sector_counts = sector_series.value_counts()
-        primary_sector = str(sector_counts.index[0])
-        sector_homogeneity = float(sector_counts.iloc[0]) / len(valid_symbols)
+        primary_sector = str(sector_counts.index[0]) if not sector_counts.empty else "N/A"
+        sector_homogeneity = float(sector_counts.iloc[0]) / len(valid_symbols) if not sector_counts.empty else 0.0
 
         markets = list(set(meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols))
 
@@ -105,15 +157,15 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         report.append(f"- **Sector Homogeneity:** {sector_homogeneity:.1%}")
         report.append(f"- **Markets:** {', '.join(markets)}")
 
-        # Perform Nested Sub-clustering for large clusters
-        if len(valid_symbols) > 10:
+        # Perform Nested Sub-clustering
+        if len(valid_symbols) > 5:
             sub_clusters = perform_subclustering(valid_symbols, returns, threshold=0.2)
             if len(sub_clusters) > 1:
                 report.append("\n### 🔍 Nested Sub-Cluster Structure")
                 report.append("| Sub-Cluster | Size | Lead Assets | Avg Vol |")
                 report.append("| :--- | :--- | :--- | :--- |")
                 for sc_id, sc_syms in sorted(sub_clusters.items(), key=lambda x: len(x[1]), reverse=True):
-                    sc_rets = sub_rets[sc_syms]
+                    sc_rets = returns[sc_syms]
                     sc_mean = cast(pd.Series, sc_rets.mean(axis=1))
                     sc_vol_val = float(sc_mean.std())
                     sc_vol = sc_vol_val * np.sqrt(252) if not np.isnan(sc_vol_val) else 0.0
@@ -132,21 +184,29 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         summary_data.append({"Cluster": c_id, "Sector": primary_sector, "Assets": len(valid_symbols), "Avg_Corr": avg_corr, "Vol": cluster_vol, "Homogeneity": sector_homogeneity})
 
     # Summary Table
-    report.insert(4, "\n## 📊 Clusters Overview")
-    report.insert(5, "| Cluster | Primary Sector | Assets | Avg Corr | Vol | Homogeneity |")
-    report.insert(6, "| :--- | :--- | :--- | :--- | :--- | :--- |")
+    summary_table = []
+    summary_table.append("\n## 📊 Clusters Overview")
+    summary_table.append("| Cluster | Primary Sector | Assets | Avg Corr | Vol | Homogeneity |")
+    summary_table.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
 
-    # Sort summary data by number of assets descending
     summary_data.sort(key=lambda x: x["Assets"], reverse=True)
+    for s in summary_data:
+        summary_table.append(f"| {s['Cluster']} | {s['Sector']} | {s['Assets']} | {s['Avg_Corr']:.3f} | {s['Vol']:.2%} | {s['Homogeneity']:.1%} |")
 
-    for i, s in enumerate(summary_data):
-        report.insert(7 + i, f"| {s['Cluster']} | {s['Sector']} | {s['Assets']} | {s['Avg_Corr']:.3f} | {s['Vol']:.2%} | {s['Homogeneity']:.1%} |")
+    # Combine report
+    full_report = report[:10] + summary_table + report[10:]
 
     with open(output_path, "w") as f:
-        f.write("\n".join(report))
+        f.write("\n".join(full_report))
 
-    logger.info(f"✅ Hierarchical cluster analysis report generated at: {output_path}")
+    logger.info(f"✅ Integrated hierarchical cluster analysis report generated at: {output_path}")
 
 
 if __name__ == "__main__":
-    analyze_clusters("data/lakehouse/portfolio_clusters.json", "data/lakehouse/portfolio_meta.json", "data/lakehouse/portfolio_returns.pkl", "summaries/cluster_analysis.md")
+    analyze_clusters(
+        "data/lakehouse/portfolio_clusters.json",
+        "data/lakehouse/portfolio_meta.json",
+        "data/lakehouse/portfolio_returns.pkl",
+        "summaries/cluster_analysis.md",
+        "summaries/portfolio_clustermap.png",
+    )

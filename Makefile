@@ -37,6 +37,10 @@ summaries:
 
 prep:
 	PORTFOLIO_MAX_SYMBOLS=150 PORTFOLIO_BATCH_SIZE=$(BATCH) PORTFOLIO_LOOKBACK_DAYS=$(LOOKBACK) PORTFOLIO_BACKFILL=$(BACKFILL) PORTFOLIO_GAPFILL=$(GAPFILL) $(PY) scripts/prepare_portfolio_data.py
+	@if [ "$(GAPFILL)" = "1" ]; then \
+		echo "Running final repair pass..."; \
+		$(PY) scripts/repair_portfolio_gaps.py --type all; \
+	fi
 
 validate:
 	$(PY) scripts/validate_portfolio_artifacts.py
@@ -51,7 +55,7 @@ optimize-v2:
 	CLUSTER_CAP=0.25 $(PY) scripts/optimize_clustered_v2.py
 
 clustered:
-	$(PY) scripts/optimize_portfolio_clustered.py
+	$(MAKE) optimize-v2
 
 barbell:
 	$(PY) scripts/optimize_barbell.py
@@ -59,9 +63,13 @@ barbell:
 corr-report:
 	mkdir -p $(SUMMARY_DIR)
 	$(PY) scripts/correlation_report.py --hrp --out-dir $(SUMMARY_DIR) --min-col-frac 0.2
+	$(PY) scripts/analyze_clusters.py
 
 report:
 	$(PY) scripts/generate_portfolio_report.py
+
+display:
+	$(PY) scripts/display_portfolio_dashboard.py
 
 regime-check:
 	$(PY) scripts/research_regime_v2.py
@@ -74,8 +82,6 @@ clean-run: clean-all
 	$(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=200
 	$(MAKE) validate
 	$(MAKE) corr-report
-	$(PY) scripts/analyze_clusters.py
-	$(PY) scripts/analyze_subcluster.py --cluster 5
 	$(PY) scripts/audit_antifragility.py
 	$(MAKE) regime-check
 	$(MAKE) optimize-v2

@@ -46,6 +46,9 @@ uv run pylint $(git ls-files '*.py')
 # Audit portfolio logic and constraints
 make audit
 
+# Display terminal-based implementation dashboard
+make display
+
 # Run advanced regime detection research
 make regime-check
 ```
@@ -87,16 +90,13 @@ uv run scripts/analyze_subcluster.py --cluster 5
 - `stream_handler.py` - Low-level WebSocket connection and message handling.
 - `utils.py` - WebSocket utilities, symbol validation, indicator metadata fetching.
 
-**`tradingview_scraper/utils/`** - Shared utilities
-- Currently empty, reserved for future shared utilities
+### Deployment & Maintenance
+- **Data Integrity**: The pipeline uses a self-healing cycle (`make prep`) that automatically repairs identified gaps after backfilling history.
+- **Risk Control**: All portfolios are cluster-aware, enforcing a 25% cap on hierarchical risk buckets to prevent systemic concentration.
+- **Alpha Alignment**: Lead assets within clusters are selected via a composite rank of Momentum, Stability, and Convexity.
 
-**`tradingview_scraper/data/`** - Static configuration files
-- `indicators.txt` - List of supported indicator names
-- `exchanges.txt` - List of supported exchanges
-- `timeframes.json` - Timeframe mappings
-- `languages.json`, `areas.json`, `news_providers.txt` - News scraping configurations
+## Key Design Patterns
 
-### Key Design Patterns
 
 #### Export Pattern
 All main scraper classes follow a consistent pattern:

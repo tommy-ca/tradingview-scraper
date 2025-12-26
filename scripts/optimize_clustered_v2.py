@@ -241,23 +241,53 @@ class ClusteredOptimizerV2:
     def get_cluster_summary(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Aggregates asset-level results into a cluster-level summary.
+        Uses Alpha Ranking (Momentum + Stability + Convexity) to pick Lead Asset.
         """
         if df.empty:
             return pd.DataFrame()
 
         summary = []
         for c_id, group in df.groupby("Cluster_ID"):
-            lead_asset = group.sort_values("Weight", ascending=False).iloc[0]
-            sectors = list(group["Sector"].unique())
+            # Calculate Alpha Rank for each asset in the cluster
+            symbols = group["Symbol"].tolist()
+            sub_rets = self.returns[symbols]
+
+            # 1. Momentum (Annualized mean return)
+            mom = sub_rets.mean() * 252
+            # 2. Stability (Annualized inverse vol)
+            vol = sub_rets.std() * np.sqrt(252)
+            stab = 1.0 / (vol + 1e-9)
+
+            # 3. Convexity (Normalize Antifragility Score if present)
+            conv = pd.Series(0.0, index=symbols)
+            if self.stats is not None:
+                # Merge stats
+                cluster_stats = self.stats[self.stats["Symbol"].isin(symbols)].set_index("Symbol")
+                if not cluster_stats.empty:
+                    conv = cluster_stats["Antifragility_Score"]
+
+            # Composite Alpha Score (Normalized components)
+            def norm(s):
+                return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
+
+            # If cluster size is 1, all norms will be 1.0
+            alpha_score = 0.4 * norm(mom) + 0.3 * norm(stab) + 0.3 * norm(conv)
+            lead_symbol = alpha_score.idxmax()
+            lead_asset = group[group["Symbol"] == lead_symbol].iloc[0]
+
+            # Determine primary sector (mode)
+            sector_counts = group["Sector"].value_counts()
+            primary_sector = str(sector_counts.index[0]) if not sector_counts.empty else "N/A"
+
             summary.append(
                 {
                     "Cluster_ID": str(c_id),
                     "Cluster_Label": lead_asset["Cluster_Label"],
                     "Total_Weight": float(group["Weight"].sum()),
                     "Asset_Count": int(len(group)),
-                    "Lead_Asset": lead_asset["Symbol"],
+                    "Lead_Asset": lead_symbol,
                     "Lead_Description": lead_asset["Description"],
-                    "Sectors": sectors[0] if len(sectors) == 1 else sectors,
+                    "Sectors": primary_sector,
                     "Markets": list(group["Market"].unique()),
                     "Type": group["Type"].iloc[0] if "Type" in group.columns else "CORE",
                 }

@@ -1758,7 +1758,33 @@ All symbols must include exchange prefix:
 - Release `0.1.0`:  
   The name of `ClassA` changed to `Ideas`
 
+### 9. Institutional Quantitative Workflow (V2)
+
+The library now includes a full-lifecycle quantitative pipeline designed for professional trading desk oversight.
+
+#### Implementation Dashboard (CLI)
+Instantly view optimized allocations and trend candidates directly in your terminal with beautiful formatting.
+```bash
+make display
+```
+
+#### Production Lifecycle
+Run the entire pipeline—from discovery to de-risked allocation—with a single command:
+```bash
+make clean-run
+```
+
+**Key Capabilities:**
+*   **Multi-Factor Regime Detection**: Entropy, DWT Spectral Turbulence, and Volatility Clustering.
+*   **Hierarchical Risk Bucketing**: Automatic redundancy filtering (e.g., 70+ crypto tickers behave as one unit).
+*   **Cluster-Aware Optimization**: Strictly enforced 25% global concentration caps across all profiles.
+*   **Self-Healing Data Layer**: Automated gap detection and targeted repair for 200-day alignment.
+*   **Professional Reporting**: Integrated Markdown dashboards with visual concentration bars and lead asset selection.
+
+---
+
 ## License:
+
 ```
 [MIT]
 ```

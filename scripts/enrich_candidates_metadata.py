@@ -55,6 +55,15 @@ def enrich_candidates():
         "THINKMARKETS:CADJPY": "Forex (JPY)",
         "THINKMARKETS:AUDJPY": "Forex (JPY)",
         "THINKMARKETS:AUDUSD": "Forex (USD)",
+        "THINKMARKETS:EURUSD": "Forex (EUR)",
+        "THINKMARKETS:GBPUSD": "Forex (GBP)",
+        "THINKMARKETS:USDJPY": "Forex (JPY)",
+        "AMEX:HYG": "Fixed Income (High Yield)",
+        "NASDAQ:TLT": "Fixed Income (Treasury)",
+        "AMEX:AGG": "Fixed Income (Aggregate)",
+        "NASDAQ:IEF": "Fixed Income (Treasury)",
+        "AMEX:LQD": "Fixed Income (Corporate)",
+        "NASDAQ:BND": "Fixed Income (Aggregate)",
     }
 
     # Enrich

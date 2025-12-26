@@ -22,10 +22,12 @@ def get_market_category(market: str) -> str:
         return "🪙 CRYPTO"
     if any(x in m for x in ["NASDAQ", "NYSE", "AMEX", "US_STOCKS", "US_ETF"]):
         return "📈 EQUITIES"
-    if any(x in m for x in ["FUTURES", "CME", "CBOT", "COMEX"]):
+    if any(x in m for x in ["FUTURES", "CME", "CBOT", "COMEX", "NYMEX"]):
         return "⛓️ FUTURES"
     if "FOREX" in m:
         return "💱 FOREX"
+    if "OANDA" in m or "UNKNOWN" in m:
+        return "⛓️ COMMODITIES / CFD"
     return "🌐 OTHER"
 
 
@@ -87,7 +89,13 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
 
     for c_id, c_info in sorted(cluster_registry.items(), key=lambda x: int(x[0])):
         syms = c_info.get("symbols", [])
-        markets = ", ".join(sorted(c_info.get("markets", [])))
+        raw_markets = sorted(c_info.get("markets", []))
+        # Truncate markets if too many
+        if len(raw_markets) > 2:
+            markets = ", ".join(raw_markets[:2]) + f" (+{len(raw_markets) - 2})"
+        else:
+            markets = ", ".join(raw_markets)
+
         sector = c_info.get("primary_sector", "N/A")
         # Find lead asset from first in list
         lead = syms[0] if syms else "N/A"
@@ -106,8 +114,21 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
         unique_clusters = len(clusters)
         top_3_conc = sum(float(c["Total_Weight"]) for c in clusters[:3]) if clusters else 0.0
 
+        # Sector Diversity Score: Count unique sectors in top 80% weight
+        sorted_assets = sorted(assets, key=lambda x: x["Weight"], reverse=True)
+        running_w = 0.0
+        top_sectors = set()
+        for a in sorted_assets:
+            top_sectors.add(a.get("Sector", "N/A"))
+            running_w += a["Weight"]
+            if running_w >= 0.80:
+                break
+        sector_diversity = len(top_sectors)
+
         md.append(f"\n## 📈 {pretty_name} Profile")
-        md.append(f"> **Strategy Metrics:** Est. Annual Vol: **{vol:.2%}** | Unique Buckets: **{unique_clusters}** | Top 3 Concentration: **{top_3_conc:.2%}**")
+        md.append(
+            f"> **Strategy Metrics:** Est. Annual Vol: **{vol:.2%}** | Unique Buckets: **{unique_clusters}** | Sector Diversity: **{sector_diversity}** | Top 3 Concentration: **{top_3_conc:.2%}**"
+        )
 
         # Cluster Summary Table
         md.append("\n### 🧩 Risk Bucket Allocation (Clusters)")
@@ -116,6 +137,8 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
 
         for cluster in clusters:
             weight = float(cluster["Total_Weight"])
+            if weight < 0.001:
+                continue
             bar = draw_bar(weight)
             lead = f"`{cluster['Lead_Asset']}`"
             count = cluster["Asset_Count"]
@@ -132,6 +155,8 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
         # Group assets by class
         categorized: Dict[str, List[Dict[str, Any]]] = {}
         for a in assets:
+            if a["Weight"] < 0.001:
+                continue  # Filter implementation noise
             cat = get_market_category(a.get("Market", "UNKNOWN"))
             if cat not in categorized:
                 categorized[cat] = []

@@ -1,41 +1,40 @@
-# Data Resilience & Stabilization (v2)
+# Data Integrity & Self-Healing Pipeline (v2)
 
-This document specifies the guardrails and architectural patterns implemented to ensure high-quality, continuous market data collection across mixed asset universes.
+This specification documents the multi-layered data resilience architecture implemented to ensure high-integrity market data for quantitative analysis.
 
-## 1. WebSocket Guardrails (`Streamer`)
+## 1. Genesis Detection & Data Gaps
 
-To prevent the streaming process from hanging on throttled symbols or network instability, the following mechanisms are active:
+A critical challenge in historical data management is distinguishing between a **missing data gap** and the **genesis** (start of history) of an asset.
 
-- **Total Execution Timeout**: `Streamer.stream()` accepts a `total_timeout` (seconds). The main collection loop exits immediately if this limit is reached.
-- **Partial Data Recovery**: Upon timeout, the streamer returns any candles gathered so far instead of failing the entire request.
-- **Idle Packet Detection**: Monitors consecutive "empty" WebSocket messages. Exits early if no new data is received for `idle_packet_limit` packets.
-- **Auto-Reset Connection**: Every subscription request triggers a fresh connection state to prevent cross-symbol session pollution.
+- **Genesis Heuristic**: If a backfill request for a specific depth returns 0 new candles, the system flags that point as the asset's "Genesis."
+- **Persistence**: The pipeline respects the genesis point and stops attempting to fill data prior to that date, preventing infinite retry loops and artificial gap detection.
+- **Reverse Iteration**: Gaps are filled from most recent to oldest. Deep historical fetches naturally fill younger gaps in a single call.
 
-## 2. Optimized Repair Pattern (`PersistentDataLoader`)
+## 2. Market-Aware Gap Detection
 
-The gap-filling process has been refactored for efficiency and "Genesis" detection:
+The system uses the `DataProfile` (CRYPTO, EQUITY, FUTURES, FOREX) to apply different gap detection logic:
 
-- **Reverse Iteration (Newest to Oldest)**: Gaps are filled from most recent to oldest. Deep historical fetches naturally fill all younger gaps in a single call.
-- **Fail-Fast Genesis Detection**: If an API call for a specific depth returns **0 new candles**, the system assumes it has hit the beginning of available history ("Genesis") and breaks the loop for that symbol.
-- **Redundancy Check**: Before attempting to fill a gap, the system checks the local lakehouse via `contains_timestamp()` to see if a previous deeper fetch already covered the hole.
-- **Strict Per-Symbol Caps**:
-    - `max_time`: Limits total repair duration per symbol (prevents blocking the batch).
-    - `max_fills`: Limits discrete gap-fill attempts per symbol.
-    - `legacy_cutoff`: Hard floor at **2010-01-01**; older gaps are ignored.
+| Profile | Session Logic | Gap Logic |
+| :--- | :--- | :--- |
+| **CRYPTO** | 24/7 | Every missing minute/day is a gap. |
+| **EQUITY** | 09:30-16:00 EST | Skips weekends and market holidays. |
+| **FUTURES** | Exchange Specific | Skips specific session breaks (e.g., CME Sunday open). |
+| **FOREX** | 24/5 | Skips Friday 5PM to Sunday 5PM EST. |
 
-## 3. HTTP Resilience (`RequestSession`)
+## 3. The Self-Healing Cycle
 
-All REST-based scrapers (`Overview`, `News`, `Ideas`) utilize a thread-safe `RequestSession` singleton:
+The production workflow implements an automated loop to ensure data health:
 
-- **Retries**: 3 attempts per request.
-- **Backoff**: Exponential backoff factor (1.0s base) to handle `429 Too Many Requests`.
-- **Global Timeout**: 10s default timeout for all HTTPS operations.
-- **Status Forcelist**: Automatically retries on `[429, 500, 502, 503, 504]`.
+1.  **Orchestrated Backfill**: Batch-processed fetch of historical data (e.g., 200 days).
+2.  **Audit (Validation)**: Runs `scripts/validate_portfolio_artifacts.py` to identify "DEGRADED" or "MISSING" assets.
+3.  **Targeted Repair**: Automatically triggers `scripts/repair_portfolio_gaps.py` for symbols with identified internal holes.
+4.  **Neutral Alignment**: Any remaining minor gaps (e.g., exchange maintenance) are filled with **0.0 (neutral returns)** during matrix alignment.
 
-## 4. Mixed-Universe Alignment
+## 4. Operational Guardrails
 
-To merge assets with different trading sessions (e.g., 24/7 Crypto vs M-F Equities):
-
-- **Zero-Fill Returns**: Missing returns during market closures (weekends/holidays) are filled with `0.0`.
-- **Min-History Floor**: `PORTFOLIO_MIN_HISTORY_FRAC` ensures symbols with insufficient anchoring are excluded, while allowing newer listings through a lower threshold (e.g., 0.4).
-- **Smart Gap Detection**: Weekend gaps for non-crypto symbols are automatically filtered out of the "Health" report.
+- **WebSocket Resilience**:
+    - **Total Execution Timeout**: Main collection loop exits if `total_timeout` is reached.
+    - **Partial Data Recovery**: Returns any gathered candles upon timeout instead of failing.
+    - **Idle Packet Detection**: Monitors consecutive "empty" messages to spot hangs.
+- **Throttling**: The `BATCH` parameter ensures backfills do not trigger rate limits.
+- **HTTP Retries**: Scrapers use exponential backoff and retries for status codes `[429, 500, 502, 503, 504]`.
