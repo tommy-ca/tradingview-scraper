@@ -68,6 +68,9 @@ corr-report:
 report:
 	$(PY) scripts/generate_portfolio_report.py
 
+heatmap:
+	$(PY) scripts/visualize_matrix_cli.py
+
 display:
 	$(PY) scripts/display_portfolio_dashboard.py
 
