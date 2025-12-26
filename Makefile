@@ -6,7 +6,9 @@ BACKFILL ?= 1
 GAPFILL ?= 1
 SUMMARY_DIR ?= summaries
 
-.PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run hedge-anchors drift-check
+.PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run hedge-anchors drift-check gist
+
+GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 
 scans-local:
 
@@ -68,6 +70,9 @@ heatmap:
 display:
 	$(PY) scripts/display_portfolio_dashboard.py
 
+gist:
+	bash scripts/push_summaries_to_gist.sh
+
 regime-check:
 	$(PY) scripts/research_regime_v2.py
 
@@ -92,4 +97,5 @@ clean-run: clean-all
 	$(MAKE) optimize-v2
 	$(MAKE) audit
 	$(MAKE) report
+	$(MAKE) gist
 
