@@ -1,14 +1,15 @@
 import json
 import logging
 
-import numpy as np
 import pandas as pd
+
+from tradingview_scraper.risk import AntifragilityAuditor, TailRiskAuditor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("antifragility_audit")
 
 
-def audit_antifragility():
+def audit_portfolio_fragility():
     # 1. Load Returns
     returns = pd.read_pickle("data/lakehouse/portfolio_returns.pkl")
     with open("data/lakehouse/portfolio_meta.json", "r") as f:
@@ -17,44 +18,43 @@ def audit_antifragility():
     # Filter valid columns
     returns = returns.loc[:, (returns != 0).any(axis=0)]
 
-    stats = []
+    # 2. Audit Antifragility
+    auditor = AntifragilityAuditor()
+    af_df = auditor.audit(returns)
 
-    for symbol in returns.columns:
-        res = returns[symbol]
+    # 3. Audit Tail Risk
+    tail_auditor = TailRiskAuditor()
+    tail_df = tail_auditor.calculate_metrics(returns, confidence_level=0.95)
 
-        # Calculate Antifragility Metrics
-        # Skewness: Positive is 'Options-like' (Antifragile)
-        # Kurtosis: High means 'Fat Tails'
-        skew = res.skew()
-        kurt = res.kurtosis()
-        vol = res.std() * np.sqrt(252)
+    # 4. Merge Metrics
+    df = pd.merge(af_df, tail_df, on="Symbol")
 
-        # Tail Gain: Average return during top 5% of moves
-        threshold = res.quantile(0.95)
-        tail_gain = res[res > threshold].mean() if not res[res > threshold].empty else 0
+    # Inject metadata
+    df["Direction"] = df["Symbol"].apply(lambda x: meta.get(x, {}).get("direction", "N/A"))
+    df["ADX"] = df["Symbol"].apply(lambda x: meta.get(x, {}).get("adx", 0))
 
-        stats.append({"Symbol": symbol, "Direction": meta[symbol]["direction"], "Vol": vol, "Skew": skew, "Kurtosis": kurt, "Tail_Gain": tail_gain, "ADX": meta[symbol]["adx"]})
-
-    df = pd.DataFrame(stats)
-
-    # Antifragility Score: Favor Positive Skew and High Tail Gain
-    # Normalized sum of Skew and Tail Gain
-    df["Antifragility_Score"] = (df["Skew"] - df["Skew"].min()) / (df["Skew"].max() - df["Skew"].min()) + (df["Tail_Gain"] - df["Tail_Gain"].min()) / (df["Tail_Gain"].max() - df["Tail_Gain"].min())
+    # Fragility Score (Inverse of Antifragility + High CVaR)
+    # We want to identify symbols that are most prone to large left-tail losses
+    df["Fragility_Score"] = (1.0 - (df["Antifragility_Score"] / df["Antifragility_Score"].max())) + (abs(df["CVaR_95"]) / abs(df["CVaR_95"]).max())
 
     print("\n" + "=" * 100)
-    print("ANTIFRAGILITY AUDIT (Convexity & Tail Metrics)")
+    print("PORTFOLIO FRAGILITY & TAIL RISK AUDIT")
     print("=" * 100)
 
-    print("\n[Top 10 Antifragile Candidates (Positive Skew / Tail Benefit)]")
+    print("\n[Top 10 Antifragile Candidates (Positive Skew / Convexity)]")
     print(df.sort_values("Antifragility_Score", ascending=False).head(10)[["Symbol", "Direction", "Skew", "Tail_Gain", "Antifragility_Score"]].to_string(index=False))
 
-    print("\n[Bottom 10 Fragile Assets (Negative Skew / Tail Risk)]")
-    print(df.sort_values("Antifragility_Score", ascending=True).head(10)[["Symbol", "Direction", "Skew", "Tail_Gain", "Antifragility_Score"]].to_string(index=False))
+    print("\n[Top 10 High Tail Risk Assets (Expected Shortfall / CVaR 95%)]")
+    cols = ["Symbol", "Direction", "CVaR_95", "VaR_95", "Tail_Ratio", "Max_Drawdown"]
+    print(df.sort_values("CVaR_95", ascending=True).head(10)[cols].to_string(index=False))
 
-    # Save for Barbell Optimizer
+    print("\n[Bottom 10 Most Fragile Assets (Composite Fragility Score)]")
+    print(df.sort_values("Fragility_Score", ascending=False).head(10)[["Symbol", "Direction", "Fragility_Score", "CVaR_95", "Skew"]].to_string(index=False))
+
+    # Save for Barbell Optimizer and Reporting
     df.to_json("data/lakehouse/antifragility_stats.json")
-    print("\nSaved stats to data/lakehouse/antifragility_stats.json")
+    print("\nSaved comprehensive risk stats to data/lakehouse/antifragility_stats.json")
 
 
 if __name__ == "__main__":
-    audit_antifragility()
+    audit_portfolio_fragility()

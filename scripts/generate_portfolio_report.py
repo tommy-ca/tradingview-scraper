@@ -54,7 +54,7 @@ def calculate_portfolio_vol(assets: List[Dict[str, Any]], returns_df: Optional[p
     return float(np.sqrt(port_var)) if port_var > 0 else 0.0
 
 
-def generate_markdown_report(data_path: str, returns_path: str, candidates_path: str, output_path: str):
+def generate_markdown_report(data_path: str, returns_path: str, candidates_path: str, stats_path: str, output_path: str):
     with open(data_path, "r") as f:
         data = json.load(f)
 
@@ -62,6 +62,10 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
     if os.path.exists(candidates_path):
         with open(candidates_path, "r") as f:
             candidates = json.load(f)
+
+    stats_df = None
+    if os.path.exists(stats_path):
+        stats_df = pd.read_json(stats_path)
 
     returns_df: Optional[pd.DataFrame] = None
     if os.path.exists(returns_path):
@@ -78,14 +82,14 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
     md = []
     md.append("# 📊 Quantitative Portfolio Analysis Dashboard")
     md.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    md.append("\n**Quick Links:** [Risk Rationale](./research/antifragile_barbell_rationale.md) | [Cluster Hierarchy](./cluster_analysis.md)")
+    md.append("\n**Quick Links:** [Risk Rationale](./research/antifragile_barbell_rationale.md) | [Cluster Hierarchy](./cluster_analysis.md) | [Tail Hedges](./hedge_anchors.md)")
     md.append("\n---")
 
     # 1. SHARED CLUSTER REFERENCE
     md.append("## 🧩 Shared Cluster Reference")
     md.append("Hierarchical clustering groups correlated assets into risk units to prevent over-concentration.")
-    md.append("| Cluster | Primary Sector | Size | Lead Asset | Primary Markets |")
-    md.append("| :--- | :--- | :--- | :--- | :--- |")
+    md.append("| Cluster | Primary Sector | Size | Lead Asset | Fragility | Primary Markets |")
+    md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
 
     for c_id, c_info in sorted(cluster_registry.items(), key=lambda x: int(x[0])):
         syms = c_info.get("symbols", [])
@@ -99,7 +103,17 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
         sector = c_info.get("primary_sector", "N/A")
         # Find lead asset from first in list
         lead = syms[0] if syms else "N/A"
-        md.append(f"| **Cluster {c_id}** | {sector} | {len(syms)} | `{lead}` | {markets} |")
+
+        # Calculate Cluster Fragility
+        fragility_str = "N/A"
+        if stats_df is not None:
+            c_stats = stats_df[stats_df["Symbol"].isin(syms)]
+            if not c_stats.empty:
+                f_score = c_stats["Fragility_Score"].mean()
+                icon = "🔴" if f_score > 1.2 else "🟡" if f_score > 0.8 else "🟢"
+                fragility_str = f"{icon} {f_score:.2f}"
+
+        md.append(f"| **Cluster {c_id}** | {sector} | {len(syms)} | `{lead}` | {fragility_str} | {markets} |")
 
     md.append("\n---")
 
@@ -211,4 +225,10 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
 
 
 if __name__ == "__main__":
-    generate_markdown_report("data/lakehouse/portfolio_optimized_v2.json", "data/lakehouse/portfolio_returns.pkl", "data/lakehouse/portfolio_candidates.json", "summaries/portfolio_report.md")
+    generate_markdown_report(
+        "data/lakehouse/portfolio_optimized_v2.json",
+        "data/lakehouse/portfolio_returns.pkl",
+        "data/lakehouse/portfolio_candidates.json",
+        "data/lakehouse/antifragility_stats.json",
+        "summaries/portfolio_report.md",
+    )

@@ -6,16 +6,10 @@ BACKFILL ?= 1
 GAPFILL ?= 1
 SUMMARY_DIR ?= summaries
 
-.PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run
-
-clean-exports:
-	rm -rf export/*.csv export/*.json
-
-clean-all: clean-exports
-	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md
-	rm -f data/lakehouse/portfolio_*
+.PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run hedge-anchors drift-check
 
 scans-local:
+
 	bash scripts/run_local_scans.sh
 
 scans-crypto:
@@ -77,6 +71,12 @@ display:
 regime-check:
 	$(PY) scripts/research_regime_v2.py
 
+hedge-anchors:
+	$(PY) scripts/detect_hedge_anchors.py
+
+drift-check:
+	$(PY) scripts/monitor_cluster_drift.py
+
 clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
 	$(MAKE) scans
@@ -87,6 +87,8 @@ clean-run: clean-all
 	$(MAKE) corr-report
 	$(PY) scripts/audit_antifragility.py
 	$(MAKE) regime-check
+	$(MAKE) hedge-anchors
+	$(MAKE) drift-check
 	$(MAKE) optimize-v2
 	$(MAKE) audit
 	$(MAKE) report

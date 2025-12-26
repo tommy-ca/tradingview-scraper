@@ -103,6 +103,48 @@ class BarbellOptimizer:
         return pd.DataFrame(portfolio).sort_values("Weight", ascending=False)
 
 
+class TailRiskAuditor:
+    """
+    Calculates tail risk metrics including Value at Risk (VaR) and
+    Conditional Value at Risk (CVaR) / Expected Shortfall.
+    """
+
+    def calculate_metrics(self, returns: pd.DataFrame, confidence_level: float = 0.95) -> pd.DataFrame:
+        """
+        Calculates VaR and CVaR for each asset in the returns matrix.
+        """
+        stats = []
+        for symbol in returns.columns:
+            res = returns[symbol].dropna()
+            if res.empty:
+                continue
+
+            # Value at Risk (VaR)
+            var = float(res.quantile(1 - confidence_level))
+
+            # Conditional Value at Risk (CVaR) / Expected Shortfall
+            # The average of returns that are worse than VaR
+            tail_loss = res[res <= var]
+            cvar = float(tail_loss.mean()) if len(tail_loss) > 0 else var
+
+            # Tail Ratio (Ratio of right tail to left tail)
+            right_tail = float(res.quantile(confidence_level))
+            left_tail = abs(var) if var != 0 else 1e-9
+            tail_ratio = right_tail / left_tail
+
+            stats.append(
+                {
+                    "Symbol": symbol,
+                    f"VaR_{int(confidence_level * 100)}": var,
+                    f"CVaR_{int(confidence_level * 100)}": cvar,
+                    "Tail_Ratio": tail_ratio,
+                    "Max_Drawdown": float((res.cumsum() - res.cumsum().cummax()).min()),  # Approx daily DD
+                }
+            )
+
+        return pd.DataFrame(stats)
+
+
 class AntifragilityAuditor:
     """
     Analyzes historical returns for convexity, skewness, and tail potential.

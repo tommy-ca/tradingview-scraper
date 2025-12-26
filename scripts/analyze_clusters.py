@@ -87,7 +87,7 @@ def visualize_clusters(returns: pd.DataFrame, output_path: str):
     logger.info(f"✅ Clustermap saved to: {output_path}")
 
 
-def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, output_path: str, image_path: str):
+def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stats_path: str, output_path: str, image_path: str):
     if not os.path.exists(clusters_path) or not os.path.exists(meta_path) or not os.path.exists(returns_path):
         logger.error("Required files missing for cluster analysis.")
         return
@@ -96,6 +96,10 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         clusters = cast(Dict[str, List[str]], json.load(f))
     with open(meta_path, "r") as f:
         meta = cast(Dict[str, Any], json.load(f))
+
+    stats_df = None
+    if os.path.exists(stats_path):
+        stats_df = pd.read_json(stats_path)
 
     # Use a safer way to read pickle
     with open(returns_path, "rb") as f_in:
@@ -141,6 +145,15 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         std_val = float(mean_rets.std())
         cluster_vol = std_val * np.sqrt(252) if not np.isnan(std_val) else 0.0
 
+        # Calculate Cluster Fragility (Mean of member fragility)
+        cluster_fragility = 0.0
+        cluster_af = 0.0
+        if stats_df is not None:
+            c_stats = stats_df[stats_df["Symbol"].isin(valid_symbols)]
+            if not c_stats.empty:
+                cluster_fragility = float(c_stats["Fragility_Score"].mean())
+                cluster_af = float(c_stats["Antifragility_Score"].mean())
+
         # Sector distribution
         sectors = [meta.get(s, {}).get("sector", "N/A") for s in valid_symbols]
         sector_series = pd.Series(sectors)
@@ -154,6 +167,8 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, outp
         report.append(f"- **Size:** {len(valid_symbols)} assets")
         report.append(f"- **Avg Intra-Cluster Correlation:** {avg_corr:.4f}")
         report.append(f"- **Cluster Annualized Vol:** {cluster_vol:.2%}")
+        report.append(f"- **Antifragility Score:** {cluster_af:.2f}")
+        report.append(f"- **Fragility Score:** {cluster_fragility:.2f}")
         report.append(f"- **Sector Homogeneity:** {sector_homogeneity:.1%}")
         report.append(f"- **Markets:** {', '.join(markets)}")
 
@@ -207,6 +222,7 @@ if __name__ == "__main__":
         "data/lakehouse/portfolio_clusters.json",
         "data/lakehouse/portfolio_meta.json",
         "data/lakehouse/portfolio_returns.pkl",
+        "data/lakehouse/antifragility_stats.json",
         "summaries/cluster_analysis.md",
         "summaries/portfolio_clustermap.png",
     )
