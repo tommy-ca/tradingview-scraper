@@ -115,7 +115,7 @@ class LakehouseStorage:
             return False
         return timestamp in df["timestamp"].values
 
-    def detect_gaps(self, symbol: str, interval: str, profile: DataProfile = DataProfile.UNKNOWN) -> List[tuple]:
+    def detect_gaps(self, symbol: str, interval: str, profile: DataProfile = DataProfile.UNKNOWN, start_ts: Optional[float] = None) -> List[tuple]:
         """
         Identifies missing data points in the historical time-series.
 
@@ -123,11 +123,12 @@ class LakehouseStorage:
             symbol (str): Symbol name.
             interval (str): Timeframe interval.
             profile (DataProfile): Asset class profile for market-aware filtering.
+            start_ts (Optional[float]): Only check for gaps after this timestamp.
 
         Returns:
             List[tuple]: List of (start_missing_ts, end_missing_ts) gaps.
         """
-        df = self.load_candles(symbol, interval)
+        df = self.load_candles(symbol, interval, start_ts=start_ts)
         if df.empty or len(df) < 2:
             return []
 
@@ -162,8 +163,8 @@ class LakehouseStorage:
                         if (start_dt.weekday() >= 5 or end_dt.weekday() >= 5) and diff <= expected_diff * 3.5:
                             continue
 
-                    # 2. Skip US Holidays for Equities/Futures
-                    if profile in [DataProfile.EQUITY, DataProfile.FUTURES]:
+                    # 2. Skip US Holidays for Equities/Futures/Forex (Major ones)
+                    if profile in [DataProfile.EQUITY, DataProfile.FUTURES, DataProfile.FOREX]:
                         start_date_str = start_dt.strftime("%Y-%m-%d")
                         if start_date_str in holidays:
                             continue

@@ -89,8 +89,8 @@ class PortfolioAuditor:
                 self._record(profile, symbol, "STALE", last_ts)
                 continue
 
-            all_gaps = self.storage.detect_gaps(symbol, "1d", profile=profile)
-            recent_gaps = [g for g in all_gaps if g[1] > lookback_cutoff]
+            all_gaps = self.storage.detect_gaps(symbol, "1d", profile=profile, start_ts=lookback_cutoff)
+            recent_gaps = all_gaps
 
             status = "OK"
             if recent_gaps:

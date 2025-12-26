@@ -49,7 +49,9 @@ def get_us_holidays(year: int) -> Set[str]:
         f"{year}-06-19",  # Juneteenth
         f"{year}-07-04",  # Independence Day
         f"{year}-09-01",  # Labor Day (2025)
+        f"{year}-11-26",  # Day before Thanksgiving (Early close)
         f"{year}-11-27",  # Thanksgiving (2025)
+        f"{year}-11-28",  # Day after Thanksgiving (Early close/Closed for some)
         f"{year}-12-24",  # Christmas Eve (Early Close/Closed)
         f"{year}-12-25",  # Christmas
     }

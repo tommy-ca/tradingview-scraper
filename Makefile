@@ -82,6 +82,9 @@ hedge-anchors:
 drift-check:
 	$(PY) scripts/monitor_cluster_drift.py
 
+recover:
+	$(PY) scripts/recover_universe.py
+
 clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
 	$(MAKE) scans
