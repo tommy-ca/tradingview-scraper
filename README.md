@@ -1780,6 +1780,7 @@ make clean-run
 *   **Cluster-Aware Optimization**: Strictly enforced 25% global concentration caps across all profiles.
 *   **Self-Healing Data Layer**: Automated gap detection and targeted repair for 200-day alignment.
 *   **Professional Reporting**: Integrated Markdown dashboards with visual concentration bars and lead asset selection.
+*   **Live Output Example**: [Institutional Portfolio Implementation Gist](https://gist.github.com/tommy-ca/e888e1eab0b86447c90c26e92ec4dc36)
 
 ---
 

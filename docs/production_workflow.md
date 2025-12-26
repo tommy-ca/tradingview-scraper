@@ -67,6 +67,7 @@ make display
 ```
 - `make report`: Generates `summaries/portfolio_report.md` with visual concentration bars.
 - `make display`: Opens the interactive terminal dashboard for immediate implementations.
+- **Live Output Example**: [GitHub Gist - Portfolio Summaries](https://gist.github.com/tommy-ca/e888e1eab0b86447c90c26e92ec4dc36)
 
 ---
 
