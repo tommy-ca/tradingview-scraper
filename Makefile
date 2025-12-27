@@ -40,10 +40,14 @@ prep:
 	fi
 
 validate:
-	$(PY) scripts/validate_portfolio_artifacts.py
+	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health
 
 audit:
-	$(PY) scripts/validate_portfolio_artifacts.py --only-logic
+	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-logic
+
+health-report:
+	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health
+	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
 
 select:
 	$(PY) scripts/natural_selection.py --top-n $(TOP_N) --threshold $(THRESHOLD)

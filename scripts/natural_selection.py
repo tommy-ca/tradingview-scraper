@@ -141,28 +141,42 @@ def natural_selection(
         def norm(s):
             return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
 
+        # Map symbols to identities and directions
+        sym_to_ident = {s: candidate_map.get(s, {}).get("identity", s) for s in symbols}
         directions = pd.Series({s: candidate_map.get(s, {}).get("direction", "LONG") for s in symbols})
+
         alpha_scores = 0.4 * norm(mom) + 0.3 * norm(stab) + 0.3 * norm(conv)
 
         # Audit cluster info
         audit_selection["clusters"][str(c_id)] = {"size": len(symbols), "members": symbols, "selected": []}
 
-        # Pick Top N LONGs
-        long_syms = [s for s in symbols if directions[s] == "LONG"]
+        # --- REFINEMENT: Identity-based merging within cluster ---
+        # For each identity in this cluster, find the best symbol (venue)
+        identity_to_best_sym: Dict[str, str] = {}
+        for s in symbols:
+            ident = sym_to_ident[s]
+            if ident not in identity_to_best_sym or alpha_scores[s] > alpha_scores[identity_to_best_sym[ident]]:
+                identity_to_best_sym[ident] = s
+
+        # Best symbols are the unique candidates for this cluster
+        unique_cluster_candidates = list(identity_to_best_sym.values())
+
+        # Pick Top N LONGs from unique identities
+        long_syms = [s for s in unique_cluster_candidates if directions[s] == "LONG"]
         if long_syms:
             top_longs = alpha_scores[long_syms].sort_values(ascending=False).head(top_n_per_cluster).index.tolist()
-            selected_symbols.extend(top_longs)
+            selected_symbols.extend([str(s) for s in top_longs])
             audit_selection["clusters"][str(c_id)]["selected"].extend([str(s) for s in top_longs])
 
-        # Pick Top N SHORTS
-        short_syms = [s for s in symbols if directions[s] == "SHORT"]
+        # Pick Top N SHORTS from unique identities
+        short_syms = [s for s in unique_cluster_candidates if directions[s] == "SHORT"]
         if short_syms:
             top_shorts = alpha_scores[short_syms].sort_values(ascending=False).head(top_n_per_cluster).index.tolist()
-            selected_symbols.extend(top_shorts)
+            selected_symbols.extend([str(s) for s in top_shorts])
             audit_selection["clusters"][str(c_id)]["selected"].extend([str(s) for s in top_shorts])
 
         n_sel = len([s for s in selected_symbols if s in symbols])
-        logger.info(f"  Cluster {c_id}: Selected {n_sel}/{len(symbols)} (L: {len(long_syms)}, S: {len(short_syms)})")
+        logger.info(f"  Cluster {c_id}: Selected {n_sel}/{len(symbols)} (L: {len(long_syms)}, S: {len(short_syms)}) [Merged {len(symbols) - len(unique_cluster_candidates)} redundant venues]")
 
     # 4. Save Final Candidates
     final_candidates = []
