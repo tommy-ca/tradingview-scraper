@@ -1,10 +1,10 @@
 import logging
 import math
-from typing import cast
+from typing import Tuple, cast
 
 import numpy as np
 import pandas as pd
-import pywt
+import pywt  # type: ignore
 from scipy.stats import entropy
 
 logger = logging.getLogger(__name__)
@@ -78,23 +78,23 @@ class MarketRegimeDetector:
 
         return float(energy_detail / total_energy)
 
-    def detect_regime(self, returns: pd.DataFrame) -> str:
+    def detect_regime(self, returns: pd.DataFrame) -> Tuple[str, float]:
         """
         Analyzes the return matrix and classifies the current regime using a
         multi-factor weighted score.
 
         Returns:
-            str: 'QUIET', 'NORMAL', or 'CRISIS'
+            Tuple[str, float]: ('QUIET'|'NORMAL'|'CRISIS', weighted_score)
         """
         if returns.empty or len(returns) < 20:
-            return "NORMAL"
+            return "NORMAL", 1.0
 
         mean_vals = returns.mean(axis=1)
-        if isinstance(mean_vals, (float, int)):
-            return "NORMAL"
+        if not isinstance(mean_vals, pd.Series):
+            return "NORMAL", 1.0
 
-        mean_rets_series = pd.Series(mean_vals)
-        market_rets = mean_rets_series.values
+        mean_rets_series = cast(pd.Series, mean_vals)
+        market_rets = cast(np.ndarray, mean_rets_series.values)
 
         # 1. Volatility Ratio (Shock) - range [0, 3+]
         current_vol = float(mean_rets_series.tail(10).std())
@@ -121,23 +121,13 @@ class MarketRegimeDetector:
             + 0.2 * ent  # Complexity (0-1)
         )
 
-        # In a normal market:
-        # vol_ratio ~ 1.0, turbulence ~ 0.8, vc ~ 0.1, ent ~ 0.9
-        # score ~ 0.5 + 0.4 + 0.03 + 0.18 = 1.11
-
-        # In a quiet market:
-        # vol_ratio ~ 0.5, turbulence ~ 0.5, vc ~ 0.0, ent ~ 0.7
-        # score ~ 0.25 + 0.25 + 0 + 0.14 = 0.64
-
-        # In a crisis:
-        # vol_ratio ~ 2.5, turbulence ~ 0.9, vc ~ 0.4, ent ~ 0.95
-        # score ~ 1.25 + 0.45 + 0.12 + 0.19 = 2.01
-
         logger.info(f"Regime Analysis - Score: {regime_score:.2f} | VolRatio: {vol_ratio:.2f}, Turbulence: {turbulence:.2f}, Clustering: {vc:.2f}, Entropy: {ent:.2f}")
 
         if regime_score >= self.crisis_threshold:
-            return "CRISIS"
+            regime = "CRISIS"
         elif regime_score < self.quiet_threshold:
-            return "QUIET"
+            regime = "QUIET"
         else:
-            return "NORMAL"
+            regime = "NORMAL"
+
+        return regime, float(regime_score)

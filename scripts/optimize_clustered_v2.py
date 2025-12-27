@@ -29,9 +29,10 @@ class ClusteredOptimizerV2:
         available_symbols = [s for s in all_symbols if s in self.returns.columns]
         self.returns = self.returns[available_symbols].fillna(0.0)
 
-        # Build cluster benchmarks (Inverse-Variance weights within cluster)
+        # Build cluster benchmarks and aggregate risk stats
         self.cluster_benchmarks = pd.DataFrame()
         self.intra_cluster_weights = {}  # ClusterID -> Series of weights summing to 1
+        self.cluster_stats = {}  # ClusterID -> Aggregated stats
 
         for c_id, symbols in self.clusters.items():
             valid_symbols = [s for s in symbols if s in self.returns.columns]
@@ -39,22 +40,48 @@ class ClusteredOptimizerV2:
                 continue
 
             sub_rets = self.returns[valid_symbols]
-            if len(valid_symbols) == 1:
-                self.cluster_benchmarks[f"Cluster_{c_id}"] = pd.DataFrame(sub_rets).iloc[:, 0]
-                self.intra_cluster_weights[c_id] = pd.Series([1.0], index=valid_symbols)
+
+            # Hybrid Layer 2 Weighting (Blend of InvVar and AlphaRank)
+            vols = sub_rets.std() * np.sqrt(252)
+            inv_vars = 1.0 / (vols**2 + 1e-9)
+            w_ivp = inv_vars / inv_vars.sum()
+
+            # Alpha components for internal weighting
+            mom = sub_rets.mean() * 252
+
+            def norm(s):
+                return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
+
+            w_alpha = norm(mom) / (norm(mom).sum() + 1e-9)
+
+            # 50/50 Blend
+            w_hybrid = 0.5 * w_ivp + 0.5 * w_alpha
+            w_hybrid = w_hybrid / w_hybrid.sum()
+
+            self.cluster_benchmarks[f"Cluster_{c_id}"] = (sub_rets * w_hybrid).sum(axis=1)
+            self.intra_cluster_weights[c_id] = w_hybrid
+
+            # Aggregate cluster fragility (CVaR)
+            if self.stats is not None:
+                c_af_stats = self.stats[self.stats["Symbol"].isin(valid_symbols)]
+                if not c_af_stats.empty:
+                    # Use mean Fragility Score as penalty factor
+                    self.cluster_stats[c_id] = {"fragility": float(c_af_stats["Fragility_Score"].mean()), "cvar": float(c_af_stats["CVaR_95"].mean())}
+                else:
+                    self.cluster_stats[c_id] = {"fragility": 1.0, "cvar": -0.05}
             else:
-                # Inverse Variance Weighting within cluster
-                vols = sub_rets.std() * np.sqrt(252)
-                inv_vars = 1.0 / (vols**2 + 1e-9)
-                w = inv_vars / inv_vars.sum()
-                self.cluster_benchmarks[f"Cluster_{c_id}"] = (sub_rets * w).sum(axis=1)
-                self.intra_cluster_weights[c_id] = w
+                self.cluster_stats[c_id] = {"fragility": 1.0, "cvar": -0.05}
 
     def _get_cov(self, df: pd.DataFrame):
         return df.cov() * 252
 
-    def _min_var_obj(self, weights, cov):
-        return np.sqrt(np.dot(weights.T, np.dot(cov, weights)))
+    def _min_var_obj(self, weights, cov, penalties=None):
+        base_vol = np.sqrt(np.dot(weights.T, np.dot(cov, weights)))
+        if penalties is not None:
+            # Penalize by weighted average fragility
+            penalty = np.dot(weights, penalties)
+            return base_vol * (1.0 + penalty * 0.2)  # 20% influence
+        return base_vol
 
     def _risk_parity_obj(self, weights, cov):
         vol = np.sqrt(np.dot(weights.T, np.dot(cov, weights)))
@@ -65,29 +92,35 @@ class ClusteredOptimizerV2:
         target_rc = vol / len(weights)
         return np.sum(np.square(rc - target_rc))
 
-    def _max_sharpe_obj(self, weights, returns_df: pd.DataFrame):
+    def _max_sharpe_obj(self, weights, returns_df: pd.DataFrame, penalties=None):
         cov = self._get_cov(returns_df)
         vol = np.sqrt(np.dot(weights.T, np.dot(cov, weights)))
         ret = np.sum(returns_df.mean() * weights) * 252
         if vol == 0:
             return 0
-        return -(ret / vol)
+        sharpe = ret / vol
+        if penalties is not None:
+            penalty = np.dot(weights, penalties)
+            return -(sharpe / (1.0 + penalty * 0.2))
+        return -sharpe
 
     def optimize_across_clusters(self, method: str, cluster_cap: float = 0.25) -> pd.Series:
         n = self.cluster_benchmarks.shape[1]
         init_weights = np.array([1.0 / n] * n)
-        # Enforce cluster_cap (e.g. 0.25)
         bounds = tuple((0.0, cluster_cap) for _ in range(n))
         constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
 
         cov = self._get_cov(self.cluster_benchmarks)
 
+        # Extract penalties (Fragility Scores)
+        penalties = np.array([self.cluster_stats[c_col.replace("Cluster_", "")]["fragility"] for c_col in self.cluster_benchmarks.columns])
+
         if method == "min_var":
-            res = minimize(self._min_var_obj, init_weights, args=(cov,), method="SLSQP", bounds=bounds, constraints=constraints)
+            res = minimize(self._min_var_obj, init_weights, args=(cov, penalties), method="SLSQP", bounds=bounds, constraints=constraints)
         elif method == "risk_parity":
             res = minimize(self._risk_parity_obj, init_weights, args=(cov,), method="SLSQP", bounds=bounds, constraints=constraints)
         elif method == "max_sharpe":
-            res = minimize(self._max_sharpe_obj, init_weights, args=(self.cluster_benchmarks,), method="SLSQP", bounds=bounds, constraints=constraints)
+            res = minimize(self._max_sharpe_obj, init_weights, args=(self.cluster_benchmarks, penalties), method="SLSQP", bounds=bounds, constraints=constraints)
         else:
             raise ValueError(f"Unknown method {method}")
 

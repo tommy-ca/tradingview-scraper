@@ -22,7 +22,7 @@ def prepare_portfolio_universe():
     candidates = []
 
     # Check for pre-selected candidates file first
-    preselected_file = "data/lakehouse/portfolio_candidates.json"
+    preselected_file = os.getenv("CANDIDATES_FILE", "data/lakehouse/portfolio_candidates.json")
     if os.path.exists(preselected_file):
         logger.info(f"Loading candidates from {preselected_file}")
         with open(preselected_file, "r") as f:
@@ -129,7 +129,18 @@ def prepare_portfolio_universe():
         symbol = candidate["symbol"]
         local_loader = PersistentDataLoader(websocket_jwt_token=jwt_token)
 
-        if os.getenv("PORTFOLIO_BACKFILL", "0") == "1":
+        # 1. Selective Sync Check
+        is_stale = True
+        parquet_path = f"data/lakehouse/{symbol.replace(':', '_')}_1d.parquet"
+        if os.path.exists(parquet_path):
+            mtime = os.path.getmtime(parquet_path)
+            # If updated in the last 12 hours, consider fresh for Daily data
+            if (time.time() - mtime) < (12 * 3600):
+                is_stale = False
+
+        force_sync = os.getenv("PORTFOLIO_FORCE_SYNC", "0") == "1"
+
+        if (os.getenv("PORTFOLIO_BACKFILL", "0") == "1") and (is_stale or force_sync):
             try:
                 # Limit backfill depth to 250 days max to prevent large pulls / 429s
                 bf_depth = min(lookback_days + 20, 250)
@@ -139,7 +150,7 @@ def prepare_portfolio_universe():
             except Exception as e:
                 logger.error(f"Backfill failed for {symbol}: {e}")
 
-        if os.getenv("PORTFOLIO_GAPFILL", "0") == "1":
+        if (os.getenv("PORTFOLIO_GAPFILL", "0") == "1") and (is_stale or force_sync):
             try:
                 logger.info(f"Gap filling {symbol} (max_depth=250)...")
                 # max_time=60s, max_fills=3, total_timeout=60s per gap-fill call

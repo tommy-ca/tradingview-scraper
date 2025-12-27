@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("select_top_universe")
 
 
-def select_top_universe():
+def select_top_universe(mode: str = "raw"):
     files = glob.glob("export/universe_selector_*.json")
 
     categories = {}
@@ -22,7 +22,6 @@ def select_top_universe():
             clean = [p for p in parts if p not in ["universe", "selector"] and not p[0].isdigit()]
 
             # Simple heuristic: Exchange + Type
-            # If we have binance, perp/spot
             exchange = "UNKNOWN"
             mtype = "UNKNOWN"
 
@@ -50,15 +49,15 @@ def select_top_universe():
                 elif isinstance(raw_data, list):
                     items = raw_data
 
-                # Check if items is None or invalid
                 if not items:
                     items = []
 
-                # Enrich with direction
+                # Enrich with direction and scan file name for tracking
                 file_direction = "SHORT" if "_short" in os.path.basename(f).lower() else "LONG"
                 for i in items:
                     if isinstance(i, dict):
                         i["_direction"] = file_direction
+                        i["_category"] = category
 
                 categories[category].extend(items)
         except Exception as e:
@@ -67,7 +66,7 @@ def select_top_universe():
     final_universe = []
 
     for cat, items in categories.items():
-        # Deduplicate
+        # Deduplicate by symbol
         unique_items = {}
         for item in items:
             if isinstance(item, dict) and "symbol" in item:
@@ -75,13 +74,11 @@ def select_top_universe():
 
         items = list(unique_items.values())
 
-        # 1. Composite Alpha Ranking
-        # We rank within category to find the most 'characteristic' assets
+        # Always calculate Alpha Ranking to allow truncation in 'raw' mode too
         if items:
-            # Extract metrics
-            v_traded = np.array([x.get("Value.Traded", 0) or 0 for x in items])
-            adx = np.array([x.get("ADX", 0) or 0 for x in items])
-            vol = np.array([x.get("Volatility.D", 0) or 0 for x in items])
+            v_traded = np.array([float(x.get("Value.Traded", 0) or 0) for x in items])
+            adx = np.array([float(x.get("ADX", 0) or 0) for x in items])
+            vol = np.array([float(x.get("Volatility.D", 0) or 0) for x in items])
 
             def norm(a):
                 return (a - a.min()) / (a.max() - a.min() + 1e-9) if len(a) > 1 else np.array([1.0] * len(a))
@@ -92,40 +89,48 @@ def select_top_universe():
             for i, item in enumerate(items):
                 item["_alpha_score"] = float(alpha_scores[i])
 
-            # Sort by Alpha Score
             items.sort(key=lambda x: x.get("_alpha_score", 0), reverse=True)
 
-        top_n = int(os.getenv("UNIVERSE_TOP_N", "20"))
-        top_selected = items[:top_n]
-        logger.info(f"Category: {cat} - Selected {len(top_selected)} from {len(items)} via Alpha Ranking")
+        if mode == "top":
+            limit = int(os.getenv("UNIVERSE_TOP_N", "20"))
+            items = items[:limit]
+            logger.info(f"Category: {cat} - Selected Top {len(items)} via Alpha Ranking")
+        elif mode == "raw":
+            # Apply a loose truncation to prevent massive bloat (e.g. Top 30)
+            raw_limit = int(os.getenv("RAW_TOP_N", "30"))
+            if len(items) > raw_limit:
+                items = items[:raw_limit]
+                logger.info(f"Category: {cat} - Truncated raw pool to Top {raw_limit} via Alpha Ranking")
 
-        for item in top_selected:
-            # Determine direction from filename stored in 'market' or pass it down?
-            # 'market' is 'category' which is e.g. BINANCE_SPOT
-            # We lost the filename context in 'categories[category]'.
-            # We should probably store direction in the item during parsing.
-
-            direction = item.get("_direction", "LONG")
-
+        for item in items:
             final_universe.append(
                 {
                     "symbol": item["symbol"],
                     "description": item.get("description", "N/A"),
                     "sector": item.get("sector", "N/A"),
-                    "market": cat,
+                    "market": item.get("_category", cat),
                     "close": item.get("close", 0),
                     "value_traded": item.get("Value.Traded", 0),
                     "adx": item.get("ADX", 0),
                     "atr": item.get("ATR", 0),
-                    "direction": direction,
+                    "direction": item.get("_direction", "LONG"),
                 }
             )
 
-    with open("data/lakehouse/portfolio_candidates.json", "w") as f:
+    output_file = "data/lakehouse/portfolio_candidates.json"
+    if mode == "raw":
+        output_file = "data/lakehouse/portfolio_candidates_raw.json"
+
+    with open(output_file, "w") as f:
         json.dump(final_universe, f, indent=2)
 
-    logger.info(f"Saved {len(final_universe)} candidates to data/lakehouse/portfolio_candidates.json")
+    logger.info(f"Saved {len(final_universe)} candidates to {output_file}")
 
 
 if __name__ == "__main__":
-    select_top_universe()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=["raw", "top"], default="raw")
+    args = parser.parse_args()
+    select_top_universe(mode=args.mode)

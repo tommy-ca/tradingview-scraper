@@ -149,14 +149,15 @@ class QuantitativePipeline:
             return {"status": "empty_returns", "data": signals}
 
         # 3. Risk Optimization
-        regime = self.regime_detector.detect_regime(returns_df)
+        regime_name, regime_score = self.regime_detector.detect_regime(returns_df)
+        logger.info(f"Market Regime Detected: {regime_name} (Score: {regime_score:.2f})")
         stats = self.antifragility_auditor.audit(returns_df)
-        portfolio = self.optimizer.optimize(returns_df, stats, regime=regime)
+        portfolio = self.optimizer.optimize(returns_df, stats, regime=regime_name)
 
         # 4. Cataloging & PIT Verification
         # Upsert signal constituents to the metadata catalog
         self.catalog.upsert_symbols(signals)
 
-        logger.info(f"Pipeline complete. Portfolio constructed with {len(portfolio)} assets in {regime} regime.")
+        logger.info(f"Pipeline complete. Portfolio constructed with {len(portfolio)} assets in {regime_name} regime.")
 
-        return {"status": "success", "regime": regime, "total_signals": len(signals), "portfolio": portfolio.to_dict(orient="records"), "data": signals}
+        return {"status": "success", "regime": regime_name, "total_signals": len(signals), "portfolio": portfolio.to_dict(orient="records"), "data": signals}

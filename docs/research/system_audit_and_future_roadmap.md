@@ -8,49 +8,63 @@ The current system has successfully implemented a multi-asset, cluster-aware qua
 ## 2. Audit Findings: Identified Weaknesses
 
 ### Stage 1: Discovery & Selection
-- **Fixed Diversity Caps**: The system picks the Top 10 assets per category regardless of the sector's current alpha density.
-- **Metadata Timing**: Metadata enrichment occurs *after* selection, leading to a risk of "blind" clustering if descriptions are missing during the initial grouping.
+- [x] **Fixed Diversity Caps**: The system now supports configurable `UNIVERSE_TOP_N` and Alpha Ranking.
+- [x] **Metadata Timing**: Metadata enrichment is now integrated into the selection and prep cycle.
+- [ ] **Raw Pool Bloat**: Currently backfilling 100% of raw candidates (~140 symbols) for 200 days before any pruning, causing significant data waste and rate-limit friction.
 
 ### Stage 2: Data Resilience
-- **Rigid Lookback**: All assets are forced to a 200-day window. Recently listed high-momentum assets (e.g., new Crypto Perps) may be dropped due to insufficient history even if they provide unique diversification.
-- **Throttling Inefficiency**: Backfill batching is static. There is no automated "slow-lane" fallback for problematic exchanges.
+- [ ] **Rigid Lookback**: All assets are forced to a 200-day window. Recently listed high-momentum assets may be dropped.
+- [x] **Throttling Inefficiency**: Batching is active, and `Selective Sync` is implemented.
+- [x] **Self-Healing**: Automated repair pass is integrated into `make prep`.
 
 ### Stage 3: Hierarchical Analysis
-- **Static Cutting Threshold**: The 0.4 correlation distance threshold is used for all market conditions. It does not tighten during "Correlation One" spikes.
-- **Labeling Noise**: While mode-selection was added, some mixed clusters still suffer from inconsistent sector labeling.
+- [x] **Static Cutting Threshold**: Regime-adaptive clustering is now implemented.
+- [x] **Labeling Noise**: Mode-selection and institutional sector overrides are active.
 
 ### Stage 4: Risk Optimization
-- **Binary Fragility**: Fragility scores are calculated and reported but do not influence the optimization objective function (Weights are not penalized by fragility).
-- **Uniform Intra-Cluster Weighting**: Weight distribution within a bucket is purely Inverse-Variance, ignoring current momentum or alpha ranking for sizing.
+- [x] **Binary Fragility**: Fragility scores (CVaR) are now calculated and audited.
+- [x] **Fragility-Adjusted Objective**: Weights are penalized by fragility in `ClusteredOptimizerV2`.
+- [x] **Uniform Intra-Cluster Weighting**: Hybrid Layer 2 (Momentum-Volatility blend) is implemented.
+
+### Stage 5: Reporting & Implementation
+- [x] **Categorization Gaps**: Explicit institutional mapping for Fixed Income and Metals is active.
+- [x] **Visual "Dust"**: Minimum implementation floor (0.1%) is enforced in reports.
+- [x] **Integrated Risk Tree**: Nested sub-clustering and high-res clustermaps are integrated.
+- [x] **Implementation Dashboard**: Terminal-based `rich` dashboard (`make display`) is fully operational.
 
 ## 3. Phase 5 Roadmap: Dynamic Constraints & State Management
 
-### A. Dynamic Risk Constraints (Priority: High)
-- **Fragility-Adjusted Objective**: Penalize clusters with high CVaR (Expected Shortfall) directly in the optimizer.
-- **Regime-Adaptive Clustering**: Automatically adjust the distance threshold ($t$) based on the `Regime_Score`:
-    - `CRISIS`: $t = 0.3$ (Higher diversification forced)
-    - `NORMAL`: $t = 0.4$
-    - `QUIET`: $t = 0.5$ (Allow larger, thematic buckets)
+### A. Tiered Intelligence Discovery (Priority: High)
+- **Discovery-Alpha Gate**: Implement a Stage 1 filter in `select_top_universe.py` to limit the raw pool to the Top 25 assets per category based on Discovery Alpha (`Liquidity + Trend + Vol`).
+- **Two-Pass Statistical Pruning**:
+    - **Pass 1 (Lightweight)**: Fetch only **60 days** of history for the truncated raw pool.
+    - **Pass 2 (Natural Selection)**: Execute hierarchical clustering on the 60-day window to identify winners.
+    - **Pass 3 (High Integrity)**: Fetch full **200-day** history *only* for the Natural Selection winners.
+- **Strategic Rationale**: Reduces deep backfill volume by 50-60% while maintaining exchange fidelity (allowing venues to compete statistically).
 
-### B. Alpha-Weighted Internal Distribution (Priority: High)
-- **Hybrid Layer 2**: Replace pure Inverse-Variance with a blend:
-    - $Weight = 0.5 \cdot \text{InvVar} + 0.5 \cdot \text{MomentumRank}$
-    - This ensures that the Lead Asset doesn't just represent the "stablest" member but also the most "active" member.
+### B. Dynamic Risk Constraints (Priority: High)
+- **CVaR-Penalized Optimization**: [x] Implemented.
+- **Regime-Adaptive Clustering**: [x] Implemented.
+- **Fragility Constraints**: Automatically penalize clusters with high CVaR directly in the objective function.
 
-### C. State-Aware Workflows (Priority: Medium)
-- **Portfolio State Engine**: Implement `scripts/track_portfolio_state.py` to compare "Current Optimal" vs. "Last Implemented" and report **Rebalancing Drift**.
-- **Selective Sync**: Update `make prep` to only backfill assets that are stale or missing, rather than checking the entire universe, improving throughput by 60%+.
+### C. Alpha-Weighted Internal Allocation (Priority: High)
+- **Hybrid Layer 2**: [x] Implemented Momentum-Volatility blend.
 
-### D. Advanced Signal Fusion (Priority: Low)
-- **Inter-Market Sentiment**: Use G8 Forex trend strength as a global multiplier for Crypto/Equity exposure limits.
+### D. State-Aware Workflows & State Tracking (Priority: Medium)
+- **Portfolio State Engine**: [x] Implemented `scripts/track_portfolio_state.py`.
+- **Selective Sync**: [x] Implemented.
 
-## 4. Operational Improvement Suggestions
+## 4. Operational Improvement Progress
+- [x] **Gist Automation**: `make gist` now syncs all 5 risk reports + images.
+- [x] **Natural Selection**: Initial cluster-based filtering is active.
+- [x] **CLI Heatmap**: Unicode-based correlation heatmap (`make heatmap`) is operational.
 
-1. **Recovery Loops**: Implement a `make recover` target that specifically identifies failed backfills from the previous run and re-tries them with a batch size of 1.
-2. **Institutional Guardrails**: Integrate `make audit` into a pre-commit hook or GitHub Action to ensure no logic change breaches the 25% systemic cap.
-3. **Threshold Sensitivity Analysis**: Create a script to visualize how the number of clusters changes as the distance threshold moves from 0.1 to 0.9.
+## 5. Operational Improvement Suggestions
+1. **Recovery Loops**: Implement a `make recover` target for high-intensity sequential retries.
+2. **Institutional Guardrails**: Integrate `make audit` into CI/CD.
+3. **Threshold Sensitivity Analysis**: Visualize cluster count vs. distance threshold.
 
-## 5. Next Steps
-1. Refactor `optimize_clustered_v2.py` to support **Fragility Penalties**.
-2. Implement the **Selective Sync** logic in `prepare_portfolio_data.py`.
-3. Scaffold the **Portfolio State Engine** to track drift.
+## 6. Next Steps
+1. Refactor `select_top_universe.py` with Alpha-Gate truncation.
+2. Implement Tiered Backfill (60d/200d) in `Makefile`.
+3. Integrate real-time liquidity into Lead Asset selection.

@@ -10,6 +10,8 @@ from scipy.cluster.hierarchy import fcluster, leaves_list, linkage
 from scipy.spatial.distance import squareform
 from sklearn.covariance import LedoitWolf
 
+from tradingview_scraper.regime import MarketRegimeDetector
+
 
 def winsorize(df: pd.DataFrame, alpha: float) -> pd.DataFrame:
     if alpha <= 0:
@@ -132,6 +134,20 @@ def main():
         z = (series.iloc[-1] - series.mean()) / (series.std() + 1e-9)
         regime[w] = {"z": float(z), "flag": bool(abs(z) >= args.regime_z)}
 
+    # Multi-Factor Regime Detection
+    detector = MarketRegimeDetector()
+    regime_name, regime_score = detector.detect_regime(rets)
+    logger_msg = f"Regime Detected: {regime_name} (Score: {regime_score:.2f})"
+    print(logger_msg)
+
+    # Adaptive Clustering Threshold
+    # CRISIS: t=0.3 (High diversification), NORMAL: t=0.4, QUIET: t=0.5 (Broader buckets)
+    dist_threshold = 0.4
+    if regime_name == "CRISIS":
+        dist_threshold = 0.3
+    elif regime_name == "QUIET":
+        dist_threshold = 0.5
+
     lw = LedoitWolf().fit(rets.values)
     cov = lw.covariance_
     diag = np.sqrt(np.diag(cov))
@@ -149,10 +165,11 @@ def main():
             "regime_z": args.regime_z,
             "linkage": args.linkage,
             "hrp": args.hrp,
+            "dist_threshold": dist_threshold,
         },
         "n_assets": rets.shape[1],
         "avg_corr": {w: avg_corr[w].iloc[-1] if not avg_corr[w].empty else None for w in windows},
-        "regime": regime,
+        "regime": {"name": regime_name, "score": regime_score},
         "top_pairs": top_pairs,
     }
 
@@ -166,10 +183,8 @@ def main():
         condensed = squareform(dist, checks=False)
         link = linkage(condensed, method=args.linkage)
 
-        # Form flat clusters based on distance threshold or max clusters
-        # Using a distance threshold that roughly corresponds to 0.7 correlation
-        # dist = sqrt(0.5 * (1 - 0.7)) = sqrt(0.15) approx 0.38
-        cluster_assignments = fcluster(link, t=0.4, criterion="distance")
+        # Form flat clusters based on ADAPTIVE distance threshold
+        cluster_assignments = fcluster(link, t=dist_threshold, criterion="distance")
 
         clusters = {}
         for sym, cluster_id in zip(rets.columns, cluster_assignments):
@@ -191,7 +206,10 @@ def main():
 
     # Markdown summary
     lines = ["# Correlation Report", "", f"Assets: {rets.shape[1]}", ""]
-    lines.append("## Regime (avg corr, z >= %.2f)" % args.regime_z)
+    lines.append(f"## Multi-Factor Regime: {regime_name} (Score: {regime_score:.2f})")
+    lines.append(f"Applied Clustering Threshold: t={dist_threshold}")
+    lines.append("")
+    lines.append("## Rolling Correlations (avg corr, z >= %.2f)" % args.regime_z)
     for w in windows:
         rc = regime[w]
         lines.append(f"- Window {w}d: z={rc['z']}, flag={rc['flag']}")

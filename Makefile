@@ -5,13 +5,18 @@ LOOKBACK ?= 100
 BACKFILL ?= 1
 GAPFILL ?= 1
 SUMMARY_DIR ?= summaries
-
-.PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run hedge-anchors drift-check gist
-
 GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 
-scans-local:
+# Selection parameters
+TOP_N ?= 2
+THRESHOLD ?= 0.4
 
+.PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run hedge-anchors drift-check gist select recover heatmap display regime-check drift-monitor
+
+drift-monitor:
+	$(PY) scripts/track_portfolio_state.py
+
+scans-local:
 	bash scripts/run_local_scans.sh
 
 scans-crypto:
@@ -25,14 +30,13 @@ scans-forex-mtf:
 
 scans: scans-local scans-crypto scans-bonds scans-forex-mtf
 
-
 summaries:
 	mkdir -p $(SUMMARY_DIR)
 	$(PY) scripts/summarize_results.py | tee $(SUMMARY_DIR)/summary_results.txt
 	$(PY) scripts/summarize_crypto_results.py | tee $(SUMMARY_DIR)/summary_crypto.txt
 
 prep:
-	PORTFOLIO_MAX_SYMBOLS=150 PORTFOLIO_BATCH_SIZE=$(BATCH) PORTFOLIO_LOOKBACK_DAYS=$(LOOKBACK) PORTFOLIO_BACKFILL=$(BACKFILL) PORTFOLIO_GAPFILL=$(GAPFILL) $(PY) scripts/prepare_portfolio_data.py
+	PORTFOLIO_MAX_SYMBOLS=200 PORTFOLIO_BATCH_SIZE=$(BATCH) PORTFOLIO_LOOKBACK_DAYS=$(LOOKBACK) PORTFOLIO_BACKFILL=$(BACKFILL) PORTFOLIO_GAPFILL=$(GAPFILL) $(PY) scripts/prepare_portfolio_data.py
 	@if [ "$(GAPFILL)" = "1" ]; then \
 		echo "Running final repair pass..."; \
 		$(PY) scripts/repair_portfolio_gaps.py --type all; \
@@ -43,6 +47,9 @@ validate:
 
 audit:
 	$(PY) scripts/validate_portfolio_artifacts.py --only-logic
+
+select:
+	$(PY) scripts/natural_selection.py --top-n $(TOP_N) --threshold $(THRESHOLD)
 
 optimize:
 	$(PY) scripts/optimize_portfolio.py
@@ -85,20 +92,31 @@ drift-check:
 recover:
 	$(PY) scripts/recover_universe.py
 
+clean-exports:
+	rm -rf export/*.csv export/*.json
+
+clean-all: clean-exports
+	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md
+	rm -f data/lakehouse/portfolio_*
+
 clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
 	$(MAKE) scans
-	$(PY) scripts/select_top_universe.py
+	$(PY) scripts/select_top_universe.py --mode raw
+	@echo "--- Pass 1: Lightweight Backfill (60d) for statistical pruning ---"
+	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json $(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=60 BATCH=5
+	$(PY) scripts/audit_antifragility.py
+	$(MAKE) select TOP_N=$(TOP_N) THRESHOLD=$(THRESHOLD)
 	$(PY) scripts/enrich_candidates_metadata.py
-	$(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=200
+	@echo "--- Pass 2: High Integrity Backfill (200d) for final winners ---"
+	$(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=200 BATCH=2
 	$(MAKE) validate
 	$(MAKE) corr-report
-	$(PY) scripts/audit_antifragility.py
 	$(MAKE) regime-check
 	$(MAKE) hedge-anchors
 	$(MAKE) drift-check
 	$(MAKE) optimize-v2
 	$(MAKE) audit
 	$(MAKE) report
+	$(MAKE) drift-monitor
 	$(MAKE) gist
-
