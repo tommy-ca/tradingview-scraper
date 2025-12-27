@@ -113,7 +113,55 @@ class PortfolioAuditor:
 
         status_counts = self.summary["status_counts"]
         critical_health = status_counts["MISSING"] + status_counts["STALE"]
+
+        # Generate Markdown Report
+        self.generate_health_report(mode=mode)
+
         return critical_health == 0
+
+    def generate_health_report(self, mode: str = "selected"):
+        md = []
+        md.append(f"# 🏥 Data Health & Integrity Report ({mode.upper()})")
+        md.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        md.append("\n---")
+
+        md.append("\n## 📊 Summary by Status")
+        md.append("| Status | Count |")
+        md.append("| :--- | :--- |")
+        for status, count in self.summary["status_counts"].items():
+            if count > 0:
+                md.append(f"| {status} | {count} |")
+
+        md.append("\n## 📂 Asset Class Breakdown")
+        md.append("| Profile | Count |")
+        md.append("| :--- | :--- |")
+        for profile_val, count in self.summary["profiles"].items():
+            if count > 0:
+                md.append(f"| {profile_val} | {count} |")
+
+        for profile in DataProfile:
+            results = self.results_by_profile[profile]
+            if not results:
+                continue
+            md.append(f"\n## 📦 {profile.value} Assets")
+            md.append("| Symbol | Status | Last Date | Recent Gaps |")
+            md.append("| :--- | :--- | :--- | :--- |")
+            sorted_results = sorted(results, key=lambda x: (x["status"] != "OK", x["symbol"]))
+            for r in sorted_results:
+                status_str = r["status"]
+                if "OK" in status_str:
+                    status_str = f"✅ {status_str}"
+                elif status_str in ["MISSING", "STALE"]:
+                    status_str = f"❌ {status_str}"
+                else:
+                    status_str = f"⚠️ {status_str}"
+                md.append(f"| `{r['symbol']}` | {status_str} | {r['last_date']} | {r['gaps']} |")
+
+        os.makedirs("summaries", exist_ok=True)
+        report_path = os.path.join("summaries", f"data_health_{mode}.md")
+        with open(report_path, "w") as f:
+            f.write("\n".join(md))
+        print(f"✅ Data health report generated at: {report_path}")
 
     def run_logic_audit(self):
         print("\n" + "=" * 100)
