@@ -43,14 +43,26 @@ def get_asset_identity(symbol: str) -> str:
         return symbol
 
 
-def get_asset_class(category: str) -> str:
+def get_asset_class(category: str, symbol: str = "") -> str:
     """Maps granular categories to broad institutional asset classes."""
     c = category.upper()
-    if any(x in c for x in ["BOND", "ETF"]) and "STOCKS" not in c:
+    s = symbol.upper()
+
+    if "BOND" in c:
         return "FIXED_INCOME"
+
+    if "ETF" in c:
+        # Heuristic for Equity ETFs
+        if any(x in s for x in ["SPY", "QQQ", "IWM", "DIA", "VTI", "VXUS", "VEA", "VWO"]):
+            return "EQUITIES"
+        # Heuristic for Bond ETFs
+        if any(x in s for x in ["TLT", "IEF", "AGG", "BND", "HYG", "LQD", "TIP"]):
+            return "FIXED_INCOME"
+        return "EQUITIES"  # Default ETFs to Equities if unknown
+
     if any(x in c for x in ["BINANCE", "BYBIT", "OKX", "BITGET", "CRYPTO"]):
         return "CRYPTO"
-    if any(x in c for x in ["NASDAQ", "NYSE", "AMEX", "US_STOCKS", "US_ETF"]):
+    if any(x in c for x in ["NASDAQ", "NYSE", "AMEX", "US_STOCKS"]):
         return "EQUITIES"
     if any(x in c for x in ["CME", "COMEX", "NYMEX", "CBOT", "FUTURES"]):
         return "FUTURES"
@@ -109,7 +121,7 @@ def select_top_universe(mode: str = "raw"):
                     if isinstance(i, dict) and "symbol" in i:
                         i["_direction"] = file_direction
                         i["_category"] = category
-                        i["_asset_class"] = get_asset_class(category)
+                        i["_asset_class"] = get_asset_class(category, i["symbol"])
                         i["_identity"] = get_asset_identity(i["symbol"])
                         all_items.append(i)
         except Exception as e:

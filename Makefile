@@ -107,6 +107,7 @@ clean-run: clean-all
 	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
 	@echo "--- Pass 1: Lightweight Backfill (60d) for statistical pruning ---"
 	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json $(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=60 BATCH=5
+	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
 	$(PY) scripts/audit_antifragility.py
 	$(MAKE) select TOP_N=$(TOP_N) THRESHOLD=$(THRESHOLD)
 	$(PY) scripts/enrich_candidates_metadata.py
