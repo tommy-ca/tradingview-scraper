@@ -1777,9 +1777,9 @@ make clean-run
 **Key Capabilities:**
 *   **Multi-Factor Regime Detection**: Entropy, DWT Spectral Turbulence, and Volatility Clustering.
 *   **Hierarchical Risk Bucketing**: Automatic redundancy filtering (e.g., 70+ crypto tickers behave as one unit).
-*   **Cluster-Aware Optimization**: Strictly enforced 25% global concentration caps across all profiles.
+*   **Cluster-Aware Optimization**: Strictly enforced 25% global concentration caps and **CVaR-penalized** objectives.
 *   **Self-Healing Data Layer**: Automated gap detection and targeted repair for 200-day alignment.
-*   **Professional Reporting**: Integrated Markdown dashboards with visual concentration bars and lead asset selection.
+*   **Decision Trail Audit**: Full post-mortem logs (`selection_audit.md`) documenting every universe pruning and allocation choice.
 *   **Live Output Example**: [Institutional Portfolio Implementation Gist](https://gist.github.com/tommy-ca/e888e1eab0b86447c90c26e92ec4dc36)
 
 ---

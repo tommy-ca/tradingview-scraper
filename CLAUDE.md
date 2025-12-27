@@ -46,11 +46,17 @@ uv run pylint $(git ls-files '*.py')
 # Audit portfolio logic and constraints
 make audit
 
+# Run hierarchical cluster and sub-cluster analysis
+make corr-report
+
 # Display terminal-based implementation dashboard
 make display
 
-# Run advanced regime detection research
-make regime-check
+# Monitor portfolio drift and rebalancing signals
+make drift-monitor
+
+# Synchronize summaries to private GitHub Gist
+make gist
 ```
 
 ### Analytical Reports
@@ -58,42 +64,32 @@ make regime-check
 # Generate final prettified dashboard
 make report
 
-# Deeper cluster hierarchy analysis
-uv run scripts/analyze_clusters.py
-
-# Nested sub-cluster analysis for specific buckets
-uv run scripts/analyze_subcluster.py --cluster 5
+# Deeper cluster hierarchy analysis (Selected or Raw universe)
+uv run scripts/analyze_clusters.py --mode raw
 ```
 
 ## Architecture
 
 ### Core Module Structure
 - `regime.py` - Advanced multi-factor detector (Entropy, DWT, Vol Clustering).
-- `risk.py` - Barbell optimizer and antifragility (convexity) auditing.
+- `risk.py` - Barbell optimizer and tail risk (CVaR) auditing.
 - `pipeline.py` - Unified orchestrator for Discovery -> Alpha -> Risk flow.
 - `bond_universe_selector.py` - Wrapper for US-listed Bond ETF discovery.
 
-**`tradingview_scraper/symbols/`** - Main data scraping modules
-- `ideas.py` - Scrapes trading ideas from TradingView symbol pages
-- `technicals.py` - Fetches technical indicators via TradingView scanner API
-- `news.py` - Scrapes news headlines and content for symbols
-- `cal.py` - Scrapes calendar events (earnings, dividends)
-- `utils.py` - Shared utilities for file export, user agent generation, validation
-- `exceptions.py` - Custom exception classes
-
-**`tradingview_scraper/symbols/stream/`** - Real-time WebSocket streaming
-- `streamer.py` - Main `Streamer` class for OHLCV and indicator streaming. Features `total_timeout` and partial data recovery.
-- `persistent_loader.py` - Orchestrates historical backfill and `repair()` with market-aware gap detection and genesis (start of history) detection.
-- `lakehouse.py` - Manages Parquet persistence and deduplication. Includes `detect_gaps()` with weekend/holiday skipping.
-- `metadata.py` - Symbol/Exchange catalogs. Defines `DataProfile` (CRYPTO, EQUITY, FUTURES, FOREX) for session-aware logic.
-- `price.py` - `RealTimeData` class for simple OHLCV and watchlist streaming.
-- `stream_handler.py` - Low-level WebSocket connection and message handling.
-- `utils.py` - WebSocket utilities, symbol validation, indicator metadata fetching.
+**`scripts/`** - Production Pipeline Stages
+- `select_top_universe.py` - Aggregates raw pool with canonical venue merging.
+- `natural_selection.py` - Statistical pruning via hierarchical clustering.
+- `optimize_clustered_v2.py` - Unified factor-based optimizer with fragility penalties.
+- `generate_portfolio_report.py` - Prettified Markdown dashboard with visual bars.
+- `display_portfolio_dashboard.py` - Interactive Rich terminal Implementation Dashboard.
+- `monitor_cluster_drift.py` - Temporal stability tracking for risk buckets.
+- `detect_hedge_anchors.py` - Automated discovery of insurance/diversification assets.
 
 ### Deployment & Maintenance
-- **Data Integrity**: The pipeline uses a self-healing cycle (`make prep`) that automatically repairs identified gaps after backfilling history.
-- **Risk Control**: All portfolios are cluster-aware, enforcing a 25% cap on hierarchical risk buckets to prevent systemic concentration.
-- **Alpha Alignment**: Lead assets within clusters are selected via a composite rank of Momentum, Stability, and Convexity.
+- **Data Integrity**: Uses a tiered self-healing cycle (`Pass 1: 60d` -> `Natural Selection` -> `Pass 2: 200d`).
+- **Risk Control**: Cluster-aware allocation with strictly enforced 25% caps and CVaR-penalized objectives.
+- **Alpha Alignment**: Hybrid internal distribution using a blend of Momentum and Stability.
+- **Decision Trail**: Persistent logging of every selection decision in `selection_audit.json`.
 
 ## Key Design Patterns
 

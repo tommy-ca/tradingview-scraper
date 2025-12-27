@@ -13,9 +13,6 @@ THRESHOLD ?= 0.4
 
 .PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run hedge-anchors drift-check gist select recover heatmap display regime-check drift-monitor
 
-drift-monitor:
-	$(PY) scripts/track_portfolio_state.py
-
 scans-local:
 	bash scripts/run_local_scans.sh
 
@@ -72,8 +69,38 @@ report:
 	$(PY) scripts/generate_portfolio_report.py
 	$(PY) scripts/generate_audit_summary.py
 
-clean-run: clean-all
+heatmap:
+	$(PY) scripts/visualize_matrix_cli.py
 
+display:
+	$(PY) scripts/display_portfolio_dashboard.py
+
+gist:
+	bash scripts/push_summaries_to_gist.sh
+
+regime-check:
+	$(PY) scripts/research_regime_v2.py
+
+hedge-anchors:
+	$(PY) scripts/detect_hedge_anchors.py
+
+drift-check:
+	$(PY) scripts/monitor_cluster_drift.py
+
+drift-monitor:
+	$(PY) scripts/track_portfolio_state.py
+
+recover:
+	$(PY) scripts/recover_universe.py
+
+clean-exports:
+	rm -rf export/*.csv export/*.json
+
+clean-all: clean-exports
+	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md
+	rm -f data/lakehouse/portfolio_*
+
+clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
 	$(MAKE) scans
 	$(PY) scripts/select_top_universe.py --mode raw

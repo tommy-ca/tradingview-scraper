@@ -1,35 +1,32 @@
 # Optimization Engine V2: Cluster-Aware Allocation
 
-The Cluster-Aware Optimization Engine (v2) is designed to handle asset redundancy and enforce systemic diversification by grouping correlated symbols into hierarchical risk buckets before allocating capital.
+The Cluster-Aware Optimization Engine (v2) is an institutional-grade allocator designed to handle venue redundancy and enforce systemic risk controls across disparate asset classes.
 
 ## 1. Two-Layer Allocation Strategy
 
-The engine utilizes a top-down approach to portfolio construction:
+### Layer 1: Across Clusters (Factor Level)
+The total capital is first distributed across high-level hierarchical risk buckets.
+- **Max Cluster Cap (25%)**: Strictly enforced to prevent systemic over-concentration.
+- **Fragility Penalty**: Refactored objective functions (`min_var`, `max_sharpe`) now include a penalty term for clusters with high **Expected Shortfall (CVaR)**.
+- **Net vs Gross Exposure**: The engine tracks both total capital at risk (Gross) and directional tilt (Net) for each factor.
 
-### Layer 1: Across Clusters (Systemic)
-The total portfolio weight (100%) is first distributed across the discovered hierarchical clusters.
-- **Profiles Supported**: 
-    - **Min Variance**: Global Minimum Variance across synthetic cluster returns.
-    - **Risk Parity**: Equal Risk Contribution from every cluster.
-    - **Max Sharpe**: Maximum Sharpe ratio based on cluster benchmarks.
-- **Constraint**: A **Global Cluster Cap (Default: 25%)** is enforced at this level. No single economic factor can dominate more than a quarter of the portfolio.
-
-### Layer 2: Intra-Cluster (Robustness)
-Within each cluster, the assigned weight is distributed among its members.
-- **Methodology**: **Inverse-Variance Weighting**.
-- **Rationale**: This favors the most stable asset or exchange venue within a correlated group (e.g., picking the lowest-volatility BTC venue in a Crypto cluster).
+### Layer 2: Intra-Cluster (Instrument Level)
+Within each factor, weight is distributed using a **Momentum-Volatility Hybrid**:
+- **Formula**: $Weight \propto 0.5 \cdot InverseVolatility + 0.5 \cdot AlphaRank$.
+- **Rationale**: Ensures the portfolio is anchored by stable instruments while rewarding the highest-momentum members within a correlated group.
 
 ## 2. Risk Insulation (Barbell Strategy)
 
-For the Antifragile Barbell profile, the engine enforces strict structural isolation:
-- **Aggressor Identification**: Top 5 clusters by **Antifragility Score** (Composite of Positive Skew and Tail Gain).
-- **Core Optimization**: The 90% "Safe Core" is optimized using Clustered Risk Parity across all clusters **excluding** those used in the Aggressor sleeve.
-- **Sleeve Weights**: 
-    - **10% Aggressors** (Fixed split across 5 unique buckets).
-    - **90% Core** (Diversified across remaining uncorrelated factors).
+The Barbell strategy implements strict structural isolation:
+- **Aggressor Sleeves**: Top 5 clusters by **Alpha Rank**.
+- **Risk Insulation**: Any cluster selected for the high-optionality sleeve is **excluded** from the core optimization to ensure zero risk overlap.
+- **Dynamic Regime Scaling**:
+    - **QUIET**: 15% Aggressors / 85% Core.
+    - **NORMAL**: 10% Aggressors / 90% Core.
+    - **CRISIS**: 5% Aggressors / 95% Core.
 
-## 3. Implementation Heuristics
+## 3. Decision Support & Implementation
 
-- **Lead Asset Selection**: The asset with the highest weight within its cluster is designated as the "Lead Asset" for execution.
-- **Small Portfolio Safety**: Upper bounds for weights are dynamically adjusted (`max(0.2, 1.1 / n_assets)`) to ensure optimization convergence even when the number of core assets is low.
-- **Redundancy Filter**: Prevents "ticker counting" from biasing the portfolio toward sectors with many available symbols (e.g., Crypto).
+- **Lead Asset Designation**: The single best-performing member of each cluster is flagged for primary implementation.
+- **Institutional Reporting**: Generates a professional dashboard with visual concentration bars and rebalancing BUY/SELL signals.
+- **Audit Trace**: Every optimization run is logged in `selection_audit.json`, documenting the regime score and active constraints.
