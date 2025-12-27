@@ -104,6 +104,7 @@ clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
 	$(MAKE) scans
 	$(PY) scripts/select_top_universe.py --mode raw
+	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
 	@echo "--- Pass 1: Lightweight Backfill (60d) for statistical pruning ---"
 	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json $(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=60 BATCH=5
 	$(PY) scripts/audit_antifragility.py

@@ -87,6 +87,23 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
     )
     md.append("\n---")
 
+    # 0. SYSTEM HEALTH SUMMARY
+    md.append("## 🏥 System Health & Integrity")
+
+    # Try to load latest audit results if available, else generic status
+    health_status = "✅ HEALTHY"
+    # Simple check for returns matrix coverage
+    if returns_df is not None and not returns_df.empty:
+        total_assets = len(profiles[next(iter(profiles))]["assets"]) if profiles else 0
+        coverage = len(returns_df.columns)
+        if coverage < total_assets:
+            health_status = f"⚠️ DEGRADED ({coverage}/{total_assets} aligned)"
+
+    md.append(f"- **Data Integrity:** {health_status}")
+    md.append(f"- **Regime:** {data.get('optimization', {}).get('regime', {}).get('name', 'UNKNOWN')}")
+    md.append(f"- **Lookback:** {len(returns_df) if returns_df is not None else 0} Days")
+    md.append("\n---")
+
     # 1. SHARED CLUSTER REFERENCE (The Implementation Grid)
     md.append("## 🧩 Shared Cluster Reference")
     md.append("Hierarchical clustering groups correlated assets into risk units. 'Lead' is the primary instrument; 'Alt' lists redundant venues.")

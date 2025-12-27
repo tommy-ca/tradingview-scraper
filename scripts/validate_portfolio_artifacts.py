@@ -105,6 +105,10 @@ class PortfolioAuditor:
 
             self._record(profile, symbol, status, last_ts, len(recent_gaps))
 
+        if self.summary["total"] == 0:
+            logger.error("❌ No candidates found to validate. Check scanner outputs.")
+            return False
+
         self._print_health_dashboard()
 
         status_counts = self.summary["status_counts"]
