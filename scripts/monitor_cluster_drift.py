@@ -85,6 +85,10 @@ def monitor_drift():
             }
         )
 
+    if not drift_results:
+        logger.warning("No clusters with multiple assets found. Skipping drift analysis.")
+        return
+
     df = pd.DataFrame(drift_results).sort_values(by="Drift_Score", ascending=False)
 
     print("\n" + "=" * 100)

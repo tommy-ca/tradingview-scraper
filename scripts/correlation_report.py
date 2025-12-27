@@ -164,6 +164,7 @@ def main():
     parser.add_argument("--linkage", default="ward")
     parser.add_argument("--hrp", action="store_true", help="Emit HRP weights")
     parser.add_argument("--max-clusters", type=int, default=25, help="Target maximum number of clusters")
+    parser.add_argument("--out-clusters", default="data/lakehouse/portfolio_clusters.json", help="Path to save cluster JSON")
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -235,7 +236,7 @@ def main():
 
         report["clusters"] = clusters
 
-        cluster_path = Path("data/lakehouse/portfolio_clusters.json")
+        cluster_path = Path(args.out_clusters)
         with open(cluster_path, "w") as f_out:
             json.dump(clusters, f_out, indent=2)
         print(f"Saved {len(clusters)} clusters to {cluster_path}")

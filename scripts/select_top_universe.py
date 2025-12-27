@@ -2,20 +2,20 @@ import glob
 import json
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
+
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("select_top_universe")
+
+AUDIT_FILE = "data/lakehouse/selection_audit.json"
 
 
 def get_asset_identity(symbol: str) -> str:
     """
     Extracts canonical identity of an asset to group redundant venues.
-    Examples:
-      BINANCE:BTCUSDT.P -> BTC/USDT
-      OKX:BTC-USDT-SWAP -> BTC/USDT
-      COMEX:SI1! -> SI
-      COMEX:SIH2026 -> SI
+    Groups different stablecoin variations into one economic unit.
     """
     try:
         raw = symbol.split(":")[-1].upper()
@@ -30,12 +30,9 @@ def get_asset_identity(symbol: str) -> str:
         # Handle dashes
         if "-" in clean:
             parts = clean.split("-")
-            # Filter out known junk parts
-            parts = [p for p in parts if p not in ["USDT", "USDC", "USD", "BUSD", "DAI", "EUR", "GBP"]]
-            if len(parts) >= 1:
-                return parts[0]
+            return parts[0]
 
-        # Heuristic for base/quote (e.g. BTCUSDT -> BTC/USDT)
+        # Heuristic for base/quote (e.g. BTCUSDT -> BTC)
         for quote in ["USDT", "USDC", "USD", "BUSD", "DAI", "EUR", "GBP"]:
             if clean.endswith(quote) and len(clean) > len(quote):
                 base = clean[: -len(quote)]
@@ -65,6 +62,10 @@ def get_asset_class(category: str) -> str:
 def select_top_universe(mode: str = "raw"):
     files = glob.glob("export/universe_selector_*.json")
 
+    # Type-hinted audit structure to satisfy linter
+    audit_discovery: Dict[str, Any] = {"total_scanned_files": len(files), "categories": {}, "total_symbols_found": 0}
+    audit_data: Dict[str, Any] = {"timestamp": str(pd.Timestamp.now()), "discovery": audit_discovery}
+
     # 1. Load All Items
     all_items = []
     for f in files:
@@ -85,13 +86,25 @@ def select_top_universe(mode: str = "raw"):
         try:
             with open(f, "r") as j:
                 raw_data = json.load(j)
-                items = []
+                items: List[Dict[str, Any]] = []
                 if isinstance(raw_data, dict):
-                    items = raw_data.get("data", [])
+                    items = cast(List[Dict[str, Any]], raw_data.get("data", []))
                 elif isinstance(raw_data, list):
-                    items = raw_data
+                    items = cast(List[Dict[str, Any]], raw_data)
 
                 file_direction = "SHORT" if "_short" in f.lower() else "LONG"
+
+                if category not in audit_discovery["categories"]:
+                    audit_discovery["categories"][category] = {"long": 0, "short": 0, "total": 0}
+
+                count = len(items) if items else 0
+                audit_discovery["total_symbols_found"] += count
+                if file_direction == "LONG":
+                    audit_discovery["categories"][category]["long"] += count
+                else:
+                    audit_discovery["categories"][category]["short"] += count
+                audit_discovery["categories"][category]["total"] += count
+
                 for i in items:
                     if isinstance(i, dict) and "symbol" in i:
                         i["_direction"] = file_direction
@@ -118,13 +131,10 @@ def select_top_universe(mode: str = "raw"):
         perf6m = float(item.get("Perf.6M", 0) or 0)
         is_long = item.get("_direction", "LONG") == "LONG"
 
-        # Direction-aware performance score
-        # For LONG: positive is good. For SHORT: negative is good.
         p3 = perf3m if is_long else -perf3m
         p6 = perf6m if is_long else -perf6m
         p_avg = (p3 + p6) / 2
 
-        # Updated Alpha Score: Liquidity, Trend, Vol, Perf
         score = 0.3 * min(1.0, v_traded / 1e9) + 0.3 * min(1.0, adx / 50) + 0.1 * min(1.0, vol / 10) + 0.3 * min(1.0, p_avg / 50)
         item["_alpha_score"] = score
 
@@ -137,12 +147,23 @@ def select_top_universe(mode: str = "raw"):
         identity_groups[ident].append(item)
 
     merged_pool = []
-    for _, group in identity_groups.items():
+    redundancy_count = 0
+    for ident, group in identity_groups.items():
+        if len(group) > 1:
+            redundancy_count += len(group) - 1
+
         group.sort(key=lambda x: x["_alpha_score"], reverse=True)
         primary = group[0]
         if len(group) > 1:
-            primary["alternative_venues"] = [x["symbol"] for x in group[1:]]
+            primary["implementation_alternatives"] = [
+                {"symbol": x["symbol"], "market": x["_category"], "alpha_score": float(x["_alpha_score"]), "volume": float(x.get("volume", 0))} for x in group[1:]
+            ]
+        else:
+            primary["implementation_alternatives"] = []
+
         merged_pool.append(primary)
+
+    audit_data["merging"] = {"total_unique_identities": len(merged_pool), "redundant_symbols_merged": redundancy_count}
 
     # 4. Filter by Asset Class
     final_candidates = []
@@ -162,6 +183,12 @@ def select_top_universe(mode: str = "raw"):
         final_candidates.sort(key=lambda x: x["_alpha_score"], reverse=True)
         final_candidates = final_candidates[: int(os.getenv("UNIVERSE_TOTAL_LIMIT", "80"))]
 
+    audit_data["final_selection"] = {
+        "mode": mode,
+        "total_candidates": len(final_candidates),
+        "class_breakdown": {ac: len([x for x in final_candidates if x["_asset_class"] == ac]) for ac in asset_classes},
+    }
+
     # Map to final format
     output_universe = []
     for item in final_candidates:
@@ -179,7 +206,7 @@ def select_top_universe(mode: str = "raw"):
                 "atr": item.get("ATR", 0),
                 "direction": item["_direction"],
                 "alpha_score": item["_alpha_score"],
-                "alternative_venues": item.get("alternative_venues", []),
+                "implementation_alternatives": item.get("implementation_alternatives", []),
             }
         )
 
@@ -190,7 +217,15 @@ def select_top_universe(mode: str = "raw"):
     with open(output_file, "w") as f_out:
         json.dump(output_universe, f_out, indent=2)
 
+    # Save audit trail
+    if not os.path.exists(os.path.dirname(AUDIT_FILE)):
+        os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
+
+    with open(AUDIT_FILE, "w") as f_audit:
+        json.dump(audit_data, f_audit, indent=2)
+
     logger.info(f"Saved {len(output_universe)} candidates to {output_file}")
+    logger.info(f"Audit log updated: {AUDIT_FILE}")
 
 
 if __name__ == "__main__":

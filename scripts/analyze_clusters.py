@@ -1,16 +1,16 @@
 import json
 import logging
 import os
-from typing import Any, Dict, List, cast
+from typing import Dict, List, cast
 
 import matplotlib
 
 matplotlib.use("Agg")  # Non-interactive backend
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 import pandas as pd
 import scipy.cluster.hierarchy as sch
-import seaborn as sns
+import seaborn as sns  # type: ignore
 from scipy.spatial.distance import squareform
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -88,14 +88,22 @@ def visualize_clusters(returns: pd.DataFrame, output_path: str):
 
 
 def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stats_path: str, output_path: str, image_path: str):
-    if not os.path.exists(clusters_path) or not os.path.exists(meta_path) or not os.path.exists(returns_path):
-        logger.error("Required files missing for cluster analysis.")
+    if not os.path.exists(clusters_path) or not os.path.exists(returns_path):
+        logger.error(f"Required files missing for cluster analysis: {clusters_path} or {returns_path}")
         return
 
     with open(clusters_path, "r") as f:
         clusters = cast(Dict[str, List[str]], json.load(f))
-    with open(meta_path, "r") as f:
-        meta = cast(Dict[str, Any], json.load(f))
+
+    # meta_path might be candidates json
+    meta = {}
+    if os.path.exists(meta_path):
+        with open(meta_path, "r") as f:
+            raw_meta = json.load(f)
+            if isinstance(raw_meta, list):
+                meta = {item["symbol"]: item for item in raw_meta}
+            else:
+                meta = raw_meta
 
     stats_df = None
     if os.path.exists(stats_path):
@@ -114,7 +122,7 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     visualize_clusters(returns, image_path)
 
     report = []
-    report.append("# 🧩 Hierarchical Cluster Analysis")
+    report.append(f"# 🧩 Hierarchical Cluster Analysis ({'RAW' if 'raw' in output_path else 'SELECTED'})")
     report.append(f"**Date:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
     report.append(f"**Total Clusters:** {len(clusters)}")
     report.append("\n---")
@@ -218,11 +226,28 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=["selected", "raw"], default="selected")
+    args = parser.parse_args()
+
+    c_path = "data/lakehouse/portfolio_clusters.json"
+    m_path = "data/lakehouse/portfolio_meta.json"
+    o_path = "summaries/cluster_analysis.md"
+    i_path = "summaries/portfolio_clustermap.png"
+
+    if args.mode == "raw":
+        c_path = "data/lakehouse/portfolio_clusters_raw.json"
+        m_path = "data/lakehouse/portfolio_candidates_raw.json"
+        o_path = "summaries/raw_factor_analysis.md"
+        i_path = "summaries/raw_clustermap.png"
+
     analyze_clusters(
-        "data/lakehouse/portfolio_clusters.json",
-        "data/lakehouse/portfolio_meta.json",
-        "data/lakehouse/portfolio_returns.pkl",
-        "data/lakehouse/antifragility_stats.json",
-        "summaries/cluster_analysis.md",
-        "summaries/portfolio_clustermap.png",
+        clusters_path=c_path,
+        meta_path=m_path,
+        returns_path="data/lakehouse/portfolio_returns.pkl",
+        stats_path="data/lakehouse/antifragility_stats.json",
+        output_path=o_path,
+        image_path=i_path,
     )

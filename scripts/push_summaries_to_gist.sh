@@ -16,15 +16,13 @@ echo "🚀 Syncing summaries to Gist: $GIST_ID"
 # 1. Clone the gist repository
 git clone "https://gist.github.com/$GIST_ID.git" "$TEMP_DIR"
 
-# 2. Copy all files from summaries/ to the temp dir
-# Including md, json, and png
-cp "$SUMMARY_DIR"/*.md "$TEMP_DIR/" 2>/dev/null || true
-cp "$SUMMARY_DIR"/*.json "$TEMP_DIR/" 2>/dev/null || true
-cp "$SUMMARY_DIR"/*.png "$TEMP_DIR/" 2>/dev/null || true
+# 2. Sync files from summaries/ to the temp dir
+# This ensures deletions are handled correctly
+rsync -av --delete --exclude='.git' "$SUMMARY_DIR/" "$TEMP_DIR/"
 
 # 3. Commit and push
 cd "$TEMP_DIR"
-git add .
+git add -A
 if git diff --staged --quiet; then
     echo "✅ No changes to push."
 else

@@ -34,6 +34,7 @@ DEFAULT_EXCHANGE_METADATA = {
     "ICE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
     "OANDA": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FOREX},
     "FX_IDC": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
+    "FOREX": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
 }
 
 
@@ -149,21 +150,16 @@ class MetadataCatalog:
 
         now_ts = pd.Timestamp.now()
         new_records = []
-        updates_mask = pd.Series(False, index=self._df.index)
 
         # Convert input to map for easy lookup
         incoming_map = {item["symbol"]: item for item in symbols_data}
 
         # 1. Process existing active symbols
-        for idx, row in self._df[self._df["valid_until"].isna()].iterrows():
+        active_mask = self._df["valid_until"].isna()
+        for idx, row in self._df[active_mask].iterrows():
             sym = row["symbol"]
             if sym in incoming_map:
                 new_data = incoming_map[sym]
-                # Check for changes (simplified: check if any key field differs)
-                # For now, we assume if it's passed in, we might want to update it.
-                # A real impl would compare specific fields.
-                # Let's assume we always update if present for this prototype.
-
                 # Retire old record
                 self._df.at[idx, "valid_until"] = now_ts
 

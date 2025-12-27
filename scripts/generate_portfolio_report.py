@@ -82,17 +82,19 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
     md = []
     md.append("# 📊 Quantitative Portfolio Analysis Dashboard")
     md.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    md.append("\n**Quick Links:** [Risk Rationale](./research/antifragile_barbell_rationale.md) | [Cluster Hierarchy](./cluster_analysis.md) | [Tail Hedges](./hedge_anchors.md)")
+    md.append(
+        "\n**Quick Links:** [Risk Rationale](./research/antifragile_barbell_rationale.md) | [Cluster Hierarchy](./cluster_analysis.md) | [Decision Audit](./selection_audit.md) | [Tail Hedges](./hedge_anchors.md)"
+    )
     md.append("\n---")
 
-    # 1. SHARED CLUSTER REFERENCE
+    # 1. SHARED CLUSTER REFERENCE (The Implementation Grid)
     md.append("## 🧩 Shared Cluster Reference")
     md.append("Hierarchical clustering groups correlated assets into risk units. 'Lead' is the primary instrument; 'Alt' lists redundant venues.")
     md.append("| Cluster | Primary Sector | Size | Lead Asset | Fragility | Implementation Alts |")
     md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
 
     # Map candidates for alternative venue lookup
-    alt_map = {c["symbol"]: c.get("alternative_venues", []) for c in candidates}
+    alt_map = {c["symbol"]: c.get("implementation_alternatives", []) for c in candidates}
 
     for c_id, c_info in sorted(cluster_registry.items(), key=lambda x: int(x[0])):
         syms = c_info.get("symbols", [])
@@ -103,12 +105,13 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
         # Aggregate alternatives across symbols in cluster
         alts = []
         for s in syms:
-            alts.extend(alt_map.get(s, []))
+            venue_list = alt_map.get(s, [])
+            alts.extend([v["symbol"] for v in venue_list])
 
         # Deduplicate and format alts
-        unique_alts = sorted(list(set([a.split(":")[0] for a in alts])))  # Exchange names
-        alt_str = ", ".join(unique_alts[:2]) + (f" (+{len(unique_alts) - 2})" if len(unique_alts) > 2 else "")
-        if not unique_alts:
+        unique_exchanges = sorted(list(set([a.split(":")[0] for a in alts])))
+        alt_str = ", ".join(unique_exchanges[:2]) + (f" (+{len(unique_exchanges) - 2})" if len(unique_exchanges) > 2 else "")
+        if not unique_exchanges:
             alt_str = "-"
 
         # Calculate Cluster Fragility
@@ -187,8 +190,8 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
         # Sort categories for consistent order
         for cat in sorted(categorized.keys()):
             md.append(f"#### {cat}")
-            md.append("| Symbol | Description | Cluster | Weight | Bar | Direction |")
-            md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+            md.append("| Symbol | Description | Cluster | Weight | Bar | Direction | Market |")
+            md.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
 
             cat_assets = sorted(categorized[cat], key=lambda x: x["Weight"], reverse=True)
             for asset in cat_assets:
@@ -197,11 +200,11 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
                 direction = f"**{asset['Direction']}**"
                 desc = asset.get("Description", "N/A")
                 if desc == "N/A":
-                    desc = str(asset["Symbol"]).split(":")[-1]  # fallback to ticker
+                    desc = str(asset["Symbol"]).split(":")[-1]
                 if len(desc) > 40:
                     desc = desc[:37] + "..."
 
-                md.append(f"| `{asset['Symbol']}` | {desc} | {asset['Cluster_ID']} | {weight:.2%} | `{bar}` | {direction} |")
+                md.append(f"| `{asset['Symbol']}` | {desc} | {asset['Cluster_ID']} | {weight:.2%} | `{bar}` | {direction} | {asset['Market']} |")
 
         md.append("\n---")
 
@@ -220,7 +223,6 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
             atr = float(c.get("atr", 0))
             atr_pct = f"{(atr / close) * 100:.2f}%" if close > 0 else "N/A"
 
-            # Simple trend strength indicator
             trend_icon = "🔥" if adx > 25 else "📈" if adx > 15 else "➡️"
             market_cat = get_market_category(c.get("market", "UNKNOWN")).split(" ")[0]  # Just emoji
 

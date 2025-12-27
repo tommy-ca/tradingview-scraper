@@ -18,6 +18,7 @@ logger = logging.getLogger("portfolio_auditor")
 # Configuration
 LAKEHOUSE_PATH = "data/lakehouse"
 CANDIDATES_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_candidates.json")
+CANDIDATES_RAW_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_candidates_raw.json")
 RETURNS_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_returns.pkl")
 OPTIMIZED_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_optimized_v2.json")
 FRESHNESS_THRESHOLD_HOURS = 72
@@ -35,16 +36,17 @@ class PortfolioAuditor:
         }
         self.audit_failures = []
 
-    def run_health_check(self, type_filter: str = "all"):
+    def run_health_check(self, type_filter: str = "all", mode: str = "selected"):
         print("\n" + "=" * 100)
-        print(f"PORTFOLIO DATA HEALTH CHECK - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"PORTFOLIO DATA HEALTH CHECK ({mode.upper()}) - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 100)
 
-        if not os.path.exists(CANDIDATES_FILE):
-            logger.error(f"❌ Candidates file missing: {CANDIDATES_FILE}")
+        target_file = CANDIDATES_FILE if mode == "selected" else CANDIDATES_RAW_FILE
+        if not os.path.exists(target_file):
+            logger.error(f"❌ Candidates file missing: {target_file}")
             return False
 
-        with open(CANDIDATES_FILE, "r") as f:
+        with open(target_file, "r") as f:
             candidates = json.load(f)
 
         returns_symbols = set()
@@ -180,7 +182,6 @@ class PortfolioAuditor:
             # 4. Metadata Completeness
             missing_metadata = [a["Symbol"] for a in assets if a.get("Sector") == "N/A" or not a.get("Description")]
             if missing_metadata:
-                # Warning only, doesn't fail the audit unless it's a huge portion
                 print(f"⚠️ Metadata Warning: {len(missing_metadata)} assets have incomplete sector/description.")
             else:
                 print("✅ Metadata Completeness: 100%")
@@ -227,6 +228,7 @@ class PortfolioAuditor:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--type", choices=["crypto", "trad", "all"], default="all")
+    parser.add_argument("--mode", choices=["selected", "raw"], default="selected")
     parser.add_argument("--only-health", action="store_true")
     parser.add_argument("--only-logic", action="store_true")
     args = parser.parse_args()
@@ -237,7 +239,7 @@ if __name__ == "__main__":
     logic_ok = True
 
     if not args.only_logic:
-        health_ok = auditor.run_health_check(type_filter=args.type)
+        health_ok = auditor.run_health_check(type_filter=args.type, mode=args.mode)
 
     if not args.only_health:
         logic_ok = auditor.run_logic_audit()

@@ -8,8 +8,8 @@ SUMMARY_DIR ?= summaries
 GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 
 # Selection parameters
-TOP_N ?= 1
-THRESHOLD ?= 0.5
+TOP_N ?= 3
+THRESHOLD ?= 0.4
 
 .PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run hedge-anchors drift-check gist select recover heatmap display regime-check drift-monitor
 
@@ -70,36 +70,10 @@ corr-report:
 
 report:
 	$(PY) scripts/generate_portfolio_report.py
-
-heatmap:
-	$(PY) scripts/visualize_matrix_cli.py
-
-display:
-	$(PY) scripts/display_portfolio_dashboard.py
-
-gist:
-	bash scripts/push_summaries_to_gist.sh
-
-regime-check:
-	$(PY) scripts/research_regime_v2.py
-
-hedge-anchors:
-	$(PY) scripts/detect_hedge_anchors.py
-
-drift-check:
-	$(PY) scripts/monitor_cluster_drift.py
-
-recover:
-	$(PY) scripts/recover_universe.py
-
-clean-exports:
-	rm -rf export/*.csv export/*.json
-
-clean-all: clean-exports
-	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md
-	rm -f data/lakehouse/portfolio_*
+	$(PY) scripts/generate_audit_summary.py
 
 clean-run: clean-all
+
 	rm -f data/lakehouse/portfolio_*
 	$(MAKE) scans
 	$(PY) scripts/select_top_universe.py --mode raw

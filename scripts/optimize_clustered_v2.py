@@ -7,8 +7,10 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("clustered_optimizer_v2")
+
+AUDIT_FILE = "data/lakehouse/selection_audit.json"
 
 
 class ClusteredOptimizerV2:
@@ -55,7 +57,6 @@ class ClusteredOptimizerV2:
                 return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
 
             # Use Alpha scores for within-cluster ranking
-            # We also consider Direction parity here if needed
             w_alpha = norm(mom) / (norm(mom).sum() + 1e-9)
 
             # 50/50 Blend
@@ -69,6 +70,7 @@ class ClusteredOptimizerV2:
             if self.stats is not None:
                 c_af_stats = self.stats[self.stats["Symbol"].isin(valid_symbols)]
                 if not c_af_stats.empty:
+                    # Use mean Fragility Score as penalty factor
                     self.cluster_stats[c_id] = {"fragility": float(c_af_stats["Fragility_Score"].mean()), "cvar": float(c_af_stats["CVaR_95"].mean())}
                 else:
                     self.cluster_stats[c_id] = {"fragility": 1.0, "cvar": -0.05}
@@ -170,7 +172,6 @@ class ClusteredOptimizerV2:
             logger.error("No antifragility stats found for barbell.")
             return pd.DataFrame()
 
-        # 1. IDENTIFY AGGRESSOR CLUSTERS
         symbol_to_cluster = {}
         for c_id, symbols in self.clusters.items():
             for s in symbols:
@@ -179,7 +180,6 @@ class ClusteredOptimizerV2:
         stats_with_clusters = self.stats.copy()
         stats_with_clusters["Cluster_ID"] = stats_with_clusters["Symbol"].apply(lambda x: symbol_to_cluster.get(str(x)))
 
-        # Best asset per cluster (Alpha Score handled earlier in selection)
         cluster_convexity = stats_with_clusters.sort_values("Antifragility_Score", ascending=False).groupby("Cluster_ID").first()
         top_aggressor_clusters = cluster_convexity.sort_values("Antifragility_Score", ascending=False).head(5)
 
@@ -189,7 +189,6 @@ class ClusteredOptimizerV2:
         agg_weight_total = 0.10
         agg_weight_per = agg_weight_total / len(agg_symbols)
 
-        # 2. OPTIMIZE CORE (90%)
         excluded_symbols = []
         for c_id in agg_cluster_ids:
             excluded_symbols.extend(self.clusters[str(c_id)])
@@ -198,7 +197,6 @@ class ClusteredOptimizerV2:
         available_core_symbols = [s for s in pd.Index(self.returns.columns) if s not in excluded_symbols]
         self.returns = self.returns[available_core_symbols]
 
-        # Re-benchmark
         self.cluster_benchmarks = pd.DataFrame()
         self.intra_cluster_weights = {}
         for c_id, symbols in self.clusters.items():
@@ -209,7 +207,6 @@ class ClusteredOptimizerV2:
                 continue
 
             sub_rets = self.returns[valid_symbols]
-            # Use same hybrid weighting for core
             vols = sub_rets.std() * np.sqrt(252)
             inv_vars = 1.0 / (vols**2 + 1e-9)
             w_ivp = inv_vars / inv_vars.sum()
@@ -305,12 +302,19 @@ class ClusteredOptimizerV2:
 
 
 def main():
+    from tradingview_scraper.regime import MarketRegimeDetector
+
     opt = ClusteredOptimizerV2(
         returns_path="data/lakehouse/portfolio_returns.pkl",
         clusters_path="data/lakehouse/portfolio_clusters.json",
         meta_path="data/lakehouse/portfolio_meta.json",
         stats_path="data/lakehouse/antifragility_stats.json",
     )
+
+    # Detect Regime for audit
+    detector = MarketRegimeDetector()
+    returns_df = cast(pd.DataFrame, opt.returns)
+    regime_name, regime_score = detector.detect_regime(returns_df)
 
     cluster_cap = float(os.getenv("CLUSTER_CAP", "0.25"))
     top_n = int(os.getenv("TOP_N_ASSETS", "0"))
@@ -338,6 +342,30 @@ def main():
             "markets": list(set(opt.meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols)),
         }
 
+    # Audit Data Collection (Stage 4)
+    if os.path.exists(AUDIT_FILE):
+        with open(AUDIT_FILE, "r") as f_audit:
+            full_audit = json.load(f_audit)
+    else:
+        full_audit = {}
+
+    full_audit["optimization"] = {
+        "timestamp": str(pd.Timestamp.now()),
+        "regime": {"name": regime_name, "score": regime_score},
+        "constraints": {"cluster_cap": cluster_cap, "top_n": top_n},
+        "profiles": {
+            name: {
+                "assets": len(df),
+                "top_cluster": str(opt.get_cluster_summary(df).iloc[0]["Cluster_ID"]) if not df.empty else "N/A",
+                "total_gross": float(df["Weight"].sum()) if not df.empty else 0.0,
+                "total_net": float(df["Net_Weight"].sum()) if not df.empty else 0.0,
+            }
+            for name, df in profiles_raw.items()
+        },
+    }
+    with open(AUDIT_FILE, "w") as f_audit_out:
+        json.dump(full_audit, f_audit_out, indent=2)
+
     output = {"profiles": {}, "cluster_registry": cluster_registry}
     for name, df in profiles_raw.items():
         cluster_sum = opt.get_cluster_summary(df)
@@ -347,6 +375,7 @@ def main():
     with open("data/lakehouse/portfolio_optimized_v2.json", "w") as f:
         json.dump(output, f, indent=2)
     logger.info("Saved all profiles and cluster details to data/lakehouse/portfolio_optimized_v2.json")
+    logger.info(f"Audit log updated: {AUDIT_FILE}")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Dict, List, cast
+from typing import Any, Dict, List, cast
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,8 @@ from scipy.spatial.distance import squareform
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("natural_selection")
+
+AUDIT_FILE = "data/lakehouse/selection_audit.json"
 
 
 def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
@@ -22,8 +24,6 @@ def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
     corr_matrix = np.eye(n)
 
     # Replace zeros with NaN for intersection correlation
-    df = returns.replace(0, np.nan)
-
     for i in range(n):
         for j in range(i + 1, n):
             s1 = str(symbols[i])
@@ -56,7 +56,7 @@ def natural_selection(
     meta_path: str = "data/lakehouse/portfolio_candidates_raw.json",
     stats_path: str = "data/lakehouse/antifragility_stats.json",
     output_path: str = "data/lakehouse/portfolio_candidates.json",
-    top_n_per_cluster: int = 1,
+    top_n_per_cluster: int = 3,  # Target Top 3 per direction
     dist_threshold: float = 0.4,
     max_clusters: int = 25,
 ):
@@ -82,6 +82,9 @@ def natural_selection(
     if os.path.exists(stats_path):
         stats_df = pd.read_json(stats_path).set_index("Symbol")
 
+    # Audit Data Collection with explicit typing
+    audit_selection: Dict[str, Any] = {"total_raw_symbols": len(returns.columns), "lookbacks_used": [], "clusters": {}, "total_selected": 0}
+
     # 2. Multi-Lookback Persistent Clustering
     lookbacks = [60, 120, 200]
     available_len = len(returns)
@@ -89,6 +92,8 @@ def natural_selection(
 
     if not valid_lookbacks:
         valid_lookbacks = [available_len]
+
+    audit_selection["lookbacks_used"] = valid_lookbacks
 
     logger.info(f"Natural Selection using multi-lookback: {valid_lookbacks}")
 
@@ -136,22 +141,25 @@ def natural_selection(
         def norm(s):
             return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
 
-        # We need direction context from candidate_map
         directions = pd.Series({s: candidate_map.get(s, {}).get("direction", "LONG") for s in symbols})
-
         alpha_scores = 0.4 * norm(mom) + 0.3 * norm(stab) + 0.3 * norm(conv)
+
+        # Audit cluster info
+        audit_selection["clusters"][str(c_id)] = {"size": len(symbols), "members": symbols, "selected": []}
 
         # Pick Top N LONGs
         long_syms = [s for s in symbols if directions[s] == "LONG"]
         if long_syms:
             top_longs = alpha_scores[long_syms].sort_values(ascending=False).head(top_n_per_cluster).index.tolist()
             selected_symbols.extend(top_longs)
+            audit_selection["clusters"][str(c_id)]["selected"].extend([str(s) for s in top_longs])
 
         # Pick Top N SHORTS
         short_syms = [s for s in symbols if directions[s] == "SHORT"]
         if short_syms:
             top_shorts = alpha_scores[short_syms].sort_values(ascending=False).head(top_n_per_cluster).index.tolist()
             selected_symbols.extend(top_shorts)
+            audit_selection["clusters"][str(c_id)]["selected"].extend([str(s) for s in top_shorts])
 
         n_sel = len([s for s in selected_symbols if s in symbols])
         logger.info(f"  Cluster {c_id}: Selected {n_sel}/{len(symbols)} (L: {len(long_syms)}, S: {len(short_syms)})")
@@ -160,21 +168,35 @@ def natural_selection(
     final_candidates = []
     for sym in selected_symbols:
         if sym in candidate_map:
+            # Metadata propagation: implementation_alternatives
             final_candidates.append(candidate_map[sym])
         else:
             final_candidates.append({"symbol": sym, "direction": "LONG", "market": "UNKNOWN"})
 
+    audit_selection["total_selected"] = len(final_candidates)
+
     with open(output_path, "w") as f_out:
         json.dump(final_candidates, f_out, indent=2)
 
+    # Update Audit Log
+    full_audit: Dict[str, Any] = {}
+    if os.path.exists(AUDIT_FILE):
+        with open(AUDIT_FILE, "r") as f_audit:
+            full_audit = cast(Dict[str, Any], json.load(f_audit))
+
+    full_audit["selection"] = audit_selection
+    with open(AUDIT_FILE, "w") as f_audit_out:
+        json.dump(full_audit, f_audit_out, indent=2)
+
     logger.info(f"Natural Selection Complete: Generated {len(final_candidates)} candidates in {output_path}")
+    logger.info(f"Audit log updated: {AUDIT_FILE}")
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--top-n", type=int, default=1, help="Number of symbols to pick per direction per cluster")
+    parser.add_argument("--top-n", type=int, default=3, help="Number of symbols to pick per direction per cluster")
     parser.add_argument("--threshold", type=float, default=0.4, help="Clustering distance threshold")
     parser.add_argument("--max-clusters", type=int, default=25, help="Target maximum number of clusters")
     args = parser.parse_args()
