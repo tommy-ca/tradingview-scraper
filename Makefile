@@ -8,8 +8,8 @@ SUMMARY_DIR ?= summaries
 GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 
 # Selection parameters
-TOP_N ?= 2
-THRESHOLD ?= 0.4
+TOP_N ?= 1
+THRESHOLD ?= 0.5
 
 .PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run hedge-anchors drift-check gist select recover heatmap display regime-check drift-monitor
 

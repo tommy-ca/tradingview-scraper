@@ -138,7 +138,7 @@ class PortfolioAuditor:
                 print(f"✅ Weight Normalization: {total_w:.2%}")
 
             # 2. Cluster Concentration Cap (25%)
-            cluster_weights = {c["Cluster_ID"]: c["Total_Weight"] for c in clusters}
+            cluster_weights = {c["Cluster_ID"]: c["Gross_Weight"] for c in clusters}
             over_capped = [c_id for c_id, w in cluster_weights.items() if w > 0.251]
             if over_capped:
                 self._fail(f"Profile '{name}' clusters exceed 25% cap: {over_capped}")

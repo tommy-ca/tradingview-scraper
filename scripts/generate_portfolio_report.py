@@ -87,22 +87,29 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
 
     # 1. SHARED CLUSTER REFERENCE
     md.append("## 🧩 Shared Cluster Reference")
-    md.append("Hierarchical clustering groups correlated assets into risk units to prevent over-concentration.")
-    md.append("| Cluster | Primary Sector | Size | Lead Asset | Fragility | Primary Markets |")
+    md.append("Hierarchical clustering groups correlated assets into risk units. 'Lead' is the primary instrument; 'Alt' lists redundant venues.")
+    md.append("| Cluster | Primary Sector | Size | Lead Asset | Fragility | Implementation Alts |")
     md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+
+    # Map candidates for alternative venue lookup
+    alt_map = {c["symbol"]: c.get("alternative_venues", []) for c in candidates}
 
     for c_id, c_info in sorted(cluster_registry.items(), key=lambda x: int(x[0])):
         syms = c_info.get("symbols", [])
-        raw_markets = sorted(c_info.get("markets", []))
-        # Truncate markets if too many
-        if len(raw_markets) > 2:
-            markets = ", ".join(raw_markets[:2]) + f" (+{len(raw_markets) - 2})"
-        else:
-            markets = ", ".join(raw_markets)
-
         sector = c_info.get("primary_sector", "N/A")
         # Find lead asset from first in list
         lead = syms[0] if syms else "N/A"
+
+        # Aggregate alternatives across symbols in cluster
+        alts = []
+        for s in syms:
+            alts.extend(alt_map.get(s, []))
+
+        # Deduplicate and format alts
+        unique_alts = sorted(list(set([a.split(":")[0] for a in alts])))  # Exchange names
+        alt_str = ", ".join(unique_alts[:2]) + (f" (+{len(unique_alts) - 2})" if len(unique_alts) > 2 else "")
+        if not unique_alts:
+            alt_str = "-"
 
         # Calculate Cluster Fragility
         fragility_str = "N/A"
@@ -113,7 +120,7 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
                 icon = "🔴" if f_score > 1.2 else "🟡" if f_score > 0.8 else "🟢"
                 fragility_str = f"{icon} {f_score:.2f}"
 
-        md.append(f"| **Cluster {c_id}** | {sector} | {len(syms)} | `{lead}` | {fragility_str} | {markets} |")
+        md.append(f"| **Cluster {c_id}** | {sector} | {len(syms)} | `{lead}` | {fragility_str} | {alt_str} |")
 
     md.append("\n---")
 
@@ -126,7 +133,7 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
         # Calculate Stats
         vol = calculate_portfolio_vol(assets, returns_df)
         unique_clusters = len(clusters)
-        top_3_conc = sum(float(c["Total_Weight"]) for c in clusters[:3]) if clusters else 0.0
+        top_3_conc = sum(float(c["Gross_Weight"]) for c in clusters[:3]) if clusters else 0.0
 
         # Sector Diversity Score: Count unique sectors in top 80% weight
         sorted_assets = sorted(assets, key=lambda x: x["Weight"], reverse=True)
@@ -146,14 +153,15 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
 
         # Cluster Summary Table
         md.append("\n### 🧩 Risk Bucket Allocation (Clusters)")
-        md.append("| Cluster | Weight | Concentration | Lead Asset | Assets | Type | Sectors |")
-        md.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
+        md.append("| Cluster | Gross | Net | Concentration | Lead Asset | Assets | Type | Sectors |")
+        md.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
 
         for cluster in clusters:
-            weight = float(cluster["Total_Weight"])
-            if weight < 0.001:
+            gross = float(cluster["Gross_Weight"])
+            net = float(cluster["Net_Weight"])
+            if gross < 0.001:
                 continue
-            bar = draw_bar(weight)
+            bar = draw_bar(gross)
             lead = f"`{cluster['Lead_Asset']}`"
             count = cluster["Asset_Count"]
             risk_type = cluster.get("Type", "CORE")
@@ -161,7 +169,7 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
             if isinstance(sector, list):
                 sector = ", ".join(sector)
 
-            md.append(f"| {cluster['Cluster_Label']} | **{weight:.2%}** | `{bar}` | {lead} | {count} | {risk_type} | {sector} |")
+            md.append(f"| {cluster['Cluster_Label']} | **{gross:.2%}** | {net:+.2%} | `{bar}` | {lead} | {count} | {risk_type} | {sector} |")
 
         # Asset Class Breakdown
         md.append("\n### 💎 Asset Class Breakdown")

@@ -21,6 +21,9 @@ def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
     n = len(symbols)
     corr_matrix = np.eye(n)
 
+    # Replace zeros with NaN for intersection correlation
+    df = returns.replace(0, np.nan)
+
     for i in range(n):
         for j in range(i + 1, n):
             s1 = str(symbols[i])
@@ -53,8 +56,9 @@ def natural_selection(
     meta_path: str = "data/lakehouse/portfolio_candidates_raw.json",
     stats_path: str = "data/lakehouse/antifragility_stats.json",
     output_path: str = "data/lakehouse/portfolio_candidates.json",
-    top_n_per_cluster: int = 2,
+    top_n_per_cluster: int = 1,
     dist_threshold: float = 0.4,
+    max_clusters: int = 25,
 ):
     if not os.path.exists(returns_path) or not os.path.exists(meta_path):
         logger.error("Returns matrix or raw candidates file missing.")
@@ -92,20 +96,18 @@ def natural_selection(
     for l in valid_lookbacks:
         rets_subset = returns.tail(l)
         corr = get_robust_correlation(rets_subset)
-        # Distance = sqrt(0.5 * (1 - rho))
         dist = np.sqrt(0.5 * (1 - corr.values.clip(-1, 1)))
         dist_matrices.append(dist)
 
-    # Average distance across lookbacks for persistence
     avg_dist_matrix = np.mean(dist_matrices, axis=0)
-    # Ensure symmetry and 0 diagonal
     avg_dist_matrix = (avg_dist_matrix + avg_dist_matrix.T) / 2
     np.fill_diagonal(avg_dist_matrix, 0)
 
     condensed = squareform(avg_dist_matrix, checks=False)
-    # Switch to Ward linkage for tighter clusters
     link = sch.linkage(condensed, method="ward")
-    cluster_ids = sch.fcluster(link, t=dist_threshold, criterion="distance")
+
+    # Use maxclust if threshold is reached or explicitly requested
+    cluster_ids = sch.fcluster(link, t=max_clusters, criterion="maxclust")
 
     clusters: Dict[int, List[str]] = {}
     for sym, c_id in zip(returns.columns, cluster_ids):
@@ -114,15 +116,12 @@ def natural_selection(
             clusters[c_id_int] = []
         clusters[c_id_int].append(str(sym))
 
-    logger.info(f"Natural Selection: Identified {len(clusters)} risk clusters from {len(returns.columns)} symbols.")
+    logger.info(f"Natural Selection: Identified {len(clusters)} risk clusters from {len(returns.columns)} symbols (Target={max_clusters}).")
 
-    # 3. Selection within Clusters
+    # 3. Selection within Clusters: Top LONG and Top SHORT
     selected_symbols = []
     for c_id, symbols in clusters.items():
-        if len(symbols) <= top_n_per_cluster:
-            selected_symbols.extend(symbols)
-            continue
-
+        # Alpha Ranking
         sub_rets = returns[symbols]
         mom = sub_rets.mean() * 252
         vol = sub_rets.std() * np.sqrt(252)
@@ -137,11 +136,25 @@ def natural_selection(
         def norm(s):
             return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
 
-        alpha_scores = 0.4 * norm(mom) + 0.3 * norm(stab) + 0.3 * norm(conv)
-        top_cluster_syms = alpha_scores.sort_values(ascending=False).head(top_n_per_cluster).index.tolist()
-        selected_symbols.extend([str(s) for s in top_cluster_syms])
+        # We need direction context from candidate_map
+        directions = pd.Series({s: candidate_map.get(s, {}).get("direction", "LONG") for s in symbols})
 
-        logger.info(f"  Cluster {c_id}: Selected {len(top_cluster_syms)}/{len(symbols)} (Top Alpha: {top_cluster_syms[0]})")
+        alpha_scores = 0.4 * norm(mom) + 0.3 * norm(stab) + 0.3 * norm(conv)
+
+        # Pick Top N LONGs
+        long_syms = [s for s in symbols if directions[s] == "LONG"]
+        if long_syms:
+            top_longs = alpha_scores[long_syms].sort_values(ascending=False).head(top_n_per_cluster).index.tolist()
+            selected_symbols.extend(top_longs)
+
+        # Pick Top N SHORTS
+        short_syms = [s for s in symbols if directions[s] == "SHORT"]
+        if short_syms:
+            top_shorts = alpha_scores[short_syms].sort_values(ascending=False).head(top_n_per_cluster).index.tolist()
+            selected_symbols.extend(top_shorts)
+
+        n_sel = len([s for s in selected_symbols if s in symbols])
+        logger.info(f"  Cluster {c_id}: Selected {n_sel}/{len(symbols)} (L: {len(long_syms)}, S: {len(short_syms)})")
 
     # 4. Save Final Candidates
     final_candidates = []
@@ -161,8 +174,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--top-n", type=int, default=2, help="Number of symbols to pick per cluster")
+    parser.add_argument("--top-n", type=int, default=1, help="Number of symbols to pick per direction per cluster")
     parser.add_argument("--threshold", type=float, default=0.4, help="Clustering distance threshold")
+    parser.add_argument("--max-clusters", type=int, default=25, help="Target maximum number of clusters")
     args = parser.parse_args()
 
-    natural_selection(top_n_per_cluster=args.top_n, dist_threshold=args.threshold)
+    natural_selection(top_n_per_cluster=args.top_n, dist_threshold=args.threshold, max_clusters=args.max_clusters)

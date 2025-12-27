@@ -86,7 +86,7 @@ def display_dashboard():
         # Cluster Summary for this profile
         c_table = Table(title="[dim]Top 5 Risk Buckets[/]", box=box.SIMPLE, show_header=False)
         for c in clusters[:5]:
-            c_table.add_row(f"Cluster {c['Cluster_ID']}", f"[bold white]{format_weight(c['Total_Weight'])}[/]", c.get("Lead_Asset", ""))
+            c_table.add_row(f"Cluster {c['Cluster_ID']}", f"[bold white]{format_weight(c['Gross_Weight'])}[/]", c.get("Lead_Asset", ""))
 
         console.print(Columns([table, c_table]))
 

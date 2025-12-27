@@ -4,163 +4,182 @@ import logging
 import os
 from typing import Any, Dict, List
 
-import numpy as np
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("select_top_universe")
 
 
-def get_canonical_name(symbol: str) -> str:
-    """Extracts base pair name from exchange:pair string."""
+def get_asset_identity(symbol: str) -> str:
+    """
+    Extracts canonical identity of an asset to group redundant venues.
+    Examples:
+      BINANCE:BTCUSDT.P -> BTC/USDT
+      OKX:BTC-USDT-SWAP -> BTC/USDT
+      COMEX:SI1! -> SI
+      COMEX:SIH2026 -> SI
+    """
     try:
-        pair = symbol.split(":")[-1]
-        # Remove .P for perps and .F for futures if present
-        canonical = pair.replace(".P", "").replace(".F", "").upper()
-        return canonical
+        raw = symbol.split(":")[-1].upper()
+        # 1. Handle Futures (strip contract dates)
+        for prefix in ["GC", "SI", "HG", "PL", "PA", "ZC", "ZS", "ZW"]:
+            if raw.startswith(prefix):
+                return prefix
+
+        # 2. Handle Crypto (base/quote)
+        # Remove common suffixes
+        clean = raw.replace(".P", "").replace(".F", "").replace("-SWAP", "").replace("-SPOT", "")
+        # Handle dashes
+        if "-" in clean:
+            parts = clean.split("-")
+            # Filter out known junk parts
+            parts = [p for p in parts if p not in ["USDT", "USDC", "USD", "BUSD", "DAI", "EUR", "GBP"]]
+            if len(parts) >= 1:
+                return parts[0]
+
+        # Heuristic for base/quote (e.g. BTCUSDT -> BTC/USDT)
+        for quote in ["USDT", "USDC", "USD", "BUSD", "DAI", "EUR", "GBP"]:
+            if clean.endswith(quote) and len(clean) > len(quote):
+                base = clean[: -len(quote)]
+                return base
+
+        return clean
     except Exception:
         return symbol
+
+
+def get_asset_class(category: str) -> str:
+    """Maps granular categories to broad institutional asset classes."""
+    c = category.upper()
+    if any(x in c for x in ["BOND", "ETF"]) and "STOCKS" not in c:
+        return "FIXED_INCOME"
+    if any(x in c for x in ["BINANCE", "BYBIT", "OKX", "BITGET", "CRYPTO"]):
+        return "CRYPTO"
+    if any(x in c for x in ["NASDAQ", "NYSE", "AMEX", "US_STOCKS", "US_ETF"]):
+        return "EQUITIES"
+    if any(x in c for x in ["CME", "COMEX", "NYMEX", "CBOT", "FUTURES"]):
+        return "FUTURES"
+    if "FOREX" in c:
+        return "FOREX"
+    return "OTHER"
 
 
 def select_top_universe(mode: str = "raw"):
     files = glob.glob("export/universe_selector_*.json")
 
-    categories: Dict[str, List[Dict[str, Any]]] = {}
-
+    # 1. Load All Items
+    all_items = []
     for f in files:
-        # Determine category from filename
         parts = os.path.basename(f).split("_")
         try:
-            # remove universe, selector, date
             clean = [p for p in parts if p not in ["universe", "selector"] and not p[0].isdigit()]
-
-            # Simple heuristic: Exchange + Type
             exchange = "UNKNOWN"
             mtype = "UNKNOWN"
-
             for p in clean:
                 if p.upper() in ["BINANCE", "BYBIT", "OKX", "BITGET", "NASDAQ", "NYSE", "AMEX", "CME", "FOREX", "US", "BOND", "OANDA", "THINKMARKETS"]:
                     exchange = p.upper()
                 if p.upper() in ["SPOT", "PERP", "FUTURES", "STOCKS", "ETF", "BONDS", "CFD"]:
                     mtype = p.upper()
-
             category = f"{exchange}_{mtype}"
-
         except Exception:
             category = "UNKNOWN"
-
-        if category not in categories:
-            categories[category] = []
 
         try:
             with open(f, "r") as j:
                 raw_data = json.load(j)
-
                 items = []
                 if isinstance(raw_data, dict):
                     items = raw_data.get("data", [])
                 elif isinstance(raw_data, list):
                     items = raw_data
 
-                if not items:
-                    items = []
-
-                # Enrich with direction and scan file name for tracking
-                file_direction = "SHORT" if "_short" in os.path.basename(f).lower() else "LONG"
+                file_direction = "SHORT" if "_short" in f.lower() else "LONG"
                 for i in items:
-                    if isinstance(i, dict):
+                    if isinstance(i, dict) and "symbol" in i:
                         i["_direction"] = file_direction
                         i["_category"] = category
-
-                categories[category].extend(items)
+                        i["_asset_class"] = get_asset_class(category)
+                        i["_identity"] = get_asset_identity(i["symbol"])
+                        all_items.append(i)
         except Exception as e:
             logger.error(f"Error reading {f}: {e}")
 
-    # Step 1: Alpha Ranking within each category
-    for cat in list(categories.keys()):
-        items = categories[cat]
-        # Deduplicate by symbol within category
-        unique_items = {}
-        for item in items:
-            if isinstance(item, dict) and "symbol" in item:
-                unique_items[item["symbol"]] = item
-        items = list(unique_items.values())
+    # 2. Deduplicate and Score
+    unique_assets = {}
+    for item in all_items:
+        sym = item["symbol"]
+        if sym not in unique_assets:
+            unique_assets[sym] = item
 
-        if items:
-            v_traded = np.array([float(x.get("Value.Traded", 0) or 0) for x in items])
-            adx = np.array([float(x.get("ADX", 0) or 0) for x in items])
-            vol = np.array([float(x.get("Volatility.D", 0) or 0) for x in items])
-            # Performance metrics for proxies (Equities/Bonds)
-            perf3m = np.array([float(x.get("Perf.3M", 0) or 0) for x in items])
-            perf6m = np.array([float(x.get("Perf.6M", 0) or 0) for x in items])
+    scored_items = list(unique_assets.values())
+    for item in scored_items:
+        v_traded = float(item.get("Value.Traded", 0) or 0)
+        adx = float(item.get("ADX", 0) or 0)
+        vol = float(item.get("Volatility.D", 0) or 0)
+        perf3m = float(item.get("Perf.3M", 0) or 0)
+        perf6m = float(item.get("Perf.6M", 0) or 0)
+        is_long = item.get("_direction", "LONG") == "LONG"
 
-            def norm(a):
-                return (a - a.min()) / (a.max() - a.min() + 1e-9) if len(a) > 1 else np.array([1.0] * len(a))
+        # Direction-aware performance score
+        # For LONG: positive is good. For SHORT: negative is good.
+        p3 = perf3m if is_long else -perf3m
+        p6 = perf6m if is_long else -perf6m
+        p_avg = (p3 + p6) / 2
 
-            # Updated Discovery Alpha Score:
-            # Liquidity (30%), Trend (30%), Volatility (10%), Performance (30%)
-            alpha_scores = 0.3 * norm(v_traded) + 0.3 * norm(adx) + 0.1 * norm(vol) + 0.15 * norm(perf3m) + 0.15 * norm(perf6m)
+        # Updated Alpha Score: Liquidity, Trend, Vol, Perf
+        score = 0.3 * min(1.0, v_traded / 1e9) + 0.3 * min(1.0, adx / 50) + 0.1 * min(1.0, vol / 10) + 0.3 * min(1.0, p_avg / 50)
+        item["_alpha_score"] = score
 
-            for i, item in enumerate(items):
-                item["_alpha_score"] = float(alpha_scores[i])
+    # 3. Canonical Merging (Best Venue per Identity)
+    identity_groups: Dict[str, List[Dict[str, Any]]] = {}
+    for item in scored_items:
+        ident = item["_identity"]
+        if ident not in identity_groups:
+            identity_groups[ident] = []
+        identity_groups[ident].append(item)
 
-            items.sort(key=lambda x: x.get("_alpha_score", 0), reverse=True)
-            categories[cat] = items
-
-    # Step 2: Global Canonical Merging for Crypto
-    canonical_groups: Dict[str, List[Dict[str, Any]]] = {}
-    other_assets: List[Dict[str, Any]] = []
-
-    for cat, items in categories.items():
-        is_crypto = any(x in cat for x in ["BINANCE", "BYBIT", "OKX", "BITGET", "CRYPTO"])
-        for item in items:
-            if is_crypto:
-                canonical = get_canonical_name(item["symbol"])
-                if canonical not in canonical_groups:
-                    canonical_groups[canonical] = []
-                canonical_groups[canonical].append(item)
-            else:
-                other_assets.append(item)
-
-    merged_crypto = []
-    for canonical, group in canonical_groups.items():
-        # Sort by alpha score to find the best venue
-        group.sort(key=lambda x: x.get("_alpha_score", 0), reverse=True)
+    merged_pool = []
+    for _, group in identity_groups.items():
+        group.sort(key=lambda x: x["_alpha_score"], reverse=True)
         primary = group[0]
         if len(group) > 1:
             primary["alternative_venues"] = [x["symbol"] for x in group[1:]]
-            # Store alpha scores of alternatives for future statsarb
-            primary["alternative_alpha_scores"] = {x["symbol"]: x.get("_alpha_score", 0) for x in group[1:]}
-        merged_crypto.append(primary)
+        merged_pool.append(primary)
 
-    # Step 3: Final Selection based on mode
-    all_final_candidates = merged_crypto + other_assets
+    # 4. Filter by Asset Class
+    final_candidates = []
+    asset_classes = ["CRYPTO", "EQUITIES", "FUTURES", "FOREX", "FIXED_INCOME", "OTHER"]
 
+    class_limit = int(os.getenv("UNIVERSE_CLASS_LIMIT", "30"))
+
+    for ac in asset_classes:
+        class_items = [x for x in merged_pool if x["_asset_class"] == ac]
+        class_items.sort(key=lambda x: x["_alpha_score"], reverse=True)
+        top_class = class_items[:class_limit]
+        logger.info(f"Asset Class: {ac} - Selected {len(top_class)} symbols")
+        final_candidates.extend(top_class)
+
+    # 5. Global Truncation if in 'top' mode
     if mode == "top":
-        all_final_candidates.sort(key=lambda x: x.get("_alpha_score", 0), reverse=True)
-        limit = int(os.getenv("UNIVERSE_TOP_N", "60"))
-        all_final_candidates = all_final_candidates[:limit]
-    elif mode == "raw":
-        # Still apply a loose global limit to prevent total bloat
-        raw_limit = int(os.getenv("RAW_TOP_N", "150"))
-        all_final_candidates.sort(key=lambda x: x.get("_alpha_score", 0), reverse=True)
-        if len(all_final_candidates) > raw_limit:
-            all_final_candidates = all_final_candidates[:raw_limit]
+        final_candidates.sort(key=lambda x: x["_alpha_score"], reverse=True)
+        final_candidates = final_candidates[: int(os.getenv("UNIVERSE_TOTAL_LIMIT", "80"))]
 
-    final_universe = []
-    for item in all_final_candidates:
-        final_universe.append(
+    # Map to final format
+    output_universe = []
+    for item in final_candidates:
+        output_universe.append(
             {
                 "symbol": item["symbol"],
-                "description": item.get("description", "N/A"),
+                "description": item.get("description", item.get("name", "N/A")),
                 "sector": item.get("sector", "N/A"),
-                "market": item.get("_category", "UNKNOWN"),
+                "market": item["_category"],
+                "asset_class": item["_asset_class"],
+                "identity": item["_identity"],
                 "close": item.get("close", 0),
                 "value_traded": item.get("Value.Traded", 0),
                 "adx": item.get("ADX", 0),
                 "atr": item.get("ATR", 0),
-                "direction": item.get("_direction", "LONG"),
+                "direction": item["_direction"],
+                "alpha_score": item["_alpha_score"],
                 "alternative_venues": item.get("alternative_venues", []),
-                "alternative_alpha_scores": item.get("alternative_alpha_scores", {}),
             }
         )
 
@@ -169,9 +188,9 @@ def select_top_universe(mode: str = "raw"):
         output_file = "data/lakehouse/portfolio_candidates_raw.json"
 
     with open(output_file, "w") as f_out:
-        json.dump(final_universe, f_out, indent=2)
+        json.dump(output_universe, f_out, indent=2)
 
-    logger.info(f"Saved {len(final_universe)} candidates to {output_file}")
+    logger.info(f"Saved {len(output_universe)} candidates to {output_file}")
 
 
 if __name__ == "__main__":

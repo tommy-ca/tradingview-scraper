@@ -163,6 +163,7 @@ def main():
     parser.add_argument("--regime-z", type=float, default=1.5)
     parser.add_argument("--linkage", default="ward")
     parser.add_argument("--hrp", action="store_true", help="Emit HRP weights")
+    parser.add_argument("--max-clusters", type=int, default=25, help="Target maximum number of clusters")
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -221,7 +222,9 @@ def main():
         condensed = squareform(dist, checks=False)
         link = sch.linkage(condensed, method=args.linkage)
 
-        cluster_assignments = sch.fcluster(link, t=dist_threshold, criterion="distance")
+        # Adaptive Clustering Threshold or Max Clusters
+        # If max-clusters is set, use it as the primary criterion
+        cluster_assignments = sch.fcluster(link, t=args.max_clusters, criterion="maxclust")
 
         clusters: Dict[int, List[str]] = {}
         for sym, cluster_id in zip(rets.columns, cluster_assignments):

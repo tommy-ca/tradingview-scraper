@@ -14,7 +14,9 @@ logger = logging.getLogger("clustered_optimizer_v2")
 class ClusteredOptimizerV2:
     def __init__(self, returns_path: str, clusters_path: str, meta_path: str, stats_path: Optional[str] = None):
         # Explicitly cast to DataFrame to satisfy linter
-        self.returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+        with open(returns_path, "rb") as f_in:
+            self.returns = cast(pd.DataFrame, pd.read_pickle(f_in))
+
         with open(clusters_path, "r") as f:
             self.clusters = cast(Dict[str, List[str]], json.load(f))
         with open(meta_path, "r") as f:
@@ -41,7 +43,7 @@ class ClusteredOptimizerV2:
 
             sub_rets = self.returns[valid_symbols]
 
-            # Hybrid Layer 2 Weighting (Blend of InvVar and AlphaRank)
+            # 1. Hybrid Layer 2 Weighting (Blend of InvVar and AlphaRank)
             vols = sub_rets.std() * np.sqrt(252)
             inv_vars = 1.0 / (vols**2 + 1e-9)
             w_ivp = inv_vars / inv_vars.sum()
@@ -52,6 +54,8 @@ class ClusteredOptimizerV2:
             def norm(s):
                 return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
 
+            # Use Alpha scores for within-cluster ranking
+            # We also consider Direction parity here if needed
             w_alpha = norm(mom) / (norm(mom).sum() + 1e-9)
 
             # 50/50 Blend
@@ -61,11 +65,10 @@ class ClusteredOptimizerV2:
             self.cluster_benchmarks[f"Cluster_{c_id}"] = (sub_rets * w_hybrid).sum(axis=1)
             self.intra_cluster_weights[c_id] = w_hybrid
 
-            # Aggregate cluster fragility (CVaR)
+            # 2. Aggregate cluster fragility (CVaR)
             if self.stats is not None:
                 c_af_stats = self.stats[self.stats["Symbol"].isin(valid_symbols)]
                 if not c_af_stats.empty:
-                    # Use mean Fragility Score as penalty factor
                     self.cluster_stats[c_id] = {"fragility": float(c_af_stats["Fragility_Score"].mean()), "cvar": float(c_af_stats["CVaR_95"].mean())}
                 else:
                     self.cluster_stats[c_id] = {"fragility": 1.0, "cvar": -0.05}
@@ -80,7 +83,7 @@ class ClusteredOptimizerV2:
         if penalties is not None:
             # Penalize by weighted average fragility
             penalty = np.dot(weights, penalties)
-            return base_vol * (1.0 + penalty * 0.2)  # 20% influence
+            return base_vol * (1.0 + penalty * 0.2)
         return base_vol
 
     def _risk_parity_obj(self, weights, cov):
@@ -112,7 +115,6 @@ class ClusteredOptimizerV2:
 
         cov = self._get_cov(self.cluster_benchmarks)
 
-        # Extract penalties (Fragility Scores)
         penalties = np.array([self.cluster_stats[c_col.replace("Cluster_", "")]["fragility"] for c_col in self.cluster_benchmarks.columns])
 
         if method == "min_var":
@@ -139,6 +141,8 @@ class ClusteredOptimizerV2:
             for sym, sym_w_in_cluster in intra_w.items():
                 if sym_w_in_cluster * c_weight < 1e-6:
                     continue
+
+                direction = self.meta.get(str(sym), {}).get("direction", "LONG")
                 final_alloc.append(
                     {
                         "Symbol": sym,
@@ -149,18 +153,15 @@ class ClusteredOptimizerV2:
                         "Weight": float(c_weight * sym_w_in_cluster),
                         "Cluster_Weight": float(c_weight),
                         "Intra_Cluster_Weight": float(sym_w_in_cluster),
-                        "Direction": self.meta.get(str(sym), {}).get("direction", "LONG"),
+                        "Direction": direction,
                         "Market": self.meta.get(str(sym), {}).get("market", "UNKNOWN"),
+                        "Net_Weight": float(c_weight * sym_w_in_cluster) * (1.0 if direction == "LONG" else -1.0),
                     }
                 )
 
         df = pd.DataFrame(final_alloc).sort_values("Weight", ascending=False)
         if top_n > 0:
             df = df.head(top_n)
-            # Re-normalize weights to sum to 1.0 if we truncate?
-            # Actually, usually for Top N selection we want to see the real weights.
-            # But the user might want a functional portfolio.
-            # Let's keep the real weights for now so it's clear what was dropped.
         return df
 
     def run_barbell(self, cluster_cap: float = 0.25, top_n: int = 0) -> pd.DataFrame:
@@ -170,7 +171,6 @@ class ClusteredOptimizerV2:
             return pd.DataFrame()
 
         # 1. IDENTIFY AGGRESSOR CLUSTERS
-        # Map symbols to clusters in stats
         symbol_to_cluster = {}
         for c_id, symbols in self.clusters.items():
             for s in symbols:
@@ -179,7 +179,7 @@ class ClusteredOptimizerV2:
         stats_with_clusters = self.stats.copy()
         stats_with_clusters["Cluster_ID"] = stats_with_clusters["Symbol"].apply(lambda x: symbol_to_cluster.get(str(x)))
 
-        # Calculate best asset per cluster
+        # Best asset per cluster (Alpha Score handled earlier in selection)
         cluster_convexity = stats_with_clusters.sort_values("Antifragility_Score", ascending=False).groupby("Cluster_ID").first()
         top_aggressor_clusters = cluster_convexity.sort_values("Antifragility_Score", ascending=False).head(5)
 
@@ -190,7 +190,6 @@ class ClusteredOptimizerV2:
         agg_weight_per = agg_weight_total / len(agg_symbols)
 
         # 2. OPTIMIZE CORE (90%)
-        # Exclude all symbols from the Aggressor Clusters to prevent correlated core risk
         excluded_symbols = []
         for c_id in agg_cluster_ids:
             excluded_symbols.extend(self.clusters[str(c_id)])
@@ -199,33 +198,39 @@ class ClusteredOptimizerV2:
         available_core_symbols = [s for s in pd.Index(self.returns.columns) if s not in excluded_symbols]
         self.returns = self.returns[available_core_symbols]
 
-        # Re-benchmark without excluded clusters
+        # Re-benchmark
         self.cluster_benchmarks = pd.DataFrame()
         self.intra_cluster_weights = {}
         for c_id, symbols in self.clusters.items():
-            if int(c_id) in agg_cluster_ids:
+            if str(c_id) in [str(x) for x in agg_cluster_ids]:
                 continue
-
             valid_symbols = [s for s in symbols if s in self.returns.columns]
             if not valid_symbols:
                 continue
+
             sub_rets = self.returns[valid_symbols]
-            if len(valid_symbols) == 1:
-                self.cluster_benchmarks[f"Cluster_{c_id}"] = pd.DataFrame(sub_rets).iloc[:, 0]
-                self.intra_cluster_weights[c_id] = pd.Series([1.0], index=valid_symbols)
-            else:
-                vols = sub_rets.std() * np.sqrt(252)
-                inv_vars = 1.0 / (vols**2 + 1e-9)
-                w = inv_vars / inv_vars.sum()
-                self.cluster_benchmarks[f"Cluster_{c_id}"] = (sub_rets * w).sum(axis=1)
-                self.intra_cluster_weights[c_id] = w
+            # Use same hybrid weighting for core
+            vols = sub_rets.std() * np.sqrt(252)
+            inv_vars = 1.0 / (vols**2 + 1e-9)
+            w_ivp = inv_vars / inv_vars.sum()
+            mom = sub_rets.mean() * 252
+
+            def norm(s):
+                return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
+
+            w_alpha = norm(mom) / (norm(mom).sum() + 1e-9)
+            w_hybrid = 0.5 * w_ivp + 0.5 * w_alpha
+            w_hybrid = w_hybrid / w_hybrid.sum()
+
+            self.cluster_benchmarks[f"Cluster_{c_id}"] = (sub_rets * w_hybrid).sum(axis=1)
+            self.intra_cluster_weights[c_id] = w_hybrid
 
         core_cluster_weights = self.optimize_across_clusters("risk_parity", cluster_cap=cluster_cap)
 
         final_alloc = []
-        # Add Aggressors
         for sym in agg_symbols:
             c_id = symbol_to_cluster.get(sym)
+            direction = self.meta.get(str(sym), {}).get("direction", "LONG")
             final_alloc.append(
                 {
                     "Symbol": sym,
@@ -236,12 +241,12 @@ class ClusteredOptimizerV2:
                     "Weight": float(agg_weight_per),
                     "Cluster_Weight": float(agg_weight_per),
                     "Type": "AGGRESSOR (Antifragile)",
-                    "Direction": self.meta.get(str(sym), {}).get("direction", "LONG"),
+                    "Direction": direction,
                     "Market": self.meta.get(str(sym), {}).get("market", "UNKNOWN"),
+                    "Net_Weight": float(agg_weight_per) * (1.0 if direction == "LONG" else -1.0),
                 }
             )
 
-        # Add Core
         for c_col, c_weight in core_cluster_weights.items():
             if c_weight < 1e-6:
                 continue
@@ -250,6 +255,7 @@ class ClusteredOptimizerV2:
             for sym, sym_w_in_cluster in intra_w.items():
                 if sym_w_in_cluster * c_weight < 1e-6:
                     continue
+                direction = self.meta.get(str(sym), {}).get("direction", "LONG")
                 final_alloc.append(
                     {
                         "Symbol": sym,
@@ -260,8 +266,9 @@ class ClusteredOptimizerV2:
                         "Weight": float(c_weight * sym_w_in_cluster * 0.90),
                         "Cluster_Weight": float(c_weight * 0.90),
                         "Type": "CORE (Safe)",
-                        "Direction": self.meta.get(str(sym), {}).get("direction", "LONG"),
+                        "Direction": direction,
                         "Market": self.meta.get(str(sym), {}).get("market", "UNKNOWN"),
+                        "Net_Weight": float(c_weight * sym_w_in_cluster * 0.90) * (1.0 if direction == "LONG" else -1.0),
                     }
                 )
 
@@ -272,43 +279,11 @@ class ClusteredOptimizerV2:
         return df
 
     def get_cluster_summary(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Aggregates asset-level results into a cluster-level summary.
-        Uses Alpha Ranking (Momentum + Stability + Convexity) to pick Lead Asset.
-        """
         if df.empty:
             return pd.DataFrame()
-
         summary = []
         for c_id, group in df.groupby("Cluster_ID"):
-            # Calculate Alpha Rank for each asset in the cluster
-            symbols = group["Symbol"].tolist()
-            sub_rets = self.returns[symbols]
-
-            # 1. Momentum (Annualized mean return)
-            mom = sub_rets.mean() * 252
-            # 2. Stability (Annualized inverse vol)
-            vol = sub_rets.std() * np.sqrt(252)
-            stab = 1.0 / (vol + 1e-9)
-
-            # 3. Convexity (Normalize Antifragility Score if present)
-            conv = pd.Series(0.0, index=symbols)
-            if self.stats is not None:
-                # Merge stats
-                cluster_stats = self.stats[self.stats["Symbol"].isin(symbols)].set_index("Symbol")
-                if not cluster_stats.empty:
-                    conv = cluster_stats["Antifragility_Score"]
-
-            # Composite Alpha Score (Normalized components)
-            def norm(s):
-                return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
-
-            # If cluster size is 1, all norms will be 1.0
-            alpha_score = 0.4 * norm(mom) + 0.3 * norm(stab) + 0.3 * norm(conv)
-            lead_symbol = alpha_score.idxmax()
-            lead_asset = group[group["Symbol"] == lead_symbol].iloc[0]
-
-            # Determine primary sector (mode)
+            lead_asset = group.sort_values("Weight", ascending=False).iloc[0]
             sector_counts = group["Sector"].value_counts()
             primary_sector = str(sector_counts.index[0]) if not sector_counts.empty else "N/A"
 
@@ -316,17 +291,17 @@ class ClusteredOptimizerV2:
                 {
                     "Cluster_ID": str(c_id),
                     "Cluster_Label": lead_asset["Cluster_Label"],
-                    "Total_Weight": float(group["Weight"].sum()),
+                    "Gross_Weight": float(group["Weight"].sum()),
+                    "Net_Weight": float(group["Net_Weight"].sum()),
                     "Asset_Count": int(len(group)),
-                    "Lead_Asset": lead_symbol,
+                    "Lead_Asset": lead_asset["Symbol"],
                     "Lead_Description": lead_asset["Description"],
                     "Sectors": primary_sector,
                     "Markets": list(group["Market"].unique()),
                     "Type": group["Type"].iloc[0] if "Type" in group.columns else "CORE",
                 }
             )
-
-        return pd.DataFrame(summary).sort_values("Total_Weight", ascending=False)
+        return pd.DataFrame(summary).sort_values("Gross_Weight", ascending=False)
 
 
 def main():
@@ -347,14 +322,11 @@ def main():
         "barbell": opt.run_barbell(cluster_cap=cluster_cap, top_n=top_n),
     }
 
-    # Prepare clusters metadata for implementation
     cluster_registry = {}
     for c_id, symbols in opt.clusters.items():
         valid_symbols = [s for s in symbols if s in opt.returns.columns]
         if not valid_symbols:
             continue
-
-        # Determine primary sector for registry
         sectors = [opt.meta.get(s, {}).get("sector", "N/A") for s in valid_symbols]
         sector_counts = pd.Series(sectors).value_counts()
         primary_sector = str(sector_counts.index[0]) if not sector_counts.empty else "N/A"
@@ -366,21 +338,14 @@ def main():
             "markets": list(set(opt.meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols)),
         }
 
-    # Save all
     output = {"profiles": {}, "cluster_registry": cluster_registry}
     for name, df in profiles_raw.items():
         cluster_sum = opt.get_cluster_summary(df)
         output["profiles"][name] = {"assets": df.to_dict(orient="records"), "clusters": cluster_sum.to_dict(orient="records")}
-
-        print(f"\n--- {name.upper()} PROFILE ---")
-        print("TOP ASSETS:")
-        print(df.head(10).to_string(index=False))
-        print("\nCLUSTER SUMMARY:")
-        print(cluster_sum.to_string(index=False))
+        print(f"\n--- {name.upper()} PROFILE ---\nTOP ASSETS:\n{df.head(10).to_string(index=False)}\nCLUSTER SUMMARY:\n{cluster_sum.to_string(index=False)}")
 
     with open("data/lakehouse/portfolio_optimized_v2.json", "w") as f:
         json.dump(output, f, indent=2)
-
     logger.info("Saved all profiles and cluster details to data/lakehouse/portfolio_optimized_v2.json")
 
 
