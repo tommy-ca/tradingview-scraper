@@ -2,13 +2,12 @@
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 import numpy as np
 import pandas as pd
-from scipy.cluster.hierarchy import fcluster, leaves_list, linkage
+import scipy.cluster.hierarchy as sch
 from scipy.spatial.distance import squareform
-from sklearn.covariance import LedoitWolf
 
 from tradingview_scraper.regime import MarketRegimeDetector
 
@@ -18,16 +17,60 @@ def winsorize(df: pd.DataFrame, alpha: float) -> pd.DataFrame:
         return df
     lower = df.quantile(alpha, axis=0)
     upper = df.quantile(1 - alpha, axis=0)
-    return df.clip(lower=lower, upper=upper, axis=1)
+    return cast(pd.DataFrame, df.clip(lower=lower, upper=upper, axis=1))
+
+
+def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculates a robust correlation matrix using intersection of active trading days
+    to avoid dilution from padding (e.g. TradFi weekends vs Crypto 24/7).
+    """
+    symbols = returns.columns
+    n = len(symbols)
+    corr_matrix = np.eye(n)
+
+    # Process each pair individually to ensure intersection correlation
+    for i in range(n):
+        for j in range(i + 1, n):
+            s1 = str(symbols[i])
+            s2 = str(symbols[j])
+
+            # Extract pair and drop zeros/NaNs
+            v1 = cast(np.ndarray, returns[s1].values)
+            v2 = cast(np.ndarray, returns[s2].values)
+
+            mask = np.logical_and(np.logical_and(v1 != 0, v2 != 0), np.logical_and(~np.isnan(v1), ~np.isnan(v2)))
+
+            v1_clean = v1[mask]
+            v2_clean = v2[mask]
+
+            if len(v1_clean) < 20:
+                c = 0.0
+            else:
+                c = float(np.corrcoef(v1_clean, v2_clean)[0, 1])
+                if np.isnan(c):
+                    c = 0.0
+
+            corr_matrix[i, j] = c
+            corr_matrix[j, i] = c
+
+    return pd.DataFrame(corr_matrix, index=symbols, columns=symbols)
 
 
 def load_returns(path: Path, min_col_frac: float) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Returns file not found: {path}")
-    rets = pd.read_pickle(path)
+    with open(path, "rb") as f:
+        rets_raw = pd.read_pickle(f)
+
+    if not isinstance(rets_raw, pd.DataFrame):
+        rets = pd.DataFrame(rets_raw)
+    else:
+        rets = rets_raw
+
     # Drop columns with too many NaNs
     min_count = int(min_col_frac * len(rets))
-    rets = rets.dropna(axis=1, thresh=int(min_count))  # type: ignore[arg-type]
+    rets = rets.dropna(axis=1, thresh=min_count)
     rets = rets.dropna(axis=0)
     # Drop zero-variance cols
     var = rets.var()
@@ -38,8 +81,8 @@ def load_returns(path: Path, min_col_frac: float) -> pd.DataFrame:
 def rolling_avg_corr(rets: pd.DataFrame, window: int) -> pd.Series:
     if len(rets) < window:
         return pd.Series(dtype=float)
+    # This remains a simple average for regime detection proxy
     roll = rets.rolling(window).corr()
-    # average pairwise per window
     avg = roll.groupby(level=0).mean().mean(axis=1)
     return pd.Series(avg, dtype=float)
 
@@ -54,11 +97,11 @@ def top_corr_pairs(corr: pd.DataFrame, cap: float, limit: int) -> List[Tuple[str
             v = float(corr_abs[i, j])
             if v < cap:
                 continue
-            key = (symbols[i], symbols[j])
+            key = tuple(sorted((str(symbols[i]), str(symbols[j]))))
             if key in seen:
                 continue
             seen.add(key)
-            out.append((symbols[i], symbols[j], v))
+            out.append((str(symbols[i]), str(symbols[j]), v))
     out.sort(key=lambda x: x[2], reverse=True)
     return out[:limit]
 
@@ -68,15 +111,20 @@ def hrp_weights(rets: pd.DataFrame, linkage_method: str) -> pd.Series:
         return pd.Series(dtype=float)
 
     cov = rets.cov().to_numpy()
-    corr = rets.corr().to_numpy()
+    corr_df = get_robust_correlation(rets)
+    corr = corr_df.values
+
     dist = np.sqrt(0.5 * (np.ones_like(corr) - corr))
+    dist = (dist + dist.T) / 2
+    np.fill_diagonal(dist, 0)
+
     condensed = squareform(dist, checks=False)
-    link = linkage(condensed, method=linkage_method)
-    order = leaves_list(link)
+    link = sch.linkage(condensed, method=linkage_method)
+    order = sch.leaves_list(link)
     ordered_cols = rets.columns[order]
 
     def get_ivp(cov_sub: np.ndarray) -> np.ndarray:
-        inv_diag = 1 / np.diag(cov_sub)
+        inv_diag = 1 / (np.diag(cov_sub) + 1e-9)
         return inv_diag / inv_diag.sum()
 
     def cluster_var(cov_mat: np.ndarray, idxs: List[int]) -> float:
@@ -94,8 +142,8 @@ def hrp_weights(rets: pd.DataFrame, linkage_method: str) -> pd.Series:
         left, right = cluster[:mid], cluster[mid:]
         var_left = cluster_var(cov, left)
         var_right = cluster_var(cov, right)
-        alloc_left = var_right / (var_left + var_right)
-        alloc_right = var_left / (var_left + var_right)
+        alloc_left = var_right / (var_left + var_right + 1e-9)
+        alloc_right = var_left / (var_left + var_right + 1e-9)
         weights.iloc[left] *= alloc_left
         weights.iloc[right] *= alloc_right
         clusters.extend([left, right])
@@ -113,7 +161,7 @@ def main():
     parser.add_argument("--min-col-frac", type=float, default=0.9)
     parser.add_argument("--windows", default="20,60,180")
     parser.add_argument("--regime-z", type=float, default=1.5)
-    parser.add_argument("--linkage", default="average")
+    parser.add_argument("--linkage", default="ward")
     parser.add_argument("--hrp", action="store_true", help="Emit HRP weights")
     args = parser.parse_args()
 
@@ -125,37 +173,25 @@ def main():
         rets = winsorize(rets, args.winsor_alpha)
 
     windows = [int(w) for w in args.windows.split(",") if w.strip()]
-    avg_corr = {w: rolling_avg_corr(rets, w) for w in windows}
-    regime = {}
-    for w, series in avg_corr.items():
-        if series.empty:
-            regime[w] = {"z": None, "flag": False}
-            continue
-        z = (series.iloc[-1] - series.mean()) / (series.std() + 1e-9)
-        regime[w] = {"z": float(z), "flag": bool(abs(z) >= args.regime_z)}
+    avg_corr_series = {w: rolling_avg_corr(rets, w) for w in windows}
 
     # Multi-Factor Regime Detection
     detector = MarketRegimeDetector()
     regime_name, regime_score = detector.detect_regime(rets)
-    logger_msg = f"Regime Detected: {regime_name} (Score: {regime_score:.2f})"
-    print(logger_msg)
+    print(f"Regime Detected: {regime_name} (Score: {regime_score:.2f})")
 
     # Adaptive Clustering Threshold
-    # CRISIS: t=0.3 (High diversification), NORMAL: t=0.4, QUIET: t=0.5 (Broader buckets)
     dist_threshold = 0.4
     if regime_name == "CRISIS":
         dist_threshold = 0.3
     elif regime_name == "QUIET":
         dist_threshold = 0.5
 
-    lw = LedoitWolf().fit(rets.values)
-    cov = lw.covariance_
-    diag = np.sqrt(np.diag(cov))
-    shrunk_corr = pd.DataFrame(cov / np.outer(diag, diag), index=rets.columns, columns=rets.columns)
-
+    # Robust Correlation for reporting
+    shrunk_corr = get_robust_correlation(rets)
     top_pairs = top_corr_pairs(shrunk_corr, args.pair_cap, args.pair_limit)
 
-    report: Dict[str, object] = {
+    report: Dict[str, Any] = {
         "params": {
             "pair_cap": args.pair_cap,
             "pair_limit": args.pair_limit,
@@ -168,7 +204,7 @@ def main():
             "dist_threshold": dist_threshold,
         },
         "n_assets": rets.shape[1],
-        "avg_corr": {w: avg_corr[w].iloc[-1] if not avg_corr[w].empty else None for w in windows},
+        "avg_corr": {w: float(avg_corr_series[w].iloc[-1]) if not avg_corr_series[w].empty else None for w in windows},
         "regime": {"name": regime_name, "score": regime_score},
         "top_pairs": top_pairs,
     }
@@ -177,28 +213,28 @@ def main():
         w_hrp = hrp_weights(rets, args.linkage)
         report["hrp_weights"] = w_hrp.to_dict()
 
-        # Extract clusters
-        corr = rets.corr().to_numpy()
-        dist = np.sqrt(0.5 * (np.ones_like(corr) - corr))
+        # Extract clusters using Robust Correlation
+        corr = shrunk_corr.values
+        dist = np.sqrt(0.5 * (1 - np.clip(corr, -1, 1)))
+        dist = (dist + dist.T) / 2
+        np.fill_diagonal(dist, 0)
         condensed = squareform(dist, checks=False)
-        link = linkage(condensed, method=args.linkage)
+        link = sch.linkage(condensed, method=args.linkage)
 
-        # Form flat clusters based on ADAPTIVE distance threshold
-        cluster_assignments = fcluster(link, t=dist_threshold, criterion="distance")
+        cluster_assignments = sch.fcluster(link, t=dist_threshold, criterion="distance")
 
-        clusters = {}
+        clusters: Dict[int, List[str]] = {}
         for sym, cluster_id in zip(rets.columns, cluster_assignments):
             c_id = int(cluster_id)
             if c_id not in clusters:
                 clusters[c_id] = []
-            clusters[c_id].append(sym)
+            clusters[c_id].append(str(sym))
 
         report["clusters"] = clusters
 
-        # Save cluster mapping for the optimizer
         cluster_path = Path("data/lakehouse/portfolio_clusters.json")
-        with open(cluster_path, "w") as f:
-            json.dump(clusters, f, indent=2)
+        with open(cluster_path, "w") as f_out:
+            json.dump(clusters, f_out, indent=2)
         print(f"Saved {len(clusters)} clusters to {cluster_path}")
 
     json_path = out_dir / "correlation_report.json"
@@ -211,8 +247,8 @@ def main():
     lines.append("")
     lines.append("## Rolling Correlations (avg corr, z >= %.2f)" % args.regime_z)
     for w in windows:
-        rc = regime[w]
-        lines.append(f"- Window {w}d: z={rc['z']}, flag={rc['flag']}")
+        val = report["avg_corr"].get(w)
+        lines.append(f"- Window {w}d: {val}")
     lines.append("")
     lines.append("## Top pairs (|corr| >= %.2f)" % args.pair_cap)
     for a, b, v in top_pairs:

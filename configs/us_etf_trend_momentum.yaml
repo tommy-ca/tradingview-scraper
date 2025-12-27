@@ -7,18 +7,22 @@ pagination_size: 200
 sort_by: market_cap_basic
 final_sort_by: volume
 
+# Prioritize secular proxies (SPY, QQQ, GLD, TLT, etc.)
+include_symbols: ["SPY", "QQQ", "DIA", "IWM", "GLD", "TLT", "IEF", "AGG", "BND", "HYG", "LQD", "VTI", "VXUS", "VWO", "VEA"]
+
 trend:
   direction: "long"
   timeframe: "daily"
-  logic: "AND"
+  logic: "OR" # Use OR to capture strong secular trend even if short-term is weak
   recommendation:
     enabled: false
   adx:
     enabled: true
-    min: 8
+    min: 5 # Relaxed ADX for secular proxies
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: 0.2, Perf.1M: 1.0, Perf.3M: 2.0}
+    # Focus on long-term performance
+    horizons: {Perf.3M: 1.0, Perf.6M: 2.0}
   confirmation_momentum:
     enabled: false
 
