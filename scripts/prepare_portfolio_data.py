@@ -90,7 +90,7 @@ def prepare_portfolio_universe():
     # Sort by value_traded descending to keep the most liquid first
     universe = sorted(unique_candidates.values(), key=lambda x: x.get("value_traded", 0), reverse=True)
 
-    max_symbols = int(os.getenv("PORTFOLIO_MAX_SYMBOLS", "50"))
+    max_symbols = int(os.getenv("PORTFOLIO_MAX_SYMBOLS", "200"))
     if max_symbols > 0:
         universe = universe[:max_symbols]
     logger.info(f"Portfolio Universe: {len(universe)} symbols after limiting (max={max_symbols}).")

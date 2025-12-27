@@ -27,9 +27,9 @@ def select_top_universe():
             mtype = "UNKNOWN"
 
             for p in clean:
-                if p.upper() in ["BINANCE", "BYBIT", "OKX", "BITGET", "NASDAQ", "NYSE", "AMEX", "CME", "FOREX", "US", "BOND"]:
+                if p.upper() in ["BINANCE", "BYBIT", "OKX", "BITGET", "NASDAQ", "NYSE", "AMEX", "CME", "FOREX", "US", "BOND", "OANDA", "THINKMARKETS"]:
                     exchange = p.upper()
-                if p.upper() in ["SPOT", "PERP", "FUTURES", "STOCKS", "ETF", "BONDS"]:
+                if p.upper() in ["SPOT", "PERP", "FUTURES", "STOCKS", "ETF", "BONDS", "CFD"]:
                     mtype = p.upper()
 
             category = f"{exchange}_{mtype}"
@@ -95,10 +95,11 @@ def select_top_universe():
             # Sort by Alpha Score
             items.sort(key=lambda x: x.get("_alpha_score", 0), reverse=True)
 
-        top_10 = items[:10]
-        logger.info(f"Category: {cat} - Selected {len(top_10)} from {len(items)} via Alpha Ranking")
+        top_n = int(os.getenv("UNIVERSE_TOP_N", "20"))
+        top_selected = items[:top_n]
+        logger.info(f"Category: {cat} - Selected {len(top_selected)} from {len(items)} via Alpha Ranking")
 
-        for item in top_10:
+        for item in top_selected:
             # Determine direction from filename stored in 'market' or pass it down?
             # 'market' is 'category' which is e.g. BINANCE_SPOT
             # We lost the filename context in 'categories[category]'.
