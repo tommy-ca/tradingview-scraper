@@ -4,8 +4,9 @@ import logging
 import os
 import sys
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple, cast
 
+import numpy as np
 import pandas as pd
 
 from tradingview_scraper.symbols.stream.lakehouse import LakehouseStorage
@@ -23,6 +24,9 @@ RETURNS_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_returns.pkl")
 OPTIMIZED_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_optimized_v2.json")
 FRESHNESS_THRESHOLD_HOURS = 72
 
+# Institutional Safety Limits
+BETA_THRESHOLD_DEFENSIVE = 0.50  # Max beta for Min Variance
+
 
 class PortfolioAuditor:
     def __init__(self):
@@ -35,6 +39,36 @@ class PortfolioAuditor:
             "status_counts": {"OK": 0, "OK (MARKET CLOSED)": 0, "DEGRADED (GAPS)": 0, "STALE": 0, "MISSING": 0, "DROPPED": 0},
         }
         self.audit_failures = []
+
+    def calculate_market_sensitivity(self, assets: List[Dict[str, Any]], returns_df: Optional[pd.DataFrame]) -> Tuple[float, float]:
+        """Calculates Beta and Correlation to SPY benchmark."""
+        benchmark = "AMEX:SPY"
+        if returns_df is None or returns_df.empty or benchmark not in returns_df.columns:
+            return 0.0, 0.0
+
+        weights_map = {str(a["Symbol"]): float(a["Weight"]) for a in assets}
+        common_symbols = [s for s in weights_map.keys() if s in returns_df.columns]
+        if not common_symbols:
+            return 0.0, 0.0
+
+        sub_rets = cast(pd.DataFrame, returns_df[common_symbols])
+        w = np.array([weights_map[s] for s in common_symbols], dtype=float)
+        port_rets = (sub_rets * w).sum(axis=1)
+
+        market_rets = returns_df[benchmark]
+        combined = pd.concat([port_rets, market_rets], axis=1).dropna()
+        if len(combined) < 20:
+            return 0.0, 0.0
+
+        p_rets = combined.iloc[:, 0]
+        m_rets = combined.iloc[:, 1]
+
+        correlation = float(p_rets.corr(m_rets))
+        cov = np.cov(p_rets, m_rets)[0, 1]
+        var_m = np.var(m_rets)
+        beta = float(cov / var_m) if var_m > 0 else 0.0
+
+        return beta, correlation
 
     def run_health_check(self, type_filter: str = "all", mode: str = "selected"):
         print("\n" + "=" * 100)
@@ -53,7 +87,8 @@ class PortfolioAuditor:
         if os.path.exists(RETURNS_FILE):
             try:
                 returns_df = pd.read_pickle(RETURNS_FILE)
-                returns_symbols = set(returns_df.columns)
+                if isinstance(returns_df, pd.DataFrame):
+                    returns_symbols = set(returns_df.columns)
             except Exception:
                 pass
 
@@ -114,7 +149,6 @@ class PortfolioAuditor:
         status_counts = self.summary["status_counts"]
         critical_health = status_counts["MISSING"] + status_counts["STALE"]
 
-        # Generate Markdown Report
         self.generate_health_report(mode=mode)
 
         return critical_health == 0
@@ -175,6 +209,12 @@ class PortfolioAuditor:
         with open(OPTIMIZED_FILE, "r") as f:
             data = json.load(f)
 
+        returns_df: Optional[pd.DataFrame] = None
+        if os.path.exists(RETURNS_FILE):
+            raw_rets = pd.read_pickle(RETURNS_FILE)
+            if isinstance(raw_rets, pd.DataFrame):
+                returns_df = raw_rets
+
         all_passed = True
         profiles = data.get("profiles", {})
 
@@ -201,12 +241,19 @@ class PortfolioAuditor:
                 max_c = max(cluster_weights.values()) if cluster_weights else 0
                 print(f"✅ Cluster Concentration: Max bucket is {max_c:.2%}")
 
-            # 3. Barbell Insulation & Uniqueness
+            # 3. Market Sensitivity (Beta Audit)
+            beta, corr = self.calculate_market_sensitivity(assets, returns_df)
+            if name == "min_variance" and beta > BETA_THRESHOLD_DEFENSIVE:
+                self._fail(f"Profile '{name}' beta is too high: {beta:.2f} (max {BETA_THRESHOLD_DEFENSIVE})")
+                all_passed = False
+            else:
+                print(f"✅ Market Sensitivity: Beta={beta:.2f}, Corr={corr:.2f}")
+
+            # 4. Barbell Insulation & Uniqueness
             if name == "barbell":
                 aggressors = [a for a in assets if "AGGRESSOR" in a.get("Type", "")]
                 core = [a for a in assets if "CORE" in a.get("Type", "")]
 
-                # Uniqueness
                 agg_clusters = set(str(a["Cluster_ID"]) for a in aggressors)
                 if len(agg_clusters) != len(aggressors):
                     self._fail(f"Barbell aggressors are not from unique clusters! ({len(agg_clusters)} vs {len(aggressors)})")
@@ -214,7 +261,6 @@ class PortfolioAuditor:
                 else:
                     print(f"✅ Aggressor Uniqueness: {len(agg_clusters)} unique buckets")
 
-                # Insulation
                 core_clusters = set(str(a["Cluster_ID"]) for a in core)
                 overlap = agg_clusters.intersection(core_clusters)
                 if overlap:
@@ -223,7 +269,6 @@ class PortfolioAuditor:
                 else:
                     print("✅ Risk Insulation: Zero overlap between Core and Aggressors")
 
-                # Sleeve weights
                 agg_w = sum(a["Weight"] for a in aggressors)
                 if abs(agg_w - 0.10) > 0.005:
                     self._fail(f"Barbell aggressor weight is {agg_w:.4f} (expected 0.10)")
@@ -231,7 +276,7 @@ class PortfolioAuditor:
                 else:
                     print("✅ Sleeve Balance: 10% Aggressors / 90% Core")
 
-            # 4. Metadata Completeness
+            # 5. Metadata Completeness
             missing_metadata = [a["Symbol"] for a in assets if a.get("Sector") == "N/A" or not a.get("Description")]
             if missing_metadata:
                 print(f"⚠️ Metadata Warning: {len(missing_metadata)} assets have incomplete sector/description.")

@@ -85,24 +85,8 @@ gist:
 regime-check:
 	$(PY) scripts/research_regime_v2.py
 
-hedge-anchors:
-	$(PY) scripts/detect_hedge_anchors.py
-
-drift-check:
-	$(PY) scripts/monitor_cluster_drift.py
-
-drift-monitor:
-	$(PY) scripts/track_portfolio_state.py
-
-recover:
-	$(PY) scripts/recover_universe.py
-
-clean-exports:
-	rm -rf export/*.csv export/*.json
-
-clean-all: clean-exports
-	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md
-	rm -f data/lakehouse/portfolio_*
+factor-map:
+	$(PY) scripts/visualize_factor_map.py
 
 clean-run: clean-all
 	rm -f data/lakehouse/portfolio_*
@@ -119,6 +103,7 @@ clean-run: clean-all
 	$(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=200 BATCH=2
 	$(MAKE) validate
 	$(MAKE) corr-report
+	$(MAKE) factor-map
 	$(MAKE) regime-check
 	$(MAKE) hedge-anchors
 	$(MAKE) drift-check
@@ -127,3 +112,4 @@ clean-run: clean-all
 	$(MAKE) report
 	$(MAKE) drift-monitor
 	$(MAKE) gist
+
