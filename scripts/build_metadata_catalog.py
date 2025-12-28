@@ -14,7 +14,7 @@ def fetch_tv_metadata(symbols: List[str]) -> List[dict]:
     Fetches structural metadata from TradingView for a list of symbols.
     Enhanced with validation and type consistency.
     """
-    from tradingview_scraper.symbols.stream.metadata import DEFAULT_EXCHANGE_METADATA
+    from tradingview_scraper.symbols.stream.metadata import DEFAULT_EXCHANGE_METADATA, get_symbol_profile
 
     ov = Overview()
     results = []
@@ -80,6 +80,8 @@ def fetch_tv_metadata(symbols: List[str]) -> List[dict]:
                     if critical_errors:
                         continue
 
+                profile = get_symbol_profile(symbol, {"type": data.get("type"), "is_crypto": ex_defaults.get("is_crypto")})
+
                 record = {
                     "symbol": symbol,
                     "exchange": exchange,
@@ -87,6 +89,7 @@ def fetch_tv_metadata(symbols: List[str]) -> List[dict]:
                     "quote": data.get("currency"),
                     "type": data.get("type"),
                     "subtype": data.get("subtype"),
+                    "profile": profile.value,
                     "description": data.get("description"),
                     "sector": data.get("sector"),
                     "industry": data.get("industry"),
@@ -181,6 +184,8 @@ def _validate_symbol_record(symbol: str, data: dict, exchange: str, pricescale: 
 def main():
     parser = argparse.ArgumentParser(description="Build/Update Metadata Catalog")
     parser.add_argument("--symbols", nargs="+", help="List of symbols to process")
+    parser.add_argument("--from-catalog", action="store_true", help="Refresh all active symbols from existing symbols.parquet")
+    parser.add_argument("--catalog-path", type=str, default="data/lakehouse/symbols.parquet", help="Path to symbols.parquet for --from-catalog")
     parser.add_argument("--config", type=str, help="Path to universe config yaml")
     parser.add_argument("--limit", type=int, help="Override symbol limit")
     parser.add_argument("--liquidity-floor", type=float, help="Override liquidity floor (Value.Traded)")
@@ -192,6 +197,31 @@ def main():
     # 1. Resolve Symbols
     if args.symbols:
         target_symbols = args.symbols
+
+    elif args.from_catalog:
+        try:
+            import pandas as pd
+
+            if not os.path.exists(args.catalog_path):
+                logger.error(f"Catalog not found: {args.catalog_path}")
+                return
+
+            df = pd.read_parquet(args.catalog_path)
+            if "valid_until" in df.columns:
+                df = df[df["valid_until"].isna()]
+            if "active" in df.columns:
+                df = df[df["active"] == True]
+
+            if "symbol" not in df.columns:
+                logger.error("Catalog missing required 'symbol' column")
+                return
+
+            syms = df["symbol"].dropna().astype(str)
+            target_symbols = sorted({s.strip() for s in syms if s.strip()})
+            logger.info(f"Loaded {len(target_symbols)} symbols from catalog")
+        except Exception as e:
+            logger.error(f"Failed to load symbols from catalog: {e}")
+            return
 
     elif args.config:
         try:
@@ -274,7 +304,7 @@ def main():
                 {
                     "exchange": ex,
                     "timezone": defaults.get("timezone", "UTC"),
-                    "is_crypto": defaults.get("is_crypto", True),
+                    "is_crypto": defaults.get("is_crypto", False),
                     "country": defaults.get("country", "Global"),
                     "description": defaults.get("description", f"{ex} Exchange"),
                 }

@@ -73,7 +73,7 @@ def get_symbol_profile(symbol: str, meta: Optional[Dict] = None) -> DataProfile:
         stype = str(meta.get("type", "")).lower()
         if stype in ["spot", "swap", "crypto"]:
             return DataProfile.CRYPTO
-        if stype == "stock":
+        if stype in ["stock", "fund", "dr", "index"]:
             return DataProfile.EQUITY
         if stype in ["futures", "commodity"]:
             return DataProfile.FUTURES
@@ -109,20 +109,16 @@ class MetadataCatalog:
 
     def _load_catalog(self) -> pd.DataFrame:
         """Loads the catalog from disk or returns an empty DataFrame."""
-        if os.path.exists(self.catalog_path):
-            try:
-                return pd.read_parquet(self.catalog_path)
-            except Exception as e:
-                logger.error(f"Failed to load metadata catalog: {e}")
-
-        # Initialize with standard schema including PIT and enriched fields
-        cols: List[str] = [
+        # Standard schema including PIT and enriched fields.
+        # New columns may be added over time; missing columns are backfilled as null.
+        required_cols: List[str] = [
             "symbol",
             "exchange",
             "base",
             "quote",
             "type",
             "subtype",
+            "profile",
             "description",
             "sector",
             "industry",
@@ -139,43 +135,184 @@ class MetadataCatalog:
             "valid_from",
             "valid_until",
         ]
-        return pd.DataFrame(data=None, columns=pd.Index(cols))
+
+        if os.path.exists(self.catalog_path):
+            try:
+                df = pd.read_parquet(self.catalog_path)
+                for col in required_cols:
+                    if col not in df.columns:
+                        df[col] = None
+                return df
+            except Exception as e:
+                logger.error(f"Failed to load metadata catalog: {e}")
+
+        return pd.DataFrame(data=None, columns=pd.Index(required_cols))
 
     def upsert_symbols(self, symbols_data: List[Dict]):
-        """
-        Inserts or updates multiple symbol definitions using SCD Type 2.
-        """
+        """Inserts or updates multiple symbol definitions using SCD Type 2."""
         if not symbols_data:
             return
+
+        def _is_missing(value) -> bool:
+            if value is None:
+                return True
+            if isinstance(value, str) and value.strip() == "":
+                return True
+            try:
+                return bool(pd.isna(value))
+            except Exception:
+                return False
+
+        def _normalize_profile(value) -> Optional[str]:
+            if isinstance(value, DataProfile):
+                return value.value
+            if _is_missing(value):
+                return None
+            return str(value)
+
+        def _ensure_symbol_record(record: Dict) -> Dict:
+            sym = str(record.get("symbol") or "").strip()
+            if not sym:
+                return record
+
+            record["symbol"] = sym
+
+            if _is_missing(record.get("exchange")) and ":" in sym:
+                record["exchange"] = sym.split(":", 1)[0]
+
+            # Normalize numeric fields
+            for numeric_field in ["pricescale", "minmov"]:
+                val = record.get(numeric_field)
+                if not _is_missing(val):
+                    try:
+                        record[numeric_field] = int(float(str(val)))
+                    except Exception:
+                        pass
+
+            if _is_missing(record.get("tick_size")):
+                ps_val = record.get("pricescale")
+                mm_val = record.get("minmov")
+                if not _is_missing(ps_val) and not _is_missing(mm_val):
+                    try:
+                        ps = float(str(ps_val))
+                        mm = float(str(mm_val))
+                        record["tick_size"] = (mm / ps) if ps else None
+                    except Exception:
+                        pass
+
+            # Persist profile (required)
+            profile_val = _normalize_profile(record.get("profile"))
+            if profile_val is None:
+                record["profile"] = get_symbol_profile(sym, record).value
+            else:
+                record["profile"] = profile_val
+
+            # Resolve timezone/session/country only if missing
+            exchange = record.get("exchange")
+            ex_defaults = DEFAULT_EXCHANGE_METADATA.get(str(exchange), {}) if exchange else {}
+
+            if _is_missing(record.get("timezone")):
+                record["timezone"] = ex_defaults.get("timezone") or "UTC"
+
+            if _is_missing(record.get("session")):
+                record["session"] = "24x7" if record.get("profile") == DataProfile.CRYPTO.value else "Unknown"
+
+            if _is_missing(record.get("country")) and ex_defaults.get("country") is not None:
+                record["country"] = ex_defaults.get("country")
+
+            if "active" not in record or _is_missing(record.get("active")):
+                record["active"] = True
+
+            return record
+
+        def _values_equal(left, right) -> bool:
+            if _is_missing(left) and _is_missing(right):
+                return True
+
+            if isinstance(left, DataProfile):
+                left = left.value
+            if isinstance(right, DataProfile):
+                right = right.value
+
+            # Numeric tolerance
+            if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+                try:
+                    return abs(float(left) - float(right)) <= 1e-12
+                except Exception:
+                    return left == right
+
+            return left == right
+
+        meaningful_fields = [
+            "exchange",
+            "base",
+            "quote",
+            "type",
+            "subtype",
+            "profile",
+            "description",
+            "sector",
+            "industry",
+            "country",
+            "pricescale",
+            "minmov",
+            "tick_size",
+            "lot_size",
+            "contract_size",
+            "timezone",
+            "session",
+            "active",
+        ]
+
+        def _has_meaningful_changes(old: Dict, new: Dict) -> bool:
+            for field in meaningful_fields:
+                if not _values_equal(old.get(field), new.get(field)):
+                    return True
+            return False
 
         now_ts = pd.Timestamp.now()
         new_records = []
 
-        # Convert input to map for easy lookup
-        incoming_map = {item["symbol"]: item for item in symbols_data}
+        incoming_map: Dict[str, Dict] = {}
+        for item in symbols_data:
+            sym = item.get("symbol")
+            if sym:
+                incoming_map[str(sym)] = item
 
         # 1. Process existing active symbols
         active_mask = self._df["valid_until"].isna()
         for idx, row in self._df[active_mask].iterrows():
-            sym = row["symbol"]
-            if sym in incoming_map:
-                new_data = incoming_map[sym]
-                # Retire old record
-                self._df.at[idx, "valid_until"] = now_ts
+            sym = str(row["symbol"])
+            if sym not in incoming_map:
+                continue
 
-                # Prepare new record
-                record = new_data.copy()
-                record["valid_from"] = now_ts
-                record["valid_until"] = None
-                record["updated_at"] = now_ts
-                new_records.append(record)
+            incoming = incoming_map[sym]
 
-                # Remove from incoming map so we don't double insert
+            merged = row.to_dict()
+            for key, value in incoming.items():
+                if not _is_missing(value):
+                    merged[key] = value
+
+            merged = _ensure_symbol_record(merged)
+
+            if not _has_meaningful_changes(row.to_dict(), merged):
                 del incoming_map[sym]
+                continue
+
+            # Retire old record
+            self._df.at[idx, "valid_until"] = now_ts
+
+            # Prepare new record
+            merged["valid_from"] = now_ts
+            merged["valid_until"] = None
+            merged["updated_at"] = now_ts
+            new_records.append(merged)
+
+            del incoming_map[sym]
 
         # 2. Process completely new symbols
         for sym, data in incoming_map.items():
-            record = data.copy()
+            record = _ensure_symbol_record(data.copy())
             record["valid_from"] = now_ts
             record["valid_until"] = None
             record["updated_at"] = now_ts
@@ -251,7 +388,7 @@ class MetadataCatalog:
         if self._df.empty:
             return []
 
-        query = self._df[self._df["active"] == True]
+        query = self._df[(self._df["active"] == True) & (self._df["valid_until"].isna())]
         if exchange:
             query = query[query["exchange"] == exchange]
 

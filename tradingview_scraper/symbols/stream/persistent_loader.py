@@ -8,7 +8,13 @@ from tradingview_scraper.symbols.overview import Overview
 from tradingview_scraper.symbols.stream import Streamer
 from tradingview_scraper.symbols.stream.lakehouse import LakehouseStorage
 from tradingview_scraper.symbols.stream.loader import DataLoader
-from tradingview_scraper.symbols.stream.metadata import DataProfile, MetadataCatalog, get_symbol_profile
+from tradingview_scraper.symbols.stream.metadata import (
+    DEFAULT_EXCHANGE_METADATA,
+    DataProfile,
+    ExchangeCatalog,
+    MetadataCatalog,
+    get_symbol_profile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +29,7 @@ class PersistentDataLoader:
         self.loader = DataLoader(websocket_jwt_token=websocket_jwt_token)
         self.storage = LakehouseStorage(base_path=lakehouse_path)
         self.catalog = MetadataCatalog(base_path=lakehouse_path)
+        self.ex_catalog = ExchangeCatalog(base_path=lakehouse_path)
         self.overview = Overview()
         self.streamer = Streamer(export_result=True, websocket_jwt_token=websocket_jwt_token)
 
@@ -33,35 +40,81 @@ class PersistentDataLoader:
 
         logger.info(f"Metadata missing for {symbol}. Triggering auto-enrichment...")
         try:
-            # Fetch structural and descriptive metadata
-            fields = ["pricescale", "minmov", "currency", "base_currency", "exchange", "type", "subtype", "description", "sector", "industry", "country"]
+            # Fetch structural and descriptive metadata.
+            # Timezone/session may be missing for some asset classes, so we resolve via exchange defaults.
+            fields = [
+                "pricescale",
+                "minmov",
+                "currency",
+                "base_currency",
+                "exchange",
+                "type",
+                "subtype",
+                "description",
+                "sector",
+                "industry",
+                "country",
+                "timezone",
+                "session",
+            ]
 
             res = self.overview.get_symbol_overview(symbol, fields=fields)
 
             if res["status"] == "success":
                 data = res["data"]
-                pricescale = data.get("pricescale", 1)
-                minmov = data.get("minmov", 1)
+
+                exchange = data.get("exchange") or symbol.split(":", 1)[0]
+                ex_defaults = DEFAULT_EXCHANGE_METADATA.get(exchange, {})
+
+                pricescale = data.get("pricescale", 1) or 1
+                minmov = data.get("minmov", 1) or 1
+
+                tick_size = (minmov / pricescale) if pricescale else None
+
+                # Hierarchy: API -> exchange defaults -> fallback
+                timezone = data.get("timezone") or ex_defaults.get("timezone") or "UTC"
+
+                # Persist profile for PIT-safe backtests
+                profile = get_symbol_profile(symbol, {"type": data.get("type"), "is_crypto": ex_defaults.get("is_crypto")})
+
+                session = data.get("session")
+                if not session:
+                    session = "24x7" if profile == DataProfile.CRYPTO else "Unknown"
+
+                country = data.get("country") or ex_defaults.get("country")
 
                 record = {
                     "symbol": symbol,
-                    "exchange": data.get("exchange"),
+                    "exchange": exchange,
                     "base": data.get("base_currency"),
                     "quote": data.get("currency"),
                     "type": data.get("type"),
                     "subtype": data.get("subtype"),
+                    "profile": profile.value,
                     "description": data.get("description"),
                     "sector": data.get("sector"),
                     "industry": data.get("industry"),
-                    "country": data.get("country"),
+                    "country": country,
                     "pricescale": pricescale,
                     "minmov": minmov,
-                    "tick_size": minmov / pricescale if pricescale else None,
-                    "timezone": "UTC",
-                    "session": "24x7",
+                    "tick_size": tick_size,
+                    "timezone": timezone,
+                    "session": session,
                     "active": True,
                 }
+
                 self.catalog.upsert_symbols([record])
+
+                # Ensure exchange defaults are materialized.
+                self.ex_catalog.upsert_exchange(
+                    {
+                        "exchange": exchange,
+                        "timezone": ex_defaults.get("timezone") or timezone,
+                        "is_crypto": bool(ex_defaults.get("is_crypto", False)),
+                        "country": ex_defaults.get("country") or country or "Global",
+                        "description": ex_defaults.get("description", f"{exchange} Exchange"),
+                    }
+                )
                 logger.info(f"Metadata enriched for {symbol}.")
             else:
                 logger.warning(f"Could not fetch metadata for {symbol}: {res.get('error')}")

@@ -38,7 +38,15 @@ def main():
         for ex in exchanges:
             defaults = DEFAULT_EXCHANGE_METADATA.get(ex)
             if defaults:
-                ex_catalog.upsert_exchange({"exchange": ex, **defaults})
+                ex_catalog.upsert_exchange(
+                    {
+                        "exchange": ex,
+                        "timezone": defaults.get("timezone", "UTC"),
+                        "is_crypto": bool(defaults.get("is_crypto", False)),
+                        "country": defaults.get("country", "Global"),
+                        "description": defaults.get("description", f"{ex} Exchange"),
+                    }
+                )
 
         logger.info("Build complete")
     else:
