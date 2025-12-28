@@ -51,3 +51,7 @@ To ensure profiles aren't implicitly betting on broad market direction without e
 Updated the `repair_portfolio_gaps.py` logic to handle institutional rate limits:
 - **Retry Mechanism**: Exponential backoff on HTTP 429.
 - **Multi-Pass**: Verification of alignment integrity after every repair cycle.
+
+## 5. Operational Outputs
+- `make backtest` writes per-profile JSON (`summaries/backtest_<profile>.json`) and a comparison resume (`summaries/backtest_comparison.md`).
+- `make finalize` runs backtesting + audit + reporting and then `make gist` to publish `summaries/`.

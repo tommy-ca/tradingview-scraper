@@ -4,8 +4,23 @@ This runbook documents the institutional "Golden Path" for daily portfolio gener
 
 ## 1. Automated Execution (Recommended)
 
-The entire lifecycle is unified via the `make clean-run` target. This is the institutional default for generating new portfolios.
+Two execution modes are supported:
 
+### Daily incremental run (recommended for production)
+```bash
+make daily-run
+```
+- Runs full multi-asset discovery and the full pipeline.
+- Preserves the lakehouse candle cache (`data/lakehouse/*_1d.parquet`) and the last implemented baseline (`data/lakehouse/portfolio_actual_state.json`) for drift monitoring.
+- Pushes artifacts to gist before cleanup (archives prior run + validates auth) and again at the final step (`make finalize` includes `make gist`).
+- Note: `make prep-raw` includes a best-effort raw health check that may report STALE/MISSING before the first backfill; hard health gates run after the Pass 1 and alignment backfills.
+
+After reviewing (and implementing) the new target weights, snapshot the “last implemented” state:
+```bash
+make accept-state
+```
+
+### Full reset run (use when you want a blank slate)
 ```bash
 make clean-run
 ```
@@ -70,7 +85,7 @@ make gist
 ```
 - `make report`: Generates `summaries/portfolio_report.md` with visual concentration bars.
 - `make display`: Opens the interactive terminal dashboard for immediate implementations.
-- `make gist`: Syncs all reports, clustermaps, and audit logs to your private repository.
+- `make gist`: Syncs all reports, clustermaps, and audit logs to your private repository; skips sync if `summaries/` is missing/empty (set `GIST_ALLOW_EMPTY=1` to override).
 - **Live Output Example**: [GitHub Gist - Portfolio Summaries](https://gist.github.com/tommy-ca/e888e1eab0b86447c90c26e92ec4dc36)
 
 ---

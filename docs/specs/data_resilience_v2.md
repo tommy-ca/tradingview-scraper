@@ -37,5 +37,5 @@ The production workflow implements an automated loop to ensure data health:
 - **WebSocket Resilience**:
     - **Total Execution Timeout**: Main collection loop exits if `total_timeout` is reached.
     - **Partial Data Recovery**: Returns any gathered candles upon timeout instead of failing.
-- **Throttling**: The `BATCH` parameter ensures backfills do not trigger rate limits.
+- **Throttling**: The `BATCH` Makefile param (mapped to `PORTFOLIO_BATCH_SIZE`) controls concurrency to avoid rate limits; `LOOKBACK` maps to `PORTFOLIO_LOOKBACK_DAYS`, and `PORTFOLIO_FORCE_SYNC=1` forces refresh even if locally "fresh".
 - **HTTP Retries**: Scrapers use exponential backoff and retries for status codes `[429, 500, 502, 503, 504]`.

@@ -6,6 +6,10 @@ This specification defines the institutional upgrades for the quantitative platf
 
 The system tracks the "Last Implemented State" and compares it to the "Current Optimal Target" to minimize churn while maintaining risk parity.
 
+- **State file**: `data/lakehouse/portfolio_actual_state.json`
+- **Initialization behavior**: If the state file is missing, `make drift-monitor` will snapshot the current optimized portfolio as the baseline and exit (no drift report on first run).
+- **Operator action**: After implementing new target weights, run `make accept-state` to update the baseline.
+
 ### Thresholds
 - **Portfolio Turnover Alert**: If $\sum |Target_i - Actual_i| / 2 > 10\%$, trigger `⚠️ REBALANCE`.
 - **Urgent Rebalance**: If Turnover $> 20\%$ or any single asset drift $> 7.5\%$.
