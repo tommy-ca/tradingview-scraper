@@ -7,11 +7,14 @@ pagination_size: 200
 sort_by: market_cap_basic
 final_sort_by: volume
 
-# Institutional Base Universe: S&P 500
+# Institutional Base Universe: S&P 500 (via symbol list)
+include_symbol_files:
+  - ../data/index/sp500_symbols.txt
+
 filters:
-  - left: "index"
+  - left: "type"
     operation: "in_range"
-    right: ["S&P 500"]
+    right: ["stock", "dr"]
   - left: "market_cap_basic"
     operation: "greater"
     right: 15000000000 # $15B floor
