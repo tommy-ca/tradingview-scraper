@@ -6,6 +6,23 @@ SUMMARY_DIR="summaries"
 GIST_ID="${GIST_ID:-e888e1eab0b86447c90c26e92ec4dc36}"
 TEMP_DIR=".temp_gist_$(date +%s)"
 
+# Safety: avoid wiping the remote gist when summaries are absent/empty.
+# `rsync --delete` mirrors local state, so an empty directory would delete everything.
+if [ ! -d "$SUMMARY_DIR" ]; then
+    echo "ℹ️ '$SUMMARY_DIR/' not found; skipping Gist sync."
+    exit 0
+fi
+
+if ! compgen -G "$SUMMARY_DIR/*" > /dev/null; then
+    if [ "${GIST_ALLOW_EMPTY:-0}" = "1" ]; then
+        echo "⚠️ '$SUMMARY_DIR/' is empty; proceeding because GIST_ALLOW_EMPTY=1."
+    else
+        echo "⚠️ '$SUMMARY_DIR/' is empty; skipping Gist sync to avoid deleting remote files."
+        echo "   Set GIST_ALLOW_EMPTY=1 to override."
+        exit 0
+    fi
+fi
+
 if [ -z "$GIST_ID" ]; then
     echo "Error: GIST_ID not set. Please provide it as an environment variable."
     exit 1
