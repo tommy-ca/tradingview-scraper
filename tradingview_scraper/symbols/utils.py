@@ -82,35 +82,29 @@ def ensure_export_directory(path="/export"):
             print(f"[ERROR] Error creating directory {path}: {e}")
 
 
-def generate_export_filepath(symbol, data_category, timeframe, file_extension):
-    """Generate a file path for exporting data, including the current timestamp.
+def _sanitize_export_run_id(run_id: str) -> str:
+    run_id = (run_id or "").strip()
+    if not run_id:
+        return ""
+    cleaned = "".join(ch if (ch.isalnum() or ch in {"-", "_", ".", "="}) else "_" for ch in run_id)
+    cleaned = cleaned.strip("._-")
+    return cleaned[:80]
 
-    This function constructs a file path based on the provided symbol, data category,
-    and file extension. The generated path will include a timestamp to ensure uniqueness.
 
-    Parameters
-    ----------
-    symbol : str
-        The symbol to include in the file name, formatted in lowercase.
-    data_category : str
-        The category of data being exported, which will be prefixed in the file name.
-    file_extension : str
-        The file extension for the export file (e.g., '.json', '.csv').
-    timeframe: str
-        Timeframe of report like (e.g., '1M', '1W').
-
-    Returns
-    -------
-    str
-        The generated file path, structured as:
-        "<current_directory>/export/<data_category>_<symbol>_<timestamp><file_extension>".
-    """
+def generate_export_filepath(symbol, data_category, timeframe, file_extension, run_id=None, root_path=None):
+    """Generate a file path for exporting data, including the current timestamp."""
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    symbol_lower = f"{symbol.lower()}_" if symbol else ""
+    data_category = str(data_category or "export")
+    symbol_lower = f"{str(symbol or '').lower()}_" if symbol else ""
     timeframe = f"{timeframe}_" if timeframe else ""
-    root_path = os.getcwd()
-    path = os.path.join(root_path, "export", f"{data_category}_{symbol_lower}{timeframe}{timestamp}{file_extension}")
-    return path
+
+    root_path = root_path or os.getcwd()
+    export_dir = os.path.join(root_path, "export")
+    run_id_clean = _sanitize_export_run_id(str(run_id)) if run_id else ""
+    if run_id_clean:
+        export_dir = os.path.join(export_dir, run_id_clean)
+
+    return os.path.join(export_dir, f"{data_category}_{symbol_lower}{timeframe}{timestamp}{file_extension}")
 
 
 def save_json_file(data, **kwargs):
@@ -144,8 +138,10 @@ def save_json_file(data, **kwargs):
     symbol = kwargs.get("symbol")
     data_category = kwargs.get("data_category")
     timeframe = kwargs.get("timeframe", "")
+    run_id = kwargs.get("run_id") or os.getenv("TV_EXPORT_RUN_ID")
+    root_path = kwargs.get("root_path")
 
-    output_path = generate_export_filepath(symbol, data_category, timeframe, ".json")
+    output_path = generate_export_filepath(symbol, data_category, timeframe, ".json", run_id=run_id, root_path=root_path)
     ensure_export_directory(os.path.dirname(output_path))  # Ensure the directory exists
     try:
         with open(output_path, "w") as f:
@@ -159,6 +155,8 @@ def save_json_file(data, **kwargs):
         print(f"[ERROR] Error: The data provided is not serializable. {e}")
     except Exception as e:
         print(f"[ERROR] An unexpected error occurred: {e}")
+
+    return output_path
 
 
 def save_csv_file(data, **kwargs):
@@ -192,8 +190,10 @@ def save_csv_file(data, **kwargs):
     symbol = kwargs.get("symbol")
     data_category = kwargs.get("data_category")
     timeframe = kwargs.get("timeframe", "")
+    run_id = kwargs.get("run_id") or os.getenv("TV_EXPORT_RUN_ID")
+    root_path = kwargs.get("root_path")
 
-    output_path = generate_export_filepath(symbol, data_category, timeframe, ".csv")
+    output_path = generate_export_filepath(symbol, data_category, timeframe, ".csv", run_id=run_id, root_path=root_path)
     ensure_export_directory(os.path.dirname(output_path))  # Ensure the directory exists
     try:
         df = pd.DataFrame.from_dict(data)
@@ -207,6 +207,8 @@ def save_csv_file(data, **kwargs):
         print(f"[ERROR] Error: Permission denied when trying to write to {output_path}.")
     except Exception as e:
         print(f"[ERROR] An unexpected error occurred: {e}")
+
+    return output_path
 
 
 def generate_user_agent():

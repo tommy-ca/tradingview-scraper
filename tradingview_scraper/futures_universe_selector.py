@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 
@@ -212,6 +213,7 @@ class ExportMetadata(BaseModel):
 
 
 class SelectorConfig(BaseModel):
+    config_source: Optional[str] = None
     markets: List[str] = Field(default_factory=lambda: ["futures"])
     exchanges: List[str] = Field(default_factory=list)
     filters: List[Dict[str, Any]] = Field(default_factory=list)
@@ -369,6 +371,9 @@ def load_config(
         raw = _merge(raw, overrides)
 
     config = SelectorConfig.model_validate(raw)
+
+    if isinstance(source, str):
+        config.config_source = str(Path(source).resolve())
 
     if config.include_symbol_files:
         extra: List[str] = []
@@ -1213,10 +1218,51 @@ class FuturesUniverseSelector:
             return
 
         if self.config.export.type == "json":
+            run_id = os.getenv("TV_EXPORT_RUN_ID") or None
+            markets = list(self.config.markets or [])
+            markets_lower = [m.lower() for m in markets]
+            direction = (self.config.trend.direction or "").upper()
+            primary_exchange = self.config.exchanges[0] if len(self.config.exchanges or []) == 1 else None
+
+            product = None
+            if "crypto" in markets_lower:
+                if self.config.include_perps_only:
+                    product = "PERP"
+                elif self.config.exclude_perps:
+                    product = "SPOT"
+                else:
+                    product = "CRYPTO"
+            elif "futures" in markets_lower:
+                product = "FUTURES"
+            elif "forex" in markets_lower:
+                product = "FOREX"
+            elif "america" in markets_lower:
+                product = "STOCKS"
+
+            payload = {
+                "meta": {
+                    "schema": "universe_selector_export",
+                    "schema_version": 1,
+                    "run_id": run_id,
+                    "generated_at": datetime.now().isoformat(timespec="seconds"),
+                    "selector": self.__class__.__name__,
+                    "config_source": self.config.config_source,
+                    "export_symbol": self.config.export_metadata.symbol,
+                    "data_category": self.config.export_metadata.data_category,
+                    "direction": direction,
+                    "product": product,
+                    "primary_exchange": primary_exchange,
+                    "markets": markets,
+                    "exchanges": list(self.config.exchanges or []),
+                    "trend": self.config.trend.model_dump(),
+                },
+                "data": data,
+            }
             save_json_file(
-                data=data,
+                data=payload,
                 symbol=self.config.export_metadata.symbol,
                 data_category=self.config.export_metadata.data_category,
+                run_id=run_id,
             )
         else:
             save_csv_file(
@@ -1294,50 +1340,74 @@ class FuturesUniverseSelector:
             "total_selected": len(trimmed),
         }
 
+    def build_payloads(self, columns: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Build screener payloads for dry-run and execution.
+
+        This must match the actual `run()` execution path (including exchange loops)
+        to keep dry-run output faithful.
+        """
+        resolved_columns = columns or self._build_columns()
+        payloads: List[Dict[str, Any]] = []
+
+        for market in self.config.markets:
+            filters = self._build_filters(market)
+            prefilter_limit = self.config.prefilter_limit or self.config.limit
+
+            if self.config.exchanges:
+                for exchange in self.config.exchanges:
+                    payloads.append(
+                        {
+                            "market": market,
+                            "filters": list(filters),
+                            "columns": resolved_columns,
+                            "sort_by": self.config.sort_by,
+                            "sort_order": self.config.sort_order,
+                            "limit": prefilter_limit,
+                            "pagination_size": self.config.pagination_size,
+                            "exchange": exchange,
+                        }
+                    )
+            else:
+                payloads.append(
+                    {
+                        "market": market,
+                        "filters": list(filters),
+                        "columns": resolved_columns,
+                        "sort_by": self.config.sort_by,
+                        "sort_order": self.config.sort_order,
+                        "limit": prefilter_limit,
+                        "pagination_size": self.config.pagination_size,
+                        "exchange": None,
+                    }
+                )
+
+        return payloads
+
     def run(self, dry_run: bool = False) -> Dict[str, Any]:
         """Execute the selector pipeline."""
         columns = self._build_columns()
+        payloads = self.build_payloads(columns=columns)
 
         if dry_run:
             return {
                 "status": "dry_run",
-                "payloads": [
-                    {
-                        "market": market,
-                        "filters": self._build_filters(market),
-                        "columns": columns,
-                        "sort_by": self.config.sort_by,
-                        "sort_order": self.config.sort_order,
-                        "limit": self.config.limit,
-                        "pagination_size": self.config.pagination_size,
-                    }
-                    for market in self.config.markets
-                ],
+                "payloads": payloads,
                 "config": self.config.model_dump(),
             }
 
         aggregated: List[Dict[str, Any]] = []
         errors: List[str] = []
 
-        filters: List[Dict[str, Any]] = []
-        for market in self.config.markets:
-            filters = self._build_filters(market)
-            prefilter_limit = self.config.prefilter_limit or self.config.limit
-            if self.config.exchanges:
-                for exchange in self.config.exchanges:
-                    market_rows, market_errors = self._screen_market(
-                        market,
-                        filters,
-                        columns,
-                        exchange=exchange,
-                        max_rows=prefilter_limit,
-                    )
-                    aggregated.extend(market_rows)
-                    errors.extend(market_errors)
-            else:
-                market_rows, market_errors = self._screen_market(market, filters, columns, max_rows=prefilter_limit)
-                aggregated.extend(market_rows)
-                errors.extend(market_errors)
+        for payload in payloads:
+            market_rows, market_errors = self._screen_market(
+                payload["market"],
+                payload["filters"],
+                payload["columns"],
+                exchange=payload.get("exchange"),
+                max_rows=payload.get("limit"),
+            )
+            aggregated.extend(market_rows)
+            errors.extend(market_errors)
 
         result = self.process_data(aggregated)
         if errors:

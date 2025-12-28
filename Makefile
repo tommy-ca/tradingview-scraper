@@ -10,6 +10,22 @@ META_REFRESH ?= 0
 META_AUDIT ?= 0
 GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 
+# Scan run scoping (export/<run_id>/...)
+# Priority: explicit TV_EXPORT_RUN_ID > explicit RUN_ID > generated timestamp
+ifneq ($(origin TV_EXPORT_RUN_ID), undefined)
+RUN_ID := $(TV_EXPORT_RUN_ID)
+else
+ifeq ($(origin RUN_ID), undefined)
+RUN_ID := $(shell date +%Y%m%d-%H%M%S)
+endif
+endif
+
+export RUN_ID
+ifeq ($(origin TV_EXPORT_RUN_ID), undefined)
+TV_EXPORT_RUN_ID := $(RUN_ID)
+endif
+export TV_EXPORT_RUN_ID
+
 # Selection & Risk Parameters
 TOP_N ?= 3
 THRESHOLD ?= 0.4
@@ -30,7 +46,7 @@ CLUSTER_CAP ?= 0.25
 .PHONY: meta-refresh meta-stats meta-audit-offline meta-audit meta-explore meta-validate
 
 # Scanners
-.PHONY: scan-local scan-crypto scan-bonds scan-forex-mtf scan-all scan
+.PHONY: scan-local scan-crypto scan-bonds scan-forex-mtf scan-all scan scan-lint
 .PHONY: scans-local scans-crypto scans-bonds scans-forex-mtf scans
 
 # Portfolio pipeline aliases
@@ -44,6 +60,7 @@ help:
 	@echo "  run-daily        Daily incremental portfolio run"
 	@echo "  clean-run        Full reset run (blank slate)"
 	@echo "  scan-all         Run all scanners"
+	@echo "  scan-lint        Lint all scan configs"
 	@echo "  meta-validate    Refresh + offline metadata audits"
 	@echo "  meta-audit       Offline + online metadata parity sample"
 	@echo "  daily-run META_REFRESH=1 META_AUDIT=1  Offline metadata gates"
@@ -52,19 +69,22 @@ help:
 # --- Discovery (Scanners) ---
 
 scan-local:
-	bash scripts/run_local_scans.sh
+	TV_EXPORT_RUN_ID=$(RUN_ID) bash scripts/run_local_scans.sh
 
 scan-crypto:
-	bash scripts/run_crypto_scans.sh
+	TV_EXPORT_RUN_ID=$(RUN_ID) bash scripts/run_crypto_scans.sh
 
 scan-bonds:
-	$(PY) -m tradingview_scraper.bond_universe_selector --config configs/bond_etf_trend_momentum.yaml --export json
+	TV_EXPORT_RUN_ID=$(RUN_ID) $(PY) -m tradingview_scraper.bond_universe_selector --config configs/bond_etf_trend_momentum.yaml --export json
 
 scan-forex-mtf:
-	$(PY) -m tradingview_scraper.cfd_universe_selector --config configs/forex_mtf_monthly_weekly_daily.yaml --export json
+	TV_EXPORT_RUN_ID=$(RUN_ID) $(PY) -m tradingview_scraper.cfd_universe_selector --config configs/forex_mtf_monthly_weekly_daily.yaml --export json
 
 scan-all: scan-local scan-crypto scan-bonds scan-forex-mtf
 scan: scan-all
+
+scan-lint:
+	$(PY) scripts/lint_universe_configs.py
 
 # Legacy aliases (kept for compatibility)
 scans-local: scan-local
@@ -243,7 +263,7 @@ typecheck:
 	uvx ty check
 
 clean-exports:
-	rm -rf export/*.csv export/*.json
+	rm -rf export/*.csv export/*.json export/*/*.csv export/*/*.json
 
 clean-all: clean-exports
 	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md $(SUMMARY_DIR)/*.png

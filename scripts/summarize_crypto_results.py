@@ -1,6 +1,8 @@
 import glob
 import json
 import os
+from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 
@@ -8,9 +10,38 @@ import pandas as pd
 CRYPTO_EXCHANGES = {"BINANCE", "OKX", "BYBIT", "BITGET"}
 
 
+def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
+    export_root = Path("export")
+    run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
+
+    if run_id:
+        candidate = export_root / run_id
+        if candidate.exists():
+            return candidate
+
+    if export_root.exists():
+        best_dir: Optional[Path] = None
+        best_mtime = -1.0
+        for subdir in export_root.iterdir():
+            if not subdir.is_dir():
+                continue
+            matches = list(subdir.glob("universe_selector_*.json"))
+            if not matches:
+                continue
+            newest = max(p.stat().st_mtime for p in matches)
+            if newest > best_mtime:
+                best_mtime = newest
+                best_dir = subdir
+        if best_dir is not None:
+            return best_dir
+
+    return export_root
+
+
 def summarize_crypto_signals():
     # Capture all latest results
-    files = sorted(glob.glob("export/universe_selector_*.json"), key=os.path.getmtime, reverse=True)
+    export_dir = _resolve_export_dir()
+    files = sorted(glob.glob(str(export_dir / "universe_selector_*.json")), key=os.path.getmtime, reverse=True)
 
     seen_categories = set()
     latest_files = []
@@ -39,8 +70,12 @@ def summarize_crypto_signals():
     for f in latest_files:
         with open(f, "r") as j:
             try:
-                rows = json.load(j)
+                payload = json.load(j)
             except (json.JSONDecodeError, OSError):
+                continue
+
+            rows = payload.get("data", []) if isinstance(payload, dict) else payload
+            if not isinstance(rows, list):
                 continue
 
             basename = os.path.basename(str(f)).upper()

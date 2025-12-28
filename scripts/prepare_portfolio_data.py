@@ -1,4 +1,3 @@
-import glob
 import json
 import logging
 import math
@@ -7,7 +6,8 @@ import threading
 import time
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta
-from typing import List
+from pathlib import Path
+from typing import List, Optional
 
 import pandas as pd
 
@@ -15,6 +15,34 @@ from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataL
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("portfolio_data_prep")
+
+
+def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
+    export_root = Path("export")
+    run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
+
+    if run_id:
+        candidate = export_root / run_id
+        if candidate.exists():
+            return candidate
+
+    if export_root.exists():
+        best_dir: Optional[Path] = None
+        best_mtime = -1.0
+        for subdir in export_root.iterdir():
+            if not subdir.is_dir():
+                continue
+            matches = list(subdir.glob("universe_selector_*.json"))
+            if not matches:
+                continue
+            newest = max(p.stat().st_mtime for p in matches)
+            if newest > best_mtime:
+                best_mtime = newest
+                best_dir = subdir
+        if best_dir is not None:
+            return best_dir
+
+    return export_root
 
 
 def prepare_portfolio_universe():
@@ -29,7 +57,7 @@ def prepare_portfolio_universe():
             candidates = json.load(f)
     else:
         # Fallback to scanning exports (Old behavior)
-        files = glob.glob("export/universe_selector_*.json")
+        files = [str(p) for p in _resolve_export_dir().glob("universe_selector_*.json")]
         # Filter for today's timestamp in filename (20251221) - Update to match current date or just take all recent?
         # Let's just take all for now if fallback is needed, or keep existing logic.
         # But since we generated candidates, we expect to use them.
@@ -40,7 +68,7 @@ def prepare_portfolio_universe():
 
     if not candidates:
         # 1. Identify candidates from latest exports (Original Logic as backup)
-        files = glob.glob("export/universe_selector_*.json")
+        files = [str(p) for p in _resolve_export_dir().glob("universe_selector_*.json")]
         today_str = datetime.now().strftime("%Y%m%d")
         files = [f for f in files if today_str in f]
 

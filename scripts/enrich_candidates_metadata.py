@@ -1,6 +1,35 @@
-import glob
 import json
 import os
+from pathlib import Path
+from typing import Optional
+
+
+def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
+    export_root = Path("export")
+    run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
+
+    if run_id:
+        candidate = export_root / run_id
+        if candidate.exists():
+            return candidate
+
+    if export_root.exists():
+        best_dir: Optional[Path] = None
+        best_mtime = -1.0
+        for subdir in export_root.iterdir():
+            if not subdir.is_dir():
+                continue
+            matches = list(subdir.glob("universe_selector_*.json"))
+            if not matches:
+                continue
+            newest = max(p.stat().st_mtime for p in matches)
+            if newest > best_mtime:
+                best_mtime = newest
+                best_dir = subdir
+        if best_dir is not None:
+            return best_dir
+
+    return export_root
 
 
 def enrich_candidates():
@@ -13,7 +42,8 @@ def enrich_candidates():
         candidates = json.load(f)
 
     # Load all export data
-    export_files = glob.glob("export/universe_selector_*.json")
+    export_dir = _resolve_export_dir()
+    export_files = [str(p) for p in export_dir.glob("universe_selector_*.json")]
     symbol_meta = {}
 
     for f in export_files:

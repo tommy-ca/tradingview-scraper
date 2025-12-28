@@ -1,6 +1,8 @@
 import glob
 import json
 import os
+from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 
@@ -8,14 +10,44 @@ import pandas as pd
 ALLOWED_QUOTES = {"USDT", "USDC", "USD", "DAI", "BUSD", "FDUSD"}
 
 
+def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
+    export_root = Path("export")
+    run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
+
+    if run_id:
+        candidate = export_root / run_id
+        if candidate.exists():
+            return candidate
+
+    if export_root.exists():
+        best_dir: Optional[Path] = None
+        best_mtime = -1.0
+        for subdir in export_root.iterdir():
+            if not subdir.is_dir():
+                continue
+            matches = list(subdir.glob("universe_selector_*.json"))
+            if not matches:
+                continue
+            newest = max(p.stat().st_mtime for p in matches)
+            if newest > best_mtime:
+                best_mtime = newest
+                best_dir = subdir
+        if best_dir is not None:
+            return best_dir
+
+    return export_root
+
+
 def verify_quality():
-    files = sorted(glob.glob("export/universe_selector_*_base_*.json"), key=os.path.getmtime, reverse=True)[:8]
+    export_dir = _resolve_export_dir()
+    files = sorted(glob.glob(str(export_dir / "universe_selector_*_base_*.json")), key=os.path.getmtime, reverse=True)[:8]
 
     report = []
 
     for f in files:
         with open(f, "r") as j:
-            rows = json.load(j)
+            payload = json.load(j)
+            rows = payload.get("data", []) if isinstance(payload, dict) else payload
             basename = os.path.basename(str(f))
             parts = basename.split("_")
             exchange = parts[2].upper()
@@ -38,11 +70,11 @@ def verify_quality():
                 return q
 
             df["quote"] = df["symbol"].apply(get_quote)
-            invalid_quotes = df[~df["quote"].isin(ALLOWED_QUOTES)]
+            invalid_quotes = df[~df["quote"].isin(list(ALLOWED_QUOTES))]
 
             if not invalid_quotes.empty:
                 print(f"\n[DEBUG] Invalid quotes in {exchange} {ptype}:")
-                print(invalid_quotes[["symbol", "quote"]].to_string(index=False))
+                print(invalid_quotes[["symbol", "quote"]])
 
             # 3. Liquidity Floor
             min_vt = df["Value.Traded"].min()
@@ -64,18 +96,18 @@ def verify_quality():
 
             if not suspicious.empty:
                 print(f"\n[WARNING] Suspicious assets in {exchange} {ptype} (High VT, No MC):")
-                print(suspicious[["symbol", "Value.Traded"]].to_string(index=False))
+                print(suspicious[["symbol", "Value.Traded"]])
 
     df_report = pd.DataFrame(report)
     print("\n" + "=" * 100)
     print("FINAL UNIVERSE QUALITY VERIFICATION")
     print("=" * 100)
-    print(df_report.to_string(index=False))
+    print(df_report)
     print("=" * 100)
 
     # Final Verdict
-    all_unique = df_report["Unique Bases"].all()
-    all_quoted = (df_report["Quote Violations"] == 0).all()
+    all_unique = all(r.get("Unique Bases") for r in report) if report else True
+    all_quoted = all((r.get("Quote Violations") or 0) == 0 for r in report) if report else True
 
     print("\nFinal Integrity Check:")
     print(f"- Absolute Uniqueness: {'PASSED' if all_unique else 'FAILED'}")

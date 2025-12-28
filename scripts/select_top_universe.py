@@ -1,8 +1,8 @@
-import glob
 import json
 import logging
 import os
-from typing import Any, Dict, List, cast
+from pathlib import Path
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -10,6 +10,34 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("select_top_universe")
 
 AUDIT_FILE = "data/lakehouse/selection_audit.json"
+
+
+def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
+    export_root = Path("export")
+    run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
+
+    if run_id:
+        candidate = export_root / run_id
+        if candidate.exists():
+            return candidate
+
+    if export_root.exists():
+        best_dir: Optional[Path] = None
+        best_mtime = -1.0
+        for subdir in export_root.iterdir():
+            if not subdir.is_dir():
+                continue
+            matches = list(subdir.glob("universe_selector_*.json"))
+            if not matches:
+                continue
+            newest = max(p.stat().st_mtime for p in matches)
+            if newest > best_mtime:
+                best_mtime = newest
+                best_dir = subdir
+        if best_dir is not None:
+            return best_dir
+
+    return export_root
 
 
 def get_asset_identity(symbol: str) -> str:
@@ -72,7 +100,8 @@ def get_asset_class(category: str, symbol: str = "") -> str:
 
 
 def select_top_universe(mode: str = "raw"):
-    files = glob.glob("export/universe_selector_*.json")
+    export_dir = _resolve_export_dir()
+    files = [str(p) for p in export_dir.glob("universe_selector_*.json")]
 
     # Type-hinted audit structure to satisfy linter
     audit_discovery: Dict[str, Any] = {"total_scanned_files": len(files), "categories": {}, "total_symbols_found": 0}
@@ -81,51 +110,81 @@ def select_top_universe(mode: str = "raw"):
     # 1. Load All Items
     all_items = []
     for f in files:
-        parts = os.path.basename(f).split("_")
-        try:
-            clean = [p for p in parts if p not in ["universe", "selector"] and not p[0].isdigit()]
-            exchange = "UNKNOWN"
-            mtype = "UNKNOWN"
-            for p in clean:
-                if p.upper() in ["BINANCE", "BYBIT", "OKX", "BITGET", "NASDAQ", "NYSE", "AMEX", "CME", "FOREX", "US", "BOND", "OANDA", "THINKMARKETS"]:
-                    exchange = p.upper()
-                if p.upper() in ["SPOT", "PERP", "FUTURES", "STOCKS", "ETF", "BONDS", "CFD"]:
-                    mtype = p.upper()
-            category = f"{exchange}_{mtype}"
-        except Exception:
-            category = "UNKNOWN"
-
         try:
             with open(f, "r") as j:
                 raw_data = json.load(j)
-                items: List[Dict[str, Any]] = []
-                if isinstance(raw_data, dict):
-                    items = cast(List[Dict[str, Any]], raw_data.get("data", []))
-                elif isinstance(raw_data, list):
-                    items = cast(List[Dict[str, Any]], raw_data)
-
-                file_direction = "SHORT" if "_short" in f.lower() else "LONG"
-
-                if category not in audit_discovery["categories"]:
-                    audit_discovery["categories"][category] = {"long": 0, "short": 0, "total": 0}
-
-                count = len(items) if items else 0
-                audit_discovery["total_symbols_found"] += count
-                if file_direction == "LONG":
-                    audit_discovery["categories"][category]["long"] += count
-                else:
-                    audit_discovery["categories"][category]["short"] += count
-                audit_discovery["categories"][category]["total"] += count
-
-                for i in items:
-                    if isinstance(i, dict) and "symbol" in i:
-                        i["_direction"] = file_direction
-                        i["_category"] = category
-                        i["_asset_class"] = get_asset_class(category, i["symbol"])
-                        i["_identity"] = get_asset_identity(i["symbol"])
-                        all_items.append(i)
         except Exception as e:
             logger.error(f"Error reading {f}: {e}")
+            continue
+
+        meta: Dict[str, Any] = {}
+        items: List[Dict[str, Any]] = []
+        if isinstance(raw_data, dict):
+            meta = cast(Dict[str, Any], raw_data.get("meta") or {})
+            items = cast(List[Dict[str, Any]], raw_data.get("data", []))
+        elif isinstance(raw_data, list):
+            items = cast(List[Dict[str, Any]], raw_data)
+
+        # Prefer embedded metadata; fall back to filename heuristics.
+        file_direction = "SHORT" if "_short" in f.lower() else "LONG"
+        meta_direction = meta.get("direction") or (meta.get("trend") or {}).get("direction")
+        if isinstance(meta_direction, str) and meta_direction.strip():
+            candidate = meta_direction.strip().upper()
+            if candidate in {"LONG", "SHORT"}:
+                file_direction = candidate
+
+        category = "UNKNOWN"
+        meta_exchange = meta.get("primary_exchange")
+        meta_product = meta.get("product")
+        if isinstance(meta_exchange, str) and isinstance(meta_product, str) and meta_exchange and meta_product:
+            category = f"{meta_exchange.upper()}_{meta_product.upper()}"
+        else:
+            parts = os.path.basename(f).split("_")
+            try:
+                clean = [p for p in parts if p not in ["universe", "selector"] and not p[0].isdigit()]
+                exchange = "UNKNOWN"
+                mtype = "UNKNOWN"
+                for p in clean:
+                    if p.upper() in [
+                        "BINANCE",
+                        "BYBIT",
+                        "OKX",
+                        "BITGET",
+                        "NASDAQ",
+                        "NYSE",
+                        "AMEX",
+                        "CME",
+                        "FOREX",
+                        "US",
+                        "BOND",
+                        "OANDA",
+                        "THINKMARKETS",
+                    ]:
+                        exchange = p.upper()
+                    if p.upper() in ["SPOT", "PERP", "FUTURES", "STOCKS", "ETF", "BONDS", "CFD"]:
+                        mtype = p.upper()
+                category = f"{exchange}_{mtype}"
+            except Exception:
+                category = "UNKNOWN"
+
+        if category not in audit_discovery["categories"]:
+            audit_discovery["categories"][category] = {"long": 0, "short": 0, "total": 0}
+
+        count = len(items) if items else 0
+        audit_discovery["total_symbols_found"] += count
+        if file_direction == "LONG":
+            audit_discovery["categories"][category]["long"] += count
+        else:
+            audit_discovery["categories"][category]["short"] += count
+        audit_discovery["categories"][category]["total"] += count
+
+        for i in items:
+            if isinstance(i, dict) and "symbol" in i:
+                i["_direction"] = file_direction
+                i["_category"] = category
+                i["_asset_class"] = get_asset_class(category, i["symbol"])
+                i["_identity"] = get_asset_identity(i["symbol"])
+                all_items.append(i)
 
     # 2. Deduplicate and Score
     unique_assets = {}

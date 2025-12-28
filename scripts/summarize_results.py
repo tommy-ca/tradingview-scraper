@@ -1,8 +1,38 @@
 import json
+import os
 import re
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional
+
+
+def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
+    export_root = Path("export")
+    run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
+
+    if run_id:
+        candidate = export_root / run_id
+        if candidate.exists():
+            return candidate
+
+    if export_root.exists():
+        best_dir: Optional[Path] = None
+        best_mtime = -1.0
+        for subdir in export_root.iterdir():
+            if not subdir.is_dir():
+                continue
+            matches = list(subdir.glob("universe_selector_*.json"))
+            if not matches:
+                continue
+            newest = max(p.stat().st_mtime for p in matches)
+            if newest > best_mtime:
+                best_mtime = newest
+                best_dir = subdir
+        if best_dir is not None:
+            return best_dir
+
+    return export_root
 
 
 def load_json(filepath):
@@ -36,7 +66,7 @@ def normalize_name(name):
 
 
 def main():
-    export_dir = Path("export")
+    export_dir = _resolve_export_dir()
     # Grab all selector output files
     files = sorted(list(export_dir.glob("universe_selector_*.json")))
 
