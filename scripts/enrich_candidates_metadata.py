@@ -28,6 +28,21 @@ def enrich_candidates():
         except Exception:
             continue
 
+    # Load metadata catalog (symbols.parquet) for robust fallbacks.
+    catalog_meta = {}
+    catalog_path = "data/lakehouse/symbols.parquet"
+    if os.path.exists(catalog_path):
+        try:
+            import pandas as pd  # type: ignore
+
+            df = pd.read_parquet(catalog_path)
+            if "symbol" in df.columns:
+                keep_cols = [c for c in ["symbol", "description", "sector", "industry", "type", "subtype"] if c in df.columns]
+                df = df[keep_cols].drop_duplicates(subset="symbol", keep="last").set_index("symbol")  # type: ignore
+                catalog_meta = df.to_dict(orient="index")
+        except Exception:
+            catalog_meta = {}
+
     # Custom Overrides for N/A sectors
     custom_sectors = {
         "NYSE:SPG": "Real Estate (Retail)",
@@ -83,6 +98,8 @@ def enrich_candidates():
         "AMEX:GLD": "Metals (Gold)",
         "AMEX:IWM": "Equities (Russell 2000)",
         "AMEX:SPY": "Equities (S&P 500)",
+        "NASDAQ:QQQ": "Equities (Nasdaq 100)",
+        "AMEX:VTI": "Equities (Total Market)",
         "AMEX:VEA": "Equities (Developed Mkts)",
         "AMEX:VWO": "Equities (Emerging Mkts)",
         "AMEX:DUST": "Metals (Gold Inverse)",
@@ -95,26 +112,61 @@ def enrich_candidates():
     enriched_count = 0
     for c in candidates:
         sym = c["symbol"]
+        updated = False
+
         meta = symbol_meta.get(sym)
         if meta:
-            c["description"] = meta["description"]
-            c["sector"] = meta["sector"]
+            if (not c.get("description") or c.get("description") == "N/A") and meta.get("description") and meta.get("description") != "N/A":
+                c["description"] = meta["description"]
+                updated = True
+            if (not c.get("sector") or c.get("sector") == "N/A") and meta.get("sector") and meta.get("sector") != "N/A":
+                c["sector"] = meta["sector"]
+                updated = True
 
         # Apply custom overrides if sector is still N/A or empty
         if sym in custom_sectors and (not c.get("sector") or c.get("sector") == "N/A"):
             c["sector"] = custom_sectors[sym]
+            updated = True
 
-        # Global fallback for crypto
+        # Metadata catalog fallback (symbols.parquet)
+        if ((not c.get("sector") or c.get("sector") == "N/A") or (not c.get("description") or c.get("description") == "N/A")) and catalog_meta:
+            cat = catalog_meta.get(sym, {})
+
+            if not c.get("sector") or c.get("sector") == "N/A":
+                industry = str(cat.get("industry") or "").strip()
+                subtype = str(cat.get("subtype") or "").strip()
+                sector = str(cat.get("sector") or "").strip()
+
+                if subtype == "reit" or "Real Estate Investment Trust" in industry:
+                    c["sector"] = "Real Estate (REIT)"
+                    updated = True
+                elif sector:
+                    c["sector"] = sector
+                    updated = True
+                elif industry:
+                    c["sector"] = industry
+                    updated = True
+
+            if not c.get("description") or c.get("description") == "N/A":
+                desc = str(cat.get("description") or "").strip()
+                if desc:
+                    c["description"] = desc
+                    updated = True
+
+        # Global fallback for crypto / unclassified
         if not c.get("sector") or c.get("sector") == "N/A":
             m = c.get("market", "").upper()
             if any(x in m for x in ["BINANCE", "BITGET", "BYBIT", "OKX", "CRYPTO"]):
                 c["sector"] = "Crypto"
+                updated = True
             elif "FOREX" in m:
                 c["sector"] = "Forex"
+                updated = True
             elif "FUTURES" in m:
                 c["sector"] = "Futures"
+                updated = True
 
-        if meta or sym in custom_sectors:
+        if updated:
             enriched_count += 1
 
     with open(candidates_path, "w") as f:
