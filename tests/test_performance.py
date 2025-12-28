@@ -3,6 +3,8 @@ import shutil
 
 import pytest
 
+pytest.importorskip("pytest_benchmark", reason="pytest-benchmark not installed")
+
 from tradingview_scraper.symbols.stream.lakehouse import LakehouseStorage
 from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
 
