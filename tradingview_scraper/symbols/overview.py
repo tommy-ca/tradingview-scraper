@@ -6,7 +6,6 @@ import requests
 
 from tradingview_scraper.symbols.utils import (
     generate_user_agent,
-    get_session,
     save_csv_file,
     save_json_file,
 )
@@ -157,7 +156,7 @@ class Overview:
         self.export_result = export_result
         self.export_type = export_type
         self.headers = {"User-Agent": generate_user_agent()}
-        self.session = get_session()
+        self.session = requests
 
     def _validate_symbol(self, symbol: str) -> str:
         """

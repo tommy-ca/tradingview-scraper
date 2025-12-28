@@ -4,13 +4,14 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import requests
+
 # loading environment variables
 from dotenv import load_dotenv
 from requests.exceptions import JSONDecodeError, RequestException
 
 from tradingview_scraper.symbols.utils import (
     generate_user_agent,
-    get_session,
     save_csv_file,
     save_json_file,
 )
@@ -23,7 +24,7 @@ class Ideas:
         self.export_result = export_result
         self.export_type = export_type
         self.headers = {"user-agent": generate_user_agent()}
-        self.session = get_session()
+        self.session = requests
 
     def scrape(self, symbol: str = "BTCUSD", startPage: int = 1, endPage: int = 1, sort: str = "popular"):
         """
@@ -113,7 +114,7 @@ class Ideas:
             params["sort"] = "recent"  # default is popular so only include for recent
 
         try:
-            response = self.session.get(url, headers=self.headers, params=params)
+            response = self.session.get(url, headers=self.headers, params=params, timeout=10)
             if response.status_code != 200:
                 logging.error(f"HTTP {response.status_code}: Failed to fetch page {page} for {symbol}")
                 return []

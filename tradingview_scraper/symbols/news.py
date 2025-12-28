@@ -13,7 +13,6 @@ from bs4 import BeautifulSoup
 
 from tradingview_scraper.symbols.utils import (
     generate_user_agent,
-    get_session,
     save_csv_file,
     save_json_file,
 )
@@ -24,7 +23,7 @@ class NewsScraper:
         self.export_result = export_result
         self.export_type = export_type
         self.headers = {"user-agent": generate_user_agent()}
-        self.session = get_session()
+        self.session = requests
 
         self.exchanges = self._load_exchanges()
         self.languages = self._load_languages()
