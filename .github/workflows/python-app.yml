@@ -33,6 +33,10 @@ jobs:
     - name: Install dependencies
       run: uv sync --extra dev
 
+    - name: Lint universe configs
+      if: matrix.python-version == '3.12'
+      run: uv run scripts/lint_universe_configs.py --strict
+
     - name: Lint with ruff
       run: uv run ruff check . --output-format=github
 

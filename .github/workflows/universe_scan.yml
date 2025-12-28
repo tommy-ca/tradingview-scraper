@@ -16,8 +16,26 @@ on:
         default: 'json'
 
 jobs:
-  scan-futures:
+  lint-configs:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          cache-suffix: "3.12"
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Lint universe configs
+        run: uv run scripts/lint_universe_configs.py --strict
+
+  scan-futures:
+    needs: lint-configs
+    runs-on: ubuntu-latest
+    env:
+      TV_EXPORT_RUN_ID: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
@@ -45,7 +63,10 @@ jobs:
           path: export/
 
   scan-metals:
+    needs: lint-configs
     runs-on: ubuntu-latest
+    env:
+      TV_EXPORT_RUN_ID: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
@@ -73,7 +94,10 @@ jobs:
           path: export/
 
   scan-cfd:
+    needs: lint-configs
     runs-on: ubuntu-latest
+    env:
+      TV_EXPORT_RUN_ID: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
@@ -101,7 +125,10 @@ jobs:
           path: export/
 
   scan-forex:
+    needs: lint-configs
     runs-on: ubuntu-latest
+    env:
+      TV_EXPORT_RUN_ID: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
@@ -129,7 +156,10 @@ jobs:
           path: export/
 
   scan-etf:
+    needs: lint-configs
     runs-on: ubuntu-latest
+    env:
+      TV_EXPORT_RUN_ID: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
@@ -157,7 +187,10 @@ jobs:
           path: export/
 
   scan-stocks:
+    needs: lint-configs
     runs-on: ubuntu-latest
+    env:
+      TV_EXPORT_RUN_ID: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
