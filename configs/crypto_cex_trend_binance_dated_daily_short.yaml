@@ -47,4 +47,4 @@ export:
   enabled: false
   type: json
 base_universe_limit: 50
-exclude_dated_futures: true
+exclude_dated_futures: false

@@ -4,7 +4,7 @@ filters:
   - left: "type"
     operation: "in_range"
     right: ["fund", "structured"]
-columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR", "market_cap_basic"]
+columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "ATR", "market_cap_basic"]
 
 volume:
   min: 100000
