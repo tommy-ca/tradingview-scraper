@@ -16,7 +16,7 @@ class MarketRegimeDetector:
     and wavelet-based spectral analysis.
     """
 
-    def __init__(self, crisis_threshold: float = 1.8, quiet_threshold: float = 0.7):
+    def __init__(self, crisis_threshold: float = 1.7, quiet_threshold: float = 1.3):
         """
         Args:
             crisis_threshold: Weighted score above which regime is CRISIS.
