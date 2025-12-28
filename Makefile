@@ -1,17 +1,20 @@
 SHELL := /bin/bash
 PY ?= uv run
 BATCH ?= 5
-LOOKBACK ?= 100
+LOOKBACK ?= 200
 BACKFILL ?= 1
 GAPFILL ?= 1
 SUMMARY_DIR ?= summaries
 GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 
-# Selection parameters
+# Selection & Risk Parameters
 TOP_N ?= 3
 THRESHOLD ?= 0.4
+CLUSTER_CAP ?= 0.25
 
-.PHONY: help update-indexes clean-all clean-exports scans-local scans-crypto scans-bonds scans-forex-mtf scans summaries reports validate prep optimize barbell corr-report pipeline pipeline-quick audit report clean-run hedge-anchors drift-check gist select recover heatmap display regime-check drift-monitor
+.PHONY: clean-all clean-exports clean-run scans-local scans-crypto scans-bonds scans-forex-mtf scans prep-raw prune select prep align recover analyze corr-report factor-map regime-check hedge-anchors drift-check optimize-v2 backtest backtest-all backtest-report validate audit-health audit-logic audit-data audit report drift-monitor display gist heatmap finalize health-report
+
+# --- Discovery (Scanners) ---
 
 scans-local:
 	bash scripts/run_local_scans.sh
@@ -27,10 +30,57 @@ scans-forex-mtf:
 
 scans: scans-local scans-crypto scans-bonds scans-forex-mtf
 
-summaries:
-	mkdir -p $(SUMMARY_DIR)
-	$(PY) scripts/summarize_results.py | tee $(SUMMARY_DIR)/summary_results.txt
-	$(PY) scripts/summarize_crypto_results.py | tee $(SUMMARY_DIR)/summary_crypto.txt
+# --- Validation & Auditing ---
+
+backtest: backtest-all backtest-report
+
+backtest-all:
+	@echo ">>> Running Walk-Forward Validation for all profiles..."
+	$(PY) scripts/backtest_engine.py --profile min_variance --train 120 --test 20 --step 20 || $(PY) scripts/backtest_engine.py --profile min_variance --train 40 --test 10 --step 10
+	$(PY) scripts/backtest_engine.py --profile risk_parity --train 120 --test 20 --step 20 || $(PY) scripts/backtest_engine.py --profile risk_parity --train 40 --test 10 --step 10
+	$(PY) scripts/backtest_engine.py --profile max_sharpe --train 120 --test 20 --step 20 || $(PY) scripts/backtest_engine.py --profile max_sharpe --train 40 --test 10 --step 10
+	$(PY) scripts/backtest_engine.py --profile barbell --train 120 --test 20 --step 20 || $(PY) scripts/backtest_engine.py --profile barbell --train 40 --test 10 --step 10
+
+backtest-report:
+	$(PY) scripts/generate_backtest_report.py
+
+validate: audit-data backtest
+
+audit-health:
+	@echo ">>> Auditing Data Health & Integrity"
+	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health
+
+audit-logic:
+	@echo ">>> Auditing Portfolio Quantitative Logic"
+	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-logic
+
+audit-data: audit-health audit-logic
+
+audit: audit-logic
+
+health-report:
+	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health
+	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
+
+# --- Tiered Selection Logic ---
+
+
+prep-raw:
+	$(PY) scripts/select_top_universe.py --mode raw
+	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
+
+prune:
+	@echo ">>> Phase 1: Lightweight Backfill (60d) for statistical pruning"
+	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json $(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=60 BATCH=5
+	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
+	$(PY) scripts/audit_antifragility.py
+	$(MAKE) select TOP_N=$(TOP_N) THRESHOLD=$(THRESHOLD)
+	$(PY) scripts/enrich_candidates_metadata.py
+
+select:
+	$(PY) scripts/natural_selection.py --top-n $(TOP_N) --threshold $(THRESHOLD)
+
+# --- Data Preparation (Self-Healing) ---
 
 prep:
 	PORTFOLIO_MAX_SYMBOLS=200 PORTFOLIO_BATCH_SIZE=$(BATCH) PORTFOLIO_LOOKBACK_DAYS=$(LOOKBACK) PORTFOLIO_BACKFILL=$(BACKFILL) PORTFOLIO_GAPFILL=$(GAPFILL) $(PY) scripts/prepare_portfolio_data.py
@@ -39,42 +89,49 @@ prep:
 		$(PY) scripts/repair_portfolio_gaps.py --type all; \
 	fi
 
-validate:
-	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health
+align:
+	@echo ">>> Phase 2: High Integrity Backfill (200d) for final winners"
+	$(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=$(LOOKBACK) BATCH=2
+	$(MAKE) audit-health
 
-audit:
-	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-logic
 
-health-report:
-	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health
-	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
+recover:
+	$(PY) scripts/recover_universe.py
 
-select:
-	$(PY) scripts/natural_selection.py --top-n $(TOP_N) --threshold $(THRESHOLD)
+# --- Analysis (Risk & Regime) ---
 
-optimize:
-	$(PY) scripts/optimize_portfolio.py
-
-optimize-v2:
-	CLUSTER_CAP=0.25 $(PY) scripts/optimize_clustered_v2.py
-
-clustered:
-	$(MAKE) optimize-v2
-
-barbell:
-	$(PY) scripts/optimize_barbell.py
+analyze: corr-report factor-map regime-check hedge-anchors drift-check
 
 corr-report:
 	mkdir -p $(SUMMARY_DIR)
 	$(PY) scripts/correlation_report.py --hrp --out-dir $(SUMMARY_DIR) --min-col-frac 0.2
 	$(PY) scripts/analyze_clusters.py
 
+factor-map:
+	$(PY) scripts/visualize_factor_map.py
+
+regime-check:
+	$(PY) scripts/research_regime_v2.py
+
+hedge-anchors:
+	$(PY) scripts/detect_hedge_anchors.py
+
+drift-check:
+	$(PY) scripts/monitor_cluster_drift.py
+
+# --- Implementation (Optimization & Dashboard) ---
+
+finalize: optimize-v2 backtest audit report drift-monitor gist
+
+optimize-v2:
+	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/optimize_clustered_v2.py
+
 report:
 	$(PY) scripts/generate_portfolio_report.py
 	$(PY) scripts/generate_audit_summary.py
 
-heatmap:
-	$(PY) scripts/visualize_matrix_cli.py
+drift-monitor:
+	$(PY) scripts/track_portfolio_state.py
 
 display:
 	$(PY) scripts/display_portfolio_dashboard.py
@@ -82,34 +139,22 @@ display:
 gist:
 	bash scripts/push_summaries_to_gist.sh
 
-regime-check:
-	$(PY) scripts/research_regime_v2.py
+heatmap:
+	$(PY) scripts/visualize_matrix_cli.py
 
-factor-map:
-	$(PY) scripts/visualize_factor_map.py
+# --- Utility & Lifecycle ---
+
+clean-exports:
+	rm -rf export/*.csv export/*.json
+
+clean-all: clean-exports
+	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md $(SUMMARY_DIR)/*.png
+	rm -f data/lakehouse/portfolio_*
 
 clean-run: clean-all
-	rm -f data/lakehouse/portfolio_*
 	$(MAKE) scans
-	$(PY) scripts/select_top_universe.py --mode raw
-	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
-	@echo "--- Pass 1: Lightweight Backfill (60d) for statistical pruning ---"
-	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json $(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=60 BATCH=5
-	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
-	$(PY) scripts/audit_antifragility.py
-	$(MAKE) select TOP_N=$(TOP_N) THRESHOLD=$(THRESHOLD)
-	$(PY) scripts/enrich_candidates_metadata.py
-	@echo "--- Pass 2: High Integrity Backfill (200d) for final winners ---"
-	$(MAKE) prep BACKFILL=1 GAPFILL=1 LOOKBACK=200 BATCH=2
-	$(MAKE) validate
-	$(MAKE) corr-report
-	$(MAKE) factor-map
-	$(MAKE) regime-check
-	$(MAKE) hedge-anchors
-	$(MAKE) drift-check
-	$(MAKE) optimize-v2
-	$(MAKE) audit
-	$(MAKE) report
-	$(MAKE) drift-monitor
-	$(MAKE) gist
-
+	$(MAKE) prep-raw
+	$(MAKE) prune
+	$(MAKE) align
+	$(MAKE) analyze
+	$(MAKE) finalize

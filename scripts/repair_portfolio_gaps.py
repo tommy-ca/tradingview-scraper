@@ -1,6 +1,8 @@
 import argparse
 import json
 import logging
+import os
+import time
 
 from tradingview_scraper.symbols.stream.metadata import DataProfile, get_symbol_profile
 from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
@@ -18,11 +20,26 @@ def repair_gaps():
     parser.add_argument("--timeout", type=int, default=60, help="Total timeout per API call")
     args = parser.parse_args()
 
-    try:
-        with open("data/lakehouse/portfolio_candidates.json", "r") as f:
-            candidates = json.load(f)
-    except FileNotFoundError:
-        logger.error("portfolio_candidates.json not found")
+    candidates = []
+    candidates_files = ["data/lakehouse/portfolio_candidates.json", "data/lakehouse/portfolio_candidates_raw.json"]
+
+    # Also check env var if provided (used in Pass 1)
+    env_file = os.getenv("CANDIDATES_FILE")
+    if env_file:
+        candidates_files.insert(0, env_file)
+
+    for cf in candidates_files:
+        if os.path.exists(cf):
+            try:
+                with open(cf, "r") as f:
+                    candidates = json.load(f)
+                logger.info(f"Loaded {len(candidates)} candidates from {cf}")
+                break
+            except Exception as e:
+                logger.error(f"Failed to load {cf}: {e}")
+
+    if not candidates:
+        logger.error("No candidates file found.")
         return
 
     loader = PersistentDataLoader()
@@ -54,14 +71,26 @@ def repair_gaps():
     for symbol, profile in targets:
         processed_count += 1
         logger.info(f"[{processed_count}/{len(targets)}] Checking gaps for {symbol} ({profile.value})...")
-        try:
-            # Pass profile to repair for market-aware detection
-            filled = loader.repair(symbol, interval="1d", max_depth=500, max_fills=args.max_fills, max_time=args.max_time, total_timeout=args.timeout, profile=profile)
-            if filled > 0:
-                total_candles_filled += filled
-                symbols_with_gaps += 1
-        except Exception as e:
-            logger.error(f"Failed to repair gaps for {symbol}: {e}")
+
+        # Exponential backoff for rate limits
+        retries = 2
+        for attempt in range(retries + 1):
+            try:
+                # Pass profile to repair for market-aware detection
+                filled = loader.repair(symbol, interval="1d", max_depth=500, max_fills=args.max_fills, max_time=args.max_time, total_timeout=args.timeout, profile=profile)
+                if filled > 0:
+                    total_candles_filled += filled
+                    symbols_with_gaps += 1
+                break  # Success
+            except Exception as e:
+                is_429 = "429" in str(e)
+                if is_429 and attempt < retries:
+                    sleep_time = 30 * (attempt + 1)
+                    logger.warning(f"  Rate limit hit for {symbol}. Retrying in {sleep_time}s... ({attempt + 1}/{retries})")
+                    time.sleep(sleep_time)
+                    continue
+                logger.error(f"Failed to repair gaps for {symbol}: {e}")
+                break
 
     logger.info("=" * 50)
     logger.info("REPAIR SUMMARY")
