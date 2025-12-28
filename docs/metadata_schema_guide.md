@@ -17,9 +17,16 @@ This document describes the metadata catalog system for TradingView scraper, whi
    - Exchange-level metadata and defaults
    - Used for timezone and market session defaults
 
-3. **MetadataService** 
+3. **MetadataService**
    - High-level interface for symbol discovery and resolution
    - Future support for hybrid data sources (TradingView + CCXT)
+
+## Design Requirements
+
+- **PIT + survivorship**: Backtests MUST query `MetadataCatalog.get_instrument(..., as_of=timestamp)` and MUST NOT rely on the latest "current" metadata for historical simulation.
+- **Profile is persisted**: `profile` is a required, versioned field in `symbols.parquet` (used for market-aware calendars, gap detection, and survivorship-safe backtests).
+- **API-synced where available**: Values returned by the TradingView `Overview` API (e.g. `timezone`, `pricescale`, `minmov`, `type`) are authoritative; defaults apply only when the API returns `None`.
+- **Incremental updates**: Build on existing catalogs using SCD Type 2 upserts; do not delete catalog files in production/backtesting contexts.
 
 ## Schema Definition
 
@@ -31,8 +38,8 @@ This document describes the metadata catalog system for TradingView scraper, whi
 | exchange | str | ✓ | Exchange name (e.g., "BINANCE", "BYBIT") |
 | base | str | ✗ | Base currency (e.g., "BTC") |
 | quote | str | ✗ | Quote currency (e.g., "USDT") |
-| type | str | ✓ | Instrument type ("spot", "swap", "futures", "stock", "forex") |
-| profile | str | ✓ | DataProfile enum ("CRYPTO", "EQUITY", "FUTURES", "FOREX") |
+| type | str | ✓ | Instrument type ("spot", "swap", "futures", "stock", "fund", "commodity", "forex", "index", "dr") |
+| profile | str | ✓ | Persisted DataProfile enum ("CRYPTO", "EQUITY", "FUTURES", "FOREX", "UNKNOWN") used for market calendars and PIT-safe backtests |
 | subtype | str | ✗ | Additional classification (e.g., "perpetual") |
 | description | str | ✗ | Human-readable description |
 | sector | str | ✗ | Economic sector (for stocks) |
@@ -71,7 +78,8 @@ Assets are categorized into `DataProfile` groups to enable market-aware gap dete
 - **FOREX**: Sun 17:00 ET - Fri 17:00 ET.
 
 ### Health Statuses
-The validation pipeline (`make validate`) assigns one of the following statuses:
+The portfolio data validation pipeline (`make validate`) assigns one of the following statuses.
+For metadata catalogs (symbols/exchanges), use `make meta-validate` (refresh + offline audits) and `make meta-audit` (includes online parity sampling).
 - **OK**: Continuous data with no gaps.
 - **OK (MARKET CLOSED)**: Gaps found, but they match weekends or known US market holidays.
 - **DEGRADED (GAPS)**: Unexpected data holes during active trading hours.
@@ -86,20 +94,29 @@ The system uses a built-in US Market Holiday list (`get_us_holidays`) to filter 
 ### Building Catalog
 
 ```bash
-# Using build script
-uv run scripts/build_metadata_catalog.py \
-    --config configs/crypto_cex_binance_top50.yaml \
-    --limit 100
+# Makefile shortcuts (recommended)
+make meta-refresh
+make meta-validate
+make meta-audit
+
+# Refresh all active symbols from the existing catalog (preserves PIT history)
+uv run scripts/build_metadata_catalog.py --from-catalog --catalog-path data/lakehouse/symbols.parquet
+
+# Or build from a config universe
+uv run scripts/build_metadata_catalog.py --config configs/crypto_cex_binance_top50.yaml --limit 100
 
 # Or specific symbols
-uv run scripts/build_metadata_catalog.py \
-    --symbols BINANCE:BTCUSDT BYBIT:ETHUSDT
+uv run scripts/build_metadata_catalog.py --symbols BINANCE:BTCUSDT BYBIT:ETHUSDT
 ```
 
 ### Auditing Catalog
 
 ```bash
-# Full audit
+# Makefile shortcuts
+make meta-audit-offline
+make meta-audit
+
+# Full audit (includes online parity sample)
 uv run scripts/audit_metadata_catalog.py
 
 # Timezone audit
@@ -160,11 +177,11 @@ if exchange_info:
 
 ### Symbol Validation
 
-1. **Required Fields**: symbol, exchange, type must be present and non-empty
+1. **Required Fields**: symbol, exchange, type, profile must be present and non-empty
 2. **Numeric Fields**: pricescale, minmov must be positive integers
 3. **Tick Size**: Calculated as minmov / pricescale, must be positive
 4. **Timezone**: Must be valid IANA timezone or "UTC"
-5. **Session**: Must be valid session pattern or "24x7" for crypto
+5. **Session**: Use API value when present; otherwise resolve from exchange/profile defaults. "24x7" is reserved for crypto.
 
 ### Exchange Validation
 
@@ -222,9 +239,9 @@ if exchange_info:
 - Compatible with pandas and pyarrow
 
 ### TradingView API
-- Symbol metadata fetched via Overview API
-- Exchange metadata uses default configuration
-- Real-time validation against API responses
+- Symbol metadata fetched via Overview API (authoritative when present)
+- Exchange defaults resolved via `ExchangeCatalog` (bootstrapped from `DEFAULT_EXCHANGE_METADATA`)
+- Real-time validation against API responses (spot checks)
 
 ### Future CCXT Integration
 - MetadataService designed for hybrid sourcing
@@ -243,15 +260,20 @@ if exchange_info:
 ### Debug Commands
 
 ```bash
-# Check catalog health
-uv run scripts/audit_metadata_catalog.py
+# Makefile shortcuts
+make meta-stats
+make meta-validate
+make meta-audit
+make meta-explore
 
 # Validate specific symbol
 uv run scripts/validate_symbol.py BINANCE:BTCUSDT
 
-# Rebuild from scratch
-rm data/lakehouse/symbols.parquet
-uv run scripts/build_metadata_catalog.py --config your_config.yaml
+# Refresh all active symbols from existing symbols.parquet (preserves PIT history)
+uv run scripts/build_metadata_catalog.py --from-catalog --catalog-path data/lakehouse/symbols.parquet
+
+# Avoid deleting `symbols.parquet` / `exchanges.parquet` in production/backtesting contexts:
+# it destroys PIT history and can introduce survivorship/look-ahead bias.
 ```
 
 ## Schema Evolution

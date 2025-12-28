@@ -57,8 +57,12 @@ To support a robust quantitative research and trading environment (simulating ex
     - Use **CCXT** (or direct Exchange API) to enrich the catalog with execution details (`lot_size`, `contract_size`).
     
 2.  **Storage**:
-    - A `symbols.parquet` file in the Lakehouse root is sufficient for V1.
-    - Schema: `symbol` (PK), `exchange`, `base`, `quote`, `type`, `tick_size`, `lot_size`, `contract_size`, `active`.
+    - `symbols.parquet` is sufficient for a minimal V1 prototype, but PIT-safe backtesting requires persisted `profile` and SCD Type 2 fields.
+    - Recommended artifacts:
+        - `data/lakehouse/symbols.parquet` (symbol metadata, PIT versioned)
+        - `data/lakehouse/exchanges.parquet` (exchange defaults for timezone/session/country when the API returns `None`)
+    - Minimum schema (symbols): `symbol` (PK), `exchange`, `type`, `subtype`, `base`, `quote`, `pricescale`, `minmov`, `tick_size`, `timezone`, `session`, `profile`, `active`, `valid_from`, `valid_until`, `updated_at`.
 
 3.  **Next Steps**:
     - Prototype a "Metadata Enricher" that takes the TradingView list and queries Binance/Okx/Bybit via REST API to fill gaps.
+    - Build on existing catalogs using SCD Type 2 upserts (avoid deletes) so PIT history remains intact for survivorship-safe backtests.

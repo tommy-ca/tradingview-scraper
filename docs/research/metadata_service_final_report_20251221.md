@@ -11,9 +11,9 @@ This research track established the design for a "Data Lakehouse Metadata Catalo
 - **Symbol Catalog**: `data/lakehouse/symbols.parquet`
 - **Exchange Catalog**: `data/lakehouse/exchanges.parquet`
 - **Schema (Symbols)**:
-    - `symbol` (PK), `exchange`, `base`, `quote`, `type`, `subtype`.
+    - `symbol` (PK), `exchange`, `base`, `quote`, `type`, `subtype`, `profile` (persisted DataProfile).
     - **Descriptive**: `description`, `sector`, `industry`, `country`.
-    - **Contextual**: `timezone`, `session`.
+    - **Contextual**: `timezone`, `session` (API-synced when available; defaults only when API returns `None`).
     - **Structural**: `tick_size`, `minmov`, `pricescale`, `lot_size`, `contract_size`.
     - **Versioning**: `valid_from`, `valid_until`, `updated_at`, `active`.
 
@@ -59,3 +59,8 @@ The system implements a strict **Slowly Changing Dimension (SCD) Type 2** patter
 1.  **Exchange Integration**: Build a "Connector" module to fetch execution limits from Binance/OKX APIs to fill the `None` values in the catalog.
 2.  **Backtest Integration**: Update the Backtesting engine to query `MetadataCatalog` with `as_of=candle.timestamp` to ensure accurate tick-size/lot-size simulation.
 3.  **Scheduled Maintenance**: Run `scripts/build_metadata_catalog.py` (or a more advanced "Audit" script) daily to capture changes in the universe (e.g., delistings).
+
+## 7. Amendments (2025-12-28)
+- **Persist `profile`**: Store `profile` in `symbols.parquet` as a versioned field so historical classifications remain stable even if derivation heuristics evolve.
+- **Build on existing catalogs**: Prefer incremental refresh/upsert; do not delete `symbols.parquet`/`exchanges.parquet` in production/backtesting workflows.
+- **Session/timezone resolution**: Ensure all writers (batch build + runtime auto-enrichment) follow the same hierarchy (API -> exchange defaults -> fallback).

@@ -1,36 +1,62 @@
-# Technical Specification: Metadata Timezone & Localization
+# Technical Specification: Metadata Timezone, Session & Profile (PIT-Safe)
 **Status**: Formalized
-**Date**: 2025-12-21
+**Date**: 2025-12-21 (amended 2025-12-28)
 
 ## 1. Overview
-Accurate timezone metadata is critical for preventing look-ahead bias in backtests and ensuring trade execution logic respects local market hours. The system employs a hierarchical resolution strategy to ensure every instrument has a valid IANA timezone.
+Accurate timezone, session, and market-profile metadata is required to:
+
+- Prevent look-ahead bias in backtests (Point-in-Time metadata lookup).
+- Prevent survivorship bias (do not overwrite or delete instrument history).
+- Ensure gap detection and data health checks are market-aware.
+- Ensure execution and reporting respects local market conventions.
+
+This specification defines the authoritative resolution hierarchy for `timezone`, `session`, and `profile`, and mandates that `profile` is persisted as a versioned field.
 
 ## 2. Resolution Hierarchy
-When a symbol is added or updated in the catalog, its timezone is resolved using the following priority:
+When a symbol is added or updated in the catalog, its contextual fields are resolved using the following priority.
 
-1.  **TradingView API (`timezone`)**: If the primary data source provides a localized timezone (e.g., `America/New_York` for US Equities), it is used as the authoritative source.
-2.  **Canonical Exchange Defaults**: If the API returns `None` (common for Crypto and Forex), the system looks up the exchange in the `DEFAULT_EXCHANGE_METADATA` map.
-3.  **Global Fallback**: If neither source provides data, the system falls back to `UTC`.
+### A) Timezone
+1. **TradingView API (`timezone`)**: If `Overview.get_symbol_overview(..., fields=[...])` returns a valid IANA timezone (e.g., `America/New_York`), it is authoritative.
+2. **Canonical Exchange Defaults**: If the API returns `None` (common for Crypto, Forex, Futures), inherit from the exchange’s canonical defaults (`ExchangeCatalog`, bootstrapped from `DEFAULT_EXCHANGE_METADATA`).
+3. **Global Fallback**: If neither source provides a value, default to `UTC`.
+
+### B) Session
+1. **TradingView API (`session`)**: If present, persist it.
+2. **Canonical Defaults**:
+   - **Crypto**: `24x7`.
+   - **Non-crypto**: inherit from exchange/profile defaults when available.
+3. **Global Fallback**: If unknown, persist `Unknown`.
+
+`24x7` is reserved for Crypto. Non-crypto instruments MUST NOT be coerced to `24x7` when the API returns `None`.
+
+### C) Profile (Persisted)
+`profile` is a required, versioned field in `symbols.parquet`.
+
+- **Derivation**: derived deterministically from a combination of `exchange`, `type`, and `subtype`.
+- **Persistence**: stored in the catalog so that future changes to derivation heuristics do not rewrite history.
+- **Usage**: used for market-aware calendars (e.g. weekends/US holidays), gap detection, and backtesting invariants.
 
 ## 3. Canonical Exchange Metadata
-Authoritative defaults are maintained in `tradingview_scraper/symbols/stream/metadata.py`. Current coverage includes:
+Authoritative exchange defaults are maintained in `tradingview_scraper/symbols/stream/metadata.py` and materialized in `data/lakehouse/exchanges.parquet`.
 
-| Exchange | Canonical Timezone | Country | Classification |
-|----------|-------------------|---------|----------------|
-| BINANCE, OKX, BYBIT, BITGET | UTC | Global | Crypto |
-| NASDAQ, NYSE | America/New_York | US | Equities |
-| CME, CBOT, NYMEX | America/Chicago | US | Futures |
-| LSE | Europe/London | UK | Equities |
-| FX_IDC | UTC | Global | Forex |
+## 4. PIT & Survivorship Requirements
+The catalog MUST implement a Slowly Changing Dimension (SCD Type 2) model:
 
-## 4. Verification Procedures
-Consistency is maintained via `scripts/audit_metadata_timezones.py`, which enforces the following invariant rules:
-- **Crypto Rule**: All instruments with `subtype == 'crypto'` must be set to `UTC`.
-- **Inheritance Rule**: Symbols must match the canonical timezone of their parent exchange unless an explicit API override exists.
-- **Completeness Rule**: No active symbol may have a null or "Unknown" timezone.
+- Updates MUST NOT overwrite the active record.
+- Old records MUST be retired by setting `valid_until = NOW`.
+- New records MUST be inserted with `valid_from = NOW`.
+- Backtests MUST query metadata with `as_of=candle_timestamp`.
 
-## 5. Usage in Backtesting
-Consumers of the `MetadataCatalog` should use the `timezone` field to:
-1. Localize OHLCV timestamps.
-2. Filter for active trading sessions.
-3. Align multi-asset time-series data.
+Deletion of catalog files is prohibited for production/backtesting workflows because it destroys PIT history and can introduce survivorship/look-ahead bias.
+
+## 5. Verification Procedures
+Consistency is enforced via audits (Makefile shortcuts: `make meta-audit-offline`, `make meta-audit`):
+
+- `scripts/audit_metadata_timezones.py`: validates resolution hierarchy invariants.
+- `scripts/audit_metadata_pit.py`: validates PIT uniqueness/contiguity.
+
+Minimum invariants:
+
+- **Completeness**: no active symbol may have a null or invalid timezone.
+- **Crypto rule**: crypto symbols must resolve to `timezone=UTC` and `session=24x7`.
+- **Equity sanity**: equities should resolve to `America/New_York` (or an exchange-appropriate timezone) and MUST NOT be `24x7`.

@@ -3,6 +3,8 @@
 **Date**: December 21, 2025  
 **Auditor**: TradingView Scraper Review System  
 
+**Note**: This is a point-in-time snapshot. For current catalog schema and invariants, see `docs/metadata_schema_guide.md` and `docs/specs/metadata_timezone_spec.md`.
+
 ---
 
 ## Executive Summary
