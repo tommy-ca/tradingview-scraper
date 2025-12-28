@@ -138,6 +138,23 @@ def natural_selection(
             if common:
                 conv.loc[common] = stats_df.loc[common, "Antifragility_Score"]
 
+        # Liquidity Score (Value Traded + Spread Proxy)
+        liq = pd.Series(0.0, index=symbols)
+        for s in symbols:
+            m = candidate_map.get(s, {})
+            vt = float(m.get("value_traded", 0) or 0)
+            atr = float(m.get("atr", 0) or 0)
+            price = float(m.get("close", 0) or 0)
+
+            spread_proxy = 0.0
+            if atr > 0 and price > 0:
+                spread_pct = atr / price
+                spread_pct = max(spread_pct, 1e-6)
+                spread_proxy = 1.0 / spread_pct
+                spread_proxy = min(spread_proxy, 1e6)
+
+            liq[s] = 0.7 * np.log1p(max(vt, 0.0)) + 0.3 * np.log1p(spread_proxy)
+
         def norm(s):
             return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
 
@@ -145,7 +162,7 @@ def natural_selection(
         sym_to_ident = {s: candidate_map.get(s, {}).get("identity", s) for s in symbols}
         directions = pd.Series({s: candidate_map.get(s, {}).get("direction", "LONG") for s in symbols})
 
-        alpha_scores = 0.4 * norm(mom) + 0.3 * norm(stab) + 0.3 * norm(conv)
+        alpha_scores = 0.3 * norm(mom) + 0.2 * norm(stab) + 0.2 * norm(conv) + 0.3 * norm(liq)
 
         # Audit cluster info
         audit_selection["clusters"][str(c_id)] = {"size": len(symbols), "members": symbols, "selected": []}

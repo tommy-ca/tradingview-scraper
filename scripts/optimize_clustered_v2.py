@@ -63,10 +63,17 @@ class ClusteredOptimizerV2:
                 m = self.meta.get(s, {})
                 vt = float(m.get("value_traded", 0) or 0)
                 atr = float(m.get("atr", 0) or 0)
-                price = float(m.get("close", 1e-9))
-                spread_proxy = 1.0 / (atr / price + 1e-9)
+                price = float(m.get("close", 0) or 0)
+
+                spread_proxy = 0.0
+                if atr > 0 and price > 0:
+                    spread_pct = atr / price
+                    spread_pct = max(spread_pct, 1e-6)
+                    spread_proxy = 1.0 / spread_pct
+                    spread_proxy = min(spread_proxy, 1e6)
+
                 # Weighted Liquidity
-                liq[s] = 0.7 * np.log1p(vt) + 0.3 * np.log1p(spread_proxy)
+                liq[s] = 0.7 * np.log1p(max(vt, 0.0)) + 0.3 * np.log1p(spread_proxy)
 
             def norm(s):
                 return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
@@ -90,8 +97,30 @@ class ClusteredOptimizerV2:
             if self.stats is not None:
                 c_af_stats = self.stats[self.stats["Symbol"].isin(valid_symbols)]
                 if not c_af_stats.empty:
-                    # Use mean Fragility Score as penalty factor
-                    self.cluster_stats[c_id] = {"fragility": float(c_af_stats["Fragility_Score"].mean()), "cvar": float(c_af_stats["CVaR_95"].mean())}
+                    if "Fragility_Score" in c_af_stats.columns:
+                        fragility = float(np.mean(c_af_stats["Fragility_Score"]))
+                    else:
+                        antif = c_af_stats["Antifragility_Score"] if "Antifragility_Score" in c_af_stats.columns else pd.Series(0.0, index=c_af_stats.index)
+                        anti_norm = antif / (float(antif.max()) + 1e-9)
+
+                        if "CVaR_95" in c_af_stats.columns:
+                            tail = np.abs(c_af_stats["CVaR_95"])
+                        elif "Vol" in c_af_stats.columns:
+                            tail = c_af_stats["Vol"]
+                        else:
+                            tail = pd.Series(0.0, index=c_af_stats.index)
+
+                        tail_norm = tail / (float(np.max(tail)) + 1e-9) if len(tail) else tail
+                        fragility = float(np.mean((1.0 - anti_norm) + tail_norm))
+
+                    if "CVaR_95" in c_af_stats.columns:
+                        cvar_value = float(np.mean(c_af_stats["CVaR_95"]))
+                    elif "Vol" in c_af_stats.columns:
+                        cvar_value = float(np.mean(c_af_stats["Vol"]))
+                    else:
+                        cvar_value = -0.05
+
+                    self.cluster_stats[c_id] = {"fragility": fragility, "cvar": cvar_value}
                 else:
                     self.cluster_stats[c_id] = {"fragility": 1.0, "cvar": -0.05}
             else:
@@ -149,6 +178,53 @@ class ClusteredOptimizerV2:
             raise ValueError(f"Unknown method {method}")
 
         return pd.Series(res.x, index=self.cluster_benchmarks.columns)
+
+    def calculate_portfolio_beta(self, weights_df: pd.DataFrame, benchmark_symbol: str = "AMEX:SPY") -> float:
+        if weights_df.empty:
+            return 0.0
+
+        # Load benchmark history
+        from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
+
+        loader = PersistentDataLoader()
+
+        # Determine date range from returns
+        end_date = str(self.returns.index[-1])
+        start_date = str(self.returns.index[0])
+
+        try:
+            bench_df = loader.load(benchmark_symbol, start_date, end_date, interval="1d")
+            if bench_df.empty:
+                logger.warning(f"Benchmark {benchmark_symbol} history empty.")
+                return 0.0
+
+            bench_df["timestamp"] = pd.to_datetime(bench_df["timestamp"], unit="s").dt.date
+            bench_rets = bench_df.set_index("timestamp")["close"].pct_change().dropna()
+
+            # Align with returns (normalize indices to avoid date-vs-timestamp mismatches)
+            returns_aligned = self.returns.copy()
+            returns_aligned.index = pd.to_datetime(returns_aligned.index)
+            bench_rets.index = pd.to_datetime(bench_rets.index)
+
+            common_idx = returns_aligned.index.intersection(bench_rets.index)
+            if len(common_idx) < 20:
+                logger.warning(f"Insufficient common dates for beta: {len(common_idx)}")
+                return 0.0
+
+            weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
+            weights = weights_df.set_index("Symbol")[weight_col].astype(float)
+            weights = weights.reindex(returns_aligned.columns).fillna(0.0)
+
+            port_rets = returns_aligned.loc[common_idx].dot(weights)
+            bench_rets = bench_rets.loc[common_idx]
+
+            # Calculate Beta
+            cov = np.cov(port_rets, bench_rets)[0, 1]
+            var = np.var(bench_rets)
+            return float(cov / (var + 1e-9))
+        except Exception as e:
+            logger.error(f"Failed to calculate beta: {e}")
+            return 0.0
 
     def run_profile(self, name: str, across_method: str, cluster_cap: float = 0.25, top_n: int = 0) -> pd.DataFrame:
         logger.info(f"Running profile: {name} (Across: {across_method}, Cap: {cluster_cap}, Top N: {top_n or 'ALL'})")
@@ -374,6 +450,33 @@ def main():
             "markets": list(set(opt.meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols)),
         }
 
+    output = {
+        "profiles": {},
+        "cluster_registry": cluster_registry,
+        "optimization": {
+            "timestamp": str(pd.Timestamp.now()),
+            "regime": {"name": regime_name, "score": regime_score},
+            "constraints": {"cluster_cap": cluster_cap, "top_n": top_n},
+        },
+    }
+
+    profile_beta: Dict[str, float] = {}
+    for name, df in profiles_raw.items():
+        cluster_sum = opt.get_cluster_summary(df)
+        beta_spy = opt.calculate_portfolio_beta(df, "AMEX:SPY")
+        profile_beta[name] = beta_spy
+
+        output["profiles"][name] = {
+            "assets": df.to_dict(orient="records"),
+            "clusters": cluster_sum.to_dict(orient="records"),
+            "beta_spy": beta_spy,
+        }
+
+        print(f"\n--- {name.upper()} PROFILE ---")
+        print(f"BETA TO SPY: {beta_spy:.4f}")
+        print(f"TOP ASSETS:\n{df.head(10).to_string(index=False)}")
+        print(f"CLUSTER SUMMARY:\n{cluster_sum.to_string(index=False)}")
+
     # Audit Data Collection (Stage 4)
     if os.path.exists(AUDIT_FILE):
         with open(AUDIT_FILE, "r") as f_audit:
@@ -391,26 +494,14 @@ def main():
                 "top_cluster": str(opt.get_cluster_summary(df).iloc[0]["Cluster_ID"]) if not df.empty else "N/A",
                 "total_gross": float(df["Weight"].sum()) if not df.empty else 0.0,
                 "total_net": float(df["Net_Weight"].sum()) if not df.empty else 0.0,
+                "beta_spy": profile_beta.get(name, 0.0),
             }
             for name, df in profiles_raw.items()
         },
     }
+
     with open(AUDIT_FILE, "w") as f_audit_out:
         json.dump(full_audit, f_audit_out, indent=2)
-
-    output = {
-        "profiles": {},
-        "cluster_registry": cluster_registry,
-        "optimization": {
-            "timestamp": str(pd.Timestamp.now()),
-            "regime": {"name": regime_name, "score": regime_score},
-            "constraints": {"cluster_cap": cluster_cap, "top_n": top_n},
-        },
-    }
-    for name, df in profiles_raw.items():
-        cluster_sum = opt.get_cluster_summary(df)
-        output["profiles"][name] = {"assets": df.to_dict(orient="records"), "clusters": cluster_sum.to_dict(orient="records")}
-        print(f"\n--- {name.upper()} PROFILE ---\nTOP ASSETS:\n{df.head(10).to_string(index=False)}\nCLUSTER SUMMARY:\n{cluster_sum.to_string(index=False)}")
 
     with open("data/lakehouse/portfolio_optimized_v2.json", "w") as f:
         json.dump(output, f, indent=2)
