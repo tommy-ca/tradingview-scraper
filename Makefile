@@ -5,6 +5,9 @@ LOOKBACK ?= 200
 BACKFILL ?= 1
 GAPFILL ?= 1
 SUMMARY_DIR ?= summaries
+META_CATALOG_PATH ?= data/lakehouse/symbols.parquet
+META_REFRESH ?= 0
+META_AUDIT ?= 0
 GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 
 # Selection & Risk Parameters
@@ -12,23 +15,99 @@ TOP_N ?= 3
 THRESHOLD ?= 0.4
 CLUSTER_CAP ?= 0.25
 
-.PHONY: sync sync-dev test lint format typecheck clean-all clean-exports clean-daily clean-run daily-run accept-state scans-local scans-crypto scans-bonds scans-forex-mtf scans prep-raw prune select prep align recover analyze corr-report factor-map regime-check hedge-anchors drift-check optimize-v2 backtest backtest-all backtest-report validate audit-health audit-logic audit-data audit report drift-monitor display gist heatmap finalize health-report
+.PHONY: help
+
+# Environment / tooling
+.PHONY: sync sync-dev test lint format typecheck
+
+# Cleanup
+.PHONY: clean-exports clean-all clean-daily clean-run
+
+# High-level entry points
+.PHONY: run-daily run-clean run-scan daily-run clean-run accept-state
+
+# Metadata catalogs
+.PHONY: meta-refresh meta-stats meta-audit-offline meta-audit meta-explore meta-validate
+
+# Scanners
+.PHONY: scan-local scan-crypto scan-bonds scan-forex-mtf scan-all scan
+.PHONY: scans-local scans-crypto scans-bonds scans-forex-mtf scans
+
+# Portfolio pipeline aliases
+.PHONY: portfolio-prep-raw portfolio-prune portfolio-align portfolio-analyze portfolio-finalize portfolio-accept-state portfolio-validate portfolio-audit
+
+# Portfolio pipeline
+.PHONY: prep-raw prune select prep align recover analyze corr-report factor-map regime-check hedge-anchors drift-check optimize-v2 backtest backtest-all backtest-report validate audit-health audit-logic audit-data audit report drift-monitor display gist heatmap finalize health-report
+
+help:
+	@echo "Entry points:"
+	@echo "  run-daily        Daily incremental portfolio run"
+	@echo "  clean-run        Full reset run (blank slate)"
+	@echo "  scan-all         Run all scanners"
+	@echo "  meta-validate    Refresh + offline metadata audits"
+	@echo "  meta-audit       Offline + online metadata parity sample"
+	@echo "  daily-run META_REFRESH=1 META_AUDIT=1  Offline metadata gates"
+	@echo "  daily-run META_REFRESH=1 META_AUDIT=2  Include online parity audit"
 
 # --- Discovery (Scanners) ---
 
-scans-local:
+scan-local:
 	bash scripts/run_local_scans.sh
 
-scans-crypto:
+scan-crypto:
 	bash scripts/run_crypto_scans.sh
 
-scans-bonds:
+scan-bonds:
 	$(PY) -m tradingview_scraper.bond_universe_selector --config configs/bond_etf_trend_momentum.yaml --export json
 
-scans-forex-mtf:
+scan-forex-mtf:
 	$(PY) -m tradingview_scraper.cfd_universe_selector --config configs/forex_mtf_monthly_weekly_daily.yaml --export json
 
-scans: scans-local scans-crypto scans-bonds scans-forex-mtf
+scan-all: scan-local scan-crypto scan-bonds scan-forex-mtf
+scan: scan-all
+
+# Legacy aliases (kept for compatibility)
+scans-local: scan-local
+scans-crypto: scan-crypto
+scans-bonds: scan-bonds
+scans-forex-mtf: scan-forex-mtf
+scans: scan-all
+
+# --- Metadata Catalog (Symbols + Exchanges) ---
+
+meta-refresh:
+	$(PY) scripts/build_metadata_catalog.py --from-catalog --catalog-path $(META_CATALOG_PATH)
+
+meta-stats:
+	$(PY) scripts/check_catalog_stats.py
+
+meta-audit-offline:
+	$(PY) scripts/audit_metadata_pit.py
+	$(PY) scripts/audit_metadata_timezones.py
+
+meta-audit: meta-audit-offline
+	$(PY) scripts/audit_metadata_catalog.py
+
+meta-explore:
+	$(PY) scripts/explore_metadata_catalogs.py
+
+# Refresh + audit (offline) in one command.
+meta-validate: meta-refresh meta-audit-offline
+
+# --- Entry Points (Convenience Aliases) ---
+
+run-daily: daily-run
+run-clean: clean-run
+run-scan: scan-all
+
+portfolio-prep-raw: prep-raw
+portfolio-prune: prune
+portfolio-align: align
+portfolio-analyze: analyze
+portfolio-finalize: finalize
+portfolio-accept-state: accept-state
+portfolio-validate: validate
+portfolio-audit: audit
 
 # --- Validation & Auditing ---
 
@@ -181,22 +260,25 @@ clean-daily: clean-exports
 # Pushes summaries to gist before and after the run (for safety and early auth validation).
 daily-run:
 	$(MAKE) gist
+	@if [ "$(META_REFRESH)" = "1" ]; then echo ">>> Refreshing metadata catalogs"; $(MAKE) meta-refresh; fi
+	@if [ "$(META_AUDIT)" = "1" ]; then echo ">>> Auditing metadata catalogs (offline)"; $(MAKE) meta-audit-offline; fi
+	@if [ "$(META_AUDIT)" = "2" ]; then echo ">>> Auditing metadata catalogs (online)"; $(MAKE) meta-audit; fi
 	$(MAKE) clean-daily
-	$(MAKE) scans
-	$(MAKE) prep-raw
-	$(MAKE) prune TOP_N=$(TOP_N) THRESHOLD=$(THRESHOLD)
-	$(MAKE) align LOOKBACK=$(LOOKBACK)
-	$(MAKE) analyze
-	$(MAKE) finalize
+	$(MAKE) scan-all
+	$(MAKE) portfolio-prep-raw
+	$(MAKE) portfolio-prune TOP_N=$(TOP_N) THRESHOLD=$(THRESHOLD)
+	$(MAKE) portfolio-align LOOKBACK=$(LOOKBACK)
+	$(MAKE) portfolio-analyze
+	$(MAKE) portfolio-finalize
 
 # After reviewing and implementing, snapshot current optimized as "actual" state.
 accept-state:
 	$(PY) scripts/track_portfolio_state.py --accept
 
 clean-run: clean-all
-	$(MAKE) scans
-	$(MAKE) prep-raw
-	$(MAKE) prune
-	$(MAKE) align
-	$(MAKE) analyze
-	$(MAKE) finalize
+	$(MAKE) scan-all
+	$(MAKE) portfolio-prep-raw
+	$(MAKE) portfolio-prune
+	$(MAKE) portfolio-align
+	$(MAKE) portfolio-analyze
+	$(MAKE) portfolio-finalize
