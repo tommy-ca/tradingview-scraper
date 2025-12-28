@@ -6,102 +6,102 @@ echo "Starting Global Universe Trend Scans..."
 # 1. Futures (Commodities)
 echo "----------------------------------------"
 echo "1. Futures Trend Scan (Long)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/futures_trend_momentum.yaml \
   --export json
 
 echo "1b. Futures Trend Scan (Short)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/futures_trend_momentum_short.yaml \
   --export json
 
 echo "1e. Futures Mean Reversion Scan (Long)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/futures_mean_reversion.yaml \
   --export json
 
 echo "1f. Futures Mean Reversion Scan (Short)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/futures_mean_reversion_short.yaml \
   --export json
 
 # 2. Futures (Metals specific)
 echo "----------------------------------------"
 echo "2. Futures Metals Trend Scan (Long)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/futures_metals_trend_momentum.yaml \
   --export json
 
 echo "2b. Futures Metals Trend Scan (Short)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/futures_metals_trend_momentum_short.yaml \
   --export json
 
 # 3. CFD
 echo "----------------------------------------"
 echo "3. CFD Trend Scan (Long)..."
-uv run python -m tradingview_scraper.cfd_universe_selector \
+uv run -m tradingview_scraper.cfd_universe_selector \
   --config configs/cfd_trend_momentum.yaml \
   --export json
 
 echo "3b. CFD Trend Scan (Short)..."
-uv run python -m tradingview_scraper.cfd_universe_selector \
+uv run -m tradingview_scraper.cfd_universe_selector \
   --config configs/cfd_trend_momentum_short.yaml \
   --export json
 
 # 4. Forex
 echo "----------------------------------------"
 echo "4. Forex Trend Scan (Long)..."
-uv run python -m tradingview_scraper.cfd_universe_selector \
+uv run -m tradingview_scraper.cfd_universe_selector \
   --config configs/forex_trend_momentum.yaml \
   --export json
 
 echo "4b. Forex Trend Scan (Short)..."
-uv run python -m tradingview_scraper.cfd_universe_selector \
+uv run -m tradingview_scraper.cfd_universe_selector \
   --config configs/forex_trend_momentum_short.yaml \
   --export json
 
 echo "4c. Forex Mean Reversion Scan (Long)..."
-uv run python -m tradingview_scraper.cfd_universe_selector \
+uv run -m tradingview_scraper.cfd_universe_selector \
   --config configs/forex_mean_reversion.yaml \
   --export json
 
 echo "4d. Forex Mean Reversion Scan (Short)..."
-uv run python -m tradingview_scraper.cfd_universe_selector \
+uv run -m tradingview_scraper.cfd_universe_selector \
   --config configs/forex_mean_reversion_short.yaml \
   --export json
 
 # 5. US ETFs
 echo "----------------------------------------"
 echo "5. US ETF Trend Scan (Long)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/us_etf_trend_momentum.yaml \
   --export json
 
 echo "5b. US ETF Trend Scan (Short)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/us_etf_trend_momentum_short.yaml \
   --export json
 
 # 6. US Stocks
 echo "----------------------------------------"
 echo "6. US Stocks Trend Scan (Long)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/us_stocks_trend_momentum.yaml \
   --export json
 
 echo "6b. US Stocks Trend Scan (Short)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/us_stocks_trend_momentum_short.yaml \
   --export json
 
 echo "6c. US Stocks Mean Reversion Scan (Long)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/us_stocks_mean_reversion.yaml \
   --export json
 
 echo "6d. US Stocks Mean Reversion Scan (Short)..."
-uv run python -m tradingview_scraper.futures_universe_selector \
+uv run -m tradingview_scraper.futures_universe_selector \
   --config configs/us_stocks_mean_reversion_short.yaml \
   --export json
 

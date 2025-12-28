@@ -34,7 +34,7 @@ All tasks follow a strict lifecycle:
 
 6. **Verify Coverage:** Run coverage reports using the project's chosen tools. For example, in a Python project, this might look like:
    ```bash
-   pytest --cov=app --cov-report=html
+   uv run pytest --cov=app --cov-report=html
    ```
    Target: >80% coverage for new code. The specific tools and commands will vary by language and framework.
 

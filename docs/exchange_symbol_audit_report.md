@@ -109,10 +109,10 @@
 #### 1. **Data Quality Cleanup**
 ```bash
 # Run comprehensive cleanup
-uv run python scripts/cleanup_metadata_catalog.py
+uv run scripts/cleanup_metadata_catalog.py
 
 # Remove duplicates and fix invalid formats
-uv run python scripts/standardize_symbol_formats.py
+uv run scripts/standardize_symbol_formats.py
 ```
 
 **Expected Impact**: 

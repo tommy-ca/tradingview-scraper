@@ -30,12 +30,12 @@ jobs:
         run: uv sync --extra dev
       - name: Run Futures Trend Scan (Long)
         run: |
-          uv run python -m tradingview_scraper.futures_universe_selector \
+          uv run -m tradingview_scraper.futures_universe_selector \
             --config configs/futures_trend_momentum.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Run Futures Trend Scan (Short)
         run: |
-          uv run python -m tradingview_scraper.futures_universe_selector \
+          uv run -m tradingview_scraper.futures_universe_selector \
             --config configs/futures_trend_momentum_short.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Upload Artifacts
@@ -58,12 +58,12 @@ jobs:
         run: uv sync --extra dev
       - name: Run Futures Metals Trend Scan (Long)
         run: |
-          uv run python -m tradingview_scraper.futures_universe_selector \
+          uv run -m tradingview_scraper.futures_universe_selector \
             --config configs/futures_metals_trend_momentum.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Run Futures Metals Trend Scan (Short)
         run: |
-          uv run python -m tradingview_scraper.futures_universe_selector \
+          uv run -m tradingview_scraper.futures_universe_selector \
             --config configs/futures_metals_trend_momentum_short.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Upload Artifacts
@@ -86,12 +86,12 @@ jobs:
         run: uv sync --extra dev
       - name: Run CFD Trend Scan (Long)
         run: |
-          uv run python -m tradingview_scraper.cfd_universe_selector \
+          uv run -m tradingview_scraper.cfd_universe_selector \
             --config configs/cfd_trend_momentum.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Run CFD Trend Scan (Short)
         run: |
-          uv run python -m tradingview_scraper.cfd_universe_selector \
+          uv run -m tradingview_scraper.cfd_universe_selector \
             --config configs/cfd_trend_momentum_short.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Upload Artifacts
@@ -114,12 +114,12 @@ jobs:
         run: uv sync --extra dev
       - name: Run Forex Trend Scan (Long)
         run: |
-          uv run python -m tradingview_scraper.cfd_universe_selector \
+          uv run -m tradingview_scraper.cfd_universe_selector \
             --config configs/forex_trend_momentum.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Run Forex Trend Scan (Short)
         run: |
-          uv run python -m tradingview_scraper.cfd_universe_selector \
+          uv run -m tradingview_scraper.cfd_universe_selector \
             --config configs/forex_trend_momentum_short.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Upload Artifacts
@@ -142,12 +142,12 @@ jobs:
         run: uv sync --extra dev
       - name: Run US ETF Trend Scan (Long)
         run: |
-          uv run python -m tradingview_scraper.futures_universe_selector \
+          uv run -m tradingview_scraper.futures_universe_selector \
             --config configs/us_etf_trend_momentum.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Run US ETF Trend Scan (Short)
         run: |
-          uv run python -m tradingview_scraper.futures_universe_selector \
+          uv run -m tradingview_scraper.futures_universe_selector \
             --config configs/us_etf_trend_momentum_short.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Upload Artifacts
@@ -170,12 +170,12 @@ jobs:
         run: uv sync --extra dev
       - name: Run US Stocks Trend Scan (Long)
         run: |
-          uv run python -m tradingview_scraper.futures_universe_selector \
+          uv run -m tradingview_scraper.futures_universe_selector \
             --config configs/us_stocks_trend_momentum.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Run US Stocks Trend Scan (Short)
         run: |
-          uv run python -m tradingview_scraper.futures_universe_selector \
+          uv run -m tradingview_scraper.futures_universe_selector \
             --config configs/us_stocks_trend_momentum_short.yaml \
             --export ${{ inputs.exportType || 'json' }}
       - name: Upload Artifacts

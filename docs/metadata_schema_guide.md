@@ -85,35 +85,35 @@ The system uses a built-in US Market Holiday list (`get_us_holidays`) to filter 
 
 ### Building Catalog
 
-```python
+```bash
 # Using build script
-uv run python scripts/build_metadata_catalog.py \
+uv run scripts/build_metadata_catalog.py \
     --config configs/crypto_cex_binance_top50.yaml \
     --limit 100
 
 # Or specific symbols
-uv run python scripts/build_metadata_catalog.py \
+uv run scripts/build_metadata_catalog.py \
     --symbols BINANCE:BTCUSDT BYBIT:ETHUSDT
 ```
 
 ### Auditing Catalog
 
-```python
+```bash
 # Full audit
-uv run python scripts/audit_metadata_catalog.py
+uv run scripts/audit_metadata_catalog.py
 
 # Timezone audit
-uv run python scripts/audit_metadata_timezones.py
+uv run scripts/audit_metadata_timezones.py
 
 # Point-in-time audit
-uv run python scripts/audit_metadata_pit.py
+uv run scripts/audit_metadata_pit.py
 ```
 
 ### Cleaning Catalog
 
-```python
+```bash
 # Fix data types and duplicates
-uv run python scripts/cleanup_metadata_catalog.py
+uv run scripts/cleanup_metadata_catalog.py
 ```
 
 ## Usage Examples
@@ -242,16 +242,16 @@ if exchange_info:
 
 ### Debug Commands
 
-```python
+```bash
 # Check catalog health
-python scripts/audit_metadata_catalog.py
+uv run scripts/audit_metadata_catalog.py
 
 # Validate specific symbol
-python scripts/validate_symbol.py BINANCE:BTCUSDT
+uv run scripts/validate_symbol.py BINANCE:BTCUSDT
 
 # Rebuild from scratch
 rm data/lakehouse/symbols.parquet
-python scripts/build_metadata_catalog.py --config your_config.yaml
+uv run scripts/build_metadata_catalog.py --config your_config.yaml
 ```
 
 ## Schema Evolution

@@ -29,8 +29,8 @@ These issues are limited to the pipeline/backtesting/selection changes in the cu
 - MAINT-02: `scripts/backtest_engine.py` and `scripts/generate_backtest_report.py` ensure `summaries/` exists.
 
 ### Validation Notes
-- `python -m compileall -q scripts tradingview_scraper` completed.
-- `pytest -q tests/test_regime.py tests/test_loader_lookback.py tests/test_indicators.py` passed.
+- `uv run -m compileall -q scripts tradingview_scraper` completed.
+- `uv run pytest -q tests/test_regime.py tests/test_loader_lookback.py tests/test_indicators.py` passed.
 - Full `pytest` run is network-heavy and may timeout depending on environment.
 
 ## Issues

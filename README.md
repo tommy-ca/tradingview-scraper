@@ -136,15 +136,18 @@ To get started with the TradingView Scraper library, follow these simple steps:
 
 1. **Open your terminal**: Launch your preferred command line interface.
 
-2. **Install the package**: Run the following command to install the TradingView Scraper:
+2. **Install with uv** (recommended):
    ```sh
-   pip install tradingview-scraper
+   uv venv
+   source .venv/bin/activate
+   uv pip install tradingview-scraper
    ```
 
-3. **Upgrade if necessary**: If you already have the library installed and want to upgrade to the latest version, use:
+3. **Upgrade if necessary**:
    ```sh
-   pip install --upgrade --no-cache tradingview-scraper
+   uv pip install --upgrade tradingview-scraper
    ```
+
 
 ## Development with uv
 
@@ -167,7 +170,7 @@ For consistent and reproducible development environments, this project uses [uv]
 
 4. **Run scanners**:
    ```sh
-   uv run python -m tradingview_scraper.futures_universe_selector --config configs/futures_trend_momentum.yaml
+   uv run -m tradingview_scraper.futures_universe_selector --config configs/futures_trend_momentum.yaml
    ```
 
 All CI/CD workflows and local shell scripts (`scripts/*.sh`) are optimized to use `uv` for speed and consistency.
@@ -355,7 +358,7 @@ print(article['title'])
 
 #### CLI: poll headlines (and bodies)
 ```bash
-python -m tradingview_scraper.symbols.news \
+uv run -m tradingview_scraper.symbols.news \
   --exchange BINANCE \
   --symbols BTCUSD,ETHUSD \
   --provider cointelegraph \

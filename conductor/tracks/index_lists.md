@@ -24,10 +24,10 @@ Integration
 - `configs/us_etf_base_universe.yaml` has the same hook.
 - After updating lists, rerun US scans:
 ```bash
-uv run python -m tradingview_scraper.futures_universe_selector --config configs/us_stocks_trend_momentum.yaml --export json
-uv run python -m tradingview_scraper.futures_universe_selector --config configs/us_stocks_trend_momentum_short.yaml --export json
-uv run python -m tradingview_scraper.futures_universe_selector --config configs/us_etf_trend_momentum.yaml --export json
-uv run python -m tradingview_scraper.futures_universe_selector --config configs/us_etf_trend_momentum_short.yaml --export json
+uv run -m tradingview_scraper.futures_universe_selector --config configs/us_stocks_trend_momentum.yaml --export json
+uv run -m tradingview_scraper.futures_universe_selector --config configs/us_stocks_trend_momentum_short.yaml --export json
+uv run -m tradingview_scraper.futures_universe_selector --config configs/us_etf_trend_momentum.yaml --export json
+uv run -m tradingview_scraper.futures_universe_selector --config configs/us_etf_trend_momentum_short.yaml --export json
 uv run scripts/summarize_results.py
 ```
 
