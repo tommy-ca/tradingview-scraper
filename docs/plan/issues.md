@@ -3,7 +3,7 @@
 This file captures the current review findings (bugs + design regressions) and an implementation plan to remediate them.
 
 ## Scope
-These issues are limited to the pipeline/backtesting/selection changes in the current working tree.
+These issues cover pipeline/backtesting/selection changes, scanner/universe-selector architecture risks, and metadata-catalog correctness gaps that impact production runs and backtest validity.
 
 ## Implementation Status (2025-12-27)
 - [x] BUG-01: Audit persistence fixed.
@@ -16,6 +16,21 @@ These issues are limited to the pipeline/backtesting/selection changes in the cu
 - [x] MAINT-01: Makefile duplication/stale `.PHONY` cleaned up.
 - [x] DOC-01: Workflow automation snippet updated.
 - [x] MAINT-02: `summaries/` output directory ensured.
+
+## Metadata Catalog Status (2025-12-28)
+- [x] DOC-META-01: Requirements/specs/design docs updated for profile + PIT.
+- [x] META-01: Persist `profile` in `data/lakehouse/symbols.parquet` (PIT versioned).
+- [x] META-02: Align timezone/session resolution with TradingView API and exchange defaults (remove hardcoded UTC/24x7 for non-crypto).
+- [x] META-03: Bootstrap and maintain `data/lakehouse/exchanges.parquet`.
+- [x] META-04: Add meaningful-change detection to avoid SCD churn.
+
+## Universe Selector Status (2025-12-28)
+- [x] DOC-UNI-01: Document selector architecture and refactor roadmap.
+- [ ] UNI-01: Add config lint for all `configs/**/*.yaml` (contradictions + field portability checks).
+- [ ] UNI-02: Add run scoping for scan outputs (`export/<run_id>/...`) and a stable export envelope (`{meta,data}`) while keeping legacy exports compatible.
+- [ ] UNI-03: Update downstream consumers to prefer export `meta` over filename parsing.
+- [ ] UNI-04: Introduce a manifest-driven scan runner (replaces duplicated bash config lists).
+- [ ] UNI-05: Refactor `FuturesUniverseSelector` monolith into modules and add `build_payloads()` that matches `run()` execution (fix dry-run mismatch risk).
 
 ### Fix References
 - BUG-01: `scripts/optimize_clustered_v2.py` now writes `AUDIT_FILE` after setting `full_audit["optimization"]`.
@@ -47,6 +62,17 @@ These issues are limited to the pipeline/backtesting/selection changes in the cu
 | MAINT-01 | Low | Makefile correctness | `Makefile` | `recover` ran twice and `.PHONY` listed stale targets. | Wasted runtime / operational confusion. | Deduplicate and prune stale `.PHONY`. |
 | DOC-01 | Low | Documentation drift | `docs/specs/quantitative_workflow.md` | Automation snippet referenced legacy scripts. | Operators follow incorrect steps. | Update to new `make` targets. |
 | MAINT-02 | Low | Output directory assumptions | backtest/report scripts | Wrote to `summaries/` without ensuring directory exists. | First-time runs fail depending on command order. | `os.makedirs("summaries", exist_ok=True)` before writing. |
+| META-01 | High | Metadata survivorship | `tradingview_scraper/symbols/stream/metadata.py` | `profile` is required for market-aware logic but not persisted/versioned in the catalog. | Profile heuristics can drift over time, introducing survivorship/look-ahead bias in backtests. | Persist `profile` in `symbols.parquet` and include it in PIT versioning and audits. |
+| META-02 | High | Timezone/session correctness | `tradingview_scraper/symbols/stream/persistent_loader.py`, `scripts/build_metadata_catalog.py` | Runtime enrichment and catalog builds can coerce `timezone`/`session` to `UTC/24x7` even when TradingView provides localized values or when non-crypto defaults should apply. | Breaks market-hours logic and invalidates session-aware backtests/health checks. | Centralize resolution (API -> exchange defaults -> fallback) and remove non-crypto `24x7` coercion. |
+| META-03 | Medium | Exchange catalog availability | `data/lakehouse/exchanges.parquet` | Exchange catalog may be missing or stale, but multiple audits/docs assume it exists. | Default resolution becomes inconsistent; audits fail; operator confusion. | Bootstrap and maintain `exchanges.parquet` from `DEFAULT_EXCHANGE_METADATA` and observed exchanges. |
+| META-04 | Medium | SCD churn | `tradingview_scraper/symbols/stream/metadata.py` | Upserts may version symbols even when no meaningful fields changed. | Unnecessary PIT bloat; noisy diffs; slower audits. | Add meaningful-change detection before creating a new version. |
+| DOC-META-01 | Low | Documentation alignment | `docs/metadata_schema_guide.md`, `docs/specs/metadata_timezone_spec.md` | Requirements/spec/design docs must reflect API-synced schema and PIT-safe usage. | Operators follow incorrect workflows; inconsistencies persist. | Update docs to require persisted `profile`, API-synced resolution, and incremental updates. |
+| DOC-UNI-01 | Low | Documentation alignment | `docs/specs/quantitative_workflow.md` | Universe selector architecture and refactor plan not captured in specs. | Operators and developers lack a shared contract; changes become risky. | Document current selector contract + staged roadmap. |
+| UNI-01 | High | Config safety | `configs/**/*.yaml`, selector config loader | Contradictory flags and unsupported screener fields are not detected before runtime. | Empty universes or HTTP 400 failures during scans. | Add a fast config lint step (CI-safe) and enforce basic invariants. |
+| UNI-02 | High | Export contract | `export/universe_selector_*.json` consumers | Downstream scripts infer semantics from filenames (underscore splits / `_short`). | Hidden coupling; fragile renames; cross-run leakage. | Introduce `{meta,data}` envelope + `export/<run_id>/...` while keeping legacy compatibility. |
+| UNI-03 | Medium | Consumer robustness | `scripts/select_top_universe.py`, `scripts/prepare_portfolio_data.py` | Consumers prefer filename parsing and globbing over structured metadata. | Incorrect direction/category parsing; stale file mixing. | Prefer `meta` when present; keep legacy filename parsing as fallback. |
+| UNI-04 | Medium | Orchestration DRY | `scripts/run_*_scans.sh`, Makefile scan targets | Scan config lists are duplicated across bash scripts and ad hoc runners. | Drift and partial coverage; hard to add/remove scans safely. | Add a manifest-driven scan runner and have Makefile call it. |
+| UNI-05 | Medium | Selector correctness | `tradingview_scraper/futures_universe_selector.py`, `tradingview_scraper/pipeline.py` | `dry_run` payload generation can diverge from real `run()` behavior (especially with exchange loops). | Async pipeline scans the wrong payload set; hard-to-debug misses. | Add `build_payloads()` that matches execution and refactor selector into modules. |
 
 ## Remediation Plan
 
@@ -68,8 +94,28 @@ These issues are limited to the pipeline/backtesting/selection changes in the cu
 1. Fix Makefile duplication and stale `.PHONY` entries.
 2. Update workflow docs to match the new pipeline targets.
 
+### Phase 5 — Metadata Catalog Correctness (META-01, META-02, META-03, META-04, DOC-META-01)
+1. Align all metadata writers to a shared resolver (API -> exchange defaults -> fallback).
+2. Persist `profile` in `symbols.parquet` and include it in PIT versioning.
+3. Bootstrap and maintain `exchanges.parquet` for exchange defaults.
+4. Add meaningful-change detection to reduce SCD churn.
+5. Regenerate metadata audits/reports and confirm invariants.
+
+### Phase 6 — Universe Selector Hardening & Refactor (UNI-01, UNI-02, UNI-03, UNI-04, UNI-05, DOC-UNI-01)
+1. Add a config lint step for all `configs/**/*.yaml` (contradictions + field portability guards).
+2. Introduce a stable scan export envelope (`{meta,data}`) and run scoping (`export/<run_id>/...`) while keeping legacy exports compatible.
+3. Update downstream consumers to prefer `meta` over filename parsing.
+4. Replace duplicated bash scan lists with a manifest-driven scan runner.
+5. Refactor selector internals (split monolith + introduce `build_payloads()` that matches real execution).
+
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.
 - Backtest/report scripts create `summaries/` as needed.
 - Liquidity scoring does not rank assets higher when ATR/price are missing.
 - Beta audit reflects hedged exposure (SHORTs reduce beta rather than inflating it).
+- `data/lakehouse/exchanges.parquet` exists and covers all exchanges present in `data/lakehouse/symbols.parquet`.
+- Non-crypto symbols are not coerced to `timezone=UTC` / `session=24x7`; crypto remains `UTC/24x7`.
+- `profile` is persisted and versioned in `data/lakehouse/symbols.parquet` and used for PIT-safe backtests.
+- All `configs/**/*.yaml` pass config lint (no contradictions; field portability guards catch known HTTP 400 issues).
+- Scan outputs can be scoped by run (`export/<run_id>/...`) and consumers prefer structured `meta` over filename parsing.
+- `build_payloads()` (or equivalent) matches real selector execution so async discovery cannot under/over-scan.

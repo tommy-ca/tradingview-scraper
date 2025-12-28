@@ -9,7 +9,7 @@ This document defines the standardized pipeline for transforming raw market data
 
 ### Stage 1: Discovery & Scans
 *   **Tools**: `tradingview_scraper.futures_universe_selector`, `tradingview_scraper.cfd_universe_selector`, `tradingview_scraper.bond_universe_selector`
-*   **Entry point**: `make scans` (local + crypto scans, plus bonds + Forex MTF)
+*   **Entry point**: `make scan-all` (alias: `make scans`) (local + crypto scans, plus bonds + Forex MTF)
 *   **Input**: `configs/*.yaml` strategy configs (trend, mean reversion, MTF)
 *   **Output**: `export/universe_selector_*.json` scan results with LONG/SHORT tags
 *   **US equities note**: Avoid the TradingView screener field `index` (can return HTTP 400 "Unknown field"); constrain with `include_symbol_files` (e.g. `data/index/sp500_symbols.txt`).
@@ -42,19 +42,46 @@ This document defines the standardized pipeline for transforming raw market data
 ## 3. Automation Commands
 ```bash
 # Daily incremental run (recommended; preserves cache/state; includes gist preflight)
-make daily-run
+make run-daily   # alias: make daily-run
+
+# Optional metadata gates (build + audit catalogs before portfolio run)
+make run-daily META_REFRESH=1 META_AUDIT=1   # refresh + offline audits (PIT + timezone)
+make run-daily META_REFRESH=1 META_AUDIT=2   # includes online TradingView parity sample
 
 # Full reset run (blank slate)
-make clean-run
+make run-clean   # alias: make clean-run
 
 # After implementing new target weights
-make accept-state
+make portfolio-accept-state   # alias: make accept-state
+
+# Metadata-only workflows
+make meta-validate            # refresh + offline audits
+make meta-audit               # offline + online parity sample
 
 # Or step-by-step (tiered selection + analysis + finalize)
-make scans
+make scan-all                 # alias: make scans
 make prep-raw  # best-effort raw health check (may be stale before backfill)
 make prune TOP_N=3 THRESHOLD=0.4
 make align LOOKBACK=200
 make analyze
 make finalize
 ```
+
+## 4. Universe Selectors (Scanners) — Current State
+
+- **Core engine**: `FuturesUniverseSelector` is the generic selector used across Crypto, Equities, Forex, Futures, and CFDs.
+- **Wrappers**: `BondUniverseSelector` and `cfd_universe_selector` are thin entrypoints that reuse the same selector plumbing.
+- **Export contract (today)**: scan artifacts are written to `export/universe_selector_*.json` and downstream scripts may infer direction/market/exchange from filenames.
+- **Operational risks**:
+  - filename parsing is a hidden API (`*_short` substring, underscore splits)
+  - configs are not linted beyond Pydantic bounds (unsupported screener fields can cause HTTP 400)
+  - `dry_run` payload generation can diverge from real `run()` behavior (notably when `exchanges:` is set)
+
+## 5. Universe Selector Roadmap (Non-Breaking)
+
+1. **Inventory & dependency map**: document producer→consumer coupling for `export/universe_selector_*.json` (which scripts parse filenames vs read embedded metadata).
+2. **Config lint + deterministic tests**: validate all `configs/**/*.yaml`, detect contradictory flags, and gate network tests behind markers/env vars.
+3. **Stable export envelope + run scoping**: add optional `{meta, data}` JSON envelope and write scans to `export/<run_id>/...` to prevent cross-run leakage; keep legacy filename format supported.
+4. **Standardized scan runner**: replace bash scan lists with a manifest-driven runner (`--group local|crypto|base`, `--run-id`, `--max-concurrent`, `--export-format`).
+5. **Selector refactor**: split selector monolith into modules (config loader, payload builder, post-filters, symbol normalization, export) and introduce an explicit `build_payloads()` that matches real execution.
+6. **Config DRY**: introduce layered presets and additive list merges (`filters_add`, `columns_add`, etc.) to reduce duplication without breaking existing configs.

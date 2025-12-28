@@ -8,7 +8,12 @@ Two execution modes are supported:
 
 ### Daily incremental run (recommended for production)
 ```bash
-make daily-run
+# Primary entry point (alias: make daily-run)
+make run-daily
+
+# Optional metadata gates (build + audit catalogs before portfolio run)
+make run-daily META_REFRESH=1 META_AUDIT=1   # refresh + offline audits (PIT + timezone)
+make run-daily META_REFRESH=1 META_AUDIT=2   # includes online TradingView parity sample
 ```
 - Runs full multi-asset discovery and the full pipeline.
 - Preserves the lakehouse candle cache (`data/lakehouse/*_1d.parquet`) and the last implemented baseline (`data/lakehouse/portfolio_actual_state.json`) for drift monitoring.
@@ -47,22 +52,24 @@ make clean-run
 
 ### Stage 1: Discovery & Canonical Merging
 ```bash
-make scans
-uv run scripts/select_top_universe.py --mode raw
+make scan-all   # alias: make scans
+make prep-raw   # builds raw candidates + best-effort raw health check
 ```
 - Uses **Alpha Discovery Scoring** (`Liquidity + Trend + Vol + Perf`) to rank candidates.
 - Merges redundant crypto venues into single economic units with preserved alternative metadata.
 
 ### Stage 2: Natural Selection (Pruning)
 ```bash
-make prep BACKFILL=1 GAPFILL=1 LOOKBACK=60
-make select TOP_N=3 THRESHOLD=0.4
+make prune TOP_N=3 THRESHOLD=0.4  # pass-1 backfill + health gate + natural selection
 ```
 - Performs lightweight statistical pruning to identify the most diverse winners per cluster before deep backfilling.
 
 ### Stage 3: High-Integrity Alignment (Self-Healing)
 ```bash
-make prep BACKFILL=1 GAPFILL=1 LOOKBACK=200
+make align LOOKBACK=200           # deep backfill + selected-mode health gate
+make audit-logic                  # logic checks (recommended)
+
+# Or full validation (includes backtests)
 make validate
 ```
 - **Selective Sync**: Skips fresh assets to optimize execution speed.
