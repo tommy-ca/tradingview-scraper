@@ -20,10 +20,31 @@ class DataLoader:
     DEFAULT_GENESIS_CAP = 8500
     PROBE_CANDLE_LIMIT = 50
 
-    def __init__(self, websocket_jwt_token: str = "unauthorized_user_token"):
+    def __init__(
+        self,
+        websocket_jwt_token: str = "unauthorized_user_token",
+        export_result: bool = True,
+        idle_timeout_seconds: float = 5.0,
+        idle_packet_limit: int = 3,
+    ):
         self.websocket_jwt_token = websocket_jwt_token
+        self.export_result = export_result
+        self.idle_timeout_seconds = idle_timeout_seconds
+        self.idle_packet_limit = idle_packet_limit
+
         self.catalog = MetadataCatalog()
-        self.streamer = Streamer(export_result=True, websocket_jwt_token=self.websocket_jwt_token, idle_timeout_seconds=5.0, idle_packet_limit=3)
+        self.streamer: Optional[Streamer] = None
+
+    def _get_streamer(self) -> Streamer:
+        if self.streamer is None:
+            self.streamer = Streamer(
+                export_result=self.export_result,
+                websocket_jwt_token=self.websocket_jwt_token,
+                idle_timeout_seconds=self.idle_timeout_seconds,
+                idle_packet_limit=self.idle_packet_limit,
+            )
+        assert self.streamer is not None
+        return self.streamer
 
     def _calculate_candles_needed(self, start: datetime, end: datetime, interval: str, exchange_symbol: Optional[str] = None) -> int:
         """
@@ -159,7 +180,8 @@ class DataLoader:
         logger.info(f"Requesting {n_candles} candles for {exchange_symbol} to cover range starting {start}")
 
         probe_n = min(n_candles, self.PROBE_CANDLE_LIMIT)
-        candles = self._stream_with_retry(self.streamer, exchange, symbol, interval, probe_n)
+        streamer = self._get_streamer()
+        candles = self._stream_with_retry(streamer, exchange, symbol, interval, probe_n)
 
         if len(candles) < probe_n:
             logger.info(
@@ -172,7 +194,7 @@ class DataLoader:
             )
             n_candles = len(candles)
         elif n_candles > probe_n:
-            candles = self._stream_with_retry(self.streamer, exchange, symbol, interval, n_candles)
+            candles = self._stream_with_retry(streamer, exchange, symbol, interval, n_candles)
 
         start_ts = start.timestamp()
         end_ts = end.timestamp()
