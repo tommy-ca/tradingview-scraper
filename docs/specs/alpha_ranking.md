@@ -16,16 +16,20 @@ $$Alpha_{Discovery} = 0.3 \cdot Norm(\text{Value Traded}) + 0.3 \cdot Norm(ADX) 
     - For **LONG** candidates: $Norm(\text{Perf.3M} + \text{Perf.6M})$
     - For **SHORT** candidates: $Norm(-(\text{Perf.3M} + \text{Perf.6M}))$
 
-## 2. Execution Alpha (Lead Asset Selection)
+## 2. Execution Alpha (Execution Intelligence)
 
-Once assets are grouped into hierarchical risk buckets, the system must choose a single "Lead Asset" for execution to minimize implementation friction and maximize risk-adjusted quality.
+Once assets are grouped into hierarchical risk buckets, the system must choose a single "Lead Asset" for execution. This process now incorporates **Execution Intelligence** to minimize slippage and maximize tradeability.
 
 ### The Execution Rank Formula:
-$$Alpha_{Execution} = 0.4 \cdot Norm(\text{Momentum}) + 0.3 \cdot Norm(\text{Stability}) + 0.3 \cdot Norm(\text{Convexity})$$
+$$Alpha_{Execution} = 0.3 \cdot Norm(\text{Momentum}) + 0.2 \cdot Norm(\text{Stability}) + 0.2 \cdot Norm(\text{Convexity}) + 0.3 \cdot Norm(\text{Liquidity})$$
 
-- **Momentum (40%)**: Annualized mean return. Favors assets currently outperforming their cluster peers.
-- **Stability (30%)**: Annualized inverse volatility ($1/\sigma$). Favors the most stable venue or instrument within the correlated group.
-- **Convexity (30%)**: Normalized Antifragility Score (Positive Skew + Tail Gain). Prioritizes assets with asymmetric upside potential.
+- **Momentum (30%)**: Annualized mean return. Favors assets currently outperforming their cluster peers.
+- **Stability (20%)**: Annualized inverse volatility ($1/\sigma$). Favors the most stable instrument within the correlated group.
+- **Convexity (20%)**: Normalized Antifragility Score. Prioritizes assets with asymmetric upside potential.
+- **Liquidity (30%)**: **Execution Intelligence Layer**. 
+    - $L = 0.7 \cdot \ln(ValueTraded) + 0.3 \cdot \ln(\frac{1}{SpreadProxy})$
+    - $SpreadProxy = \frac{ATR}{Price}$
+    - Favors instruments with deep books and narrow estimated spreads.
 
 ## 3. Implementation Logic
 

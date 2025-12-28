@@ -18,27 +18,34 @@ This document defines the standardized pipeline for transforming raw market data
 *   **Parameters**: ADX thresholds, RSI levels, Performance horizons (1W, 1M, 3M).
 *   *Note*: Short signals are identified for trend-reversal or defensive positioning.
 
-### Stage 3: Portfolio Construction (MPT)
-*   **Tool**: `scripts/optimize_portfolio.py` (Modern Portfolio Theory)
-*   **Theory**:
-    *   **Minimum Variance**: Solves for weights that minimize total portfolio volatility.
-    *   **Risk Parity**: Allocates such that each asset contributes an equal amount of risk.
-*   **Synthetic Longs**: Short signals are return-inverted to allow the optimizer to treat them as positive contributors to the hedged portfolio.
+### Stage 3: Natural Selection (Pruning)
+*   **Tool**: `scripts/natural_selection.py`
+*   **Process**: Performs hierarchical clustering on Pass 1 (60d) data. Selects the Top N assets per cluster based on **Execution Intelligence** (Liquidity + Momentum + Convexity).
+*   **Identity Merging**: Canonical venue merging happens here to avoid redundant exchange risk (e.g., BTC across 5 exchanges).
 
-### Stage 4: Metadata Cataloging & PIT
-*   **Tool**: `tradingview_scraper.symbols.stream.metadata`
-*   **Persistence**: `data/lakehouse/symbols.parquet`
-*   **Goal**: Ensure all portfolio constituents have verified tick sizes, timezones, and Point-in-Time (PIT) history to prevent look-ahead bias during backtests.
+### Stage 4: Risk Optimization (Clustered V2)
+*   **Tool**: `scripts/optimize_clustered_v2.py`
+*   **Process**: Optimizes weights across clusters using hierarchical risk buckets. Supports **Min Variance, Risk Parity, Max Sharpe, and Barbell** profiles.
+*   **Insulation**: Strictly enforced 25% systemic cap per cluster.
+
+### Stage 5: Validation & Backtesting
+*   **Tool**: `scripts/backtest_engine.py`
+*   **Process**: 13th Step of the production lifecycle. Performs a Walk-Forward validation to verify realized volatility and returns against the optimizer's goals.
+*   **Target Achievement**: Automatically audits if `MIN_VARIANCE` actually delivered lower volatility than other profiles during the test period.
+
+### Stage 6: Implementation & Reporting
+*   **Output**: Implementation Dashboard (`make display`), Strategy Resume (`summaries/backtest_comparison.md`), and Audit Log (`summaries/selection_audit.md`).
 
 ## 3. Automation Commands
 ```bash
-# 1. Run Scanners
-bash scripts/run_crypto_scans.sh
-bash scripts/run_local_scans.sh
+# Full end-to-end run
+make clean-run
 
-# 2. Prepare Returns Matrix
-PYTHONPATH=. python3 scripts/prepare_portfolio_data.py
-
-# 3. Optimize Weights
-PYTHONPATH=. python3 scripts/optimize_portfolio.py
+# Or step-by-step (tiered selection + analysis + finalize)
+make scans
+make prep-raw
+make prune TOP_N=3 THRESHOLD=0.4
+make align LOOKBACK=200
+make analyze
+make finalize
 ```
