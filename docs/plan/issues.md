@@ -26,11 +26,11 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 
 ## Universe Selector Status (2025-12-28)
 - [x] DOC-UNI-01: Document selector architecture and refactor roadmap.
-- [ ] UNI-01: Add config lint for all `configs/**/*.yaml` (contradictions + field portability checks).
-- [ ] UNI-02: Add run scoping for scan outputs (`export/<run_id>/...`) and a stable export envelope (`{meta,data}`) while keeping legacy exports compatible.
-- [ ] UNI-03: Update downstream consumers to prefer export `meta` over filename parsing.
+- [x] UNI-01: Add config lint for all `configs/**/*.yaml` (see `scripts/lint_universe_configs.py` + `make scan-lint`).
+- [x] UNI-02: Add run scoping for scan outputs (`export/<run_id>/...`) and a stable export envelope (`{meta,data}`) while keeping legacy exports compatible.
+- [x] UNI-03: Update downstream consumers to prefer export `meta` over filename parsing.
 - [ ] UNI-04: Introduce a manifest-driven scan runner (replaces duplicated bash config lists).
-- [ ] UNI-05: Refactor `FuturesUniverseSelector` monolith into modules and add `build_payloads()` that matches `run()` execution (fix dry-run mismatch risk).
+- [ ] UNI-05: Refactor `FuturesUniverseSelector` monolith into modules. (Done: `build_payloads()` now matches `run()` execution and `--dry-run` output.)
 
 ### Fix References
 - BUG-01: `scripts/optimize_clustered_v2.py` now writes `AUDIT_FILE` after setting `full_audit["optimization"]`.
@@ -42,9 +42,13 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 - MAINT-01: `Makefile` deduplicates `recover` and trims stale `.PHONY` targets.
 - DOC-01: `docs/specs/quantitative_workflow.md` automation snippet updated to use the new `make` workflow.
 - MAINT-02: `scripts/backtest_engine.py` and `scripts/generate_backtest_report.py` ensure `summaries/` exists.
+- UNI-02: `tradingview_scraper/symbols/utils.py` supports run-scoped exports via `TV_EXPORT_RUN_ID`; selector exports use `{meta,data}`.
+- UNI-03: `scripts/*` consumers resolve `export/<run_id>/` and prefer embedded `meta` (direction/product/exchange) over filename parsing.
+- UNI-05: `tradingview_scraper/futures_universe_selector.py` uses `build_payloads()` for both execution and `--dry-run`.
 
 ### Validation Notes
 - `uv run -m compileall -q scripts tradingview_scraper` completed.
+- Smoke: created a conflicting export (`filename != meta`) under `export/smoke-uni-02-03/` and ran `RUN_ID=smoke-uni-02-03 make prep-raw`; `data/lakehouse/selection_audit.json` reported `OKX_PERP` + `short=1`, confirming consumers prefer `meta` over filename parsing.
 - `uv run pytest -q tests/test_regime.py tests/test_loader_lookback.py tests/test_indicators.py` passed.
 - Full `pytest` run is network-heavy and may timeout depending on environment.
 
@@ -69,7 +73,7 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 | DOC-META-01 | Low | Documentation alignment | `docs/metadata_schema_guide.md`, `docs/specs/metadata_timezone_spec.md` | Requirements/spec/design docs must reflect API-synced schema and PIT-safe usage. | Operators follow incorrect workflows; inconsistencies persist. | Update docs to require persisted `profile`, API-synced resolution, and incremental updates. |
 | DOC-UNI-01 | Low | Documentation alignment | `docs/specs/quantitative_workflow.md` | Universe selector architecture and refactor plan not captured in specs. | Operators and developers lack a shared contract; changes become risky. | Document current selector contract + staged roadmap. |
 | UNI-01 | High | Config safety | `configs/**/*.yaml`, selector config loader | Contradictory flags and unsupported screener fields are not detected before runtime. | Empty universes or HTTP 400 failures during scans. | Add a fast config lint step (CI-safe) and enforce basic invariants. |
-| UNI-02 | High | Export contract | `export/universe_selector_*.json` consumers | Downstream scripts infer semantics from filenames (underscore splits / `_short`). | Hidden coupling; fragile renames; cross-run leakage. | Introduce `{meta,data}` envelope + `export/<run_id>/...` while keeping legacy compatibility. |
+| UNI-02 | High | Export contract | `export/<run_id>/universe_selector_*.json` consumers | Downstream scripts infer semantics from filenames (underscore splits / `_short`). | Hidden coupling; fragile renames; cross-run leakage. | Introduce `{meta,data}` envelope + `export/<run_id>/...` while keeping legacy compatibility. |
 | UNI-03 | Medium | Consumer robustness | `scripts/select_top_universe.py`, `scripts/prepare_portfolio_data.py` | Consumers prefer filename parsing and globbing over structured metadata. | Incorrect direction/category parsing; stale file mixing. | Prefer `meta` when present; keep legacy filename parsing as fallback. |
 | UNI-04 | Medium | Orchestration DRY | `scripts/run_*_scans.sh`, Makefile scan targets | Scan config lists are duplicated across bash scripts and ad hoc runners. | Drift and partial coverage; hard to add/remove scans safely. | Add a manifest-driven scan runner and have Makefile call it. |
 | UNI-05 | Medium | Selector correctness | `tradingview_scraper/futures_universe_selector.py`, `tradingview_scraper/pipeline.py` | `dry_run` payload generation can diverge from real `run()` behavior (especially with exchange loops). | Async pipeline scans the wrong payload set; hard-to-debug misses. | Add `build_payloads()` that matches execution and refactor selector into modules. |
@@ -102,7 +106,7 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 5. Regenerate metadata audits/reports and confirm invariants.
 
 ### Phase 6 — Universe Selector Hardening & Refactor (UNI-01, UNI-02, UNI-03, UNI-04, UNI-05, DOC-UNI-01)
-1. Add a config lint step for all `configs/**/*.yaml` (contradictions + field portability guards).
+1. Add a config lint step for all `configs/**/*.yaml` (implemented via `scripts/lint_universe_configs.py` + `make scan-lint`; enforce in CI workflows).
 2. Introduce a stable scan export envelope (`{meta,data}`) and run scoping (`export/<run_id>/...`) while keeping legacy exports compatible.
 3. Update downstream consumers to prefer `meta` over filename parsing.
 4. Replace duplicated bash scan lists with a manifest-driven scan runner.

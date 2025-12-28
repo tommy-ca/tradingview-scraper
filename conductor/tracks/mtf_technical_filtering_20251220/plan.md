@@ -3,7 +3,7 @@
 ## Phase 1: Candidate Ingestion & MTF Mapping [checkpoint: 9155a18]
 Goal: Systematically ingest initial trend signals and map the required MTF indicator set.
 
-- [x] Task: Research automated ingestion of `export/universe_selector_binance_*_long/short.json` results.
+- [x] Task: Research automated ingestion of `export/<run_id>/universe_selector_binance_*_long/short_*.json` results.
 - [x] Task: Define the "High-Conviction" MTF set (e.g., RSI, EMA, ADX across 15m, 1h, 4h, 1d).
 - [x] Task: Document the naming schema for MTF keys (e.g., `BTCUSDT_15m_RSI`).
 - [x] Task: Conductor - User Manual Verification 'Phase 1'

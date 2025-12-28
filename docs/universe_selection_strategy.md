@@ -31,7 +31,7 @@ Instead of choosing between Volume or Market Cap, we now use a dual-layer approa
     *   **Rank Guard:** Only assets in the Top 200 (or 300) of the global market cap (using `market_caps_crypto.json`) are included.
     *   **Floor Guard:** Enforces an absolute minimum market cap ($10M) using the maximum of TradingView's `market_cap_calc` or external data.
 3.  **Strict Quote Whitelist:** Only USD-denominated quotes (`USDT`, `USDC`, `USD`, `DAI`, `BUSD`, `FDUSD`) are allowed. This eliminates local fiat noise (IDR, TRY, JPY) that can inflate "Value Traded" rankings.
-4.  **Dated Futures Exclusion:** Delivery contracts are excluded to ensure the universe focuses on perpetuals and spot markets.
+4.  **Dated Futures:** Delivery contracts are excluded by default (spot/perp scans use `exclude_dated_futures: true`) to reduce expiry noise. Separate `*_dated*` configs intentionally set `include_dated_futures_only: true` (and must not set `exclude_dated_futures: true`).
 
 ## 3. Aggregation & Summed Liquidity
 
@@ -55,7 +55,8 @@ As of December 2025, all crypto trend-following strategies follow these standard
 - **Liquidity Floors (Summed VT):**
     - **Binance:** $1M (Spot) / $5M (Perp)
     - **Bybit/OKX/Bitget:** $500k (Spot) / $1M (Perp)
-- **Dated Futures:** Explicitly excluded (`exclude_dated_futures: true`) to avoid illiquid expiry-based noise.
+- **Dated Futures (spot/perp scans):** Explicitly excluded (`exclude_dated_futures: true`) to avoid illiquid expiry-based noise.
+- **Dated Futures (delivery scans):** Use `include_dated_futures_only: true` and `exclude_dated_futures: false`.
 - **Market Cap Guard:** Top 200 Rank Guard + $10M Floor Guard.
 
 ## 3. Recommendation

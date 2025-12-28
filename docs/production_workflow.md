@@ -8,6 +8,9 @@ Two execution modes are supported:
 
 ### Daily incremental run (recommended for production)
 ```bash
+# Optional config preflight (recommended after editing configs)
+make scan-lint
+
 # Primary entry point (alias: make daily-run)
 make run-daily
 
@@ -52,6 +55,7 @@ make clean-run
 
 ### Stage 1: Discovery & Canonical Merging
 ```bash
+make scan-lint  # validate configs first
 make scan-all   # alias: make scans
 make prep-raw   # builds raw candidates + best-effort raw health check
 ```

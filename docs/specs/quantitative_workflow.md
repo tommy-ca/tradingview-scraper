@@ -10,8 +10,9 @@ This document defines the standardized pipeline for transforming raw market data
 ### Stage 1: Discovery & Scans
 *   **Tools**: `tradingview_scraper.futures_universe_selector`, `tradingview_scraper.cfd_universe_selector`, `tradingview_scraper.bond_universe_selector`
 *   **Entry point**: `make scan-all` (alias: `make scans`) (local + crypto scans, plus bonds + Forex MTF)
+*   **Config preflight**: `make scan-lint` (or `uv run scripts/lint_universe_configs.py --strict`) before running scans/CI.
 *   **Input**: `configs/*.yaml` strategy configs (trend, mean reversion, MTF)
-*   **Output**: `export/universe_selector_*.json` scan results with LONG/SHORT tags
+*   **Output**: `export/<run_id>/universe_selector_*.json` scan results (`{meta,data}` envelope; set `TV_EXPORT_RUN_ID` to scope a run)
 *   **US equities note**: Avoid the TradingView screener field `index` (can return HTTP 400 "Unknown field"); constrain with `include_symbol_files` (e.g. `data/index/sp500_symbols.txt`).
 
 ### Stage 2: Strategy Filtering (Signal Generation)
@@ -59,6 +60,7 @@ make meta-validate            # refresh + offline audits
 make meta-audit               # offline + online parity sample
 
 # Or step-by-step (tiered selection + analysis + finalize)
+make scan-lint                # validate configs first
 make scan-all                 # alias: make scans
 make prep-raw  # best-effort raw health check (may be stale before backfill)
 make prune TOP_N=3 THRESHOLD=0.4
@@ -71,17 +73,16 @@ make finalize
 
 - **Core engine**: `FuturesUniverseSelector` is the generic selector used across Crypto, Equities, Forex, Futures, and CFDs.
 - **Wrappers**: `BondUniverseSelector` and `cfd_universe_selector` are thin entrypoints that reuse the same selector plumbing.
-- **Export contract (today)**: scan artifacts are written to `export/universe_selector_*.json` and downstream scripts may infer direction/market/exchange from filenames.
+- **Export contract**: scan artifacts are written to `export/<run_id>/universe_selector_*.json` using a `{meta,data}` envelope; consumers should prefer `meta` (with filename parsing as a fallback).
 - **Operational risks**:
-  - filename parsing is a hidden API (`*_short` substring, underscore splits)
-  - configs are not linted beyond Pydantic bounds (unsupported screener fields can cause HTTP 400)
-  - `dry_run` payload generation can diverge from real `run()` behavior (notably when `exchanges:` is set)
+  - configs are linted via `make scan-lint` (CI-safe), but TradingView fields can still change over time
+  - scan orchestration still uses duplicated bash config lists (to be replaced with a manifest runner)
 
 ## 5. Universe Selector Roadmap (Non-Breaking)
 
-1. **Inventory & dependency map**: document producer→consumer coupling for `export/universe_selector_*.json` (which scripts parse filenames vs read embedded metadata).
-2. **Config lint + deterministic tests**: validate all `configs/**/*.yaml`, detect contradictory flags, and gate network tests behind markers/env vars.
-3. **Stable export envelope + run scoping**: add optional `{meta, data}` JSON envelope and write scans to `export/<run_id>/...` to prevent cross-run leakage; keep legacy filename format supported.
+1. **Inventory & dependency map**: document producer→consumer coupling for `export/<run_id>/universe_selector_*.json` (which scripts still parse filenames vs read embedded `meta`).
+2. **Config lint + deterministic tests**: validate all `configs/**/*.yaml` (lint implemented via `make scan-lint`) and gate network tests behind markers/env vars.
+3. **Stable export envelope + run scoping**: implemented (`{meta,data}` envelope + `export/<run_id>/...`) to prevent cross-run leakage; consumers fall back to legacy filename parsing when needed.
 4. **Standardized scan runner**: replace bash scan lists with a manifest-driven runner (`--group local|crypto|base`, `--run-id`, `--max-concurrent`, `--export-format`).
-5. **Selector refactor**: split selector monolith into modules (config loader, payload builder, post-filters, symbol normalization, export) and introduce an explicit `build_payloads()` that matches real execution.
+5. **Selector refactor**: `build_payloads()` now matches real execution; remaining work is splitting selector internals into modules (config loader, payload builder, post-filters, normalization, export).
 6. **Config DRY**: introduce layered presets and additive list merges (`filters_add`, `columns_add`, etc.) to reduce duplication without breaking existing configs.

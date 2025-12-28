@@ -4,15 +4,20 @@ This playbook shows the end-to-end steps: run local + crypto scanners, summarize
 
 ## 1) Run scanners
 ```
-bash scripts/run_local_scans.sh
-bash scripts/run_crypto_scans.sh
+# Recommended: run-scoped exports
+RUN_ID=20251228-120000 make scan-all
+
+# Or run individual groups
+TV_EXPORT_RUN_ID=20251228-120000 bash scripts/run_local_scans.sh
+TV_EXPORT_RUN_ID=20251228-120000 bash scripts/run_crypto_scans.sh
 ```
-- Outputs land in `export/` as `universe_selector_*` JSONs.
+- Outputs land in `export/<run_id>/` as `universe_selector_*` JSONs using a `{meta,data}` envelope.
 
 ## 2) Summarize scan results
 ```
-uv run scripts/summarize_results.py
-uv run scripts/summarize_crypto_results.py
+# Defaults to the newest `export/<run_id>/` if TV_EXPORT_RUN_ID is unset
+TV_EXPORT_RUN_ID=20251228-120000 uv run scripts/summarize_results.py
+TV_EXPORT_RUN_ID=20251228-120000 uv run scripts/summarize_crypto_results.py
 ```
 - Produces console summaries for all asset classes.
 
@@ -50,7 +55,8 @@ uv run scripts/optimize_barbell.py
 
 ## Quick daily sequence
 ```
-bash scripts/run_local_scans.sh && bash scripts/run_crypto_scans.sh && \
+RUN_ID="$(date +%Y%m%d-%H%M%S)"; export RUN_ID; export TV_EXPORT_RUN_ID="$RUN_ID"; \
+make scan-all && \
 uv run scripts/summarize_results.py && uv run scripts/summarize_crypto_results.py && \
 PORTFOLIO_BATCH_SIZE=5 PORTFOLIO_LOOKBACK_DAYS=100 PORTFOLIO_BACKFILL=1 PORTFOLIO_GAPFILL=1 \
 uv run scripts/prepare_portfolio_data.py && \
