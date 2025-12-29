@@ -60,7 +60,7 @@ def get_asset_identity(symbol: str, asset_class: str = "") -> str:
         clean = raw.replace(".P", "").replace(".F", "").replace("-SWAP", "").replace("-SPOT", "")
 
         # Forex pairs should remain pair-identified (e.g. EURUSD), not base-identified (EUR).
-        if asset_class_upper == "FOREX":
+        if asset_class_upper == "FOREX" or (len(clean) == 6 and clean.isalpha()):
             if "." in clean:
                 clean = clean.split(".", 1)[0]
             clean = re.sub(r"[^A-Z0-9]", "", clean)
@@ -204,6 +204,17 @@ def select_top_universe(mode: str = "raw"):
         if sym not in unique_assets:
             unique_assets[sym] = item
 
+    # Asset-class specific normalization denominators
+    # (ValueTraded, Volatility, PerformanceAvg)
+    norm_factors = {
+        "CRYPTO": (1e9, 10.0, 50.0),
+        "EQUITIES": (5e8, 5.0, 20.0),
+        "FUTURES": (5e8, 5.0, 20.0),
+        "FOREX": (1e8, 1.0, 5.0),
+        "FIXED_INCOME": (5e8, 2.0, 10.0),
+        "OTHER": (1e8, 5.0, 20.0),
+    }
+
     scored_items = list(unique_assets.values())
     for item in scored_items:
         v_traded = float(item.get("Value.Traded", 0) or 0)
@@ -212,12 +223,15 @@ def select_top_universe(mode: str = "raw"):
         perf3m = float(item.get("Perf.3M", 0) or 0)
         perf6m = float(item.get("Perf.6M", 0) or 0)
         is_long = item.get("_direction", "LONG") == "LONG"
+        ac = item.get("_asset_class", "OTHER")
+
+        vt_den, vol_den, perf_den = norm_factors.get(ac, norm_factors["OTHER"])
 
         p3 = perf3m if is_long else -perf3m
         p6 = perf6m if is_long else -perf6m
         p_avg = (p3 + p6) / 2
 
-        score = 0.3 * min(1.0, v_traded / 1e9) + 0.3 * min(1.0, adx / 50) + 0.1 * min(1.0, vol / 10) + 0.3 * min(1.0, p_avg / 50)
+        score = 0.3 * min(1.0, v_traded / vt_den) + 0.3 * min(1.0, adx / 50) + 0.1 * min(1.0, vol / vol_den) + 0.3 * min(1.0, p_avg / perf_den)
         item["_alpha_score"] = score
 
     # 3. Canonical Merging (Best Venue per Identity)
