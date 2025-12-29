@@ -64,24 +64,17 @@
             "enabled_markets": {
               "type": "array",
               "items": { "type": "string", "enum": ["futures", "crypto", "cfd", "forex", "bonds", "etf"] }
-            },
-            "futures": {
-              "type": "object",
-              "properties": {
-                "enabled": { "type": "boolean" },
-                "adx_threshold": { "type": "number", "minimum": 0 },
-                "volume_min": { "type": "integer", "minimum": 0 },
-                "momentum_lookback": { "type": "string" }
-              }
-            },
-            "crypto": {
-              "type": "object",
-              "properties": {
-                "enabled": { "type": "boolean" },
-                "market_cap_min": { "type": "number", "minimum": 0 },
-                "batch_size": { "type": "integer", "minimum": 1 }
-              }
             }
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "base_preset": { "type": "string" },
+              "limit": { "type": "integer" },
+              "exchanges": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": true
           }
         },
         "env": {

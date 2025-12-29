@@ -29,16 +29,31 @@
       },
       "discovery": {
         "enabled_markets": ["futures", "crypto", "cfd", "forex", "bonds", "etf"],
-        "futures": {
-          "enabled": true,
-          "adx_threshold": 25,
-          "volume_min": 5000,
-          "momentum_lookback": "1M"
+        "futures_long": {
+          "base_preset": "presets/futures_us_liquid.yaml",
+          "trend": {
+            "direction": "long",
+            "timeframe": "daily",
+            "logic": "AND",
+            "recommendation": { "enabled": true, "min": 0.4 },
+            "adx": { "enabled": true, "min": 25 },
+            "momentum": { "enabled": true, "horizons": { "change": 0.0, "Perf.W": 0.5, "Perf.1M": 3.0 } },
+            "confirmation_momentum": { "enabled": true, "horizons": { "Perf.3M": 5.0 } }
+          },
+          "export_metadata": { "symbol": "futures_trend_momentum", "data_category": "universe_selector" }
         },
-        "crypto": {
-          "enabled": true,
-          "market_cap_min": 1000000000,
-          "batch_size": 20
+        "futures_short": {
+          "base_preset": "presets/futures_us_liquid.yaml",
+          "trend": {
+            "direction": "short",
+            "timeframe": "daily",
+            "logic": "AND",
+            "recommendation": { "enabled": true, "min": -0.4 },
+            "adx": { "enabled": true, "min": 25 },
+            "momentum": { "enabled": true, "horizons": { "change": 0.0, "Perf.W": -0.5, "Perf.1M": -3.0 } },
+            "confirmation_momentum": { "enabled": true, "horizons": { "Perf.3M": -5.0 } }
+          },
+          "export_metadata": { "symbol": "futures_trend_momentum_short", "data_category": "universe_selector" }
         }
       },
       "env": {
@@ -71,6 +86,23 @@
       "tournament": {
         "engines": "custom",
         "profiles": "min_variance,hrp"
+      },
+      "discovery": {
+        "enabled_markets": ["futures", "crypto"],
+        "futures_long": {
+          "base_preset": "presets/futures_us_liquid.yaml",
+          "limit": 10,
+          "trend": { "adx": { "min": 20 } }
+        },
+        "futures_short": {
+          "base_preset": "presets/futures_us_liquid.yaml",
+          "limit": 10,
+          "trend": { "direction": "short" }
+        },
+        "cfd_long": { "base_preset": "cfd_trend_momentum.yaml", "limit": 5 },
+        "cfd_short": { "base_preset": "cfd_trend_momentum_short.yaml", "limit": 5 },
+        "crypto_binance_perp_long": { "base_preset": "crypto_cex_trend_binance_perp_daily_long.yaml", "limit": 10 },
+        "crypto_binance_perp_short": { "base_preset": "crypto_cex_trend_binance_perp_daily_short.yaml", "limit": 10 }
       },
       "env": {
         "META_REFRESH": "0",
