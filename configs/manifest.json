@@ -29,32 +29,40 @@
       },
       "discovery": {
         "enabled_markets": ["futures", "crypto", "cfd", "forex", "bonds", "etf"],
-        "futures_long": {
-          "base_preset": "presets/futures_us_liquid.yaml",
-          "trend": {
-            "direction": "long",
-            "timeframe": "daily",
-            "logic": "AND",
-            "recommendation": { "enabled": true, "min": 0.4 },
-            "adx": { "enabled": true, "min": 25 },
-            "momentum": { "enabled": true, "horizons": { "change": 0.0, "Perf.W": 0.5, "Perf.1M": 3.0 } },
-            "confirmation_momentum": { "enabled": true, "horizons": { "Perf.3M": 5.0 } }
-          },
-          "export_metadata": { "symbol": "futures_trend_momentum", "data_category": "universe_selector" }
-        },
-        "futures_short": {
-          "base_preset": "presets/futures_us_liquid.yaml",
-          "trend": {
-            "direction": "short",
-            "timeframe": "daily",
-            "logic": "AND",
-            "recommendation": { "enabled": true, "min": -0.4 },
-            "adx": { "enabled": true, "min": 25 },
-            "momentum": { "enabled": true, "horizons": { "change": 0.0, "Perf.W": -0.5, "Perf.1M": -3.0 } },
-            "confirmation_momentum": { "enabled": true, "horizons": { "Perf.3M": -5.0 } }
-          },
-          "export_metadata": { "symbol": "futures_trend_momentum_short", "data_category": "universe_selector" }
-        }
+        "futures_long": { "base_preset": "futures_trend_momentum.yaml" },
+        "futures_short": { "base_preset": "futures_trend_momentum_short.yaml" },
+        "futures_mr_long": { "base_preset": "futures_mean_reversion.yaml" },
+        "futures_mr_short": { "base_preset": "futures_mean_reversion_short.yaml" },
+        "futures_metals_long": { "base_preset": "futures_metals_trend_momentum.yaml" },
+        "futures_metals_short": { "base_preset": "futures_metals_trend_momentum_short.yaml" },
+        "cfd_long": { "base_preset": "cfd_trend_momentum.yaml" },
+        "cfd_short": { "base_preset": "cfd_trend_momentum_short.yaml" },
+        "forex_long": { "base_preset": "forex_trend_momentum.yaml" },
+        "forex_short": { "base_preset": "forex_trend_momentum_short.yaml" },
+        "forex_mr_long": { "base_preset": "forex_mean_reversion.yaml" },
+        "forex_mr_short": { "base_preset": "forex_mean_reversion_short.yaml" },
+        "etf_long": { "base_preset": "us_etf_trend_momentum.yaml" },
+        "etf_short": { "base_preset": "us_etf_trend_momentum_short.yaml" },
+        "stocks_long": { "base_preset": "us_stocks_trend_momentum.yaml" },
+        "stocks_short": { "base_preset": "us_stocks_trend_momentum_short.yaml" },
+        "stocks_mr_long": { "base_preset": "us_stocks_mean_reversion.yaml" },
+        "stocks_mr_short": { "base_preset": "us_stocks_mean_reversion_short.yaml" },
+        "crypto_binance_spot_long": { "base_preset": "crypto_cex_trend_binance_spot_daily_long.yaml" },
+        "crypto_binance_spot_short": { "base_preset": "crypto_cex_trend_binance_spot_daily_short.yaml" },
+        "crypto_binance_perp_long": { "base_preset": "crypto_cex_trend_binance_perp_daily_long.yaml" },
+        "crypto_binance_perp_short": { "base_preset": "crypto_cex_trend_binance_perp_daily_short.yaml" },
+        "crypto_okx_spot_long": { "base_preset": "crypto_cex_trend_okx_spot_daily_long.yaml" },
+        "crypto_okx_spot_short": { "base_preset": "crypto_cex_trend_okx_spot_daily_short.yaml" },
+        "crypto_okx_perp_long": { "base_preset": "crypto_cex_trend_okx_perp_daily_long.yaml" },
+        "crypto_okx_perp_short": { "base_preset": "crypto_cex_trend_okx_perp_daily_short.yaml" },
+        "crypto_bybit_spot_long": { "base_preset": "crypto_cex_trend_bybit_spot_daily_long.yaml" },
+        "crypto_bybit_spot_short": { "base_preset": "crypto_cex_trend_bybit_spot_daily_short.yaml" },
+        "crypto_bybit_perp_long": { "base_preset": "crypto_cex_trend_bybit_perp_daily_long.yaml" },
+        "crypto_bybit_perp_short": { "base_preset": "crypto_cex_trend_bybit_perp_daily_short.yaml" },
+        "crypto_bitget_spot_long": { "base_preset": "crypto_cex_trend_bitget_spot_daily_long.yaml" },
+        "crypto_bitget_spot_short": { "base_preset": "crypto_cex_trend_bitget_spot_daily_short.yaml" },
+        "crypto_bitget_perp_long": { "base_preset": "crypto_cex_trend_bitget_perp_daily_long.yaml" },
+        "crypto_bitget_perp_short": { "base_preset": "crypto_cex_trend_bitget_perp_daily_short.yaml" }
       },
       "env": {
         "META_REFRESH": "1",
@@ -89,16 +97,8 @@
       },
       "discovery": {
         "enabled_markets": ["futures", "crypto"],
-        "futures_long": {
-          "base_preset": "presets/futures_us_liquid.yaml",
-          "limit": 10,
-          "trend": { "adx": { "min": 20 } }
-        },
-        "futures_short": {
-          "base_preset": "presets/futures_us_liquid.yaml",
-          "limit": 10,
-          "trend": { "direction": "short" }
-        },
+        "futures_long": { "base_preset": "futures_trend_momentum.yaml", "limit": 10 },
+        "futures_short": { "base_preset": "futures_trend_momentum_short.yaml", "limit": 10 },
         "cfd_long": { "base_preset": "cfd_trend_momentum.yaml", "limit": 5 },
         "cfd_short": { "base_preset": "cfd_trend_momentum_short.yaml", "limit": 5 },
         "crypto_binance_perp_long": { "base_preset": "crypto_cex_trend_binance_perp_daily_long.yaml", "limit": 10 },
