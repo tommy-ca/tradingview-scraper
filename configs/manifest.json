@@ -1,0 +1,67 @@
+{
+  "$schema": "./manifest.schema.json",
+  "default_profile": "production",
+  "profiles": {
+    "production": {
+      "description": "Institutional high-integrity daily production run",
+      "data": {
+        "lookback_days": 200,
+        "batch_size": 5,
+        "backfill": true,
+        "gapfill": true,
+        "max_symbols": 200
+      },
+      "selection": {
+        "top_n": 3,
+        "threshold": 0.4
+      },
+      "risk": {
+        "cluster_cap": 0.25
+      },
+      "backtest": {
+        "train_window": 120,
+        "test_window": 20,
+        "step_size": 20
+      },
+      "tournament": {
+        "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
+        "profiles": "min_variance,hrp,max_sharpe,barbell"
+      },
+      "env": {
+        "META_REFRESH": "1",
+        "META_AUDIT": "1",
+        "GIST_ID": "e888e1eab0b86447c90c26e92ec4dc36"
+      }
+    },
+    "repro_dev": {
+      "description": "Lightweight development profile for fast end-to-end testing",
+      "data": {
+        "lookback_days": 40,
+        "batch_size": 10,
+        "backfill": true,
+        "gapfill": true,
+        "max_symbols": 50
+      },
+      "selection": {
+        "top_n": 2,
+        "threshold": 0.5
+      },
+      "risk": {
+        "cluster_cap": 0.25
+      },
+      "backtest": {
+        "train_window": 30,
+        "test_window": 10,
+        "step_size": 10
+      },
+      "tournament": {
+        "engines": "custom",
+        "profiles": "min_variance,hrp"
+      },
+      "env": {
+        "META_REFRESH": "0",
+        "META_AUDIT": "0"
+      }
+    }
+  }
+}
