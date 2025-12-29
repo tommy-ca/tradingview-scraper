@@ -116,9 +116,9 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 
 ### Phase 7 — Multi-Engine Portfolio Optimization (RESEARCH-01)
 1. Implement `BaseRiskEngine` interface for library-agnostic optimization.
-2. Integrate `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, and `CVXPortfolio`.
-3. Standardize 4 profiles (MinVar, HRP, MaxSharpe, Barbell) across all engines.
-4. Extend `BacktestEngine` with Tournament Mode for performance benchmarking.
+2. Maintain **Custom (Internal)** engine as the primary baseline for the 4 standard profiles (MinVar, HRP, MaxSharpe, Barbell).
+3. Integrate `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, and `CVXPortfolio` as comparative backends.
+4. Extend `BacktestEngine` with Tournament Mode to benchmark all engines (Custom + 4 Libraries) under the same constraints.
 
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.

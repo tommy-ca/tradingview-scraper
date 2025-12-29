@@ -8,6 +8,7 @@ The following engines will be implemented using a unified `BaseRiskEngine` inter
 
 | Engine | Primary Implementation | Profile Focus |
 | :--- | :--- | :--- |
+| **Custom (Internal)** | `ClusteredOptimizerV2` | Baseline for all 4 profiles (MinVar, HRP, MaxSharpe, Barbell) |
 | **skfolio** | `skfolio.optimization` | Hierarchical Risk Parity (HRP), Max Diversification |
 | **Riskfolio-Lib** | `riskfolio.Portfolio` | Minimum CVaR, Tail Risk Optimization |
 | **PyPortfolioOpt** | `pypfopt.efficient_frontier` | Standard Mean-Variance (MVO), Shrinkage Models |
