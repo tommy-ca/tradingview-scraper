@@ -55,6 +55,7 @@ pylint-output.txt
 outputs/
 artifacts/
 data/
+.temp_gist_*
 
 # Conductor local state
 conductor/setup_state.json
