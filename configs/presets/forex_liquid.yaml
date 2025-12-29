@@ -4,7 +4,7 @@
 markets: ["forex"]
 exchanges: [] 
 
-columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
+columns: ["name", "close", "volume", "Value.Traded", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 
 # G8 Currencies
 base_currencies: ["USD", "EUR", "JPY", "GBP", "AUD", "CAD", "CHF", "NZD"]

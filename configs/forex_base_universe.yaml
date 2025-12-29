@@ -7,6 +7,9 @@ include_stable_bases: true
 base_currencies: [USD, EUR, JPY, GBP, AUD, CAD, CHF, NZD]
 allowed_spot_quotes: [USD, EUR, JPY, GBP, AUD, CAD, CHF, NZD]
 
+# Keep alternates per pair for audit/implementation
+group_duplicates: true
+
 # Disable strategy filters at the base layer
 trend:
   recommendation:
@@ -21,6 +24,20 @@ volatility:
   max: 6.0
   atr_pct_max: 0.05
   fallback_use_atr_pct: true
+
+# Basic liquidity floor (exclude dead feeds)
+volume:
+  min: 1
+
+# Recent performance / data completeness gate (non-directional)
+recent_perf:
+  enabled: true
+  required_fields: ["change", "Perf.W", "Perf.1M", "Perf.3M"]
+  abs_max:
+    change: 5.0
+    "Perf.W": 15.0
+    "Perf.1M": 30.0
+    "Perf.3M": 60.0
 
 # Capacity and paging
 limit: 300

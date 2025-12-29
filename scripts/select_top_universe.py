@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
@@ -40,7 +41,7 @@ def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
     return export_root
 
 
-def get_asset_identity(symbol: str) -> str:
+def get_asset_identity(symbol: str, asset_class: str = "") -> str:
     """
     Extracts canonical identity of an asset to group redundant venues.
     Groups different stablecoin variations into one economic unit.
@@ -52,9 +53,19 @@ def get_asset_identity(symbol: str) -> str:
             if raw.startswith(prefix):
                 return prefix
 
-        # 2. Handle Crypto (base/quote)
+        asset_class_upper = (asset_class or "").upper()
+
+        # 2. Handle Crypto (base/quote) + shared normalization
         # Remove common suffixes
         clean = raw.replace(".P", "").replace(".F", "").replace("-SWAP", "").replace("-SPOT", "")
+
+        # Forex pairs should remain pair-identified (e.g. EURUSD), not base-identified (EUR).
+        if asset_class_upper == "FOREX":
+            if "." in clean:
+                clean = clean.split(".", 1)[0]
+            clean = re.sub(r"[^A-Z0-9]", "", clean)
+            return clean
+
         # Handle dashes
         if "-" in clean:
             parts = clean.split("-")
@@ -183,7 +194,7 @@ def select_top_universe(mode: str = "raw"):
                 i["_direction"] = file_direction
                 i["_category"] = category
                 i["_asset_class"] = get_asset_class(category, i["symbol"])
-                i["_identity"] = get_asset_identity(i["symbol"])
+                i["_identity"] = get_asset_identity(i["symbol"], i["_asset_class"])
                 all_items.append(i)
 
     # 2. Deduplicate and Score
