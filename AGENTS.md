@@ -17,7 +17,7 @@ The entire production lifecycle is unified under the `make clean-run` target. Ag
 8.  **Health Audit**: Validate 100% gap-free alignment for the implementation universe.
 9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Adaptive Thresholds**.
 10. **Regime Detection**: Multi-factor analysis (**Entropy + DWT Spectral Turbulence**).
-11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties**.
+11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties**, supported by a multi-engine benchmarking framework (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
 12. **Validation**: Run `make backtest` to verify realized performance against risk estimates.
 13. **Reporting**: Generate Implementation Dashboard, Strategy Resume, and sync to private Gist.
 

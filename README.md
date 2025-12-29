@@ -199,7 +199,9 @@ The following research reports outline advanced capabilities and feasibility stu
 - [Lakehouse Data Quality & Gap Management](docs/research/lakehouse_gap_management_20251220.md) - Automated detection and repair of missing historical data.
 - [Data Resilience & Stabilization (v2)](docs/specs/data_resilience_v2.md) - Specs for WebSocket guardrails, Genesis detection, and mixed-universe alignment.
 - [Portfolio Artifact Validation](scripts/validate_portfolio_artifacts.py) - Categorized health dashboard for mixed asset universes.
+- [Multi-Engine Optimization Benchmarks](docs/specs/multi_engine_optimization_benchmarks.md) - Framework for comparing skfolio, Riskfolio-Lib, PyPortfolioOpt, and CVXPortfolio.
 - [Optimization Learnings & Comparison](docs/research/optimization_learnings_20251224.md) - Analysis of MPT, Robust, and Antifragile Barbell models.
+
 
 - [Historical Candle Resolution & Depth Matrix](docs/research/resolution_matrix_20251220.md) - Mapping of all verified TradingView timeframes and their limits.
 - [Stress & Performance Load Testing](docs/research/performance_load_tests_20251220.md) - Benchmarks for storage latency and concurrent ingestion throughput.

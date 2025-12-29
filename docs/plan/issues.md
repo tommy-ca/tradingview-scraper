@@ -114,6 +114,12 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 4. Replace duplicated bash scan lists with a manifest-driven scan runner.
 5. Refactor selector internals (split monolith + introduce `build_payloads()` that matches real execution).
 
+### Phase 7 — Multi-Engine Portfolio Optimization (RESEARCH-01)
+1. Implement `BaseRiskEngine` interface for library-agnostic optimization.
+2. Integrate `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, and `CVXPortfolio`.
+3. Standardize 4 profiles (MinVar, HRP, MaxSharpe, Barbell) across all engines.
+4. Extend `BacktestEngine` with Tournament Mode for performance benchmarking.
+
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.
 - Summary writers create `artifacts/summaries/runs/<RUN_ID>/` and update `artifacts/summaries/latest` as needed.

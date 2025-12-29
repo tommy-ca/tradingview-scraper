@@ -19,5 +19,12 @@
     - [ ] Add `sector` and `industry` columns to US Stocks preset.
     - [ ] Create scans to rank sectors by momentum.
 
-## 4. Crypto Refinement
-- [ ] **Unified "Liquid" Presets:** Refactor remaining per-exchange crypto configs (OKX, Bybit, Bitget) to use the `crypto_cex_preset_binance_top50_perp.yaml` pattern (or create a generic `crypto_liquid_perp.yaml`).
+## 5. Portfolio Risk & Optimization Engines
+- [ ] **Multi-Engine Integration:** Implement standard `BaseRiskEngine` interface for third-party libraries.
+    - [ ] **skfolio:** Integrate HRP and Max Diversification.
+    - [ ] **Riskfolio-Lib:** Integrate CVaR and Tail Risk optimization.
+    - [ ] **PyPortfolioOpt:** Integrate MVO with shrinkage.
+    - [ ] **CVXPortfolio:** Integrate Multi-Period Optimization (MPO).
+- [ ] **Optimization Benchmarking:** 
+    - [ ] Update `BacktestEngine` with "Tournament Mode" for side-by-side comparison.
+    - [ ] Generate comparative reports across all 4 profiles (MinVar, HRP, MaxSharpe, Barbell).
