@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, Tuple, Type
 
 from pydantic import Field
 from pydantic_settings import (
@@ -48,10 +48,14 @@ class ManifestSettingsSource(PydanticBaseSettingsSource):
 
         # Flatten nested JSON into flat keys for BaseSettings
         flattened = {}
-        for section in ["data", "selection", "risk", "backtest", "tournament"]:
+        for section in ["data", "selection", "risk", "backtest", "tournament", "discovery"]:
             if section in profile_data:
-                for k, v in profile_data[section].items():
-                    flattened[k] = v
+                if section == "discovery":
+                    # Keep discovery structured for specialized consumption
+                    flattened["discovery"] = profile_data[section]
+                else:
+                    for k, v in profile_data[section].items():
+                        flattened[k] = v
 
         # Merge env block
         if "env" in profile_data:
@@ -101,6 +105,9 @@ class TradingViewScraperSettings(BaseSettings):
     tournament_engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
     tournament_profiles: str = "min_variance,hrp,max_sharpe,barbell"
 
+    # Discovery (Structured)
+    discovery: Dict[str, Any] = Field(default_factory=dict)
+
     # Environment overrides (GIST_ID, etc.)
     gist_id: str = "e888e1eab0b86447c90c26e92ec4dc36"
     meta_refresh: str = "0"
@@ -129,6 +136,10 @@ class TradingViewScraperSettings(BaseSettings):
             ManifestSettingsSource(settings_cls, m_path, p_name),
             dotenv_settings,
         )
+
+    def get_discovery_config(self, scanner_type: str) -> Dict[str, Any]:
+        """Extracts the discovery configuration for a specific scanner type."""
+        return self.discovery.get(scanner_type, {})
 
     @property
     def summaries_root_dir(self) -> Path:
