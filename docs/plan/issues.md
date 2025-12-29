@@ -114,11 +114,18 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 4. Replace duplicated bash scan lists with a manifest-driven scan runner.
 5. Refactor selector internals (split monolith + introduce `build_payloads()` that matches real execution).
 
-### Phase 7 — Multi-Engine Portfolio Optimization (RESEARCH-01)
+### Phase 7 — Multi-Engine Portfolio Optimization (Finalized)
 1. Implement `BaseRiskEngine` interface for library-agnostic optimization.
 2. Maintain **Custom (Internal)** engine as the primary baseline for the 4 standard profiles (MinVar, HRP, MaxSharpe, Barbell).
 3. Integrate `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, and `CVXPortfolio` as comparative backends.
 4. Extend `BacktestEngine` with Tournament Mode to benchmark all engines (Custom + 4 Libraries) under the same constraints.
+5. **Reproducible Workflow Manifests**: Implement `configs/manifest.json` with multi-profile support and schema validation.
+
+### Phase 8 — Centralized Discovery Configuration
+1. **Discovery Schema**: Extend `manifest.schema.json` to include universe selector parameters (thresholds, enabled markets).
+2. **Selector Integration**: Update `BaseUniverseSelector` to ingest config from manifest profiles instead of external YAMLs.
+3. **Workflow Refactoring**: Update `make scan-all` and shell scripts to propagate `PROFILE` to discovery engines.
+4. **Validation**: Extend `make scan-lint` to validate the JSON discovery block against market-specific invariants.
 
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.

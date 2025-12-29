@@ -27,6 +27,20 @@
         "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
         "profiles": "min_variance,hrp,max_sharpe,barbell"
       },
+      "discovery": {
+        "enabled_markets": ["futures", "crypto", "cfd", "forex", "bonds", "etf"],
+        "futures": {
+          "enabled": true,
+          "adx_threshold": 25,
+          "volume_min": 5000,
+          "momentum_lookback": "1M"
+        },
+        "crypto": {
+          "enabled": true,
+          "market_cap_min": 1000000000,
+          "batch_size": 20
+        }
+      },
       "env": {
         "META_REFRESH": "1",
         "META_AUDIT": "1",
