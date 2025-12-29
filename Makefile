@@ -1,9 +1,35 @@
 SHELL := /bin/bash
 PY ?= uv run
+
+# Load workflow manifest if provided, or fallback to .env
+# Priority: command line arg > manifest file > .env > Makefile defaults
+MANIFEST ?= .env
+ifneq ($(wildcard $(MANIFEST)),)
+    include $(MANIFEST)
+    # Automatically export all variables defined in the manifest/env file
+    export $(shell sed 's/=.*//' $(MANIFEST))
+endif
+
+# Defaults (if not set in environment or manifest)
 BATCH ?= 5
 LOOKBACK ?= 200
 BACKFILL ?= 1
 GAPFILL ?= 1
+TOP_N ?= 3
+THRESHOLD ?= 0.4
+CLUSTER_CAP ?= 0.25
+META_REFRESH ?= 0
+META_AUDIT ?= 0
+GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
+
+# Backtest Defaults
+BACKTEST_TRAIN ?= 120
+BACKTEST_TEST ?= 20
+BACKTEST_STEP ?= 20
+
+# Tournament Defaults
+TOURNAMENT_ENGINES ?= custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio
+TOURNAMENT_PROFILES ?= min_variance,hrp,max_sharpe,barbell
 
 # Generated artifacts live under artifacts/ (ignored by git)
 ARTIFACTS_DIR ?= artifacts
@@ -14,9 +40,6 @@ SUMMARY_DIR ?= $(SUMMARIES_ROOT)/latest
 SUMMARY_RUN_DIR ?= $(SUMMARIES_ROOT)/runs/$(TV_RUN_ID)
 
 META_CATALOG_PATH ?= data/lakehouse/symbols.parquet
-META_REFRESH ?= 0
-META_AUDIT ?= 0
-GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 
 # Scan run scoping (export/<run_id>/...)
 # Priority: explicit TV_EXPORT_RUN_ID > explicit RUN_ID > generated timestamp
@@ -39,11 +62,6 @@ ifeq ($(origin TV_RUN_ID), undefined)
 TV_RUN_ID := $(RUN_ID)
 endif
 export TV_RUN_ID
-
-# Selection & Risk Parameters
-TOP_N ?= 3
-THRESHOLD ?= 0.4
-CLUSTER_CAP ?= 0.25
 
 .PHONY: help
 
@@ -166,17 +184,17 @@ backtest: backtest-all backtest-report
 
 backtest-all:
 	@echo ">>> Running Walk-Forward Validation for all profiles..."
-	$(PY) scripts/backtest_engine.py --profile min_variance --train 120 --test 20 --step 20 || $(PY) scripts/backtest_engine.py --profile min_variance --train 40 --test 10 --step 10
-	$(PY) scripts/backtest_engine.py --profile risk_parity --train 120 --test 20 --step 20 || $(PY) scripts/backtest_engine.py --profile risk_parity --train 40 --test 10 --step 10
-	$(PY) scripts/backtest_engine.py --profile max_sharpe --train 120 --test 20 --step 20 || $(PY) scripts/backtest_engine.py --profile max_sharpe --train 40 --test 10 --step 10
-	$(PY) scripts/backtest_engine.py --profile barbell --train 120 --test 20 --step 20 || $(PY) scripts/backtest_engine.py --profile barbell --train 40 --test 10 --step 10
+	$(PY) scripts/backtest_engine.py --profile min_variance --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
+	$(PY) scripts/backtest_engine.py --profile risk_parity --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
+	$(PY) scripts/backtest_engine.py --profile max_sharpe --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
+	$(PY) scripts/backtest_engine.py --profile barbell --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
 
 backtest-report:
 	$(PY) scripts/generate_backtest_report.py
 
 backtest-tournament:
 	@echo ">>> Running Multi-Engine Tournament Mode..."
-	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --train 120 --test 20 --step 20 || CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --train 40 --test 10 --step 10
+	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --engines $(TOURNAMENT_ENGINES) --profiles $(TOURNAMENT_PROFILES) --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
 
 tournament-report: backtest-report
 
