@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.stream.lakehouse import LakehouseStorage
 from tradingview_scraper.symbols.stream.metadata import DataProfile, MetadataCatalog, get_symbol_profile
 
@@ -23,6 +24,8 @@ CANDIDATES_RAW_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_candidates_raw.jso
 RETURNS_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_returns.pkl")
 OPTIMIZED_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_optimized_v2.json")
 FRESHNESS_THRESHOLD_HOURS = 72
+# Daily bars for TradFi can be stale across weekends/holidays; use a day-based threshold.
+FRESHNESS_THRESHOLD_DAYS_TRADFI = int(os.getenv("FRESHNESS_THRESHOLD_DAYS_TRADFI", "5"))
 
 # Institutional Safety Limits
 BETA_THRESHOLD_DEFENSIVE = 0.50  # Max beta for Min Variance
@@ -120,7 +123,12 @@ class PortfolioAuditor:
             is_fresh = False
             if last_ts:
                 last_dt = datetime.fromtimestamp(last_ts)
-                is_fresh = (now - last_dt).total_seconds() / 3600 <= FRESHNESS_THRESHOLD_HOURS
+                age_hours = (now - last_dt).total_seconds() / 3600
+                if profile == DataProfile.CRYPTO:
+                    is_fresh = age_hours <= FRESHNESS_THRESHOLD_HOURS
+                else:
+                    age_days = (now.date() - last_dt.date()).days
+                    is_fresh = age_days <= FRESHNESS_THRESHOLD_DAYS_TRADFI
 
             if not is_fresh:
                 self._record(profile, symbol, "STALE", last_ts)
@@ -147,7 +155,11 @@ class PortfolioAuditor:
         self._print_health_dashboard()
 
         status_counts = self.summary["status_counts"]
-        critical_health = status_counts["MISSING"] + status_counts["STALE"]
+        if mode == "raw":
+            # Raw pool is a staging set; allow staleness (final gate is selected-mode health).
+            critical_health = status_counts["MISSING"]
+        else:
+            critical_health = status_counts["MISSING"] + status_counts["STALE"]
 
         self.generate_health_report(mode=mode)
 
@@ -191,8 +203,8 @@ class PortfolioAuditor:
                     status_str = f"⚠️ {status_str}"
                 md.append(f"| `{r['symbol']}` | {status_str} | {r['last_date']} | {r['gaps']} |")
 
-        os.makedirs("summaries", exist_ok=True)
-        report_path = os.path.join("summaries", f"data_health_{mode}.md")
+        output_dir = get_settings().prepare_summaries_run_dir()
+        report_path = output_dir / f"data_health_{mode}.md"
         with open(report_path, "w") as f:
             f.write("\n".join(md))
         print(f"✅ Data health report generated at: {report_path}")

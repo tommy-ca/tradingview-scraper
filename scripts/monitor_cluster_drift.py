@@ -1,11 +1,14 @@
 import json
 import logging
 import os
+from datetime import datetime
 from typing import Dict, List, cast
 
 import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cosine
+
+from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("cluster_drift")
@@ -120,11 +123,11 @@ def monitor_drift():
     else:
         md.append("✅ No high drift detected. Clusters are statistically stable.")
 
-    with open("summaries/cluster_drift.md", "w") as f:
+    output_dir = get_settings().prepare_summaries_run_dir()
+    output_path = output_dir / "cluster_drift.md"
+    with open(output_path, "w") as f:
         f.write("\n".join(md))
 
 
 if __name__ == "__main__":
-    from datetime import datetime
-
     monitor_drift()

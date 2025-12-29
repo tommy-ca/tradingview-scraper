@@ -13,6 +13,8 @@ import scipy.cluster.hierarchy as sch
 import seaborn as sns  # type: ignore
 from scipy.spatial.distance import squareform
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("cluster_analysis")
 
@@ -122,7 +124,7 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     visualize_clusters(returns, image_path)
 
     report = []
-    report.append(f"# 🧩 Hierarchical Cluster Analysis ({'RAW' if 'raw' in output_path else 'SELECTED'})")
+    report.append(f"# 🧩 Hierarchical Cluster Analysis ({'RAW' if 'raw' in str(output_path) else 'SELECTED'})")
     report.append(f"**Date:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
     report.append(f"**Total Clusters:** {len(clusters)}")
     report.append("\n---")
@@ -232,22 +234,24 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=["selected", "raw"], default="selected")
     args = parser.parse_args()
 
+    output_dir = get_settings().prepare_summaries_run_dir()
+
     c_path = "data/lakehouse/portfolio_clusters.json"
     m_path = "data/lakehouse/portfolio_meta.json"
-    o_path = "summaries/cluster_analysis.md"
-    i_path = "summaries/portfolio_clustermap.png"
+    o_path = output_dir / "cluster_analysis.md"
+    i_path = output_dir / "portfolio_clustermap.png"
 
     if args.mode == "raw":
         c_path = "data/lakehouse/portfolio_clusters_raw.json"
         m_path = "data/lakehouse/portfolio_candidates_raw.json"
-        o_path = "summaries/raw_factor_analysis.md"
-        i_path = "summaries/raw_clustermap.png"
+        o_path = output_dir / "raw_factor_analysis.md"
+        i_path = output_dir / "raw_clustermap.png"
 
     analyze_clusters(
         clusters_path=c_path,
         meta_path=m_path,
         returns_path="data/lakehouse/portfolio_returns.pkl",
         stats_path="data/lakehouse/antifragility_stats.json",
-        output_path=o_path,
-        image_path=i_path,
+        output_path=str(o_path),
+        image_path=str(i_path),
     )

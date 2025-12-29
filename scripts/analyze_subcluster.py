@@ -9,6 +9,8 @@ import pandas as pd
 import scipy.cluster.hierarchy as sch
 from scipy.spatial.distance import squareform
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("subcluster_analysis")
 
@@ -114,4 +116,5 @@ if __name__ == "__main__":
     parser.add_argument("--threshold", type=float, default=0.2, help="Distance threshold for sub-clustering")
     args = parser.parse_args()
 
-    analyze_subcluster(args.cluster, "data/lakehouse/portfolio_clusters.json", "data/lakehouse/portfolio_meta.json", "data/lakehouse/portfolio_returns.pkl", "summaries", threshold=args.threshold)
+    output_dir = get_settings().prepare_summaries_run_dir()
+    analyze_subcluster(args.cluster, "data/lakehouse/portfolio_clusters.json", "data/lakehouse/portfolio_meta.json", "data/lakehouse/portfolio_returns.pkl", str(output_dir), threshold=args.threshold)

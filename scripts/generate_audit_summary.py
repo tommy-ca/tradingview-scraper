@@ -1,8 +1,10 @@
 import json
 import os
 
+from tradingview_scraper.settings import get_settings
+
 AUDIT_FILE = "data/lakehouse/selection_audit.json"
-OUTPUT_FILE = "summaries/selection_audit.md"
+OUTPUT_FILENAME = "selection_audit.md"
 
 
 def generate_summary():
@@ -63,11 +65,12 @@ def generate_summary():
         for name, stats in opt.get("profiles", {}).items():
             md.append(f"| {name.replace('_', ' ').title()} | {stats['assets']} | Cluster {stats['top_cluster']} |")
 
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-    with open(OUTPUT_FILE, "w") as f:
+    output_dir = get_settings().prepare_summaries_run_dir()
+    output_file = output_dir / OUTPUT_FILENAME
+    with open(output_file, "w") as f:
         f.write("\n".join(md))
 
-    print(f"✅ Audit summary report generated at: {OUTPUT_FILE}")
+    print(f"✅ Audit summary report generated at: {output_file}")
 
 
 if __name__ == "__main__":

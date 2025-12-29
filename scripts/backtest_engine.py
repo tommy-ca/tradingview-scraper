@@ -10,6 +10,7 @@ import pandas as pd
 
 from tradingview_scraper.regime import MarketRegimeDetector
 from tradingview_scraper.risk import AntifragilityAuditor, TailRiskAuditor
+from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("backtest_engine")
@@ -239,8 +240,8 @@ def main():
     for k, v in bt_results["summary"].items():
         print(f"{k:25}: {v:.4f}")
 
-    os.makedirs("summaries", exist_ok=True)
-    output_file = f"summaries/backtest_{args.profile}.json"
+    output_dir = get_settings().prepare_summaries_run_dir()
+    output_file = output_dir / f"backtest_{args.profile}.json"
     with open(output_file, "w") as f:
         json.dump(bt_results, f, indent=2)
     print(f"\nDetailed results saved to {output_file}")

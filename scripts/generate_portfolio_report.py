@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
+
 
 def draw_bar(weight: float, max_width: int = 15) -> str:
     """Generates a text-based progress bar."""
@@ -288,10 +290,11 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
 
 
 if __name__ == "__main__":
+    output_dir = get_settings().prepare_summaries_run_dir()
     generate_markdown_report(
         "data/lakehouse/portfolio_optimized_v2.json",
         "data/lakehouse/portfolio_returns.pkl",
         "data/lakehouse/portfolio_candidates.json",
         "data/lakehouse/antifragility_stats.json",
-        "summaries/portfolio_report.md",
+        str(output_dir / "portfolio_report.md"),
     )

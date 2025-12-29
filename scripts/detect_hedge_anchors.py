@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, cast
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("hedge_detector")
 
@@ -113,8 +115,9 @@ def detect_hedge_anchors():
     for _, r in top_hedges.iterrows():
         md.append(f"| `{r['Symbol']}` | {float(r['Market_Correlation']):.3f} | {float(r['Volatility']):.2%} | {r['Market']} |")
 
-    os.makedirs("summaries", exist_ok=True)
-    with open("summaries/hedge_anchors.md", "w") as f:
+    output_dir = get_settings().prepare_summaries_run_dir()
+    output_path = output_dir / "hedge_anchors.md"
+    with open(output_path, "w") as f:
         f.write("\n".join(md))
 
 

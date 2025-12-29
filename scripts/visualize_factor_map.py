@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("factor_map")
 
@@ -19,7 +21,9 @@ def generate_factor_map():
     returns_path = "data/lakehouse/portfolio_returns.pkl"
     clusters_path = "data/lakehouse/portfolio_clusters.json"
     stats_path = "data/lakehouse/antifragility_stats.json"
-    output_path = "summaries/factor_map.png"
+
+    output_dir = get_settings().prepare_summaries_run_dir()
+    output_path = output_dir / "factor_map.png"
 
     if not os.path.exists(returns_path) or not os.path.exists(clusters_path):
         logger.error("Required data missing for factor map.")

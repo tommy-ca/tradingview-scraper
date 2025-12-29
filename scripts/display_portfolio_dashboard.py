@@ -8,6 +8,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from tradingview_scraper.settings import get_settings
+
 
 def format_weight(w: float) -> str:
     return f"{w:.2%}"
@@ -90,7 +92,8 @@ def display_dashboard():
 
         console.print(Columns([table, c_table]))
 
-    console.print("\n[dim]Artifacts generated in summaries/ directory.[/]")
+    summaries_path = get_settings().summaries_latest_link
+    console.print(f"\n[dim]Artifacts generated in {summaries_path}/ directory.[/]")
 
 
 if __name__ == "__main__":

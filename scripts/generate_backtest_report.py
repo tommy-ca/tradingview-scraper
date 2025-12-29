@@ -1,9 +1,9 @@
 import json
-import os
 
 import pandas as pd
 
-SUMMARY_DIR = "summaries"
+from tradingview_scraper.settings import get_settings
+
 PROFILES = ["min_variance", "risk_parity", "max_sharpe", "barbell"]
 SUMMARY_COLS = [
     "Profile",
@@ -48,14 +48,14 @@ def _get_metric(df, profile: str, metric: str):
 
 
 def generate_comparison_report():
-    os.makedirs(SUMMARY_DIR, exist_ok=True)
+    summary_dir = get_settings().prepare_summaries_run_dir()
 
     summary_rows = []
     regime_rows = []
 
     for profile in PROFILES:
-        path = os.path.join(SUMMARY_DIR, f"backtest_{profile}.json")
-        if not os.path.exists(path):
+        path = summary_dir / f"backtest_{profile}.json"
+        if not path.exists():
             continue
 
         try:
@@ -194,7 +194,7 @@ Generated on: {pd.Timestamp.now()}
 {recommendation}
 """
 
-    out_path = os.path.join(SUMMARY_DIR, "backtest_comparison.md")
+    out_path = summary_dir / "backtest_comparison.md"
     with open(out_path, "w") as f:
         f.write(report)
 

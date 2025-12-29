@@ -10,6 +10,7 @@ import scipy.cluster.hierarchy as sch
 from scipy.spatial.distance import squareform
 
 from tradingview_scraper.regime import MarketRegimeDetector
+from tradingview_scraper.settings import get_settings
 
 
 def winsorize(df: pd.DataFrame, alpha: float) -> pd.DataFrame:
@@ -154,7 +155,7 @@ def hrp_weights(rets: pd.DataFrame, linkage_method: str) -> pd.Series:
 def main():
     parser = argparse.ArgumentParser(description="Generate correlation/HRP report")
     parser.add_argument("--returns", default="data/lakehouse/portfolio_returns.pkl")
-    parser.add_argument("--out-dir", default="summaries")
+    parser.add_argument("--out-dir", default=None)
     parser.add_argument("--pair-cap", type=float, default=0.85)
     parser.add_argument("--pair-limit", type=int, default=20)
     parser.add_argument("--winsor-alpha", type=float, default=0.0)
@@ -167,8 +168,11 @@ def main():
     parser.add_argument("--out-clusters", default="data/lakehouse/portfolio_clusters.json", help="Path to save cluster JSON")
     args = parser.parse_args()
 
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.out_dir:
+        out_dir = Path(args.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        out_dir = get_settings().prepare_summaries_run_dir()
 
     rets = load_returns(Path(args.returns), args.min_col_frac)
     if args.winsor_alpha > 0:

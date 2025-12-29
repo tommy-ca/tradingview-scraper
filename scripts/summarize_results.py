@@ -95,6 +95,14 @@ def main():
             grouped["cfd_long"].append(f)
         elif "cfd_trend_momentum_short" in name:
             grouped["cfd_short"].append(f)
+        elif "forex_mtf_monthly_weekly_daily" in name and "short" not in name:
+            grouped["forex_mtf_long"].append(f)
+        elif "forex_mtf_monthly_weekly_daily_short" in name:
+            grouped["forex_mtf_short"].append(f)
+        elif "forex_mtf_weekly_daily_daily" in name and "short" not in name:
+            grouped["forex_mtf_long"].append(f)
+        elif "forex_mtf_weekly_daily_daily_short" in name:
+            grouped["forex_mtf_short"].append(f)
         elif "forex_trend_momentum" in name and "short" not in name:
             grouped["forex_long"].append(f)
         elif "forex_trend_momentum_short" in name:
@@ -126,6 +134,8 @@ def main():
         ("metals_short", ("Metals", "Trend", "S")),
         ("cfd_long", ("CFD", "Trend", "L")),
         ("cfd_short", ("CFD", "Trend", "S")),
+        ("forex_mtf_long", ("Forex", "MTF", "L")),
+        ("forex_mtf_short", ("Forex", "MTF", "S")),
         ("forex_long", ("Forex", "Trend", "L")),
         ("forex_short", ("Forex", "Trend", "S")),
         ("forex_mr_long", ("Forex", "MR", "L")),
