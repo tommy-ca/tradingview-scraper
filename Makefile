@@ -70,7 +70,7 @@ CLUSTER_CAP ?= 0.25
 .PHONY: portfolio-prep-raw portfolio-prune portfolio-align portfolio-analyze portfolio-finalize portfolio-accept-state portfolio-validate portfolio-audit
 
 # Portfolio pipeline
-.PHONY: prep-raw prune select prep align recover analyze corr-report factor-map regime-check hedge-anchors drift-check optimize-v2 backtest backtest-all backtest-report validate audit-health audit-logic audit-data audit report drift-monitor display gist gist-run promote-latest heatmap finalize health-report
+.PHONY: prep-raw prune select prep align recover analyze corr-report factor-map regime-check hedge-anchors drift-check optimize-v2 backtest backtest-all backtest-report backtest-tournament tournament tournament-report validate audit-health audit-logic audit-data audit report drift-monitor display gist gist-run promote-latest heatmap finalize health-report
 
 help:
 	@echo "Entry points:"
@@ -173,6 +173,14 @@ backtest-all:
 
 backtest-report:
 	$(PY) scripts/generate_backtest_report.py
+
+backtest-tournament:
+	@echo ">>> Running Multi-Engine Tournament Mode..."
+	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --train 120 --test 20 --step 20 || CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --train 40 --test 10 --step 10
+
+tournament-report: backtest-report
+
+tournament: backtest-tournament tournament-report
 
 validate: audit-data backtest
 

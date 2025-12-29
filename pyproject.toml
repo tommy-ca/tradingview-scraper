@@ -59,6 +59,18 @@ dev = [
     "locust",
 ]
 
+# Optional optimization backends (benchmarking only).
+engines = [
+    "skfolio",
+    "riskfolio-lib",
+    "PyPortfolioOpt",
+]
+
+# NOTE: `cvxportfolio` is GPL-3.0; keep isolated.
+engines-gpl = [
+    "cvxportfolio",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 
