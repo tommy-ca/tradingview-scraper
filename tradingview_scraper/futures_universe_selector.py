@@ -395,13 +395,23 @@ def load_config(
         raw = get_settings().get_discovery_config(scanner_type)
         if not raw:
             logger.warning("No discovery config found for '%s' in profile", scanner_type)
+        base_dir = Path("configs")  # Default relative base for presets
     elif isinstance(source, Mapping):
         raw = dict(source)
+        base_dir = Path("configs")
     elif isinstance(source, str):
         raw = _load_config_file(source)
         base_dir = Path(source).parent
     elif source is not None:
         raise TypeError("source must be a mapping, path string, profile name, or None")
+
+    # Handle base_preset inheritance for in-memory mappings
+    if "base_preset" in raw:
+        preset_path = raw.pop("base_preset")
+        if not Path(preset_path).is_absolute():
+            preset_path = (base_dir or Path("configs")) / preset_path
+        base = _load_config_file(str(preset_path))
+        raw = _merge(base, raw)
 
     if overrides:
         raw = _merge(raw, overrides)
