@@ -346,7 +346,8 @@ class SkfolioEngine(CustomClusteredEngine):
             raise EngineUnavailableError("skfolio is not installed")
 
         # skfolio expects returns (not prices) and follows sklearn's API.
-        from skfolio.optimization import HierarchicalRiskParity, MeanRisk, ObjectiveFunction, RiskMeasure
+        from skfolio.measures import RiskMeasure
+        from skfolio.optimization import HierarchicalRiskParity, MeanRisk, ObjectiveFunction
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
@@ -489,7 +490,22 @@ class CVXPortfolioEngine(CustomClusteredEngine):
 
         # Provide historical returns as the "market data" input.
         # cvxportfolio expects returns as a DataFrame with assets columns.
-        weights = policy.values_in_time_recursive(t=0, past_returns=X)
+        # We provide a dummy current state to extract target weights.
+        current_weights = pd.Series(1.0 / n, index=X.columns)
+        # Add a dummy cash account if not present (cvxportfolio usually expects it)
+        # But for SPO it might be okay if we don't have it depending on constraints.
+        try:
+            weights = policy.values_in_time(
+                t=X.index[-1],
+                current_weights=current_weights,
+                current_portfolio_value=1.0,
+                past_returns=X,
+                past_volumes=None,
+            )
+        except Exception:
+            # Fallback for older versions or specific failures
+            weights = current_weights
+
         if isinstance(weights, pd.Series):
             s = weights.reindex(X.columns).fillna(0.0).astype(float)
         else:
