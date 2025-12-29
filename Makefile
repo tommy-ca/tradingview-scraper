@@ -4,7 +4,15 @@ BATCH ?= 5
 LOOKBACK ?= 200
 BACKFILL ?= 1
 GAPFILL ?= 1
-SUMMARY_DIR ?= summaries
+
+# Generated artifacts live under artifacts/ (ignored by git)
+ARTIFACTS_DIR ?= artifacts
+SUMMARIES_ROOT ?= $(ARTIFACTS_DIR)/summaries
+# `latest` points to the last successful finalized run under $(SUMMARIES_ROOT)/runs/<RUN_ID>
+SUMMARY_DIR ?= $(SUMMARIES_ROOT)/latest
+# The current run's artifacts land here (run-scoped).
+SUMMARY_RUN_DIR ?= $(SUMMARIES_ROOT)/runs/$(TV_RUN_ID)
+
 META_CATALOG_PATH ?= data/lakehouse/symbols.parquet
 META_REFRESH ?= 0
 META_AUDIT ?= 0
@@ -26,6 +34,12 @@ TV_EXPORT_RUN_ID := $(RUN_ID)
 endif
 export TV_EXPORT_RUN_ID
 
+# Use a single shared run id for all artifacts in a workflow.
+ifeq ($(origin TV_RUN_ID), undefined)
+TV_RUN_ID := $(RUN_ID)
+endif
+export TV_RUN_ID
+
 # Selection & Risk Parameters
 TOP_N ?= 3
 THRESHOLD ?= 0.4
@@ -46,20 +60,25 @@ CLUSTER_CAP ?= 0.25
 .PHONY: meta-refresh meta-stats meta-audit-offline meta-audit meta-explore meta-validate
 
 # Scanners
-.PHONY: scan-local scan-crypto scan-bonds scan-forex-mtf scan-all scan scan-lint
-.PHONY: scans-local scans-crypto scans-bonds scans-forex-mtf scans
+.PHONY: scan-local scan-crypto scan-bonds scan-forex-base scan-forex-mtf scan-all scan scan-lint
+.PHONY: scans-local scans-crypto scans-bonds scans-forex-base scans-forex-mtf scans
+
+# Forex analysis
+.PHONY: forex-analyze forex-analyze-fast
 
 # Portfolio pipeline aliases
 .PHONY: portfolio-prep-raw portfolio-prune portfolio-align portfolio-analyze portfolio-finalize portfolio-accept-state portfolio-validate portfolio-audit
 
 # Portfolio pipeline
-.PHONY: prep-raw prune select prep align recover analyze corr-report factor-map regime-check hedge-anchors drift-check optimize-v2 backtest backtest-all backtest-report validate audit-health audit-logic audit-data audit report drift-monitor display gist heatmap finalize health-report
+.PHONY: prep-raw prune select prep align recover analyze corr-report factor-map regime-check hedge-anchors drift-check optimize-v2 backtest backtest-all backtest-report validate audit-health audit-logic audit-data audit report drift-monitor display gist gist-run promote-latest heatmap finalize health-report
 
 help:
 	@echo "Entry points:"
 	@echo "  run-daily        Daily incremental portfolio run"
 	@echo "  clean-run        Full reset run (blank slate)"
 	@echo "  scan-all         Run all scanners"
+	@echo "  scan-forex-base  Run forex base universe scan"
+	@echo "  forex-analyze    Analyze forex base universe"
 	@echo "  scan-lint        Lint all scan configs"
 	@echo "  meta-validate    Refresh + offline metadata audits"
 	@echo "  meta-audit       Offline + online metadata parity sample"
@@ -77,6 +96,9 @@ scan-crypto:
 scan-bonds:
 	TV_EXPORT_RUN_ID=$(RUN_ID) $(PY) -m tradingview_scraper.bond_universe_selector --config configs/bond_etf_trend_momentum.yaml --export json
 
+scan-forex-base:
+	TV_EXPORT_RUN_ID=$(RUN_ID) $(PY) -m tradingview_scraper.cfd_universe_selector --config configs/forex_base_universe.yaml --export json --print-format table
+
 scan-forex-mtf:
 	TV_EXPORT_RUN_ID=$(RUN_ID) $(PY) -m tradingview_scraper.cfd_universe_selector --config configs/forex_mtf_monthly_weekly_daily.yaml --export json
 
@@ -86,10 +108,19 @@ scan: scan-all
 scan-lint:
 	$(PY) scripts/lint_universe_configs.py
 
+# --- Forex Base Universe Analysis ---
+
+forex-analyze: scan-forex-base
+	FOREX_BACKFILL=$(BACKFILL) FOREX_GAPFILL=$(GAPFILL) $(PY) scripts/analyze_forex_universe.py --export-symbol forex_base_universe
+
+forex-analyze-fast: scan-forex-base
+	$(PY) scripts/analyze_forex_universe.py --export-symbol forex_base_universe --skip-history
+
 # Legacy aliases (kept for compatibility)
 scans-local: scan-local
 scans-crypto: scan-crypto
 scans-bonds: scan-bonds
+scans-forex-base: scan-forex-base
 scans-forex-mtf: scan-forex-mtf
 scans: scan-all
 
@@ -203,8 +234,7 @@ recover:
 analyze: corr-report factor-map regime-check hedge-anchors drift-check
 
 corr-report:
-	mkdir -p $(SUMMARY_DIR)
-	$(PY) scripts/correlation_report.py --hrp --out-dir $(SUMMARY_DIR) --min-col-frac 0.2
+	$(PY) scripts/correlation_report.py --hrp --min-col-frac 0.2
 	$(PY) scripts/analyze_clusters.py
 
 factor-map:
@@ -221,7 +251,14 @@ drift-check:
 
 # --- Implementation (Optimization & Dashboard) ---
 
-finalize: optimize-v2 backtest audit report drift-monitor gist
+finalize:
+	$(MAKE) optimize-v2
+	$(MAKE) backtest
+	$(MAKE) audit
+	$(MAKE) report
+	$(MAKE) drift-monitor
+	$(MAKE) gist-run
+	$(MAKE) promote-latest
 
 optimize-v2:
 	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/optimize_clustered_v2.py
@@ -237,7 +274,13 @@ display:
 	$(PY) scripts/display_portfolio_dashboard.py
 
 gist:
-	bash scripts/push_summaries_to_gist.sh
+	SUMMARY_DIR=$(SUMMARY_DIR) GIST_ID=$(GIST_ID) bash scripts/push_summaries_to_gist.sh
+
+gist-run:
+	SUMMARY_DIR=$(SUMMARY_RUN_DIR) GIST_ID=$(GIST_ID) bash scripts/push_summaries_to_gist.sh
+
+promote-latest:
+	$(PY) python -c "from tradingview_scraper.settings import get_settings; get_settings().promote_summaries_latest()"
 
 heatmap:
 	$(PY) scripts/visualize_matrix_cli.py
@@ -266,18 +309,21 @@ clean-exports:
 	rm -rf export/*.csv export/*.json export/*/*.csv export/*/*.json
 
 clean-all: clean-exports
-	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md $(SUMMARY_DIR)/*.png
+	# Legacy + new artifact outputs
+	rm -rf summaries
+	rm -rf $(SUMMARIES_ROOT)
 	rm -f data/lakehouse/portfolio_*
 
 # Daily incremental cleanup: keeps lakehouse candle cache and last implemented state.
 clean-daily: clean-exports
-	rm -rf $(SUMMARY_DIR)/*.txt $(SUMMARY_DIR)/*.md $(SUMMARY_DIR)/*.png
+	# Keep run history in $(SUMMARIES_ROOT)/runs and preserve `latest` (last successful run).
+	rm -rf summaries
 	rm -f data/lakehouse/portfolio_candidates*.json data/lakehouse/portfolio_returns.pkl data/lakehouse/portfolio_meta.json
 	rm -f data/lakehouse/portfolio_clusters*.json data/lakehouse/portfolio_optimized_v2.json
 	rm -f data/lakehouse/antifragility_stats.json data/lakehouse/selection_audit.json data/lakehouse/cluster_drift.json data/lakehouse/tmp_bt_*
 
 # Daily institutional run (incremental, all markets).
-# Pushes summaries to gist before and after the run (for safety and early auth validation).
+# Pushes summary artifacts to gist before and after the run (for safety and early auth validation).
 daily-run:
 	$(MAKE) gist
 	@if [ "$(META_REFRESH)" = "1" ]; then echo ">>> Refreshing metadata catalogs"; $(MAKE) meta-refresh; fi

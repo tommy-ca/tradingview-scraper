@@ -1,0 +1,54 @@
+# Specification: Artifact Paths & Summary Outputs
+**Status**: Proposed
+**Date**: 2025-12-28
+
+## 1. Goals
+- Keep the repo root clean by consolidating generated artifacts under `artifacts/`.
+- Provide a stable “latest” view for operators and publishing.
+- Preserve per-run archives for audit/debugging.
+- Centralize path resolution via `pydantic-settings` so scripts don’t hardcode directories.
+
+## 2. Canonical Summary Layout
+All portfolio outputs that previously lived in `summaries/` move to:
+
+```
+artifacts/
+  summaries/
+    runs/
+      <RUN_ID>/
+        <output files>
+    latest -> runs/<RUN_ID>
+```
+
+Notes:
+- `runs/<RUN_ID>/` is the immutable per-run archive.
+- `latest` is a symlink that points to the **last successful finalized** run directory.
+
+## 3. Write Semantics
+- All writers emit files into `artifacts/summaries/runs/<RUN_ID>/`.
+- `latest` is promoted only after a successful finalize (see `make finalize` / `make promote-latest`).
+- Publishing (`make gist`) syncs **only** `artifacts/summaries/latest/`, so it always reflects the last successful finalized run.
+
+## 4. Configuration (pydantic-settings)
+A settings object defines artifact directories.
+
+Environment variables (prefix `TV_`):
+- `TV_ARTIFACTS_DIR` (default: `artifacts`)
+- `TV_SUMMARIES_DIR` (optional override; default: `<TV_ARTIFACTS_DIR>/summaries`)
+- `TV_RUN_ID` (default: timestamp `YYYYMMDD-HHMMSS`; Makefile sets this to `RUN_ID`)
+- `TV_LAKEHOUSE_DIR` (default: `data/lakehouse`)
+
+The settings should expose:
+- `summaries_run_dir = <summaries>/runs/<TV_RUN_ID>`
+- `summaries_latest_link = <summaries>/latest`
+
+## 5. Forex Analysis Outputs
+Forex base-universe analysis (see `make forex-analyze`) writes run-scoped artifacts:
+- `artifacts/summaries/runs/<RUN_ID>/forex_universe_report.md`
+- `artifacts/summaries/runs/<RUN_ID>/forex_universe_report.csv`
+- `artifacts/summaries/runs/<RUN_ID>/forex_universe_data_health.csv`
+- `artifacts/summaries/runs/<RUN_ID>/forex_universe_clustermap.png`
+- `artifacts/summaries/runs/<RUN_ID>/forex_universe_clusters.json`
+
+## 6. Git Hygiene
+- `artifacts/` is generated and must be ignored by git.

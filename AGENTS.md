@@ -49,13 +49,13 @@ The system moves beyond simple MPT by treating clusters as single units of risk.
 
 ### Institutional Dashboards
 - **CLI Dashboard (`make display`)**: Real-time terminal view for implementing oversight.
-- **Strategy Dashboard (`summaries/portfolio_report.md`)**: Grouped by Asset Class with visual concentration bars.
-- **Selection Audit (`summaries/selection_audit.md`)**: Full trace of every merging and selection decision.
+- **Strategy Dashboard (`artifacts/summaries/latest/portfolio_report.md`)**: Grouped by Asset Class with visual concentration bars.
+- **Selection Audit (`artifacts/summaries/latest/selection_audit.md`)**: Full trace of every merging and selection decision.
 - **Backtest Validator**: `scripts/backtest_engine.py` provides walk-forward validation of returns and volatility.
 
 ### Rebalancing & Health
 - **Drift Monitor (`make drift-monitor`)**: Tracks "Last Implemented" vs. "Current Optimal" and provides BUY/SELL signals.
-- **Data Health (`summaries/data_health_selected.md`)**: Verifies 100% alignment integrity.
+- **Data Health (`artifacts/summaries/latest/data_health_selected.md`)**: Verifies 100% alignment integrity.
 - **Self-Healing**: `scripts/repair_portfolio_gaps.py` includes 429 exponential backoff and multi-pass repair.
 
 ---

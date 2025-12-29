@@ -50,5 +50,5 @@ A new high-level visual artifact to represent the distance between hierarchical 
 
 The `Makefile` is updated to include:
 - `make drift-monitor`: Terminal-based rebalancing dashboard.
-- `make factor-map`: Generates `summaries/factor_map.png`.
+- `make factor-map`: Generates `artifacts/summaries/runs/<RUN_ID>/factor_map.png` (promoted to `artifacts/summaries/latest/factor_map.png` after a successful finalize).
 - `make audit`: Now includes Beta and Correlation checks.

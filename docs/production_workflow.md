@@ -20,7 +20,7 @@ make run-daily META_REFRESH=1 META_AUDIT=2   # includes online TradingView parit
 ```
 - Runs full multi-asset discovery and the full pipeline.
 - Preserves the lakehouse candle cache (`data/lakehouse/*_1d.parquet`) and the last implemented baseline (`data/lakehouse/portfolio_actual_state.json`) for drift monitoring.
-- Pushes artifacts to gist before cleanup (archives prior run + validates auth) and again at the final step (`make finalize` includes `make gist`).
+- Pushes artifacts to gist before cleanup (publishes last successful run + validates auth) and again at the final step (`make finalize` publishes the current run and then promotes `artifacts/summaries/latest`).
 - Note: `make prep-raw` includes a best-effort raw health check that may report STALE/MISSING before the first backfill; hard health gates run after the Pass 1 and alignment backfills.
 
 After reviewing (and implementing) the new target weights, snapshot the “last implemented” state:
@@ -62,6 +62,16 @@ make prep-raw   # builds raw candidates + best-effort raw health check
 - Uses **Alpha Discovery Scoring** (`Liquidity + Trend + Vol + Perf`) to rank candidates.
 - Merges redundant crypto venues into single economic units with preserved alternative metadata.
 
+#### Optional: Forex Base Universe Audit
+```bash
+# Fast: liquidity report only
+RUN_ID=$(date +%Y%m%d-%H%M%S) make forex-analyze-fast
+
+# Full: backfill + gap-fill + data health + clusters
+RUN_ID=$(date +%Y%m%d-%H%M%S) make forex-analyze
+```
+- Excludes IG-only singleton pairs by default; outputs land in `artifacts/summaries/runs/<RUN_ID>/` (see `forex_universe_report.md` and `forex_universe_data_health.csv`).
+
 ### Stage 2: Natural Selection (Pruning)
 ```bash
 make prune TOP_N=3 THRESHOLD=0.4  # pass-1 backfill + health gate + natural selection
@@ -94,9 +104,9 @@ make report
 make display
 make gist
 ```
-- `make report`: Generates `summaries/portfolio_report.md` with visual concentration bars.
+- `make report`: Generates `artifacts/summaries/runs/<RUN_ID>/portfolio_report.md` with visual concentration bars (available via `artifacts/summaries/latest/portfolio_report.md` after a successful finalize).
 - `make display`: Opens the interactive terminal dashboard for immediate implementations.
-- `make gist`: Syncs all reports, clustermaps, and audit logs to your private repository; skips sync if `summaries/` is missing/empty (set `GIST_ALLOW_EMPTY=1` to override).
+- `make gist`: Syncs all reports, clustermaps, and audit logs from `artifacts/summaries/latest/` (symlink to last successful finalized run) to your private repository; skips sync if missing/empty (set `GIST_ALLOW_EMPTY=1` to override).
 - **Live Output Example**: [GitHub Gist - Portfolio Summaries](https://gist.github.com/tommy-ca/e888e1eab0b86447c90c26e92ec4dc36)
 
 ---
@@ -105,5 +115,5 @@ make gist
 
 - **Lead Assets**: Traders should prioritize the designated `Lead Asset` for each cluster.
 - **Implementation Alts**: Refer to the "Shared Cluster Reference" for redundant venues if the lead asset lacks liquidity.
-- **Decision Trail**: Review `summaries/selection_audit.md` to understand why specific assets were chosen or rejected.
+- **Decision Trail**: Review `artifacts/summaries/latest/selection_audit.md` (last successful finalized run) to understand why specific assets were chosen or rejected.
 - **Fail-Fast**: Never implement a portfolio if `make audit` fails (Risk logic or Data health breach).

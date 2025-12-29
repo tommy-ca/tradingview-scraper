@@ -12,6 +12,7 @@ TV_EXPORT_RUN_ID=20251228-120000 bash scripts/run_local_scans.sh
 TV_EXPORT_RUN_ID=20251228-120000 bash scripts/run_crypto_scans.sh
 ```
 - Outputs land in `export/<run_id>/` as `universe_selector_*` JSONs using a `{meta,data}` envelope.
+- Portfolio artifacts land in `artifacts/summaries/runs/<TV_RUN_ID>/` (Makefile sets `TV_RUN_ID` to the workflow `RUN_ID`) and `artifacts/summaries/latest` points to the last successful finalized run.
 
 ## 2) Summarize scan results
 ```
@@ -20,6 +21,16 @@ TV_EXPORT_RUN_ID=20251228-120000 uv run scripts/summarize_results.py
 TV_EXPORT_RUN_ID=20251228-120000 uv run scripts/summarize_crypto_results.py
 ```
 - Produces console summaries for all asset classes.
+
+## 2b) Forex base universe audit (optional)
+```
+# Fast: liquidity report only
+RUN_ID=20251228-120000 make forex-analyze-fast
+
+# Full: backfill + gap-fill + data health + clusters
+RUN_ID=20251228-120000 BACKFILL=1 GAPFILL=1 FOREX_LOOKBACK_DAYS=365 make forex-analyze
+```
+- Excludes IG-only singleton pairs by default and writes `artifacts/summaries/runs/<RUN_ID>/forex_universe_report.md` plus `forex_universe_data_health.csv` and hierarchical clustering artifacts.
 
 ## 3) Prepare portfolio data (fetch/backfill/gap-fill + returns)
 ```
@@ -39,27 +50,27 @@ uv run scripts/prepare_portfolio_data.py
 - `prepare_portfolio_data.py` loads prices/returns for those candidates; check the summary logs for any symbols dropped due to missing history.
 
 ## 5) Optimize portfolios (multiple profiles)
+Recommended (cluster-aware optimization; includes an antifragile barbell profile):
 ```
-uv run scripts/optimize_portfolio.py
+make optimize-v2
 ```
-Profiles currently emitted by `optimize_portfolio.py`:
-- **Minimum Variance**
-- **Risk Parity** (equal risk contribution; Ray Dalio style)
-- **Maximum Sharpe**
+- Writes `data/lakehouse/portfolio_optimized_v2.json` and updates `data/lakehouse/selection_audit.json`.
 
-For an antifragile/barbell take (Taleb style), run the dedicated barbell script:
+To generate the operator-ready Markdown outputs:
 ```
-uv run scripts/optimize_barbell.py
+make report
 ```
-(Configure inside the script as needed for barbell splits.)
 
 ## Quick daily sequence
+Recommended (end-to-end, incremental):
 ```
-RUN_ID="$(date +%Y%m%d-%H%M%S)"; export RUN_ID; export TV_EXPORT_RUN_ID="$RUN_ID"; \
-make scan-all && \
-uv run scripts/summarize_results.py && uv run scripts/summarize_crypto_results.py && \
-PORTFOLIO_BATCH_SIZE=5 PORTFOLIO_LOOKBACK_DAYS=100 PORTFOLIO_BACKFILL=1 PORTFOLIO_GAPFILL=1 \
-uv run scripts/prepare_portfolio_data.py && \
-uv run scripts/optimize_portfolio.py
+# Auto-generates a run id if RUN_ID is unset
+make run-daily
+
+# Or pin a run id for reproducibility
+RUN_ID="$(date +%Y%m%d-%H%M%S)" make run-daily
 ```
-- Adjust batch/lookback/backfill flags per run. Skip backfill/gapfill by setting the env vars to 0 for faster iterations.
+- Outputs:
+  - Exports: `export/<TV_EXPORT_RUN_ID>/...`
+  - Artifacts (this run): `artifacts/summaries/runs/<TV_RUN_ID>/...`
+  - Latest finalized: `artifacts/summaries/latest` (symlink)

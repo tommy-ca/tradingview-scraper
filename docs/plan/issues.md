@@ -16,6 +16,7 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 - [x] MAINT-01: Makefile duplication/stale `.PHONY` cleaned up.
 - [x] DOC-01: Workflow automation snippet updated.
 - [x] MAINT-02: `summaries/` output directory ensured.
+- [x] MAINT-03: Summary artifacts moved to `artifacts/summaries/` (`runs/<RUN_ID>/` + `latest` symlink) and all writers updated.
 
 ## Metadata Catalog Status (2025-12-28)
 - [x] DOC-META-01: Requirements/specs/design docs updated for profile + PIT.
@@ -41,7 +42,7 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 - RISK-01: `scripts/optimize_clustered_v2.py` computes beta using `Net_Weight` when present and normalizes date indices.
 - MAINT-01: `Makefile` deduplicates `recover` and trims stale `.PHONY` targets.
 - DOC-01: `docs/specs/quantitative_workflow.md` automation snippet updated to use the new `make` workflow.
-- MAINT-02: `scripts/backtest_engine.py` and `scripts/generate_backtest_report.py` ensure `summaries/` exists.
+- MAINT-03: Summary writers use `tradingview_scraper/settings.py` and write under `artifacts/summaries/runs/<RUN_ID>/` with `artifacts/summaries/latest` as a symlink.
 - UNI-02: `tradingview_scraper/symbols/utils.py` supports run-scoped exports via `TV_EXPORT_RUN_ID`; selector exports use `{meta,data}`.
 - UNI-03: `scripts/*` consumers resolve `export/<run_id>/` and prefer embedded `meta` (direction/product/exchange) over filename parsing.
 - UNI-05: `tradingview_scraper/futures_universe_selector.py` uses `build_payloads()` for both execution and `--dry-run`.
@@ -66,6 +67,7 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 | MAINT-01 | Low | Makefile correctness | `Makefile` | `recover` ran twice and `.PHONY` listed stale targets. | Wasted runtime / operational confusion. | Deduplicate and prune stale `.PHONY`. |
 | DOC-01 | Low | Documentation drift | `docs/specs/quantitative_workflow.md` | Automation snippet referenced legacy scripts. | Operators follow incorrect steps. | Update to new `make` targets. |
 | MAINT-02 | Low | Output directory assumptions | backtest/report scripts | Wrote to `summaries/` without ensuring directory exists. | First-time runs fail depending on command order. | `os.makedirs("summaries", exist_ok=True)` before writing. |
+| MAINT-03 | Medium | Artifact hygiene | pipeline/report scripts + Makefile + docs | Summary artifacts were written to `summaries/` without run scoping/history. | Hard to audit, cluttered workspace, brittle publishing assumptions. | Write to `artifacts/summaries/runs/<RUN_ID>/` and maintain `artifacts/summaries/latest` as a symlink; sync only `latest/` to gist. |
 | META-01 | High | Metadata survivorship | `tradingview_scraper/symbols/stream/metadata.py` | `profile` is required for market-aware logic but not persisted/versioned in the catalog. | Profile heuristics can drift over time, introducing survivorship/look-ahead bias in backtests. | Persist `profile` in `symbols.parquet` and include it in PIT versioning and audits. |
 | META-02 | High | Timezone/session correctness | `tradingview_scraper/symbols/stream/persistent_loader.py`, `scripts/build_metadata_catalog.py` | Runtime enrichment and catalog builds can coerce `timezone`/`session` to `UTC/24x7` even when TradingView provides localized values or when non-crypto defaults should apply. | Breaks market-hours logic and invalidates session-aware backtests/health checks. | Centralize resolution (API -> exchange defaults -> fallback) and remove non-crypto `24x7` coercion. |
 | META-03 | Medium | Exchange catalog availability | `data/lakehouse/exchanges.parquet` | Exchange catalog may be missing or stale, but multiple audits/docs assume it exists. | Default resolution becomes inconsistent; audits fail; operator confusion. | Bootstrap and maintain `exchanges.parquet` from `DEFAULT_EXCHANGE_METADATA` and observed exchanges. |
@@ -80,10 +82,10 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 
 ## Remediation Plan
 
-### Phase 1 — Persistence & Reliability (BUG-01, BUG-02, BUG-04, MAINT-02)
+### Phase 1 — Persistence & Reliability (BUG-01, BUG-02, BUG-04, MAINT-02, MAINT-03)
 1. Restore audit persistence in `scripts/optimize_clustered_v2.py`.
 2. Initialize `MarketRegimeDetector` unconditionally in `scripts/backtest_engine.py`.
-3. Ensure `summaries/` exists before writing backtest outputs.
+3. Ensure summary artifacts are written under `artifacts/summaries/runs/<RUN_ID>/` and `artifacts/summaries/latest` points at the current run.
 4. Make `scripts/generate_backtest_report.py` robust to missing profile files/rows.
 
 ### Phase 2 — Quantitative Semantics & Selection Safety (BUG-03, LOG-01)
@@ -114,7 +116,7 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.
-- Backtest/report scripts create `summaries/` as needed.
+- Summary writers create `artifacts/summaries/runs/<RUN_ID>/` and update `artifacts/summaries/latest` as needed.
 - Liquidity scoring does not rank assets higher when ATR/price are missing.
 - Beta audit reflects hedged exposure (SHORTs reduce beta rather than inflating it).
 - `data/lakehouse/exchanges.parquet` exists and covers all exchanges present in `data/lakehouse/symbols.parquet`.

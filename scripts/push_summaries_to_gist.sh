@@ -2,7 +2,8 @@
 set -e
 
 # Configuration
-SUMMARY_DIR="summaries"
+# Default to the publishable "latest" symlink.
+SUMMARY_DIR="${SUMMARY_DIR:-artifacts/summaries/latest}"
 GIST_ID="${GIST_ID:-e888e1eab0b86447c90c26e92ec4dc36}"
 TEMP_DIR=".temp_gist_$(date +%s)"
 
@@ -33,9 +34,9 @@ echo "🚀 Syncing summaries to Gist: $GIST_ID"
 # 1. Clone the gist repository
 git clone "https://gist.github.com/$GIST_ID.git" "$TEMP_DIR"
 
-# 2. Sync files from summaries/ to the temp dir
+# 2. Sync files from SUMMARY_DIR to the temp dir
 # This ensures deletions are handled correctly
-rsync -av --delete --exclude='.git' "$SUMMARY_DIR/" "$TEMP_DIR/"
+rsync -avL --delete --exclude='.git' "$SUMMARY_DIR/" "$TEMP_DIR/"
 
 # 3. Commit and push
 cd "$TEMP_DIR"

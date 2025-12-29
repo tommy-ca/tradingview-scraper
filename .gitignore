@@ -53,6 +53,7 @@ pylint-output.txt
 *.pyc
 /export/
 outputs/
+artifacts/
 data/
 
 # Conductor local state

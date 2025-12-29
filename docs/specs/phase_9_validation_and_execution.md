@@ -53,5 +53,5 @@ Updated the `repair_portfolio_gaps.py` logic to handle institutional rate limits
 - **Multi-Pass**: Verification of alignment integrity after every repair cycle.
 
 ## 5. Operational Outputs
-- `make backtest` writes per-profile JSON (`summaries/backtest_<profile>.json`) and a comparison resume (`summaries/backtest_comparison.md`).
-- `make finalize` runs backtesting + audit + reporting and then `make gist` to publish `summaries/`.
+- `make backtest` writes per-profile JSON (`artifacts/summaries/runs/<RUN_ID>/backtest_<profile>.json`) and a comparison resume (`artifacts/summaries/runs/<RUN_ID>/backtest_comparison.md`).
+- `make finalize` runs backtesting + audit + reporting, publishes the current run to gist, then promotes `artifacts/summaries/latest` to point at that run.

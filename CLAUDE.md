@@ -55,7 +55,7 @@ make display
 # Monitor portfolio drift and rebalancing signals
 make drift-monitor
 
-# Synchronize summaries to private GitHub Gist
+# Synchronize latest finalized summary artifacts to private GitHub Gist
 make gist
 ```
 
