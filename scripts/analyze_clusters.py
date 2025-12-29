@@ -168,23 +168,29 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     visualize_clusters(returns, image_path)
     visualize_volatility_clusters(returns, vol_image_path)
 
+    # 1. Start Report Header
     report = []
     report.append(f"# 🧩 Hierarchical Cluster Analysis ({'RAW' if 'raw' in str(output_path) else 'SELECTED'})")
     report.append(f"**Date:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
     report.append(f"**Total Clusters:** {len(clusters)}")
     report.append("\n---")
 
-    # Embed Images
+    # 2. Add Visualization Maps
     report.append("## 📈 Correlation Clustermap")
     report.append(f"![Portfolio Clustermap](./{os.path.basename(image_path)})")
     report.append("\n---")
 
     report.append("## ⚡ Volatility Risk Clustermap")
     report.append("Identifies systemic risk units based on volatility co-movement (Log-Vol Correlation). Assets that spike together are grouped.")
+    report.append("### 🔍 Strategic Insight")
+    report.append("- **Hidden Risk:** Assets that trend together but occupy different Volatility Units provide superior diversification.")
+    report.append("- **Systemic Contagion:** Assets in the same Volatility Unit but different Return Clusters represent dangerous 'hidden' dependencies during market stress.")
     report.append(f"![Volatility Clustermap](./{os.path.basename(vol_image_path)})")
     report.append("\n---")
 
+    # 3. Calculate Cluster details
     summary_data = []
+    cluster_details = []
 
     for c_id, symbols in sorted(clusters.items(), key=lambda x: int(x[0])):
         valid_symbols = [s for s in symbols if s in returns.columns]
@@ -225,22 +231,23 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
 
         markets = list(set(meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols))
 
-        report.append(f"\n## 📦 Cluster {c_id}: {primary_sector}")
-        report.append(f"- **Size:** {len(valid_symbols)} assets")
-        report.append(f"- **Avg Intra-Cluster Correlation:** {avg_corr:.4f}")
-        report.append(f"- **Cluster Annualized Vol:** {cluster_vol:.2%}")
-        report.append(f"- **Antifragility Score:** {cluster_af:.2f}")
-        report.append(f"- **Fragility Score:** {cluster_fragility:.2f}")
-        report.append(f"- **Sector Homogeneity:** {sector_homogeneity:.1%}")
-        report.append(f"- **Markets:** {', '.join(markets)}")
+        c_detail = []
+        c_detail.append(f"\n## 📦 Cluster {c_id}: {primary_sector}")
+        c_detail.append(f"- **Size:** {len(valid_symbols)} assets")
+        c_detail.append(f"- **Avg Intra-Cluster Correlation:** {avg_corr:.4f}")
+        c_detail.append(f"- **Cluster Annualized Vol:** {cluster_vol:.2%}")
+        c_detail.append(f"- **Antifragility Score:** {cluster_af:.2f}")
+        c_detail.append(f"- **Fragility Score:** {cluster_fragility:.2f}")
+        c_detail.append(f"- **Sector Homogeneity:** {sector_homogeneity:.1%}")
+        c_detail.append(f"- **Markets:** {', '.join(markets)}")
 
         # Perform Nested Sub-clustering
         if len(valid_symbols) > 5:
             sub_clusters = perform_subclustering(valid_symbols, returns, threshold=0.2)
             if len(sub_clusters) > 1:
-                report.append("\n### 🔍 Nested Sub-Cluster Structure")
-                report.append("| Sub-Cluster | Size | Lead Assets | Avg Vol |")
-                report.append("| :--- | :--- | :--- | :--- |")
+                c_detail.append("\n### 🔍 Nested Sub-Cluster Structure")
+                c_detail.append("| Sub-Cluster | Size | Lead Assets | Avg Vol |")
+                c_detail.append("| :--- | :--- | :--- | :--- |")
                 for sc_id, sc_syms in sorted(sub_clusters.items(), key=lambda x: len(x[1]), reverse=True):
                     sc_rets = returns[sc_syms]
                     sc_mean = cast(pd.Series, sc_rets.mean(axis=1))
@@ -249,18 +256,19 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
                     leads = ", ".join([f"`{s}`" for s in sc_syms[:3]])
                     if len(sc_syms) > 3:
                         leads += " ..."
-                    report.append(f"| {sc_id} | {len(sc_syms)} | {leads} | {sc_vol:.2%} |")
+                    c_detail.append(f"| {sc_id} | {len(sc_syms)} | {leads} | {sc_vol:.2%} |")
 
-        report.append("\n### 📋 Members")
-        report.append("| Symbol | Description | Sector | Market |")
-        report.append("| :--- | :--- | :--- | :--- |")
+        c_detail.append("\n### 📋 Members")
+        c_detail.append("| Symbol | Description | Sector | Market |")
+        c_detail.append("| :--- | :--- | :--- | :--- |")
         for s in valid_symbols:
             s_meta = meta.get(s, {})
-            report.append(f"| `{s}` | {s_meta.get('description', 'N/A')} | {s_meta.get('sector', 'N/A')} | {s_meta.get('market', 'UNKNOWN')} |")
+            c_detail.append(f"| `{s}` | {s_meta.get('description', 'N/A')} | {s_meta.get('sector', 'N/A')} | {s_meta.get('market', 'UNKNOWN')} |")
 
+        cluster_details.extend(c_detail)
         summary_data.append({"Cluster": c_id, "Sector": primary_sector, "Assets": len(valid_symbols), "Avg_Corr": avg_corr, "Vol": cluster_vol, "Homogeneity": sector_homogeneity})
 
-    # Summary Table
+    # 4. Generate Summary Table
     summary_table = []
     summary_table.append("\n## 📊 Clusters Overview")
     summary_table.append("| Cluster | Primary Sector | Assets | Avg Corr | Vol | Homogeneity |")
@@ -270,8 +278,8 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     for s in summary_data:
         summary_table.append(f"| {s['Cluster']} | {s['Sector']} | {s['Assets']} | {s['Avg_Corr']:.3f} | {s['Vol']:.2%} | {s['Homogeneity']:.1%} |")
 
-    # Combine report
-    full_report = report[:10] + summary_table + report[10:]
+    # Final assembly
+    full_report = report + summary_table + ["\n---"] + cluster_details
 
     with open(output_path, "w") as f:
         f.write("\n".join(full_report))
