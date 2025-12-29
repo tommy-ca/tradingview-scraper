@@ -1,16 +1,22 @@
 SHELL := /bin/bash
 PY ?= uv run
 
-# Load workflow manifest if provided, or fallback to .env
-# Priority: command line arg > manifest file > .env > Makefile defaults
-MANIFEST ?= .env
+# Workflow Manifest (JSON)
+MANIFEST ?= configs/manifest.json
+PROFILE ?= production
+
+# Bridge JSON Manifest to Shell Environment
+# This allows us to use manifest settings in Makefile logic and sub-processes.
 ifneq ($(wildcard $(MANIFEST)),)
-    include $(MANIFEST)
-    # Automatically export all variables defined in the manifest/env file
-    export $(shell sed 's/=.*//' $(MANIFEST))
+    # Extract variables from the selected profile using settings.py CLI
+    # We strip 'export ' to get 'KEY=VALUE' which $(eval) can consume.
+    ENV_VARS := $(shell TV_MANIFEST_PATH=$(MANIFEST) TV_PROFILE=$(PROFILE) $(PY) -m tradingview_scraper.settings --export-env | sed 's/export //')
+    $(foreach var,$(ENV_VARS),$(eval $(var)))
+    # Export these variables to all sub-processes
+    $(foreach var,$(ENV_VARS),$(eval export $(shell echo "$(var)" | cut -d= -f1)))
 endif
 
-# Defaults (if not set in environment or manifest)
+# Defaults (if not set in manifest or environment)
 BATCH ?= 5
 LOOKBACK ?= 200
 BACKFILL ?= 1

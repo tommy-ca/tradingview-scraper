@@ -1,38 +1,47 @@
-# Workflow Configuration Manifests
+# Workflow Configuration Manifest
 
-This directory contains environment-based configuration manifests for various workflows.
+This directory contains the structured configuration for institutional workflows.
 
-## Manifest Files
+## Files
 
-- **`daily_production.env`**: The institutional daily production settings. Focuses on deep history (200d), high-integrity backfills, and all optimization engines.
-- **`repro_dev.env`**: A lightweight configuration for testing the pipeline end-to-end. Faster scans, shorter history (40d), and reduced symbol counts.
+- **`manifest.json`**: The central multi-profile manifest.
+- **`manifest.schema.json`**: JSON Schema for validation and IDE autocompletion.
 
-## Usage
+## Using Profiles
 
-Use the `MANIFEST` variable with `make` to switch between profiles:
+Profiles allow you to switch between different operational modes (e.g., production vs. dev) while ensuring reproducibility.
 
 ```bash
-# Run the daily production pipeline
-make daily-run MANIFEST=configs/daily_production.env
+# Run with the default 'production' profile
+make daily-run
 
-# Run a quick development smoke-test
-make daily-run MANIFEST=configs/repro_dev.env
+# Run with the 'repro_dev' profile (faster, lightweight)
+make daily-run PROFILE=repro_dev
+
+# Run with a custom profile from a custom manifest
+make daily-run MANIFEST=configs/my_custom.json PROFILE=research
 ```
+
+## Manifest Structure
+
+The manifest is organized into logical sections:
+- `data`: Scoping for data discovery and prep (lookback, batching).
+- `selection`: Natural selection and pruning thresholds.
+- `risk`: Hierarchical risk constraints (cluster caps).
+- `backtest`: Walk-forward validation windows.
+- `tournament`: Multi-engine benchmarking settings.
+- `env`: Environment variable overrides (e.g., GIST_ID, META_REFRESH).
+
+## Adding a Profile
+
+1. Open `configs/workflow_manifest.json`.
+2. Add a new key under `profiles`.
+3. Adhere to the `manifest.schema.json` structure.
+4. (Optional) Run `uv run python -m tradingview_scraper.settings --export-env` with `TV_PROFILE` to verify loading.
 
 ## Reproducibility
 
-To ensure a specific run is perfectly reproducible:
-1. Fix the `TV_RUN_ID` in the manifest.
-2. Ensure `PORTFOLIO_BACKFILL=0` if using cached data, or `PORTFOLIO_BACKFILL=1` for fresh data.
-3. Commit the manifest along with the code.
-
-## Variables
-
-| Variable | Description |
-| :--- | :--- |
-| `TV_RUN_ID` | Scopes all artifacts to a specific directory. |
-| `PORTFOLIO_LOOKBACK_DAYS` | Days of history to fetch. |
-| `TOP_N` | Assets to select per cluster. |
-| `CLUSTER_CAP` | Max weight per hierarchical risk bucket. |
-| `BACKTEST_TRAIN` | Training window for walk-forward validation. |
-| `GIST_ID` | GitHub Gist for artifact publishing. |
+To perfectly reproduce a run:
+1. Snapshot the specific profile settings into a separate JSON file.
+2. Commit the file to the repository.
+3. Reference it via `MANIFEST=path/to/snapshot.json PROFILE=name`.
