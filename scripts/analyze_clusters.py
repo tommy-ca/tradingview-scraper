@@ -13,6 +13,7 @@ import scipy.cluster.hierarchy as sch
 import seaborn as sns  # type: ignore
 from scipy.spatial.distance import squareform
 
+from tradingview_scraper.risk import VolatilityClusterer
 from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -48,6 +49,49 @@ def perform_subclustering(symbols: List[str], returns: pd.DataFrame, threshold: 
         sub_clusters[sc_id_int].append(sym)
 
     return sub_clusters
+
+
+def visualize_volatility_clusters(returns: pd.DataFrame, output_path: str):
+    """
+    Generates a clustermap based on volatility co-movement (Log-Vol Correlation).
+    """
+    if returns.empty or returns.shape[1] < 2:
+        return
+
+    logger.info(f"Generating volatility clustermap for {len(returns.columns)} assets...")
+
+    clusterer = VolatilityClusterer(window=20)
+    log_vol = clusterer.calculate_volatility_series(returns)
+    if log_vol.empty:
+        return
+
+    vol_corr = log_vol.corr()
+
+    # Emerald-to-Purple palette for volatility (risk-focused)
+    cmap = sns.color_palette("viridis", as_cmap=True)
+
+    g = sns.clustermap(
+        vol_corr,
+        method="ward",
+        cmap=cmap,
+        vmin=0,
+        vmax=1,
+        center=0.5,
+        square=True,
+        linewidths=0.5,
+        figsize=(20, 20),
+        cbar_kws={"label": "Log-Volatility Correlation"},
+        xticklabels=True,
+        yticklabels=True,
+    )
+
+    plt.setp(g.ax_heatmap.get_xticklabels(), rotation=90, fontsize=8)
+    plt.setp(g.ax_heatmap.get_yticklabels(), rotation=0, fontsize=8)
+    g.fig.suptitle("Volatility Risk Clustermap (Systemic Spike Dependencies)", fontsize=20, y=1.02)
+
+    plt.savefig(output_path, bbox_inches="tight", dpi=150)
+    plt.close()
+    logger.info(f"✅ Volatility clustermap saved to: {output_path}")
 
 
 def visualize_clusters(returns: pd.DataFrame, output_path: str):
@@ -89,7 +133,7 @@ def visualize_clusters(returns: pd.DataFrame, output_path: str):
     logger.info(f"✅ Clustermap saved to: {output_path}")
 
 
-def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stats_path: str, output_path: str, image_path: str):
+def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stats_path: str, output_path: str, image_path: str, vol_image_path: str):
     if not os.path.exists(clusters_path) or not os.path.exists(returns_path):
         logger.error(f"Required files missing for cluster analysis: {clusters_path} or {returns_path}")
         return
@@ -120,8 +164,9 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     else:
         returns = returns_raw
 
-    # Generate Visualization
+    # Generate Visualizations
     visualize_clusters(returns, image_path)
+    visualize_volatility_clusters(returns, vol_image_path)
 
     report = []
     report.append(f"# 🧩 Hierarchical Cluster Analysis ({'RAW' if 'raw' in str(output_path) else 'SELECTED'})")
@@ -129,9 +174,14 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     report.append(f"**Total Clusters:** {len(clusters)}")
     report.append("\n---")
 
-    # Embed Image
+    # Embed Images
     report.append("## 📈 Correlation Clustermap")
     report.append(f"![Portfolio Clustermap](./{os.path.basename(image_path)})")
+    report.append("\n---")
+
+    report.append("## ⚡ Volatility Risk Clustermap")
+    report.append("Identifies systemic risk units based on volatility co-movement (Log-Vol Correlation). Assets that spike together are grouped.")
+    report.append(f"![Volatility Clustermap](./{os.path.basename(vol_image_path)})")
     report.append("\n---")
 
     summary_data = []
@@ -161,8 +211,10 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
         if stats_df is not None:
             c_stats = stats_df[stats_df["Symbol"].isin(valid_symbols)]
             if not c_stats.empty:
-                cluster_fragility = float(c_stats["Fragility_Score"].mean())
-                cluster_af = float(c_stats["Antifragility_Score"].mean())
+                if "Fragility_Score" in c_stats.columns:
+                    cluster_fragility = float(c_stats["Fragility_Score"].mean())
+                if "Antifragility_Score" in c_stats.columns:
+                    cluster_af = float(c_stats["Antifragility_Score"].mean())
 
         # Sector distribution
         sectors = [meta.get(s, {}).get("sector", "N/A") for s in valid_symbols]
@@ -240,12 +292,14 @@ if __name__ == "__main__":
     m_path = "data/lakehouse/portfolio_meta.json"
     o_path = output_dir / "cluster_analysis.md"
     i_path = output_dir / "portfolio_clustermap.png"
+    v_path = output_dir / "volatility_clustermap.png"
 
     if args.mode == "raw":
         c_path = "data/lakehouse/portfolio_clusters_raw.json"
         m_path = "data/lakehouse/portfolio_candidates_raw.json"
         o_path = output_dir / "raw_factor_analysis.md"
         i_path = output_dir / "raw_clustermap.png"
+        v_path = output_dir / "raw_volatility_clustermap.png"
 
     analyze_clusters(
         clusters_path=c_path,
@@ -254,4 +308,5 @@ if __name__ == "__main__":
         stats_path="data/lakehouse/antifragility_stats.json",
         output_path=str(o_path),
         image_path=str(i_path),
+        vol_image_path=str(v_path),
     )

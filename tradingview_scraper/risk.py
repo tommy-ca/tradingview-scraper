@@ -1,12 +1,67 @@
 import logging
-from typing import cast
+from typing import Dict, List, cast
 
 import numpy as np
 import pandas as pd
+import scipy.cluster.hierarchy as sch
 from scipy.optimize import minimize
+from scipy.spatial.distance import squareform
 from sklearn.covariance import ledoit_wolf
 
 logger = logging.getLogger(__name__)
+
+
+class VolatilityClusterer:
+    """
+    Identifies systemic risk units by clustering assets based on volatility co-movement.
+    Assets that 'spike' together are grouped, even if their price returns are uncorrelated.
+    """
+
+    def __init__(self, window: int = 20):
+        self.window = window
+
+    def calculate_volatility_series(self, returns: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculates log-volatility series for clustering.
+        Using log-volatility normalizes the distribution of risk spikes.
+        """
+        # Rolling realized volatility
+        vol_series = returns.rolling(window=self.window).std() * np.sqrt(252)
+
+        # Log-transform to handle outliers and normalize distribution
+        # Add small epsilon to avoid log(0)
+        log_vol = np.log(vol_series + 1e-6)
+
+        return log_vol.dropna()
+
+    def cluster(self, returns: pd.DataFrame, t: float = 0.5) -> Dict[int, List[str]]:
+        """
+        Performs hierarchical clustering on volatility correlations.
+        """
+        log_vol = self.calculate_volatility_series(returns)
+        if log_vol.empty or log_vol.shape[1] < 2:
+            return {1: list(returns.columns)}
+
+        # Volatility Correlation
+        corr = log_vol.corr().fillna(0)
+
+        # Distance Matrix (1 - Correlation)
+        dist = np.sqrt(0.5 * (1 - corr.values.clip(-1, 1)))
+        dist = (dist + dist.T) / 2
+        np.fill_diagonal(dist, 0)
+
+        condensed = squareform(dist, checks=False)
+        link = sch.linkage(condensed, method="ward")
+
+        # Flat clusters
+        assignments = sch.fcluster(link, t=t, criterion="distance")
+
+        clusters: Dict[int, List[str]] = {}
+        for sym, cid in zip(log_vol.columns, assignments):
+            cid_int = int(cid)
+            clusters.setdefault(cid_int, []).append(str(sym))
+
+        return clusters
 
 
 class ShrinkageCovariance:
