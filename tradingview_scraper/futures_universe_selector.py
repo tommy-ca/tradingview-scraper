@@ -381,17 +381,27 @@ def _load_symbol_file(path: Path) -> List[str]:
 def load_config(
     source: Optional[Union[str, Mapping[str, Any]]] = None,
     overrides: Optional[Mapping[str, Any]] = None,
+    profile: Optional[str] = None,
+    scanner_type: str = "futures",
 ) -> SelectorConfig:
-    """Load selector config from a file or mapping."""
+    """Load selector config from a file, mapping, or manifest profile."""
     raw: Dict[str, Any] = {}
     base_dir: Optional[Path] = None
-    if isinstance(source, Mapping):
+
+    if profile:
+        from tradingview_scraper.settings import get_settings
+
+        # Load from manifest via settings
+        raw = get_settings().get_discovery_config(scanner_type)
+        if not raw:
+            logger.warning("No discovery config found for '%s' in profile", scanner_type)
+    elif isinstance(source, Mapping):
         raw = dict(source)
     elif isinstance(source, str):
         raw = _load_config_file(source)
         base_dir = Path(source).parent
     elif source is not None:
-        raise TypeError("source must be a mapping, path string, or None")
+        raise TypeError("source must be a mapping, path string, profile name, or None")
 
     if overrides:
         raw = _merge(raw, overrides)
@@ -1583,6 +1593,8 @@ def load_config_from_env(env_var: str = "FUTURES_SELECTOR_CONFIG") -> SelectorCo
 def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Futures trend-following universe selector")
     parser.add_argument("--config", help="Path to YAML/JSON config file")
+    parser.add_argument("--profile", help="Manifest profile name to load config from")
+    parser.add_argument("--scanner-type", default="futures", help="Scanner type key in manifest (default: futures)")
     parser.add_argument("--limit", type=int, help="Override max results")
     parser.add_argument("--export", choices=["json", "csv"], help="Enable export and set type")
     parser.add_argument(
@@ -1618,7 +1630,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         overrides["export"] = {"enabled": True}
 
     try:
-        cfg = load_config(args.config, overrides=overrides)
+        cfg = load_config(args.config, overrides=overrides, profile=args.profile, scanner_type=args.scanner_type)
     except (
         FileNotFoundError,
         ValidationError,
