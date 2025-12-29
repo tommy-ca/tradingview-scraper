@@ -28,6 +28,7 @@ dependencies = [
     "pandas>=2.0.3",
     "beautifulsoup4>=4.12.3",
     "pydantic>=2.8.2",
+    "pydantic-settings>=2.0.0",
     "websockets>=13.1",
     "websocket-client>=1.8.0",
     "python-dotenv>=1.0.1",
