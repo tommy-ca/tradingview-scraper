@@ -12,6 +12,7 @@ import argparse
 import csv
 import json
 import logging
+import math
 import os
 import re
 import sys
@@ -42,6 +43,9 @@ STABLE_BASES = {
     "USDP",
     "EUR",
     "GBP",
+    "AUD",
+    "CAD",
+    "NZD",
     "BIDR",
     "IDR",
     "TRY",
@@ -129,6 +133,27 @@ class VolatilityConfig(BaseModel):
     def validate_bounds(self) -> "VolatilityConfig":
         if self.min is not None and self.max is not None and self.min > self.max:
             raise ValueError("volatility.min cannot exceed volatility.max")
+        return self
+
+
+class RecentPerfConfig(BaseModel):
+    enabled: bool = False
+    required_fields: List[str] = Field(default_factory=list)
+    abs_min: Dict[str, float] = Field(default_factory=dict)
+    abs_max: Dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "RecentPerfConfig":
+        for field, threshold in self.abs_min.items():
+            if threshold < 0:
+                raise ValueError(f"recent_perf.abs_min[{field}] must be non-negative")
+        for field, threshold in self.abs_max.items():
+            if threshold < 0:
+                raise ValueError(f"recent_perf.abs_max[{field}] must be non-negative")
+        for field, min_val in self.abs_min.items():
+            max_val = self.abs_max.get(field)
+            if max_val is not None and min_val > max_val:
+                raise ValueError(f"recent_perf.abs_min[{field}] cannot exceed abs_max[{field}]")
         return self
 
 
@@ -227,6 +252,7 @@ class SelectorConfig(BaseModel):
     columns: List[str] = Field(default_factory=lambda: DEFAULT_COLUMNS.copy())
     volume: VolumeConfig = Field(default_factory=VolumeConfig)
     volatility: VolatilityConfig = Field(default_factory=VolatilityConfig)
+    recent_perf: RecentPerfConfig = Field(default_factory=RecentPerfConfig)
     trend: TrendConfig = Field(default_factory=TrendConfig)
     trend_screen: Optional[ScreenConfig] = None
     confirm_screen: Optional[ScreenConfig] = None
@@ -533,7 +559,7 @@ class FuturesUniverseSelector:
         if not symbol:
             return "", ""
         # Strip exchange prefix and perp suffix
-        core = symbol.split(":", 1)[-1].upper().replace(".P", "")
+        core = symbol.split(":", 1)[-1].upper().replace(".P", "").replace(".F", "")
 
         # Strip Dated Futures suffixes (e.g. Z2025, 27MAR2026)
         dated_patterns = [r"[0-9]{1,2}[A-Z]{1,3}[0-9]{2,4}$", r"[A-Z][0-9]{2,4}$"]
@@ -553,7 +579,29 @@ class FuturesUniverseSelector:
         for stable in sorted(STABLE_BASES, key=len, reverse=True):
             if core.endswith(stable) and len(core) > len(stable):
                 return core[: -len(stable)], stable
+
+        if len(core) == 6 and core.isalpha():
+            return core[:3], core[3:]
+
         return core, ""
+
+    @staticmethod
+    def _forex_pair_identity(symbol: str) -> str:
+        if not symbol:
+            return ""
+
+        core = symbol.split(":", 1)[-1].upper().replace(".P", "").replace(".F", "")
+        if "." in core:
+            core = core.split(".", 1)[0]
+        core = re.sub(r"[^A-Z0-9]", "", core)
+
+        base, quote = FuturesUniverseSelector._extract_base_quote(symbol)
+        if base and quote:
+            ident = re.sub(r"[^A-Z0-9]", "", (base + quote).upper())
+            if len(ident) == 6 and ident.isalpha():
+                return ident
+
+        return core
 
     @staticmethod
     def _base_symbol(symbol: str) -> str:
@@ -624,6 +672,54 @@ class FuturesUniverseSelector:
                 return True, atr_pct
 
         return False, atr_pct
+
+    def _apply_recent_perf_filter(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        cfg = self.config.recent_perf
+        if not cfg.enabled:
+            return rows
+
+        required_fields = [f for f in (cfg.required_fields or []) if f]
+        abs_min = cfg.abs_min or {}
+        abs_max = cfg.abs_max or {}
+
+        def _coerce(value: Any) -> Optional[float]:
+            try:
+                num = float(value)
+            except (TypeError, ValueError):
+                return None
+            if math.isnan(num):
+                return None
+            return num
+
+        filtered: List[Dict[str, Any]] = []
+        for row in rows:
+            ok = True
+
+            for field in required_fields:
+                if _coerce(row.get(field)) is None:
+                    ok = False
+                    break
+            if not ok:
+                continue
+
+            for field, threshold in abs_min.items():
+                num = _coerce(row.get(field))
+                if num is None or abs(num) < threshold:
+                    ok = False
+                    break
+            if not ok:
+                continue
+
+            for field, threshold in abs_max.items():
+                num = _coerce(row.get(field))
+                if num is None or abs(num) > threshold:
+                    ok = False
+                    break
+
+            if ok:
+                filtered.append(row)
+
+        return filtered
 
     def _evaluate_trend(self, row: Dict[str, Any]) -> Dict[str, bool]:
         trend_cfg = self.config.trend
@@ -1023,6 +1119,14 @@ class FuturesUniverseSelector:
         quote_prio_list = self.config.quote_priority or ["USDT", "USDC", "FDUSD", "BUSD", "DAI", "USD"]
         quote_priority_map = {q.upper(): idx for idx, q in enumerate(quote_prio_list)}
 
+        markets_lower = [m.lower() for m in (self.config.markets or [])]
+        is_forex = "forex" in markets_lower
+
+        def group_key(symbol: str) -> str:
+            if is_forex:
+                return self._forex_pair_identity(symbol)
+            return self._base_symbol(symbol)
+
         def exchange_rank(symbol: str) -> int:
             exchange = self._extract_exchange(symbol) or ""
             if exchange.upper() in priority:
@@ -1031,7 +1135,7 @@ class FuturesUniverseSelector:
 
         for row in rows:
             symbol = row.get("symbol", "")
-            base = self._base_symbol(symbol)
+            base = group_key(symbol)
 
             # Stable-to-Stable exclusion: If base is also in STABLE_BASES, exclude unless it's a stablecoin scan
             if base in STABLE_BASES and not self.config.include_stable_bases:
@@ -1115,10 +1219,16 @@ class FuturesUniverseSelector:
 
         results = list(best_by_base.values())
         for row in results:
-            base = self._base_symbol(row.get("symbol", ""))
-            # Override with aggregated metrics
+            base = group_key(row.get("symbol", ""))
+
+            # Preserve representative (single-venue) metrics
+            row["Value.Traded_rep"] = row.get("Value.Traded")
+            row["volume_rep"] = row.get("volume")
+
+            # Override with aggregated metrics across all members in this identity
             row["Value.Traded"] = agg_vt.get(base, row.get("Value.Traded"))
             row["volume"] = agg_vol.get(base, row.get("volume"))
+
             if self.config.group_duplicates:
                 row["alternates"] = [s for s in all_members.get(base, []) if s != row.get("symbol")]
 
@@ -1291,24 +1401,27 @@ class FuturesUniverseSelector:
         # 4. Liquidity Filter (Floor)
         rows = [r for r in rows if self._evaluate_liquidity(r)]
 
+        # 5. Recent performance / data completeness guard
+        rows = self._apply_recent_perf_filter(rows)
+
         # Add back ensured rows if they were filtered out
         seen_symbols = {r.get("symbol") for r in rows}
         for er in ensured_rows:
             if er.get("symbol") not in seen_symbols:
                 rows.append(er)
 
-        # 5. Aggregation (Deduplicate by base currency)
+        # 6. Aggregation (Deduplicate by base currency)
         if self.config.dedupe_by_symbol:
             rows = self._aggregate_by_base(rows)
 
-        # 6. Sorting & Limiting (Base Universe)
+        # 7. Sorting & Limiting (Base Universe)
         base_sort_field = self.config.base_universe_sort_by or "Value.Traded"
         rows.sort(key=lambda x: x.get(base_sort_field) or 0, reverse=True)
 
         if self.config.base_universe_limit:
             rows = rows[: self.config.base_universe_limit]
 
-        # 7. Strategy Filters (Trend, Screens)
+        # 8. Strategy Filters (Trend, Screens)
         filtered = self._apply_strategy_filters(rows)
 
         if self.config.momentum_composite_fields:
