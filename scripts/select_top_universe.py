@@ -112,7 +112,7 @@ def get_asset_class(category: str, symbol: str = "") -> str:
 
 def select_top_universe(mode: str = "raw"):
     export_dir = _resolve_export_dir()
-    files = [str(p) for p in export_dir.glob("universe_selector_*.json")]
+    files = [str(p) for p in export_dir.glob("universe_selector_*.json") if "_base_universe" not in p.name]
 
     # Type-hinted audit structure to satisfy linter
     audit_discovery: Dict[str, Any] = {"total_scanned_files": len(files), "categories": {}, "total_symbols_found": 0}

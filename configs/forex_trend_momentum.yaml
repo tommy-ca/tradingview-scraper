@@ -6,13 +6,14 @@ trend:
   timeframe: "daily"
   logic: "AND"
   recommendation:
-    enabled: false
+    enabled: true
+    min: 0.1
   adx:
     enabled: true
-    min: 5
+    min: 15
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: 0.0, Perf.1M: 0.1, Perf.3M: 0.2}
+    horizons: {change: 0.1, Perf.W: 0.2, Perf.1M: 0.5, Perf.3M: 1.0}
   confirmation_momentum:
     enabled: false
 
