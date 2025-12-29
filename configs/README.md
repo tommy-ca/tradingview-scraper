@@ -34,7 +34,7 @@ The manifest is organized into logical sections:
 
 ## Adding a Profile
 
-1. Open `configs/workflow_manifest.json`.
+1. Open `configs/manifest.json`.
 2. Add a new key under `profiles`.
 3. Adhere to the `manifest.schema.json` structure.
 4. (Optional) Run `uv run python -m tradingview_scraper.settings --export-env` with `TV_PROFILE` to verify loading.

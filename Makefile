@@ -286,11 +286,12 @@ drift-check:
 finalize:
 	$(MAKE) optimize-v2
 	$(MAKE) backtest
+	$(MAKE) tournament
 	$(MAKE) audit
 	$(MAKE) report
 	$(MAKE) drift-monitor
-	$(MAKE) gist-run
 	$(MAKE) promote-latest
+	$(MAKE) gist
 
 optimize-v2:
 	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/optimize_clustered_v2.py

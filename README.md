@@ -1774,9 +1774,16 @@ make display
 ```
 
 #### Production Lifecycle
-Run the entire pipeline—from discovery to de-risked allocation—with a single command:
+Run the entire pipeline—from discovery to de-risked allocation—with institutional reproducibility:
 ```bash
-make clean-run
+# Run the institutional production pipeline (Default)
+make daily-run
+
+# Run a lightweight development test
+make daily-run PROFILE=repro_dev
+
+# Run the multi-engine benchmarking tournament
+make tournament
 ```
 
 **Key Capabilities:**
@@ -1785,6 +1792,8 @@ make clean-run
 *   **Cluster-Aware Optimization**: Strictly enforced 25% global concentration caps and **CVaR-penalized** objectives.
 *   **Self-Healing Data Layer**: Automated gap detection and targeted repair for 200-day alignment.
 *   **Decision Trail Audit**: Full post-mortem logs (`selection_audit.md`) documenting every universe pruning and allocation choice.
+*   **Multi-Engine Benchmarking**: Integrated "Tournament Mode" comparing `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, and `cvxportfolio`.
+*   **JSON Manifest Control**: Reproducible workflow profiles via schema-validated `manifest.json`.
 *   **Live Output Example**: [Institutional Portfolio Implementation Gist](https://gist.github.com/tommy-ca/e888e1eab0b86447c90c26e92ec4dc36)
 
 ---

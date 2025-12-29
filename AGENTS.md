@@ -18,8 +18,24 @@ The entire production lifecycle is unified under the `make clean-run` target. Ag
 9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Adaptive Thresholds**.
 10. **Regime Detection**: Multi-factor analysis (**Entropy + DWT Spectral Turbulence**).
 11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties**, supported by a multi-engine benchmarking framework (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
-12. **Validation**: Run `make backtest` to verify realized performance against risk estimates.
+12. **Validation**: Run `make tournament` to benchmark multiple optimization backends against the custom baseline.
 13. **Reporting**: Generate Implementation Dashboard, Strategy Resume, and sync to private Gist.
+
+---
+
+## 2. Configuration & Reproducibility
+
+The platform uses a schema-validated JSON manifest system to ensure every run is perfectly reproducible.
+
+### Workflow Profiles (configs/manifest.json)
+- **`production`**: Institutional high-integrity settings (200d history, 25% global caps, all optimizers enabled).
+- **`repro_dev`**: Lightweight development profile for fast end-to-end testing (40d history, 50 symbol limit).
+
+### Execution
+Agents should prioritize profile-based execution via the CLI:
+```bash
+make daily-run PROFILE=production
+```
 
 ---
 
@@ -69,6 +85,7 @@ The system moves beyond simple MPT by treating clusters as single units of risk.
 | `make backtest` | Run walk-forward validator (optional). |
 | `make validate` | Audit data integrity and freshness. |
 | `make recover` | High-intensity repair for degraded assets. |
+| `make tournament` | Run multi-engine benchmarking benchmark. |
 | `make drift-monitor` | Analyze rebalancing requirements. |
 | `make gist` | Synchronize artifacts to private GitHub Gist. |
 

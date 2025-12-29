@@ -11,12 +11,14 @@ Two execution modes are supported:
 # Optional config preflight (recommended after editing configs)
 make scan-lint
 
-# Primary entry point (alias: make daily-run)
+# Primary entry point (uses configs/manifest.json 'production' profile)
 make run-daily
 
+# Use lightweight dev profile for fast validation
+make run-daily PROFILE=repro_dev
+
 # Optional metadata gates (build + audit catalogs before portfolio run)
-make run-daily META_REFRESH=1 META_AUDIT=1   # refresh + offline audits (PIT + timezone)
-make run-daily META_REFRESH=1 META_AUDIT=2   # includes online TradingView parity sample
+make run-daily META_REFRESH=1 META_AUDIT=1
 ```
 - Runs full multi-asset discovery and the full pipeline.
 - Preserves the lakehouse candle cache (`data/lakehouse/*_1d.parquet`) and the last implemented baseline (`data/lakehouse/portfolio_actual_state.json`) for drift monitoring.
@@ -45,9 +47,10 @@ make clean-run
 6.  **Cluster**: Builds hierarchical risk buckets using **Ward Linkage** and **Intersection Correlation**.
 7.  **Detect**: Runs the Multi-Factor Regime Detector (Entropy, DWT, Vol Clustering).
 8.  **Optimize**: Generates 4 cluster-aware risk profiles with 25% caps and **Fragility Penalties**.
-9.  **Audit**: Programmatically verifies all weight caps and Barbell insulation.
-10. **Report**: Produces the prettified implementation dashboard and **Decision Audit Log**.
-11. **Sync**: Synchronizes all implementation artifacts to a private GitHub Gist.
+9.  **Tournament**: Benchmarks the custom optimizer against `skfolio`, `Riskfolio`, `PyPortfolioOpt`, and `cvxportfolio`.
+10. **Audit**: Programmatically verifies all weight caps and Barbell insulation.
+11. **Report**: Produces the prettified implementation dashboard and **Decision Audit Log**.
+12. **Sync**: Synchronizes all implementation artifacts to a private GitHub Gist.
 
 ---
 
