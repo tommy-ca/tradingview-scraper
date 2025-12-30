@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from pydantic import Field
 from pydantic_settings import (
@@ -98,6 +98,7 @@ class TradingViewScraperSettings(BaseSettings):
     backfill: bool = True
     gapfill: bool = True
     max_symbols: int = 200
+    strict_health: bool = False
 
     # Selection Logic
     top_n: int = 3
@@ -239,6 +240,7 @@ if __name__ == "__main__":
             "batch_size": "BATCH",
             "backfill": "BACKFILL",
             "gapfill": "GAPFILL",
+            "strict_health": "STRICT_HEALTH",
             "top_n": "TOP_N",
             "threshold": "THRESHOLD",
             "cluster_cap": "CLUSTER_CAP",

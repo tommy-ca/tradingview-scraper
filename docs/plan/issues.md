@@ -141,13 +141,21 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 4. **Matrix Reporting**: Update `generate_backtest_report.py` to produce "Alpha Decay" audit tables.
 5. **Full Validation**: Run production matrix and publish results to Gist.
 
-### Phase 11 — Core Infrastructure Hardening & Performance
+### Phase 11 — Core Infrastructure Hardening & Performance (Finalized)
 1. **Async Reliability**: Fix `AsyncScreener` retry logic by reraising aiohttp exceptions.
 2. **Runtime Robustness**: Add guards for empty universes in `ClusteredOptimizerV2` and `natural_selection.py`.
 3. **Clustering Logic**: Enable distance-based clustering thresholds in `natural_selection.py`.
 4. **Scoring Consistency**: Centralize Liquidity/Alpha scoring math into a shared utility.
 5. **Correlation Optimization**: Vectorize robust correlation calculation to handle large universes.
 6. **Error Transparency**: Improve manifest parsing error feedback in `settings.py`.
+7. **Solver Parity**: Upgrade standalone `scripts/optimize_clustered_v2.py` to `cvxpy` matching the modular engine.
+
+### Phase 12 — Execution Fidelity & Optimizer Hardening
+1. **Metric Unification**: Centralize Sharpe/MDD/CVaR calculations to a shared utility to remove simulator bias.
+2. **Simulator Debugging**: Investigate "Execution Alpha" (Realized > Idealized) anomalies in `CvxPortfolioSimulator`.
+3. **Engine Tuning**: Calibrate `cvxportfolio` and `riskfolio` default parameters for better production performance.
+4. **Data Quality Gate**: Implement a mandatory health gate in `daily-run` that blocks optimization if data integrity is compromised.
+5. **Integrated Self-Healing**: Automatically trigger `make recover` within the pipeline if gaps persist after alignment.
 
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.

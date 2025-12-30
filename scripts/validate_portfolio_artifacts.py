@@ -9,6 +9,9 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 import numpy as np
 import pandas as pd
 
+# Add the project root to the path so we can import internal modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.stream.lakehouse import LakehouseStorage
 from tradingview_scraper.symbols.stream.metadata import DataProfile, MetadataCatalog, get_symbol_profile
@@ -73,9 +76,11 @@ class PortfolioAuditor:
 
         return beta, correlation
 
-    def run_health_check(self, type_filter: str = "all", mode: str = "selected"):
+    def run_health_check(self, type_filter: str = "all", mode: str = "selected", strict: bool = False):
         print("\n" + "=" * 100)
         print(f"PORTFOLIO DATA HEALTH CHECK ({mode.upper()}) - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        if strict:
+            print("MODE: STRICT (Gaps are considered failures)")
         print("=" * 100)
 
         target_file = CANDIDATES_FILE if mode == "selected" else CANDIDATES_RAW_FILE
@@ -160,6 +165,8 @@ class PortfolioAuditor:
             critical_health = status_counts["MISSING"]
         else:
             critical_health = status_counts["MISSING"] + status_counts["STALE"]
+            if strict:
+                critical_health += status_counts["DEGRADED (GAPS)"]
 
         self.generate_health_report(mode=mode)
 
@@ -340,6 +347,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=["selected", "raw"], default="selected")
     parser.add_argument("--only-health", action="store_true")
     parser.add_argument("--only-logic", action="store_true")
+    parser.add_argument("--strict", action="store_true", help="Fail if any gaps are detected")
     args = parser.parse_args()
 
     auditor = PortfolioAuditor()
@@ -348,7 +356,7 @@ if __name__ == "__main__":
     logic_ok = True
 
     if not args.only_logic:
-        health_ok = auditor.run_health_check(type_filter=args.type, mode=args.mode)
+        health_ok = auditor.run_health_check(type_filter=args.type, mode=args.mode, strict=args.strict)
 
     if not args.only_health:
         logic_ok = auditor.run_logic_audit()

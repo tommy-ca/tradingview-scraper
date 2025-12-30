@@ -21,6 +21,7 @@ BATCH ?= 5
 LOOKBACK ?= 200
 BACKFILL ?= 1
 GAPFILL ?= 1
+STRICT_HEALTH ?= 0
 TOP_N ?= 3
 THRESHOLD ?= 0.4
 CLUSTER_CAP ?= 0.25
@@ -209,9 +210,14 @@ tournament: backtest-tournament tournament-report
 
 validate: audit-data backtest
 
+# Step 8 includes automated recovery and a hard health gate.
+# STRICT_HEALTH=1 (default in production) ensures no degraded assets reach optimization.
 audit-health:
 	@echo ">>> Auditing Data Health & Integrity"
-	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health
+	@STRICT_ARG=""; if [ "$(STRICT_HEALTH)" = "1" ]; then STRICT_ARG="--strict"; fi; \
+	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health $$STRICT_ARG || \
+	(echo ">>> Health Check Failed. Attempting Automated Recovery..."; $(MAKE) recover && \
+	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health $$STRICT_ARG)
 
 audit-logic:
 	@echo ">>> Auditing Portfolio Quantitative Logic"
@@ -356,29 +362,33 @@ clean-daily: clean-exports
 	rm -f data/lakehouse/portfolio_clusters*.json data/lakehouse/portfolio_optimized_v2.json
 	rm -f data/lakehouse/antifragility_stats.json data/lakehouse/selection_audit.json data/lakehouse/cluster_drift.json data/lakehouse/tmp_bt_*
 
-# Daily institutional run (incremental, all markets).
-# Pushes summary artifacts to gist before and after the run (for safety and early auth validation).
+# Daily institutional run (13-step production lifecycle).
 daily-run:
-	$(MAKE) gist
+	@echo ">>> Step 1: Cleanup"
+	$(MAKE) clean-daily
 	@if [ "$(META_REFRESH)" = "1" ]; then echo ">>> Refreshing metadata catalogs"; $(MAKE) meta-refresh; fi
 	@if [ "$(META_AUDIT)" = "1" ]; then echo ">>> Auditing metadata catalogs (offline)"; $(MAKE) meta-audit-offline; fi
 	@if [ "$(META_AUDIT)" = "2" ]; then echo ">>> Auditing metadata catalogs (online)"; $(MAKE) meta-audit; fi
-	$(MAKE) clean-daily
+	@echo ">>> Step 2: Discovery (Scanners)"
 	$(MAKE) scan-all
+	@echo ">>> Step 3: Aggregation (Raw Pool)"
 	$(MAKE) portfolio-prep-raw
+	@echo ">>> Step 4 & 5: Lightweight Prep & Natural Selection (Pruning)"
 	$(MAKE) portfolio-prune TOP_N=$(TOP_N) THRESHOLD=$(THRESHOLD)
+	@echo ">>> Step 6 & 7: Enrichment & High-Integrity Prep (200d)"
 	$(MAKE) portfolio-align LOOKBACK=$(LOOKBACK)
+	@echo ">>> Step 8: Health Audit & Automated Recovery"
+	$(MAKE) audit-health
+	@echo ">>> Step 9 & 10: Factor Analysis & Regime Detection"
 	$(MAKE) portfolio-analyze
+	@echo ">>> Step 11, 12 & 13: Optimization, Validation & Reporting"
 	$(MAKE) portfolio-finalize
 
 # After reviewing and implementing, snapshot current optimized as "actual" state.
 accept-state:
 	$(PY) scripts/track_portfolio_state.py --accept
 
-clean-run: clean-all
-	$(MAKE) scan-all
-	$(MAKE) portfolio-prep-raw
-	$(MAKE) portfolio-prune
-	$(MAKE) portfolio-align
-	$(MAKE) portfolio-analyze
-	$(MAKE) portfolio-finalize
+clean-run:
+	@echo ">>> Full Reset Production Run"
+	$(MAKE) clean-all
+	$(MAKE) daily-run
