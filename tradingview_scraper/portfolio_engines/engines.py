@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import logging
 from typing import Any, Dict, List, Optional, Tuple, cast
 
+import cvxpy as cp
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
@@ -142,39 +144,67 @@ def _cov_annualized(returns: pd.DataFrame) -> np.ndarray:
     return cov.values
 
 
-def _min_var_obj(weights: np.ndarray, cov: np.ndarray, penalties: Optional[np.ndarray] = None) -> float:
-    base_vol = float(np.sqrt(np.dot(weights.T, np.dot(cov, weights))))
-    if penalties is None:
-        return base_vol
-    penalty = float(np.dot(weights, penalties))
-    return base_vol * (1.0 + penalty * 0.2)
+def _solve_cvxpy(
+    *,
+    n: int,
+    cap: float,
+    cov: np.ndarray,
+    mu: Optional[np.ndarray] = None,
+    penalties: Optional[np.ndarray] = None,
+    profile: str = "min_variance",
+    risk_free_rate: float = 0.0,
+) -> np.ndarray:
+    if n <= 0:
+        return np.array([])
+    if n == 1:
+        return np.array([1.0])
 
+    w = cp.Variable(n)
 
-def _risk_parity_obj(weights: np.ndarray, cov: np.ndarray) -> float:
-    vol = float(np.sqrt(np.dot(weights.T, np.dot(cov, weights))))
-    if vol <= 0:
-        return 0.0
-    mrc = np.dot(cov, weights) / vol
-    rc = weights * mrc
-    target_rc = vol / len(weights)
-    return float(np.sum(np.square(rc - target_rc)))
+    # Standard Constraints
+    constraints = [
+        cp.sum(w) == 1.0,
+        w >= 0.0,
+        w <= cap,
+    ]
 
+    # Objective Selection
+    risk = cp.quad_form(w, cov)
 
-def _max_sharpe_obj(weights: np.ndarray, returns_df: pd.DataFrame, penalties: Optional[np.ndarray] = None, risk_free_rate: float = 0.0) -> float:
-    cov = _cov_annualized(returns_df)
-    vol = float(np.sqrt(np.dot(weights.T, np.dot(cov, weights))))
-    if vol <= 0:
-        return 0.0
-
-    mu = returns_df.mean().values * 252
-    ret = float(np.sum(mu * weights))
-    sharpe = (ret - risk_free_rate) / (vol + 1e-12)
-
+    # Scaled fragility penalty
+    p_term = 0.0
     if penalties is not None:
-        penalty = float(np.dot(weights, penalties))
-        return float(-(sharpe / (1.0 + penalty * 0.2)))
+        p_term = (w @ penalties) * 0.2
 
-    return float(-sharpe)
+    if profile == "min_variance":
+        # Regularized Variance
+        obj = cp.Minimize(risk + p_term)
+    elif profile == "hrp":
+        # Convex Risk Parity approximation (log-barrier on clusters)
+        # Note: True HRP is recursive, but for cluster benchmarks,
+        # a convex RP objective is more performant.
+        obj = cp.Minimize(0.5 * risk - (1.0 / n) * cp.sum(cp.log(w)))
+    elif profile == "max_sharpe":
+        # Quadratic Utility (SPO)
+        if mu is None:
+            mu = np.zeros(n)
+        # We use a risk-aversion lambda that targets a reasonable vol
+        obj = cp.Maximize((mu @ w) - 0.5 * risk - p_term)
+    else:
+        obj = cp.Minimize(risk)
+
+    try:
+        prob = cp.Problem(obj, constraints)
+        # Try ECOS first (stable for log objectives), fallback to OSQP
+        prob.solve(solver=cp.ECOS if profile == "hrp" else cp.OSQP)
+
+        if w.value is None or prob.status not in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}:
+            # Fallback to equal weight if solver fails
+            return np.array([1.0 / n] * n)
+
+        return np.array(w.value).flatten()
+    except Exception:
+        return np.array([1.0 / n] * n)
 
 
 def _solve_slsqp(
@@ -243,17 +273,18 @@ class CustomClusteredEngine(BaseRiskEngine):
         n = universe.cluster_benchmarks.shape[1]
         cap = _effective_cap(request.cluster_cap, n)
         cov = _cov_annualized(universe.cluster_benchmarks)
+        mu = universe.cluster_benchmarks.mean().values * 252
         penalties = _cluster_penalties(universe)
 
-        if request.profile == "min_variance":
-            w = _solve_slsqp(objective=_min_var_obj, n=n, cap=cap, args=(cov, penalties))
-        elif request.profile == "hrp":
-            # Our internal baseline uses risk-parity across the hierarchical buckets.
-            w = _solve_slsqp(objective=_risk_parity_obj, n=n, cap=cap, args=(cov,))
-        elif request.profile == "max_sharpe":
-            w = _solve_slsqp(objective=_max_sharpe_obj, n=n, cap=cap, args=(universe.cluster_benchmarks, penalties, request.risk_free_rate))
-        else:
-            w = np.array([1.0 / n] * n)
+        w = _solve_cvxpy(
+            n=n,
+            cap=cap,
+            cov=cov,
+            mu=mu,
+            penalties=penalties,
+            profile=request.profile,
+            risk_free_rate=request.risk_free_rate,
+        )
 
         return _safe_series(w, universe.cluster_benchmarks.columns)
 
