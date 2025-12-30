@@ -177,6 +177,9 @@ class AsyncScreener:
                 else:
                     text = await response.text()
                     return {"status": "failed", "error": f"HTTP {response.status}: {text}"}
+        except aiohttp.ClientError:
+            # Reraise so tenacity @retry can catch it
+            raise
         except Exception as e:
             return {"status": "failed", "error": str(e)}
 

@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
+from tradingview_scraper.utils.scoring import calculate_liquidity_score, normalize_series
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("clustered_optimizer_v2")
 
@@ -58,28 +60,10 @@ class ClusteredOptimizerV2:
                     conv.loc[common] = self.stats.set_index("Symbol").loc[common, "Antifragility_Score"]
 
             # Liquidity Score (Value Traded + Spread Proxy)
-            liq = pd.Series(0.0, index=valid_symbols)
-            for s in valid_symbols:
-                m = self.meta.get(s, {})
-                vt = float(m.get("value_traded", 0) or 0)
-                atr = float(m.get("atr", 0) or 0)
-                price = float(m.get("close", 0) or 0)
-
-                spread_proxy = 0.0
-                if atr > 0 and price > 0:
-                    spread_pct = atr / price
-                    spread_pct = max(spread_pct, 1e-6)
-                    spread_proxy = 1.0 / spread_pct
-                    spread_proxy = min(spread_proxy, 1e6)
-
-                # Weighted Liquidity
-                liq[s] = 0.7 * np.log1p(max(vt, 0.0)) + 0.3 * np.log1p(spread_proxy)
-
-            def norm(s):
-                return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
+            liq = pd.Series({s: calculate_liquidity_score(s, self.meta) for s in valid_symbols})
 
             # Combined Alpha execution score
-            alpha_exec = 0.3 * norm(mom) + 0.2 * norm(stab) + 0.2 * norm(conv) + 0.3 * norm(liq)
+            alpha_exec = 0.3 * normalize_series(mom) + 0.2 * normalize_series(stab) + 0.2 * normalize_series(conv) + 0.3 * normalize_series(liq)
             w_alpha = alpha_exec / (alpha_exec.sum() + 1e-9)
 
             # 1. Hybrid Layer 2 Weighting (Blend of InvVar and AlphaRank)
@@ -159,6 +143,9 @@ class ClusteredOptimizerV2:
         return -sharpe
 
     def optimize_across_clusters(self, method: str, cluster_cap: float = 0.25) -> pd.Series:
+        if self.cluster_benchmarks.empty:
+            return pd.Series(dtype=float)
+
         n = self.cluster_benchmarks.shape[1]
         init_weights = np.array([1.0 / n] * n)
         bounds = tuple((0.0, cluster_cap) for _ in range(n))
@@ -312,15 +299,9 @@ class ClusteredOptimizerV2:
             common = [s for s in valid_symbols if s in self.stats["Symbol"].values]
             if common:
                 conv.loc[common] = self.stats.set_index("Symbol").loc[common, "Antifragility_Score"]
-            liq = pd.Series(0.0, index=valid_symbols)
-            for s in valid_symbols:
-                m = self.meta.get(s, {})
-                liq[s] = 0.7 * np.log1p(float(m.get("value_traded", 0) or 0)) + 0.3 * np.log1p(1.0 / (float(m.get("atr", 0) or 0) / float(m.get("close", 1e-9)) + 1e-9))
+            liq = pd.Series({s: calculate_liquidity_score(s, self.meta) for s in valid_symbols})
 
-            def norm(s):
-                return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
-
-            alpha_exec = 0.3 * norm(mom) + 0.2 * norm(stab) + 0.2 * norm(conv) + 0.3 * norm(liq)
+            alpha_exec = 0.3 * normalize_series(mom) + 0.2 * normalize_series(stab) + 0.2 * normalize_series(conv) + 0.3 * normalize_series(liq)
             w_alpha = alpha_exec / (alpha_exec.sum() + 1e-9)
 
             w_ivp = (1.0 / (vols**2 + 1e-9)) / (1.0 / (vols**2 + 1e-9)).sum()

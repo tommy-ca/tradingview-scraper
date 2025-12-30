@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from datetime import datetime
@@ -14,6 +15,8 @@ from pydantic_settings import (
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ManifestSettingsSource(PydanticBaseSettingsSource):
@@ -35,7 +38,14 @@ class ManifestSettingsSource(PydanticBaseSettingsSource):
         try:
             with open(self.manifest_path, "r") as f:
                 data = json.load(f)
-        except Exception:
+        except FileNotFoundError:
+            logger.debug(f"Manifest not found: {self.manifest_path}")
+            return {}
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse manifest {self.manifest_path}: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Unexpected error loading manifest: {e}")
             return {}
 
         profiles = data.get("profiles", {})

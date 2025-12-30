@@ -8,6 +8,8 @@ import pandas as pd
 import scipy.cluster.hierarchy as sch
 from scipy.spatial.distance import squareform
 
+from tradingview_scraper.utils.scoring import calculate_liquidity_score, normalize_series
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("natural_selection")
 
@@ -19,36 +21,13 @@ def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
     Calculates a robust correlation matrix using intersection of active trading days
     to avoid dilution from padding (e.g. TradFi weekends vs Crypto 24/7).
     """
-    symbols = returns.columns
-    n = len(symbols)
-    corr_matrix = np.eye(n)
+    if returns.empty:
+        return pd.DataFrame()
 
-    # Replace zeros with NaN for intersection correlation
-    for i in range(n):
-        for j in range(i + 1, n):
-            s1 = str(symbols[i])
-            s2 = str(symbols[j])
-
-            # Extract pair and drop zeros/NaNs
-            v1 = cast(np.ndarray, returns[s1].values)
-            v2 = cast(np.ndarray, returns[s2].values)
-
-            mask = np.logical_and(np.logical_and(v1 != 0, v2 != 0), np.logical_and(~np.isnan(v1), ~np.isnan(v2)))
-
-            v1_clean = v1[mask]
-            v2_clean = v2[mask]
-
-            if len(v1_clean) < 20:
-                c = 0.0
-            else:
-                c = float(np.corrcoef(v1_clean, v2_clean)[0, 1])
-                if np.isnan(c):
-                    c = 0.0
-
-            corr_matrix[i, j] = c
-            corr_matrix[j, i] = c
-
-    return pd.DataFrame(corr_matrix, index=symbols, columns=symbols)
+    # Vectorized correlation with min_periods requirement
+    # This handles active trading day intersections efficiently
+    corr = returns.replace(0, np.nan).corr(min_periods=20)
+    return corr.fillna(0.0)
 
 
 def natural_selection(
@@ -111,8 +90,11 @@ def natural_selection(
     condensed = squareform(avg_dist_matrix, checks=False)
     link = sch.linkage(condensed, method="ward")
 
-    # Use maxclust if threshold is reached or explicitly requested
-    cluster_ids = sch.fcluster(link, t=max_clusters, criterion="maxclust")
+    # Use distance-based threshold if provided, otherwise maxclust fallback
+    if dist_threshold > 0:
+        cluster_ids = sch.fcluster(link, t=dist_threshold, criterion="distance")
+    else:
+        cluster_ids = sch.fcluster(link, t=max_clusters, criterion="maxclust")
 
     clusters: Dict[int, List[str]] = {}
     for sym, c_id in zip(returns.columns, cluster_ids):
@@ -139,30 +121,13 @@ def natural_selection(
                 conv.loc[common] = stats_df.loc[common, "Antifragility_Score"]
 
         # Liquidity Score (Value Traded + Spread Proxy)
-        liq = pd.Series(0.0, index=symbols)
-        for s in symbols:
-            m = candidate_map.get(s, {})
-            vt = float(m.get("value_traded", 0) or 0)
-            atr = float(m.get("atr", 0) or 0)
-            price = float(m.get("close", 0) or 0)
-
-            spread_proxy = 0.0
-            if atr > 0 and price > 0:
-                spread_pct = atr / price
-                spread_pct = max(spread_pct, 1e-6)
-                spread_proxy = 1.0 / spread_pct
-                spread_proxy = min(spread_proxy, 1e6)
-
-            liq[s] = 0.7 * np.log1p(max(vt, 0.0)) + 0.3 * np.log1p(spread_proxy)
-
-        def norm(s):
-            return (s - s.min()) / (s.max() - s.min() + 1e-9) if len(s) > 1 else pd.Series(1.0, index=s.index)
+        liq = pd.Series({s: calculate_liquidity_score(s, candidate_map) for s in symbols})
 
         # Map symbols to identities and directions
         sym_to_ident = {s: candidate_map.get(s, {}).get("identity", s) for s in symbols}
         directions = pd.Series({s: candidate_map.get(s, {}).get("direction", "LONG") for s in symbols})
 
-        alpha_scores = 0.3 * norm(mom) + 0.2 * norm(stab) + 0.2 * norm(conv) + 0.3 * norm(liq)
+        alpha_scores = 0.3 * normalize_series(mom) + 0.2 * normalize_series(stab) + 0.2 * normalize_series(conv) + 0.3 * normalize_series(liq)
 
         # Audit cluster info
         audit_selection["clusters"][str(c_id)] = {"size": len(symbols), "members": symbols, "selected": []}
