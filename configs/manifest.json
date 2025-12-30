@@ -81,13 +81,33 @@
     "repro_dev": {
       "description": "Lightweight development profile for fast end-to-end testing",
       "data": {
-        "lookback_days": 40,
+        "lookback_days": 60,
         "batch_size": 10,
         "backfill": true,
         "gapfill": true,
         "max_symbols": 50,
-        "strict_health": false
+        "strict_health": false,
+        "min_days_floor": 20
       },
+      "selection": {
+        "top_n": 2,
+        "threshold": 0.5
+      },
+      "risk": {
+        "cluster_cap": 0.25
+      },
+      "backtest": {
+        "train_window": 20,
+        "test_window": 5,
+        "step_size": 5,
+        "backtest_simulator": "custom",
+        "backtest_slippage": 0.0005,
+        "backtest_commission": 0.0001,
+        "backtest_cash_asset": "USDT",
+        "baseline_symbol": "AMEX:SPY",
+        "report_mode": "basic"
+      },
+
       "selection": {
         "top_n": 2,
         "threshold": 0.5

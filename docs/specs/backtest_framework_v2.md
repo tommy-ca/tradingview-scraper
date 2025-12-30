@@ -20,7 +20,7 @@ The framework decouples **Window Management** (rolling walk-forward logic) from 
     - **Commission**: Default 1 bp (0.0001) per trade.
     - **Market Impact**: Volume-based quadratic impact (requires OHLCV data).
 - **Cash Management**: Uses a stablecoin (USDT) as the base currency for the simulator's cash account.
-- \*\*Use Case\*\*: Institutional implementation audit and "Slippage Decay" analysis.
+- **Use Case**: Institutional implementation audit and "Slippage Decay" analysis.
 
 ## 3. Metrics & Standards
 
@@ -65,8 +65,8 @@ The "Tournament" evaluates a 3D matrix of `[Simulator] x [Engine] x [Profile]`.
 
 ### 7.1 Dimensions
 - **Simulators**: `ReturnsSimulator` (Idealized), `CvxPortfolioSimulator` (Realized).
-- **Engines**: `Custom (Cvxpy)`, `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `CvxPortfolio`.
-- **Profiles**: `MinVar`, `HRP`, `MaxSharpe`, `Antifragile Barbell`.
+- **Engines**: `Custom (Cvxpy)`, `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `CvxPortfolio`, **`Market`**.
+- **Profiles**: `MinVar`, `HRP`, `MaxSharpe`, `Antifragile Barbell`, `BuyHold`.
 
 ### 7.2 Performance Optimization: Weight Caching
 To minimize compute overhead, the framework implements **Weight Caching**. For each window:
@@ -78,8 +78,14 @@ To minimize compute overhead, the framework implements **Weight Caching**. For e
 ### 7.3 Alpha Decay Audit
 The report includes an "Alpha Decay" table per profile, calculating the delta between Idealized Sharpe (zero friction) and Realized Sharpe (with slippage/commission).
 
-## 8. Immutable Market Baseline
-The framework generates a dedicated **"Market (Buy & Hold)"** portfolio for every tournament.
-- **Strategy**: 100% Long `AMEX:SPY`.
-- **Integrity**: Loaded directly from raw lakehouse data, bypassing scanner-specific direction flipping.
-- **Purpose**: Provides a zero-bias yardstick for all risk-engine evaluations.
+## 8. Market Baseline Engine
+The framework treats the market benchmark as a first-class **"Market" Engine**.
+- **Strategy**: 100% Long `baseline_symbol` (default: `AMEX:SPY`).
+- **Standardized**: Appears in the 3D Tournament matrix alongside optimization engines.
+- **Zero-Bias**: Sourced directly from raw lakehouse data, bypassing scanner-specific direction flipping.
+
+## 9. Unified QuantStats Reporting
+The reporting pipeline is rebased entirely on **QuantStats** to ensure mathematical consistency.
+- **Strategy Resume**: Aggregates realized performance from the `cvxportfolio` simulator for all engines.
+- **Markdown Teardowns**: Every benchmark point links to a detailed `full_report.md` containing monthly returns and drawdown audits.
+- **Consistency**: High-level metrics (Sharpe, Sortino, Calmar) are derived from the same QuantStats engine as the detailed teardowns.

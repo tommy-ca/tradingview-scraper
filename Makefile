@@ -291,11 +291,11 @@ finalize:
 	$(MAKE) backtest
 	$(MAKE) tearsheets
 	$(MAKE) health-report
-	$(MAKE) prepare-gist
 	$(MAKE) audit
 	$(MAKE) report
 	$(MAKE) drift-monitor
 	$(MAKE) promote-latest
+	$(MAKE) prepare-gist
 	$(MAKE) gist
 
 tearsheets:

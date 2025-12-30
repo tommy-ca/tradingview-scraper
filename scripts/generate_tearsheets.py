@@ -102,24 +102,35 @@ def generate_tearsheets():
 
             # --- Essential Selection Logic ---
             # Criteria:
-            # 1. Any 'custom' engine result (our baseline)
-            # 2. Any result identified as 'best' per profile in cvxportfolio simulation
+            # 1. Production Baseline: custom engine + cvxportfolio simulator
+            # 2. Market Baseline: market + cvxportfolio simulator
+            # 3. Tournament Winners: best engine per profile in cvxportfolio simulation
 
             is_essential = False
-            if "custom" in name:
-                is_essential = True
-
-            # Check if this file corresponds to a winner
+            sim, eng, prof = "", "", ""
             # name format: {simulator}_{engine}_{profile}
             parts = name.split("_")
             if len(parts) >= 3:
                 sim, eng, prof = parts[0], parts[1], "_".join(parts[2:])
-                if prof in best_engines and eng == best_engines[prof]["engine"] and sim == "cvxportfolio":
-                    is_essential = True
+
+                # We only sync REALIZED (cvxportfolio) results to Gist to keep it clean
+                if sim == "cvxportfolio" or (eng == "market" and sim == "custom"):
+                    if eng == "custom" or eng == "market":
+                        is_essential = True
+                    elif prof in best_engines and eng == best_engines[prof]["engine"]:
+                        is_essential = True
 
             if is_essential:
+                # QuantStats report generation
+                # Skip benchmark for market engine itself to avoid "Comparing to self"
+                target_benchmark = benchmark if eng != "market" else None
+
+                out_md = tearsheet_root / f"{name}_full_report.md"
+                md_content = get_full_report_markdown(rets, benchmark=target_benchmark, title=name, mode=settings.report_mode)
+                with open(out_md, "w") as f:
+                    f.write(md_content)
+
                 essential_reports.append(out_md.name)
-                # We no longer include HTML in the essential list for Gist synchronization.
 
         except Exception as e:
             logger.error(f"Failed to generate tearsheet for {pkl_path.name}: {e}")

@@ -97,7 +97,6 @@ def generate_comparison_report():
         summary = prof_data["summary"]
         row = dict(summary)
 
-        # Mapping for display names as requested
         display_names = {"min_variance": "MIN VARIANCE", "hrp": "HIERARCHICAL RISK PARITY (HRP)", "max_sharpe": "MAX SHARPE", "barbell": "ANTIFRAGILE BARBELL"}
         disp_name = display_names.get(prof_key, profile.upper())
         row["Profile"] = disp_name

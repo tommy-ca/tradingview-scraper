@@ -561,8 +561,47 @@ class CVXPortfolioEngine(CustomClusteredEngine):
         return _enforce_cap_series(s, cap)
 
 
+class MarketBaselineEngine(BaseRiskEngine):
+    """
+    Market baseline engine that simply holds the configured baseline symbol.
+    """
+
+    @property
+    def name(self) -> str:
+        return "market"
+
+    @classmethod
+    def is_available(cls) -> bool:
+        return True
+
+    def optimize(
+        self,
+        *,
+        returns: pd.DataFrame,
+        clusters: Dict[str, List[str]],
+        meta: Optional[Dict[str, Any]],
+        stats: Optional[pd.DataFrame] = None,
+        request: EngineRequest,
+    ) -> EngineResponse:
+        from tradingview_scraper.settings import get_settings
+
+        settings = get_settings()
+        symbol = settings.baseline_symbol
+
+        # We ignore all optimization logic and return 100% weight for the baseline symbol.
+        weights = pd.DataFrame([{"Symbol": symbol, "Weight": 1.0, "Direction": "LONG", "Cluster_ID": "MARKET", "Net_Weight": 1.0, "Description": "Market Baseline"}])
+
+        return EngineResponse(
+            engine=self.name,
+            request=request,
+            weights=weights,
+            meta={"backend": "market_hold"},
+        )
+
+
 _ENGINE_CLASSES = {
     "custom": CustomClusteredEngine,
+    "market": MarketBaselineEngine,
     "skfolio": SkfolioEngine,
     "riskfolio": RiskfolioEngine,
     "pyportfolioopt": PyPortfolioOptEngine,
