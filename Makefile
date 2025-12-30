@@ -304,6 +304,9 @@ finalize:
 tearsheets:
 	@echo ">>> Generating QuantStats Tear-sheets..."
 	$(PY) scripts/generate_tearsheets.py
+	@echo ">>> Flattening top tearsheets for Gist..."
+	@mkdir -p artifacts/summaries/latest
+	@cp artifacts/summaries/runs/$(TV_RUN_ID)/tearsheets/custom_custom_*.html artifacts/summaries/runs/$(TV_RUN_ID)/ 2>/dev/null || true
 
 optimize-v2:
 	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/optimize_clustered_v2.py
