@@ -13,13 +13,13 @@ The entire production lifecycle is unified under the `make clean-run` target. Ag
 4.  **Lightweight Prep**: Fetch **60-day** history for the raw pool to establish baseline correlations.
 5.  **Natural Selection (Pruning)**: Hierarchical clustering on the raw pool; select **Top 3 Assets** per cluster using **Execution Intelligence**.
 6.  **Enrichment**: Propagate sectors, industries, and descriptions to the filtered winners.
-7.  **High-Integrity Prep**: Fetch **200-day** secular history for winners with automated gap-repair.
+7.  **High-Integrity Prep**: Fetch **500-day** secular history for winners with automated gap-repair.
 8.  **Health Audit**: Validate 100% gap-free alignment for the implementation universe (Triggers `make recover` if gaps found).
 9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Adaptive Thresholds**.
 10. **Regime Detection**: Multi-factor analysis (**Entropy + DWT Spectral Turbulence**).
 11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties**, supported by a multi-engine benchmarking framework (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
-12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators.
-13. **Reporting**: Generate Markdown Tear-sheets, Strategy Resume, and sync essential artifacts to private Gist.
+12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators (200d realized target).
+13. **Reporting**: Generate QuantStats Markdown Tear-sheets, Strategy Resume, and sync essential artifacts to private Gist.
 
 ---
 
@@ -28,7 +28,7 @@ The entire production lifecycle is unified under the `make clean-run` target. Ag
 The platform uses a schema-validated JSON manifest system to ensure every run is perfectly reproducible.
 
 ### Workflow Profiles (configs/manifest.json)
-- **`production`**: Institutional high-integrity settings (200d history, 25% global caps, all optimizers enabled).
+- **`production`**: Institutional high-integrity settings (500d history, 252d train, 25% global caps, all optimizers enabled).
 - **`repro_dev`**: Lightweight development profile for fast end-to-end testing (40d history, 50 symbol limit).
 
 ### Execution
@@ -39,63 +39,54 @@ make daily-run PROFILE=production
 
 ---
 
-## 2. Decision Logic & Specifications
+## 3. Decision Logic & Specifications
 
-### A. Canonical Asset Merging
-Redundant venues (e.g., `BINANCE:ETHUSDT`, `OKX:ETHUSDT`) are merged into a single economic identity.
-- **Winner**: Selected via **Discovery Alpha Score** (`Liquidity + Trend + Performance`).
-- **Liquidity Factor**: Incorporation of **Execution Intelligence** (Value Traded + Spread Proxy) into the winner selection.
-- **Persistence**: Alternatives are stored in metadata for future liquidity routing or statsarb research.
+### A. Immutable Market Baseline
+The platform enforces an immutable **Buy & Hold SPY** baseline for all comparative analytics. This baseline is loaded from raw data and forced LONG to prevent sign errors from scanner-specific sentiment.
 
 ### B. Tiered Natural Selection
 Pruning happens statistically *before* deep backfilling to optimize rate limits.
 - **Pass 1 (60d)**: Captures tactical correlation and momentum.
-- **Pass 2 (200d)**: Captures secular tail-risk and stable risk-parity weights.
+- **Pass 2 (500d)**: Captures secular tail-risk and stable risk-parity weights over a full trading year (252d training window).
 
 ### C. Advanced Risk Engine
 The system moves beyond simple MPT by treating clusters as single units of risk.
 - **Cluster Caps**: Strictly enforced **25% gross weight** per hierarchical bucket.
 - **Fragility Penalty**: Mathematically penalizes weights in sectors with high **Expected Shortfall (CVaR)**.
 - **Adaptive Bucketing**: Clustering distance threshold ($t$) tightens during `CRISIS` regimes (0.3) and loosens during `QUIET` regimes (0.5).
-- **Factor Neutrality**: Every profile includes a **Beta to Market (SPY)** audit to monitor systemic exposure.
 
 ---
 
-## 3. Reporting & implementation Tools
+## 4. Reporting & Implementation Tools
 
 ### Institutional Dashboards
 - **CLI Dashboard (`make display`)**: Real-time terminal view for implementing oversight.
-- **Strategy Dashboard (`artifacts/summaries/latest/portfolio_report.md`)**: Grouped by Asset Class with visual concentration bars.
-- **Selection Audit (`artifacts/summaries/latest/selection_audit.md`)**: Full trace of every merging and selection decision.
-- **Backtest Validator**: `scripts/backtest_engine.py` provides walk-forward validation of returns and volatility.
+- **Strategy Dashboard (`backtest_comparison.md`)**: Unified resume pulling from the 3D Tournament Matrix.
+- **Selection Audit (`selection_audit.md`)**: Full trace of every merging and selection decision.
+- **QuantStats Tear-sheets**: Automated Markdown teardowns for all tournament winners and the baseline.
 
 ### Rebalancing & Health
-- **Drift Monitor (`make drift-monitor`)**: Tracks "Last Implemented" vs. "Current Optimal" and provides BUY/SELL signals.
-- **Data Health (`artifacts/summaries/latest/data_health_selected.md`)**: Verifies 100% alignment integrity.
-- **Self-Healing**: `scripts/repair_portfolio_gaps.py` includes 429 exponential backoff and multi-pass repair.
+- **Data Quality Gate**: `strict_health: true` ensures no portfolio is generated if data gaps persist.
+- **Self-Healing**: Step 8 automatically triggers `make recover` for automated gap repair and matrix alignment.
 
 ---
 
-## 4. Key Developer Commands
+## 5. Key Developer Commands
 
 | Command | Purpose |
 | :--- | :--- |
-| `make clean-run` | Execute full production lifecycle. |
+| `make daily-run` | master MasterMaster Master Master Master entry point for production. |
 | `make audit` | Verify logic constraints (Caps, Insulation, Weights). |
-| `make backtest` | Run walk-forward validator (optional). |
-| `make validate` | Audit data integrity and freshness. |
+| `make tournament` | Run 3D benchmarking matrix (Engine x Simulator x Profile). |
 | `make recover` | High-intensity repair for degraded assets. |
-| `make tournament` | Run multi-engine benchmarking benchmark. |
 | `make drift-monitor` | Analyze rebalancing requirements. |
-| `make gist` | Synchronize artifacts to private GitHub Gist. |
+| `make gist` | Synchronize essential 34 artifacts to private GitHub Gist. |
 
 ---
 
-## 5. Strategic Guiding Principles for Agents
+## 6. Strategic Guiding Principles for Agents
 
-1.  **Redundancy is Risk**: Always cluster before allocating. Ticker counting leads to systemic fragility.
+1.  **Alpha must survive friction**: Prioritize optimization engines that maintain Sharpe ratio stability when moving from `custom` (idealized) to `cvxportfolio` (high-fidelity) simulation.
 2.  **Spectral Intelligence**: Prioritize spectral (DWT) and entropy metrics for regime detection over simple volatility ratios.
-3.  **Self-Healing Data**: Never trust raw data alignment. Always run `make validate` before generating a final report.
-4.  **Lead with Alpha**: Within clusters, always select the instrument with the highest composite rank of **Momentum, Stability, and Convexity**, while respecting **Execution Intelligence** (Liquidity).
-5.  **Validation First**: Never recommend a profile for implementation if its realized Win Rate in the last 2 walk-forward windows is below 25%.
-6.  **Alpha must survive friction**: Prioritize optimization engines that maintain Sharpe ratio stability when moving from `custom` (idealized) to `cvxportfolio` (high-fidelity) simulation.
+3.  **Provenance First**: Always verify that the `manifest.json` has been archived in the run directory before concluding a production cycle.
+4.  **No Padding**: Ensure the returns matrix preserves real trading calendars; never zero-fill weekends for TradFi assets.

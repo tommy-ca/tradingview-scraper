@@ -10,13 +10,11 @@ The manifest system replaces static environment variables and scattered `.env` f
 
 The manifest adheres to `configs/manifest.schema.json`. Key sections include:
 
-- **`discovery`**: (New) Centralized universe selector configurations, replacing scattered YAML files with profile-specific filters and indicator thresholds.
-- **`data`**: Parameters for data discovery, batching, and historical lookback.
+- **`discovery`**: Centralized universe selector configurations, replacing scattered YAML files with profile-specific filters and indicator thresholds.
+- **`data`**: Parameters for data discovery, batching, historical lookback, and health gates.
 - **`selection`**: Natural selection and pruning thresholds (Top N per cluster).
 - **`risk`**: Hierarchical risk constraints (e.g., global cluster weight caps).
-- **`backtest`**: Walk-forward validation windows (Train/Test/Step).
-- **`tournament`**: Multi-engine benchmarking settings (Engines and Profiles to compare).
-- **`discovery`**: (New) Centralized universe selector configurations, defining which markets to scan and which indicator thresholds to apply (e.g., ADX > 25).
+- **`backtest`**: Walk-forward validation windows (Train/Test/Step) and simulator settings.
 - **`env`**: Environment variable overrides (e.g., GIST_ID, META_REFRESH).
 
 ## 3. Profile Selection Logic
@@ -55,8 +53,13 @@ make daily-run MANIFEST=configs/research_experiment_v1.json PROFILE=aggressive
 - **Makefile Bridge**: The Makefile uses a Python helper (`python -m tradingview_scraper.settings --export-env`) to ingest JSON settings into the shell environment for legacy script support.
 - **Validation**: IDEs supporting JSON Schema will automatically provide autocompletion and validation when editing `configs/manifest.json`.
 
-## 6. Best Practices for Reproducibility
+## 6. Institutional Reproducibility Features
 
-1.  **Snapshotting**: For critical research runs, create a standalone manifest file (e.g., `configs/run_20251229_config.json`) and commit it.
-2.  **Fixed RUN_ID**: Specify a `TV_RUN_ID` in the manifest to ensure all artifacts land in a predictable directory.
-3.  **No Manual Overrides**: Avoid passing variables like `TOP_N=5` directly to the CLI; instead, create a new profile in the manifest.
+### 6.1 Manifest Archiving
+Every run automatically snapshots the active `manifest.json` into its run-scoped directory (`artifacts/summaries/runs/<RUN_ID>/manifest.json`). This ensures that every implemented portfolio is accompanied by its full historical configuration context.
+
+### 6.2 Target Row Enforcement
+The system uses `PORTFOLIO_MIN_DAYS_FLOOR` to ensure that only assets with sufficient history (e.g., 320 days for a 500-day lookback) are allowed into the implementation universe, guaranteeing the integrity of long-duration backtests.
+
+### 6.3 Hard Health Gates
+In `production` mode (`strict_health: true`), the pipeline will non-zero exit if any selected symbols have unresolved data gaps after the automated recovery phase, preventing capital allocation on degraded data.

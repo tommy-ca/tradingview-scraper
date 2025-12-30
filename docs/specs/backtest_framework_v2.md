@@ -20,7 +20,7 @@ The framework decouples **Window Management** (rolling walk-forward logic) from 
     - **Commission**: Default 1 bp (0.0001) per trade.
     - **Market Impact**: Volume-based quadratic impact (requires OHLCV data).
 - **Cash Management**: Uses a stablecoin (USDT) as the base currency for the simulator's cash account.
-- **Use Case**: Institutional implementation audit and "Slippage Decay" analysis.
+- \*\*Use Case\*\*: Institutional implementation audit and "Slippage Decay" analysis.
 
 ## 3. Metrics & Standards
 
@@ -41,39 +41,45 @@ The framework automatically generates comprehensive analytics for all tournament
 - **Location**: `artifacts/summaries/runs/<RUN_ID>/tearsheets/`
 - **Benchmark**: `AMEX:SPY` is used as the default relative performance reference.
 
-## 4. Institutional Standards (2025 Standard)
+## 5. Institutional Standards (2025 Standard)
 
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
-| **Lookback** | 400 Days | Historical depth for discovery and secular validation. |
-| **Train Window** | 120 Days | Optimization history buffer. |
+| **Lookback** | 500 Days | Historical depth for discovery and secular validation. |
+| **Train Window** | 252 Days | Full trading year history for optimization history buffer. |
 | **Test Window** | 20 Days | Rolling validation window. |
 | **Total Test Target** | 200 Days | Total cumulative backtest period required for implementation approval. |
 | **Baseline** | `AMEX:SPY` | Primary benchmark for all multi-asset comparisons. |
 | **Friction** | 5bps Slippage / 1bp Commission | Real-world execution modeling. |
 
-## 5. Multi-Calendar Correlation Logic
+## 6. Multi-Calendar Correlation Logic
 
 The framework supports mixed calendars (24/7 Crypto + 5/7 TradFi).
 - **Portfolio Returns**: Preserve all trading days (sat/sun included for crypto).
 - **Benchmark Alignment**: TradFi benchmarks (`SPY`) are mapped to the portfolio calendar. Benchmark returns on weekends are treated as `0.0`, ensuring that weekend crypto alpha is captured without benchmark bias.
 - **No Padding**: The returns matrix no longer zero-fills non-trading days for TradFi assets, preserving statistical variance and Sharpe accuracy.
 
-## 5. Tournament Matrix (3D Benchmarking)
+## 7. Tournament Matrix (3D Benchmarking)
 
-The "Tournament" now evaluates a 3D matrix of `[Simulator] x [Engine] x [Profile]`.
+The "Tournament" evaluates a 3D matrix of `[Simulator] x [Engine] x [Profile]`.
 
-### 5.1 Dimensions
+### 7.1 Dimensions
 - **Simulators**: `ReturnsSimulator` (Idealized), `CvxPortfolioSimulator` (Realized).
 - **Engines**: `Custom (Cvxpy)`, `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `CvxPortfolio`.
 - **Profiles**: `MinVar`, `HRP`, `MaxSharpe`, `Antifragile Barbell`.
 
-### 5.2 Performance Optimization: Weight Caching
+### 7.2 Performance Optimization: Weight Caching
 To minimize compute overhead, the framework implements **Weight Caching**. For each window:
 1.  All enabled **Engines** generate weights for each **Profile**.
 2.  The resulting weights are cached in-memory.
 3.  All enabled **Simulators** consume the cached weights to compute realized performance.
-    - *Result*: Optimization happens once ($N_{eng} \times N_{prof}$), Simulation happens $N_{sim}$ times.
+    - *Result*: Optimization happens once ({eng} \times N_{prof}$), Simulation happens {sim}$ times.
 
-### 5.3 Alpha Decay Audit
+### 7.3 Alpha Decay Audit
 The report includes an "Alpha Decay" table per profile, calculating the delta between Idealized Sharpe (zero friction) and Realized Sharpe (with slippage/commission).
+
+## 8. Immutable Market Baseline
+The framework generates a dedicated **"Market (Buy & Hold)"** portfolio for every tournament.
+- **Strategy**: 100% Long `AMEX:SPY`.
+- **Integrity**: Loaded directly from raw lakehouse data, bypassing scanner-specific direction flipping.
+- **Purpose**: Provides a zero-bias yardstick for all risk-engine evaluations.
