@@ -15,6 +15,7 @@ SUMMARY_COLS = [
     "sortino",
     "calmar",
     "win_rate",
+    "Details",
 ]
 
 
@@ -74,6 +75,8 @@ def generate_comparison_report():
             row["Profile"] = profile.upper()
             row["sortino"] = summary.get("sortino")
             row["calmar"] = summary.get("calmar")
+            # Default comparison uses custom/custom
+            row["Details"] = f"[Metrics](custom_custom_{profile}_metrics.md)"
             summary_rows.append(row)
 
         windows = data.get("windows") or []
@@ -105,7 +108,7 @@ def generate_comparison_report():
     for _, row in df.iterrows():
         cells = []
         for c in SUMMARY_COLS:
-            if c == "Profile":
+            if c in {"Profile", "Details"}:
                 cells.append(str(row[c]))
             else:
                 cells.append(_fmt_num(row[c], ".4f"))
@@ -287,6 +290,7 @@ def generate_engine_comparison_report():
         "worst_mdd",
         "win_rate",
         "avg_turnover",
+        "Details",
     ]
 
     fmts = {
@@ -350,6 +354,7 @@ def generate_engine_comparison_report():
                         "worst_mdd": worst_mdd,
                         "win_rate": summary.get("win_rate"),
                         "avg_turnover": summary.get("avg_turnover"),
+                        "Details": f"[Metrics]({sim}_{eng}_{profile_key}_metrics.md)",
                     }
                 )
 
@@ -368,7 +373,7 @@ def generate_engine_comparison_report():
         for row in rows:
             cells: List[str] = []
             for c in cols:
-                if c in {"Engine", "Simulator", "Windows"}:
+                if c in {"Engine", "Simulator", "Windows", "Details"}:
                     cells.append(str(row.get(c, "")))
                 else:
                     cells.append(_fmt_num(row.get(c), fmts.get(c, ".4f")))

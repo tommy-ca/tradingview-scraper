@@ -88,6 +88,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
 
         return {
             "total_return": float(total_return),
+            "annualized_return": float(rets.mean() * 252),
             "realized_vol": float(realized_vol),
             "sharpe": float(sharpe),
             "max_drawdown": float(max_drawdown),
@@ -97,3 +98,22 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
             "calmar": 0.0,
             "omega": 0.0,
         }
+
+
+def get_metrics_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Series] = None) -> str:
+    """
+    Returns a Markdown table of QuantStats metrics.
+    """
+    try:
+        import quantstats as qs
+
+        # metrics returns a DataFrame with "Strategy" and optionally "Benchmark" columns
+        # We use mode='full' for a comprehensive table
+        df = qs.reports.metrics(daily_returns, benchmark=benchmark, display=False, mode="full")
+        if df is None or df.empty:
+            return "No metrics available."
+
+        # Convert to Markdown
+        return cast(str, df.to_markdown())
+    except Exception as e:
+        return f"Error generating metrics markdown: {e}"
