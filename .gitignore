@@ -56,6 +56,7 @@ outputs/
 artifacts/
 data/
 .temp_gist_*
+.gemini/
 
 # Conductor local state
 conductor/setup_state.json
