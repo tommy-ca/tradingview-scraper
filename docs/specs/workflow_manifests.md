@@ -62,4 +62,4 @@ Every run automatically snapshots the active `manifest.json` into its run-scoped
 The system uses `PORTFOLIO_MIN_DAYS_FLOOR` to ensure that only assets with sufficient history (e.g., 320 days for a 500-day lookback) are allowed into the implementation universe, guaranteeing the integrity of long-duration backtests.
 
 ### 6.3 Hard Health Gates
-In `production` mode (`strict_health: true`), the pipeline will non-zero exit if any selected symbols have unresolved data gaps after the automated recovery phase, preventing capital allocation on degraded data.
+In `production` mode (`strict_health: true`), the pipeline will fail-fast if any selected symbols have unresolved data gaps after the automated recovery phase, preventing capital allocation on degraded data.

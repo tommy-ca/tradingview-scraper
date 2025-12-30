@@ -7,13 +7,14 @@ This is an institutional-grade Python framework for multi-asset quantitative por
 
 ## Key Capabilities
 
-*   **13-Step Production Lifecycle**: Fully automated pipeline covering discovery, tiered pruning, secular backfill, and de-risked allocation.
+*   **13-Step Production Lifecycle**: Fully automated pipeline covering discovery, tiered pruning, 500-day secular backfill, and de-risked allocation.
 *   **Convex Risk Engine (V2)**: Optimization utilizing **cvxpy** with institutional solvers (ECOS/OSQP) and strictly enforced hierarchical cluster caps (25%).
-*   **3D Tournament Matrix**: Side-by-side benchmarking of 5 optimization engines (`skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `cvxportfolio`, and `custom`) across multiple simulators.
+*   **3D Tournament Matrix**: Side-by-side benchmarking of 5 optimization engines (`skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `cvxportfolio`, and `custom`) across idealized and high-fidelity simulators.
 *   **High-Fidelity Simulation**: Professional friction modeling (5bps slippage, 1bp commission) via integrated **CVXPortfolio** simulator.
 *   **Self-Healing Data Layer**: Automated gap detection, high-intensity repair (`make recover`), and 500-day secular history management.
 *   **Markdown Tear-sheets**: Automated generation of strategy performance teardowns (Monthly returns, Drawdown audits) using **QuantStats**.
-*   **Decision Trail Audit**: Full post-mortem logs (`selection_audit.md`) documenting every universe pruning and allocation choice.
+*   **Market Baseline Engine**: Dedicated engine for Buy & Hold benchmarking, treated as a first-class strategy within the validation matrix.
+*   **Decision Trail Audit**: Full post-mortem logs documenting every universe pruning and allocation choice.
 *   **Reproducible Manifests**: Workflow profiles defined in schema-validated `configs/manifest.json` for consistent institutional operation.
 *   **Live Output Example**: [Institutional Portfolio Implementation Gist](https://gist.github.com/tommy-ca/e888e1eab0b86447c90c26e92ec4dc36)
 
@@ -52,7 +53,7 @@ make tournament
 | `make tournament` | Run benchmarking matrix (Engine x Simulator x Profile). |
 | `make recover` | High-intensity gap repair for degraded assets. |
 | `make audit` | Verify logic constraints (Caps, Net Exposure, Weights). |
-| `make gist` | Synchronize artifacts to private implementation Gist. |
+| `make gist` | Synchronize essential artifacts to private implementation Gist. |
 
 ## Research & Documentation
 

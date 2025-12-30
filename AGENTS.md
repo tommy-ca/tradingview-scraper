@@ -29,7 +29,7 @@ The platform uses a schema-validated JSON manifest system to ensure every run is
 
 ### Workflow Profiles (configs/manifest.json)
 - **`production`**: Institutional high-integrity settings (500d history, 252d train, 25% global caps, all optimizers enabled).
-- **`repro_dev`**: Lightweight development profile for fast end-to-end testing (40d history, 50 symbol limit).
+- **`repro_dev`**: Lightweight development profile for fast end-to-end testing (60d history, 50 symbol limit).
 
 ### Execution
 Agents should prioritize profile-based execution via the CLI:
@@ -42,7 +42,7 @@ make daily-run PROFILE=production
 ## 3. Decision Logic & Specifications
 
 ### A. Immutable Market Baseline
-The platform enforces an immutable **Buy & Hold SPY** baseline for all comparative analytics. This baseline is loaded from raw data and forced LONG to prevent sign errors from scanner-specific sentiment.
+The platform enforces an immutable **Market Baseline Engine**. This baseline loads raw data directly and forces LONG direction, providing an absolute yardstick regardless of scanner sentiment.
 
 ### B. Tiered Natural Selection
 Pruning happens statistically *before* deep backfilling to optimize rate limits.
@@ -53,17 +53,16 @@ Pruning happens statistically *before* deep backfilling to optimize rate limits.
 The system moves beyond simple MPT by treating clusters as single units of risk.
 - **Cluster Caps**: Strictly enforced **25% gross weight** per hierarchical bucket.
 - **Fragility Penalty**: Mathematically penalizes weights in sectors with high **Expected Shortfall (CVaR)**.
-- **Adaptive Bucketing**: Clustering distance threshold ($t$) tightens during `CRISIS` regimes (0.3) and loosens during `QUIET` regimes (0.5).
+- **Adaptive Bucketing**: Clustering distance threshold tightens during `CRISIS` regimes (0.3) and loosens during `QUIET` regimes (0.5).
 
 ---
 
 ## 4. Reporting & Implementation Tools
 
 ### Institutional Dashboards
-- **CLI Dashboard (`make display`)**: Real-time terminal view for implementing oversight.
-- **Strategy Dashboard (`backtest_comparison.md`)**: Unified resume pulling from the 3D Tournament Matrix.
+- **Strategy Resume (`backtest_comparison.md`)**: Unified dashboard derived from the 3D Tournament Matrix.
 - **Selection Audit (`selection_audit.md`)**: Full trace of every merging and selection decision.
-- **QuantStats Tear-sheets**: Automated Markdown teardowns for all tournament winners and the baseline.
+- **QuantStats Tear-sheets**: Automated Markdown teardowns for all tournament winners and the market baseline.
 
 ### Rebalancing & Health
 - **Data Quality Gate**: `strict_health: true` ensures no portfolio is generated if data gaps persist.
@@ -75,18 +74,17 @@ The system moves beyond simple MPT by treating clusters as single units of risk.
 
 | Command | Purpose |
 | :--- | :--- |
-| `make daily-run` | master MasterMaster Master Master Master entry point for production. |
-| `make audit` | Verify logic constraints (Caps, Insulation, Weights). |
+| `make daily-run` | Master entry point for production lifecycle. |
+| `make reports` | Generate unified quantitative and analysis reports. |
 | `make tournament` | Run 3D benchmarking matrix (Engine x Simulator x Profile). |
 | `make recover` | High-intensity repair for degraded assets. |
-| `make drift-monitor` | Analyze rebalancing requirements. |
-| `make gist` | Synchronize essential 34 artifacts to private GitHub Gist. |
+| `make gist` | Synchronize essential artifacts to private implementation Gist. |
 
 ---
 
 ## 6. Strategic Guiding Principles for Agents
 
-1.  **Alpha must survive friction**: Prioritize optimization engines that maintain Sharpe ratio stability when moving from `custom` (idealized) to `cvxportfolio` (high-fidelity) simulation.
+1.  **Alpha must survive friction**: Prioritize optimization engines that maintain Sharpe ratio stability in high-fidelity simulation.
 2.  **Spectral Intelligence**: Prioritize spectral (DWT) and entropy metrics for regime detection over simple volatility ratios.
-3.  **Provenance First**: Always verify that the `manifest.json` has been archived in the run directory before concluding a production cycle.
+3.  **Provenance First**: Always verify that the `manifest.json` has been archived in the run directory.
 4.  **No Padding**: Ensure the returns matrix preserves real trading calendars; never zero-fill weekends for TradFi assets.

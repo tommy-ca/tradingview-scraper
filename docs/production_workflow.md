@@ -44,14 +44,14 @@ The pipeline includes an automated **Step 8: Health Audit & Automated Recovery**
 - If `strict_health: true` is set in the manifest, the run will fail if any gaps remain after recovery.
 
 ### Immutable Market Baseline
-The framework generates a dedicated **"Market (Buy & Hold)"** portfolio for every tournament to provide a zero-bias yardstick.
+The framework treats the market benchmark as a first-class **"Market" Engine**.
 - **Strategy**: 100% Long `AMEX:SPY`.
 - **Integrity**: Loaded directly from raw lakehouse data, bypassing scanner-specific direction flipping.
 
 ### Execution Alpha Decay
 The "Tournament" evaluates an `Engine x Simulator` matrix to quantify the performance lost to friction.
-- **Idealized**: Zero-friction returns ( theoretical alpha).
-- **Realized**: Includes 5bps slippage and 1bp commission.
+- **Idealized**: Zero-friction returns (theoretical alpha).
+- **Realized**: High-fidelity simulation including 5bps slippage and 1bp commission.
 
 ---
 
@@ -59,9 +59,10 @@ The "Tournament" evaluates an `Engine x Simulator` matrix to quantify the perfor
 
 ### Strategy Dashboards
 - **Strategy Resume (`backtest_comparison.md`)**: Unified dashboard pulling the realizable baseline from the tournament matrix.
-- **Decision Audit (`selection_audit.md`)**: Full trace of every merging and selection decision.
-- **QuantStats Reports**: Detailed Markdown teardowns for all tournament winners and the baseline.
+- **Tournament Benchmark (`engine_comparison_report.md`)**: Comparative benchmark of all optimization engines.
+- **Detailed Analytics**: High-density QuantStats Markdown reports with monthly matrices and drawdown audits.
+- **Live Output Example**: [GitHub Gist - Portfolio Summaries](https://gist.github.com/e888e1eab0b86447c90c26e92ec4dc36)
 
 ### Implementation Guidelines
-- **Lead Assets**: Traders should prioritize the designated `Lead Asset` for each cluster.
+- **Golden Artifact Selection**: Only the most critical ~32 reports are pushed to the Gist to maintain high signal-to-noise ratio.
 - **Fail-Fast**: Never implement a portfolio if `make audit` fails (Risk logic or Data health breach).
