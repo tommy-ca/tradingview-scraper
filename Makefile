@@ -97,7 +97,7 @@ export TV_RUN_ID
 .PHONY: portfolio-prep-raw portfolio-prune portfolio-align portfolio-analyze portfolio-finalize portfolio-accept-state portfolio-validate portfolio-audit
 
 # Portfolio pipeline
-.PHONY: prep-raw prune select prep align recover analyze corr-report factor-map regime-check hedge-anchors drift-check optimize-v2 backtest backtest-all backtest-report backtest-tournament tournament tournament-report validate audit-health audit-logic audit-data audit report drift-monitor display gist gist-run promote-latest heatmap finalize health-report
+.PHONY: prep-raw prune select prep align recover analyze corr-report factor-map regime-check hedge-anchors drift-check optimize-v2 backtest backtest-report backtest-tournament tournament reports tournament-report validate audit-health audit-logic audit-data audit health-report report drift-monitor display gist gist-run promote-latest heatmap finalize
 
 help:
 	@echo "Entry points:"
@@ -189,18 +189,21 @@ portfolio-audit: audit
 
 # --- Validation & Auditing ---
 
-backtest: backtest-tournament backtest-report
+backtest: backtest-tournament reports
 
-backtest-report:
-	$(PY) scripts/generate_backtest_report.py
+reports:
+	@echo ">>> Generating Unified Quantitative Reports..."
+	$(PY) scripts/generate_reports.py
+
+backtest-report: reports
 
 backtest-tournament:
 	@echo ">>> Running Multi-Engine Tournament Mode (3D Matrix)..."
 	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --engines $(TOURNAMENT_ENGINES) --profiles $(TOURNAMENT_PROFILES) --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulators $(BACKTEST_SIMULATORS)
 
-tournament-report: backtest-report
+tournament-report: reports
 
-tournament: backtest-tournament tournament-report
+tournament: backtest-tournament reports
 
 validate: audit-data backtest
 
@@ -288,8 +291,8 @@ finalize:
 	@mkdir -p artifacts/summaries/runs/$(TV_RUN_ID)
 	@cp $(MANIFEST) artifacts/summaries/runs/$(TV_RUN_ID)/manifest.json 2>/dev/null || true
 	$(MAKE) optimize-v2
-	$(MAKE) backtest
-	$(MAKE) tearsheets
+	$(MAKE) backtest-tournament
+	$(MAKE) reports
 	$(MAKE) health-report
 	$(MAKE) audit
 	$(MAKE) report
@@ -298,9 +301,6 @@ finalize:
 	$(MAKE) prepare-gist
 	$(MAKE) gist
 
-tearsheets:
-	@echo ">>> Generating QuantStats Tear-sheets..."
-	$(PY) scripts/generate_tearsheets.py
 
 prepare-gist:
 	@echo ">>> Preparing Essential Gist Payload..."

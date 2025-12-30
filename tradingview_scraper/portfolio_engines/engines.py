@@ -233,7 +233,9 @@ def _solve_slsqp(
 
 
 class CustomClusteredEngine(BaseRiskEngine):
-    name = "custom"
+    @property
+    def name(self) -> str:
+        return "custom"
 
     @classmethod
     def is_available(cls) -> bool:
@@ -255,7 +257,7 @@ class CustomClusteredEngine(BaseRiskEngine):
             return EngineResponse(
                 engine=self.name,
                 request=request,
-                weights=pd.DataFrame(columns=cast(Any, ["Symbol", "Weight"])),
+                weights=pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])),
                 meta={"backend": "custom"},
                 warnings=["empty universe"],
             )
@@ -273,7 +275,7 @@ class CustomClusteredEngine(BaseRiskEngine):
         n = universe.cluster_benchmarks.shape[1]
         cap = _effective_cap(request.cluster_cap, n)
         cov = _cov_annualized(universe.cluster_benchmarks)
-        mu = universe.cluster_benchmarks.mean().values * 252
+        mu = cast(Any, np.asarray(universe.cluster_benchmarks.mean(), dtype=float)) * 252
         penalties = _cluster_penalties(universe)
 
         w = _solve_cvxpy(
@@ -366,7 +368,9 @@ class CustomClusteredEngine(BaseRiskEngine):
 
 
 class SkfolioEngine(CustomClusteredEngine):
-    name = "skfolio"
+    @property
+    def name(self) -> str:
+        return "skfolio"
 
     @classmethod
     def is_available(cls) -> bool:
@@ -414,7 +418,9 @@ class SkfolioEngine(CustomClusteredEngine):
 
 
 class PyPortfolioOptEngine(CustomClusteredEngine):
-    name = "pyportfolioopt"
+    @property
+    def name(self) -> str:
+        return "pyportfolioopt"
 
     @classmethod
     def is_available(cls) -> bool:
@@ -434,7 +440,7 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
         if request.profile == "hrp":
             hrp = HRPOpt(X)
             weights = hrp.optimize()
-            w = np.array([float(weights.get(str(k), 0.0)) for k in X.columns])
+            w = np.array([float(cast(dict, weights).get(str(k), 0.0)) for k in X.columns])
             s = _safe_series(w, X.columns)
         else:
             mu = X.mean() * 252
@@ -447,14 +453,16 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
                 ef.min_volatility()
 
             weights = ef.clean_weights()
-            w = np.array([float(weights.get(str(k), 0.0)) for k in X.columns])
+            w = np.array([float(cast(dict, weights).get(str(k), 0.0)) for k in X.columns])
             s = _safe_series(w, X.columns)
 
         return _enforce_cap_series(s, cap)
 
 
 class RiskfolioEngine(CustomClusteredEngine):
-    name = "riskfolio"
+    @property
+    def name(self) -> str:
+        return "riskfolio"
 
     @classmethod
     def is_available(cls) -> bool:
@@ -485,7 +493,7 @@ class RiskfolioEngine(CustomClusteredEngine):
                 obj = "MinRisk"
                 rm = "MV"
 
-            w = port.optimization(model="Classic", rm=rm, obj=obj, rf=request.risk_free_rate, l=0)
+            w = port.optimization(model="Classic", rm=rm, obj=obj, rf=cast(Any, float(request.risk_free_rate)), l=0)
 
         # Riskfolio returns a DataFrame of weights indexed by asset.
         if isinstance(w, pd.DataFrame):
@@ -497,7 +505,9 @@ class RiskfolioEngine(CustomClusteredEngine):
 
 
 class CVXPortfolioEngine(CustomClusteredEngine):
-    name = "cvxportfolio"
+    @property
+    def name(self) -> str:
+        return "cvxportfolio"
 
     @classmethod
     def is_available(cls) -> bool:
@@ -539,6 +549,7 @@ class CVXPortfolioEngine(CustomClusteredEngine):
         # cvxportfolio expects returns as a DataFrame with assets columns.
         # We provide a dummy current state to extract target weights.
         current_weights = pd.Series(1.0 / n, index=X.columns)
+        current_prices = pd.Series(1.0, index=X.columns)
         # Add a dummy cash account if not present (cvxportfolio usually expects it)
         # But for SPO it might be okay if we don't have it depending on constraints.
         try:
@@ -548,6 +559,7 @@ class CVXPortfolioEngine(CustomClusteredEngine):
                 current_portfolio_value=1.0,
                 past_returns=X,
                 past_volumes=None,
+                current_prices=current_prices,
             )
         except Exception:
             # Fallback for older versions or specific failures
@@ -591,11 +603,13 @@ class MarketBaselineEngine(BaseRiskEngine):
         # We ignore all optimization logic and return 100% weight for the baseline symbol.
         weights = pd.DataFrame([{"Symbol": symbol, "Weight": 1.0, "Direction": "LONG", "Cluster_ID": "MARKET", "Net_Weight": 1.0, "Description": "Market Baseline"}])
 
+        # Standard: use the profile from the request to stay consistent with tournament expectations
         return EngineResponse(
             engine=self.name,
             request=request,
             weights=weights,
             meta={"backend": "market_hold"},
+            warnings=[],
         )
 
 

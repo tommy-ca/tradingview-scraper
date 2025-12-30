@@ -121,8 +121,8 @@ class TradingViewScraperSettings(BaseSettings):
     report_mode: str = "full"
 
     # Tournament
-    tournament_engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
-    tournament_profiles: str = "min_variance,hrp,max_sharpe,barbell"
+    engines: str = "market,custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
+    profiles: str = "min_variance,hrp,max_sharpe,barbell"
 
     # Discovery (Structured)
     discovery: Dict[str, Any] = Field(default_factory=dict)
@@ -259,8 +259,8 @@ if __name__ == "__main__":
             "backtest_cash_asset": "BACKTEST_CASH_ASSET",
             "baseline_symbol": "BASELINE_SYMBOL",
             "report_mode": "REPORT_MODE",
-            "tournament_engines": "TOURNAMENT_ENGINES",
-            "tournament_profiles": "TOURNAMENT_PROFILES",
+            "engines": "TOURNAMENT_ENGINES",
+            "profiles": "TOURNAMENT_PROFILES",
             "gist_id": "GIST_ID",
             "meta_refresh": "META_REFRESH",
             "meta_audit": "META_AUDIT",

@@ -183,9 +183,8 @@ class BacktestEngine:
                     results[s][eng]["_status"] = {"skipped": True, "reason": "engine not installed"}
                     continue
 
-                # Market engine only has one profile: 'buy_hold'
-                iter_profiles = profiles if eng != "market" else ["buy_hold"]
-                for prof in iter_profiles:
+                # Market engine uses all profiles but returns static baseline
+                for prof in profiles:
                     results[s][eng][prof] = {"windows": [], "summary": None}
                     cumulative[(s, eng, prof)] = pd.Series(dtype=float)
 
@@ -301,10 +300,11 @@ class BacktestEngine:
             for eng, prof_map in results[s_name].items():
                 if prof_map.get("_status", {}).get("skipped"):
                     continue
-                # Include buy_hold if eng is market
-                iter_profiles = profiles if eng != "market" else ["buy_hold"]
-                for prof in iter_profiles:
-                    windows = prof_map.get(prof, {}).get("windows", [])
+
+                for prof in prof_map.keys():
+                    if prof == "_status":
+                        continue
+                    windows = prof_map[prof].get("windows", [])
                     if not windows:
                         continue
                     summary = self._summarize_results(windows, cumulative[(s_name, eng, prof)])

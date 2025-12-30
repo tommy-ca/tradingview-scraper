@@ -41,7 +41,10 @@ class BaseRiskEngine(ABC):
     Additional columns are allowed and preserved by downstream reporting.
     """
 
-    name: str
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """The canonical name of the risk engine."""
 
     @classmethod
     @abstractmethod

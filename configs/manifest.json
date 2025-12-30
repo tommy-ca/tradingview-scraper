@@ -32,7 +32,7 @@
         "report_mode": "full"
       },
       "tournament": {
-        "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
+        "engines": "market,custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
         "profiles": "min_variance,hrp,max_sharpe,barbell"
       },
       "discovery": {
@@ -97,9 +97,9 @@
         "cluster_cap": 0.25
       },
       "backtest": {
-        "train_window": 20,
-        "test_window": 5,
-        "step_size": 5,
+        "train_window": 30,
+        "test_window": 10,
+        "step_size": 10,
         "backtest_simulator": "custom",
         "backtest_slippage": 0.0005,
         "backtest_commission": 0.0001,
@@ -107,21 +107,8 @@
         "baseline_symbol": "AMEX:SPY",
         "report_mode": "basic"
       },
-
-      "selection": {
-        "top_n": 2,
-        "threshold": 0.5
-      },
-      "risk": {
-        "cluster_cap": 0.25
-      },
-      "backtest": {
-        "train_window": 30,
-        "test_window": 10,
-        "step_size": 10
-      },
       "tournament": {
-        "engines": "custom",
+        "engines": "market,custom",
         "profiles": "min_variance,hrp"
       },
       "discovery": {
