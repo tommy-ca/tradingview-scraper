@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, cast
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.portfolio_engines.backtest_simulators import build_simulator
 from tradingview_scraper.portfolio_engines.base import EngineRequest, EngineUnavailableError
 from tradingview_scraper.portfolio_engines.engines import build_engine, list_available_engines, list_known_engines
 from tradingview_scraper.regime import MarketRegimeDetector
@@ -68,9 +69,12 @@ class BacktestEngine:
         profile: str = "risk_parity",
         engine: str = "custom",
         cluster_cap: float = 0.25,
+        simulator_name: str = "custom",
     ):
-        logger.info(f"Starting Walk-Forward Backtest (Engine: {engine}, Profile: {profile})")
+        logger.info(f"Starting Walk-Forward Backtest (Engine: {engine}, Profile: {profile}, Simulator: {simulator_name})")
         logger.info(f"Train: {train_window}d, Test: {test_window}d, Step: {step_size}d")
+
+        simulator = build_simulator(simulator_name)
 
         total_len = len(self.returns)
         if total_len < train_window + test_window:
@@ -104,7 +108,7 @@ class BacktestEngine:
                 continue
 
             # 3. Calculate Performance on Test Data
-            test_perf = self._evaluate_performance(test_data, weights_df)
+            test_perf = simulator.simulate(test_data, weights_df)
 
             top_cols = ["Symbol", "Weight"]
             for extra in ["Net_Weight", "Direction", "Cluster_ID"]:
@@ -152,9 +156,12 @@ class BacktestEngine:
         profiles: Optional[List[str]] = None,
         engines: Optional[List[str]] = None,
         cluster_cap: float = 0.25,
+        simulator_name: str = "custom",
     ) -> Dict:
         profiles = [p.strip().lower() for p in (profiles or ["min_variance", "hrp", "max_sharpe", "barbell"]) if (p or "").strip()]
         engines = [e.strip().lower() for e in (engines or ["custom", "skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio"]) if (e or "").strip()]
+
+        simulator = build_simulator(simulator_name)
 
         known = set(list_known_engines())
         available = set(list_available_engines())
@@ -225,7 +232,7 @@ class BacktestEngine:
                         if weights_df.empty:
                             continue
 
-                        perf = self._evaluate_performance(test_data, weights_df)
+                        perf = simulator.simulate(test_data, weights_df)
 
                         weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
                         w_series = weights_df.set_index("Symbol")[weight_col].astype(float).fillna(0.0)
@@ -295,6 +302,7 @@ class BacktestEngine:
                 "test_window": test_window,
                 "step_size": step_size,
                 "cluster_cap": cluster_cap,
+                "simulator": simulator_name,
                 "profiles": profiles,
                 "engines": engines,
                 "generated_at": str(pd.Timestamp.now()),
@@ -385,58 +393,6 @@ class BacktestEngine:
         response = eng.optimize(returns=train_data, clusters=clusters, meta=cast(dict, self.meta), stats=stats_df, request=request)
         return response.weights
 
-    def _evaluate_performance(self, test_data: pd.DataFrame, weights_df: pd.DataFrame) -> Dict:
-        # Align weights and test data
-        weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
-        weights_series = weights_df.set_index("Symbol")[weight_col].astype(float)
-        symbols = [s for s in weights_series.index if s in test_data.columns]
-
-        empty = pd.Series(dtype=float)
-        if not symbols:
-            return {"total_return": 0.0, "realized_vol": 0.0, "sharpe": 0.0, "max_drawdown": 0.0, "var_95": None, "cvar_95": None, "daily_returns": empty}
-
-        # Re-normalize weights for available symbols
-        w = weights_series[symbols].astype(float)
-        w_np = np.asarray(w, dtype=float)
-        if weight_col == "Net_Weight":
-            normalizer = float(np.sum(np.abs(w_np)))
-        else:
-            normalizer = float(np.sum(w_np))
-
-        if normalizer <= 0:
-            return {"total_return": 0.0, "realized_vol": 0.0, "sharpe": 0.0, "max_drawdown": 0.0, "var_95": None, "cvar_95": None, "daily_returns": empty}
-
-        w_np = w_np / normalizer
-
-        daily_np = (np.asarray(test_data[symbols], dtype=float) * w_np).sum(axis=1)
-        daily_returns = pd.Series(daily_np, index=test_data.index).dropna()
-        if len(daily_returns) == 0:
-            return {"total_return": 0.0, "realized_vol": 0.0, "sharpe": 0.0, "max_drawdown": 0.0, "var_95": None, "cvar_95": None, "daily_returns": empty}
-
-        var_95 = float(daily_returns.quantile(0.05))
-        tail = daily_returns[daily_returns <= var_95]
-        cvar_95 = float(tail.mean()) if len(tail) else var_95
-
-        total_return = (1 + daily_returns).prod() - 1
-        realized_vol = daily_returns.std() * np.sqrt(252)
-
-        sharpe = (daily_returns.mean() * 252) / (realized_vol + 1e-9)
-
-        cum_ret = (1 + daily_returns).cumprod()
-        running_max = cum_ret.cummax()
-        drawdown = (cum_ret - running_max) / running_max
-        max_drawdown = float(drawdown.min())
-
-        return {
-            "total_return": float(total_return),
-            "realized_vol": float(realized_vol),
-            "sharpe": float(sharpe),
-            "max_drawdown": max_drawdown,
-            "var_95": var_95,
-            "cvar_95": cvar_95,
-            "daily_returns": daily_returns,
-        }
-
     def _summarize_results(self, results: List[Dict], cumulative_returns: pd.Series) -> Dict:
         rets = [r["returns"] for r in results]
         vols = [r["vol"] for r in results]
@@ -490,6 +446,7 @@ def main():
     parser.add_argument("--test", type=int, default=20)
     parser.add_argument("--step", type=int, default=20)
     parser.add_argument("--cluster-cap", type=float, default=float(os.getenv("CLUSTER_CAP", "0.25")))
+    parser.add_argument("--simulator", type=str, default="custom", choices=["custom", "cvxportfolio"])
 
     parser.add_argument("--tournament", action="store_true")
     parser.add_argument("--engines", type=str, default="custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio")
@@ -508,7 +465,15 @@ def main():
     if args.tournament:
         engines = [e.strip().lower() for e in (args.engines or "").split(",") if e.strip()]
         profiles = [p.strip().lower() for p in (args.profiles or "").split(",") if p.strip()]
-        res = bt.run_tournament(train_window=args.train, test_window=args.test, step_size=args.step, profiles=profiles, engines=engines, cluster_cap=float(args.cluster_cap))
+        res = bt.run_tournament(
+            train_window=args.train,
+            test_window=args.test,
+            step_size=args.step,
+            profiles=profiles,
+            engines=engines,
+            cluster_cap=float(args.cluster_cap),
+            simulator_name=args.simulator,
+        )
         output_file = output_dir / "tournament_results.json"
         with open(output_file, "w") as f:
             json.dump(res, f, indent=2)
@@ -516,7 +481,15 @@ def main():
         return
 
     profile_slug = "risk_parity" if args.profile == "hrp" else args.profile
-    bt_results = bt.run_walk_forward(train_window=args.train, test_window=args.test, step_size=args.step, profile=profile_slug, engine=args.engine, cluster_cap=float(args.cluster_cap))
+    bt_results = bt.run_walk_forward(
+        train_window=args.train,
+        test_window=args.test,
+        step_size=args.step,
+        profile=profile_slug,
+        engine=args.engine,
+        cluster_cap=float(args.cluster_cap),
+        simulator_name=args.simulator,
+    )
 
     if not bt_results:
         logger.error("No backtest results produced.")

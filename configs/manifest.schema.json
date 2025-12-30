@@ -48,7 +48,11 @@
           "properties": {
             "train_window": { "type": "integer", "minimum": 1 },
             "test_window": { "type": "integer", "minimum": 1 },
-            "step_size": { "type": "integer", "minimum": 1 }
+            "step_size": { "type": "integer", "minimum": 1 },
+            "backtest_simulator": { "type": "string", "enum": ["custom", "cvxportfolio"] },
+            "backtest_slippage": { "type": "number", "minimum": 0 },
+            "backtest_commission": { "type": "number", "minimum": 0 },
+            "backtest_cash_asset": { "type": "string" }
           }
         },
         "tournament": {

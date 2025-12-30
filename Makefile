@@ -32,6 +32,7 @@ GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 BACKTEST_TRAIN ?= 120
 BACKTEST_TEST ?= 20
 BACKTEST_STEP ?= 20
+BACKTEST_SIMULATOR ?= custom
 
 # Tournament Defaults
 TOURNAMENT_ENGINES ?= custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio
@@ -190,17 +191,17 @@ backtest: backtest-all backtest-report
 
 backtest-all:
 	@echo ">>> Running Walk-Forward Validation for all profiles..."
-	$(PY) scripts/backtest_engine.py --profile min_variance --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
-	$(PY) scripts/backtest_engine.py --profile risk_parity --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
-	$(PY) scripts/backtest_engine.py --profile max_sharpe --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
-	$(PY) scripts/backtest_engine.py --profile barbell --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
+	$(PY) scripts/backtest_engine.py --profile min_variance --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
+	$(PY) scripts/backtest_engine.py --profile risk_parity --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
+	$(PY) scripts/backtest_engine.py --profile max_sharpe --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
+	$(PY) scripts/backtest_engine.py --profile barbell --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
 
 backtest-report:
 	$(PY) scripts/generate_backtest_report.py
 
 backtest-tournament:
 	@echo ">>> Running Multi-Engine Tournament Mode..."
-	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --engines $(TOURNAMENT_ENGINES) --profiles $(TOURNAMENT_PROFILES) --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP)
+	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --engines $(TOURNAMENT_ENGINES) --profiles $(TOURNAMENT_PROFILES) --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
 
 tournament-report: backtest-report
 

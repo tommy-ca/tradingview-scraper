@@ -1,7 +1,23 @@
-from .base import BaseRiskEngine, EngineRequest, EngineResponse, EngineUnavailableError, ProfileName
+from .backtest_simulators import (
+    BaseSimulator,
+    CvxPortfolioSimulator,
+    ReturnsSimulator,
+    build_simulator,
+)
+from .base import (
+    BaseRiskEngine,
+    EngineRequest,
+    EngineResponse,
+    EngineUnavailableError,
+    ProfileName,
+)
 from .cluster_adapter import ClusteredUniverse, build_clustered_universe
 
 __all__ = [
+    "BaseSimulator",
+    "ReturnsSimulator",
+    "CvxPortfolioSimulator",
+    "build_simulator",
     "BaseRiskEngine",
     "EngineRequest",
     "EngineResponse",

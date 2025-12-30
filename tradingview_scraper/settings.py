@@ -100,6 +100,10 @@ class TradingViewScraperSettings(BaseSettings):
     train_window: int = 120
     test_window: int = 20
     step_size: int = 20
+    backtest_simulator: str = "custom"
+    backtest_slippage: float = 0.0005  # 5 bps
+    backtest_commission: float = 0.0001  # 1 bp
+    backtest_cash_asset: str = "USDT"
 
     # Tournament
     tournament_engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
@@ -231,6 +235,10 @@ if __name__ == "__main__":
             "train_window": "BACKTEST_TRAIN",
             "test_window": "BACKTEST_TEST",
             "step_size": "BACKTEST_STEP",
+            "backtest_simulator": "BACKTEST_SIMULATOR",
+            "backtest_slippage": "BACKTEST_SLIPPAGE",
+            "backtest_commission": "BACKTEST_COMMISSION",
+            "backtest_cash_asset": "BACKTEST_CASH_ASSET",
             "tournament_engines": "TOURNAMENT_ENGINES",
             "tournament_profiles": "TOURNAMENT_PROFILES",
             "gist_id": "GIST_ID",

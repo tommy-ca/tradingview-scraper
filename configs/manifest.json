@@ -21,7 +21,11 @@
       "backtest": {
         "train_window": 120,
         "test_window": 20,
-        "step_size": 20
+        "step_size": 20,
+        "backtest_simulator": "custom",
+        "backtest_slippage": 0.0005,
+        "backtest_commission": 0.0001,
+        "backtest_cash_asset": "USDT"
       },
       "tournament": {
         "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
