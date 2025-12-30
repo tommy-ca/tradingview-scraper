@@ -294,11 +294,16 @@ finalize:
 	$(MAKE) optimize-v2
 	$(MAKE) backtest
 	$(MAKE) tournament
+	$(MAKE) tearsheets
 	$(MAKE) audit
 	$(MAKE) report
 	$(MAKE) drift-monitor
 	$(MAKE) promote-latest
 	$(MAKE) gist
+
+tearsheets:
+	@echo ">>> Generating QuantStats Tear-sheets..."
+	$(PY) scripts/generate_tearsheets.py
 
 optimize-v2:
 	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/optimize_clustered_v2.py

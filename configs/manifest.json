@@ -9,7 +9,8 @@
         "batch_size": 5,
         "backfill": true,
         "gapfill": true,
-        "max_symbols": 200
+        "max_symbols": 200,
+        "strict_health": true
       },
       "selection": {
         "top_n": 3,
@@ -81,7 +82,8 @@
         "batch_size": 10,
         "backfill": true,
         "gapfill": true,
-        "max_symbols": 50
+        "max_symbols": 50,
+        "strict_health": false
       },
       "selection": {
         "top_n": 2,

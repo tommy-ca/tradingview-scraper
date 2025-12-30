@@ -24,11 +24,17 @@ The framework decouples **Window Management** (rolling walk-forward logic) from 
 
 ## 3. Metrics & Standards
 
-Every simulator must output a standardized result schema including:
+Every simulator must output a standardized result schema, utilizing **QuantStats** for mathematical consistency:
 - **Returns**: Geometric cumulative return and annualized mean.
 - **Risk**: Annualized Volatility, Max Drawdown, and CVaR (95%).
-- **Efficiency**: Sharpe Ratio and Win Rate.
+- **Efficiency**: Sharpe Ratio, **Sortino Ratio**, **Calmar Ratio**, and Win Rate.
 - **Operations**: 1-way Turnover ($ \sum |w_{t} - w_{t-1}| / 2 $).
+
+## 4. Visual Tear-sheets
+
+The framework automatically generates HTML tear-sheets using `quantstats.reports.html()` for all tournament benchmark points.
+- **Location**: `artifacts/summaries/runs/<RUN_ID>/tearsheets/`
+- **Benchmark**: `AMEX:SPY` is used as the default relative performance reference.
 
 ## 4. Institutional Constants
 

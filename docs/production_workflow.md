@@ -35,22 +35,21 @@ make accept-state
 make clean-run
 ```
 
-**What it does:**
-1.  **Wipe**: Clears previous scans and analysis artifacts (`data/lakehouse/portfolio_*`).
-2.  **Discover**: Runs multi-asset scanners (Equities, Crypto, Bonds, MTF Forex).
-3.  **Tiered Selection**: 
-    - **Raw Pool**: Aggregates 600+ symbols and merges redundant venues into canonical identities.
-    - **Pass 1**: Lightweight 60-day backfill for the raw pool.
-    - **Pruning**: Executes **Natural Selection** to filter the universe into ~40 diverse winners.
-4.  **Enrich**: Captures sectors, industries, and descriptions for final candidates.
-5.  **Align (Self-Healing)**: Performs a deep 200-day backfill and automatically repairs gaps.
-6.  **Cluster**: Builds hierarchical risk buckets using **Ward Linkage** and **Intersection Correlation**.
-7.  **Detect**: Runs the Multi-Factor Regime Detector (Entropy, DWT, Vol Clustering).
-8.  **Optimize**: Generates 4 cluster-aware risk profiles with 25% caps and **Fragility Penalties**.
-9.  **Tournament**: Benchmarks the custom optimizer against `skfolio`, `Riskfolio`, `PyPortfolioOpt`, and `cvxportfolio`.
-10. **Audit**: Programmatically verifies all weight caps and Barbell insulation.
-11. **Report**: Produces the prettified implementation dashboard and **Decision Audit Log**.
-12. **Sync**: Synchronizes all implementation artifacts to a private GitHub Gist.
+**What it does (13-Step Production Sequence):**
+1.  **Cleanup**: Wipe previous artifacts (`data/lakehouse/portfolio_*`).
+2.  **Discovery**: Run multi-asset scanners (Equities, Crypto, Bonds, MTF Forex).
+3.  **Aggregation**: Consolidate scans into a **Raw Pool** with canonical identity merging (Venue Neutrality).
+4.  **Lightweight Prep**: Fetch **60-day** history for the raw pool to establish baseline correlations.
+5.  **Natural Selection (Pruning)**: Hierarchical clustering on the raw pool; select **Top 3 Assets** per cluster using **Execution Intelligence**.
+6.  **Enrichment**: Propagate sectors, industries, and descriptions to the filtered winners.
+7.  **High-Integrity Prep**: Fetch **200-day** secular history for winners with automated gap-repair.
+8.  **Health Audit**: Validate 100% gap-free alignment for the implementation universe (Triggers `make recover` if gaps found).
+9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Adaptive Thresholds**.
+10. **Regime Detection**: Multi-factor analysis (**Entropy + DWT Spectral Turbulence**).
+11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties**, supported by a multi-engine benchmarking framework (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
+12. **Validation**: Run `make tournament` to benchmark multiple optimization backends against the custom baseline.
+13. **Reporting**: Generate Implementation Dashboard, Strategy Resume, and sync to private Gist.
+
 
 ---
 
@@ -91,6 +90,12 @@ make validate
 ```
 - **Selective Sync**: Skips fresh assets to optimize execution speed.
 - **Holiday-Aware**: Automatically ignores US market closures (e.g. Thanksgiving, Christmas).
+
+### Data Quality Gates
+The pipeline includes an automated **Step 8: Health Audit & Automated Recovery**. 
+- If gaps are detected in the implementation universe, `make recover` is triggered automatically.
+- Recovery includes intensive gap repair and a matrix alignment refresh.
+- If `STRICT_HEALTH=1` is set (default in `production` profile), the run will fail if any gaps remain after recovery.
 
 ### Stage 4: Risk Optimization & Audit
 ```bash

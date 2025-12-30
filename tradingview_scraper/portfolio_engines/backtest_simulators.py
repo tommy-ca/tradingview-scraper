@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
@@ -8,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.utils.metrics import calculate_performance_metrics
 
 logger = logging.getLogger("backtest_simulators")
 
@@ -73,31 +72,9 @@ class ReturnsSimulator(BaseSimulator):
         daily_np = (np.asarray(test_data[symbols], dtype=float) * w_np).sum(axis=1)
         daily_returns = pd.Series(daily_np, index=test_data.index).dropna()
 
-        if len(daily_returns) == 0:
-            return empty_res
-
-        var_95 = float(daily_returns.quantile(0.05))
-        tail = daily_returns[daily_returns <= var_95]
-        cvar_95 = float(tail.mean()) if len(tail) else var_95
-
-        total_return = (1 + daily_returns).prod() - 1
-        realized_vol = daily_returns.std() * np.sqrt(252)
-        sharpe = (daily_returns.mean() * 252) / (realized_vol + 1e-9)
-
-        cum_ret = (1 + daily_returns).cumprod()
-        running_max = cum_ret.cummax()
-        drawdown = (cum_ret - running_max) / (running_max + 1e-12)
-        max_drawdown = float(drawdown.min())
-
-        return {
-            "total_return": float(total_return),
-            "realized_vol": float(realized_vol),
-            "sharpe": float(sharpe),
-            "max_drawdown": max_drawdown,
-            "var_95": var_95,
-            "cvar_95": cvar_95,
-            "daily_returns": daily_returns,
-        }
+        res = calculate_performance_metrics(daily_returns)
+        res["daily_returns"] = daily_returns
+        return res
 
 
 class CvxPortfolioSimulator(BaseSimulator):
@@ -195,29 +172,10 @@ class CvxPortfolioSimulator(BaseSimulator):
             v = result.v  # portfolio value over time
             realized_returns = v.pct_change().dropna()
 
-            # standard metrics
-            var_95 = float(realized_returns.quantile(0.05))
-            tail = realized_returns[realized_returns <= var_95]
-            cvar_95 = float(tail.mean()) if len(tail) else var_95
+            res = calculate_performance_metrics(realized_returns)
+            res["daily_returns"] = realized_returns
+            return res
 
-            total_return = (v.iloc[-1] / v.iloc[0]) - 1
-            realized_vol = realized_returns.std() * np.sqrt(252)
-            sharpe = (realized_returns.mean() * 252) / (realized_vol + 1e-9)
-
-            cum_ret = (1 + realized_returns).cumprod()
-            running_max = cum_ret.cummax()
-            drawdown = (cum_ret - running_max) / (running_max + 1e-12)
-            max_drawdown = float(drawdown.min())
-
-            return {
-                "total_return": float(total_return),
-                "realized_vol": float(realized_vol),
-                "sharpe": float(sharpe),
-                "max_drawdown": max_drawdown,
-                "var_95": var_95,
-                "cvar_95": cvar_95,
-                "daily_returns": realized_returns,
-            }
         except Exception as e:
             logger.error(f"cvxportfolio simulation failed: {e}")
             return ReturnsSimulator().simulate(test_data, weights_df)

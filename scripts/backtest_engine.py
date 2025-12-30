@@ -128,7 +128,7 @@ class BacktestEngine:
                 "var_95": test_perf.get("var_95"),
                 "cvar_95": test_perf.get("cvar_95"),
                 "n_assets": len(weights_df),
-                "top_assets": weights_df.head(5)[top_cols].to_dict(orient="records"),
+                "top_assets": cast(Any, weights_df.head(5)[top_cols]).to_dict(orient="records"),
             }
 
             results.append(window_res)
@@ -282,7 +282,7 @@ class BacktestEngine:
                             "cvar_95": perf.get("cvar_95"),
                             "n_assets": int(len(weights_df)),
                             "turnover": t_val,
-                            "top_assets": weights_df.head(5)[top_cols].to_dict(orient="records"),
+                            "top_assets": cast(Any, weights_df.head(5)[top_cols]).to_dict(orient="records"),
                         }
 
                         results[s_name][eng][prof]["windows"].append(window_res)
@@ -321,6 +321,7 @@ class BacktestEngine:
                 "generated_at": str(pd.Timestamp.now()),
             },
             "results": results,
+            "returns": {f"{s}_{e}_{p}": v for (s, e, p), v in cumulative.items() if not v.empty},
         }
 
     def _cluster_data(self, df: pd.DataFrame) -> Dict[str, List[str]]:
@@ -407,6 +408,8 @@ class BacktestEngine:
         return response.weights
 
     def _summarize_results(self, results: List[Dict], cumulative_returns: pd.Series) -> Dict:
+        from tradingview_scraper.utils.metrics import calculate_performance_metrics
+
         rets = [r["returns"] for r in results]
         vols = [r["vol"] for r in results]
         sharpes = [r["sharpe"] for r in results]
@@ -423,30 +426,25 @@ class BacktestEngine:
 
         avg_window_cvar_95 = float(np.mean(cvars)) if cvars else None
 
-        cum = cumulative_returns.dropna()
-        total_cum_return = (1 + cum).cumprod().iloc[-1] - 1 if len(cum) else 0.0
-        annualized_return = cum.mean() * 252 if len(cum) else 0.0
-        annualized_vol = cum.std() * np.sqrt(252) if len(cum) else 0.0
+        # Standard summary using QuantStats via unified helper
+        summary = calculate_performance_metrics(cumulative_returns)
 
-        realized_var_95 = None
-        realized_cvar_95 = None
-        if len(cum):
-            realized_var_95 = float(cum.quantile(0.05))
-            tail = cum[cum <= realized_var_95]
-            realized_cvar_95 = float(tail.mean()) if len(tail) else realized_var_95
-
-        return {
-            "total_cumulative_return": float(total_cum_return),
-            "annualized_return": float(annualized_return),
-            "annualized_vol": float(annualized_vol),
-            "avg_window_return": float(np.mean(rets)),
-            "avg_window_vol": float(np.mean(vols)),
-            "avg_window_sharpe": float(np.mean(sharpes)),
-            "avg_window_cvar_95": avg_window_cvar_95,
-            "realized_var_95": realized_var_95,
-            "realized_cvar_95": realized_cvar_95,
-            "win_rate": float(np.mean([1 if r > 0 else 0 for r in rets])),
-        }
+        # Merge with window-specific metrics
+        summary.update(
+            {
+                "total_cumulative_return": summary["total_return"],
+                "annualized_return": summary["annualized_return"] if "annualized_return" in summary else (cumulative_returns.mean() * 252 if not cumulative_returns.empty else 0.0),
+                "annualized_vol": summary["realized_vol"],
+                "avg_window_return": float(np.mean(rets)),
+                "avg_window_vol": float(np.mean(vols)),
+                "avg_window_sharpe": float(np.mean(sharpes)),
+                "avg_window_cvar_95": avg_window_cvar_95,
+                "realized_var_95": summary["var_95"],
+                "realized_cvar_95": summary["cvar_95"],
+                "win_rate": float(np.mean([1 if r > 0 else 0 for r in rets])),
+            }
+        )
+        return summary
 
 
 def main():
@@ -481,7 +479,7 @@ def main():
         profiles = [p.strip().lower() for p in (args.profiles or "").split(",") if p.strip()]
         sims = [s.strip().lower() for s in (args.simulators or "").split(",") if s.strip()]
 
-        res = bt.run_tournament(
+        full_results = bt.run_tournament(
             train_window=args.train,
             test_window=args.test,
             step_size=args.step,
@@ -490,10 +488,19 @@ def main():
             cluster_cap=float(args.cluster_cap),
             simulators=sims,
         )
+        res = full_results["results"]
         output_file = output_dir / "tournament_results.json"
         with open(output_file, "w") as f:
-            json.dump(res, f, indent=2)
+            json.dump({"meta": full_results["meta"], "results": res}, f, indent=2)
         print(f"\nTournament results saved to {output_file}")
+
+        # Save cumulative returns for tearsheets
+        if "returns" in full_results:
+            returns_dir = output_dir / "returns"
+            returns_dir.mkdir(exist_ok=True)
+            for key, series in full_results["returns"].items():
+                series.to_pickle(returns_dir / f"{key}.pkl")
+            print(f"Cumulative returns exported to {returns_dir}")
         return
 
     profile_slug = "risk_parity" if args.profile == "hrp" else args.profile

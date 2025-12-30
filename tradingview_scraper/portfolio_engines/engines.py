@@ -297,7 +297,7 @@ class CustomClusteredEngine(BaseRiskEngine):
         request: EngineRequest,
     ) -> Tuple[pd.DataFrame, Dict[str, Any], List[str]]:
         if stats is None or stats.empty or "Symbol" not in stats.columns or "Antifragility_Score" not in stats.columns:
-            return pd.DataFrame(columns=["Symbol", "Weight"]), {"backend": "custom"}, ["missing antifragility stats for barbell"]
+            return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["missing antifragility stats for barbell"]
 
         # Select top aggressor clusters by best (highest antifragility) symbol.
         sym_to_cluster = universe.symbol_to_cluster
@@ -305,7 +305,7 @@ class CustomClusteredEngine(BaseRiskEngine):
         stats_local["Cluster_ID"] = stats_local["Symbol"].apply(lambda s: sym_to_cluster.get(str(s)))
         stats_local = stats_local.dropna(subset=["Cluster_ID"])
         if stats_local.empty:
-            return pd.DataFrame(columns=["Symbol", "Weight"]), {"backend": "custom"}, ["no cluster mapping for barbell"]
+            return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["no cluster mapping for barbell"]
 
         best_per_cluster = stats_local.sort_values("Antifragility_Score", ascending=False).groupby("Cluster_ID").first()
         top_clusters = best_per_cluster.sort_values("Antifragility_Score", ascending=False).head(request.max_aggressor_clusters)
@@ -313,7 +313,7 @@ class CustomClusteredEngine(BaseRiskEngine):
         aggressor_cluster_ids = [str(c) for c in top_clusters.index.tolist()]
 
         if not aggressor_symbols:
-            return pd.DataFrame(columns=["Symbol", "Weight"]), {"backend": "custom"}, ["no aggressor clusters found"]
+            return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["no aggressor clusters found"]
 
         agg_total = float(request.aggressor_weight)
         agg_per = agg_total / len(aggressor_symbols)
@@ -325,7 +325,7 @@ class CustomClusteredEngine(BaseRiskEngine):
 
         core_symbols = [s for s in universe.returns.columns if s not in excluded_symbols]
         if len(core_symbols) < 2:
-            return pd.DataFrame(columns=["Symbol", "Weight"]), {"backend": "custom"}, ["insufficient core symbols after exclusion"]
+            return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["insufficient core symbols after exclusion"]
 
         # Build a reduced universe for the core sleeve.
         core_clusters = {c_id: [s for s in syms if s in core_symbols] for c_id, syms in universe.clusters.items() if str(c_id) not in aggressor_cluster_ids}
@@ -477,8 +477,14 @@ class RiskfolioEngine(CustomClusteredEngine):
             port = rp.Portfolio(returns=X)
             port.assets_stats(method_mu="hist", method_cov="ledoit")
 
-            obj = "MinRisk" if request.profile == "min_variance" else "Sharpe"
-            rm = "MV"
+            if request.profile == "max_sharpe":
+                obj = "Sharpe"
+                # Use a higher confidence level for CVaR if available
+                rm = "MV"
+            else:
+                obj = "MinRisk"
+                rm = "MV"
+
             w = port.optimization(model="Classic", rm=rm, obj=obj, rf=request.risk_free_rate, l=0)
 
         # Riskfolio returns a DataFrame of weights indexed by asset.
@@ -507,10 +513,20 @@ class CVXPortfolioEngine(CustomClusteredEngine):
         n = X.shape[1]
         cap = _effective_cap(request.cluster_cap, n)
 
-        # Build a single-period optimization with mean return forecast and full covariance.
-        # Note: cvxportfolio is designed for backtesting with a simulator; here we extract target weights only.
-        gamma = 1.0
-        objective = cvx.ReturnsForecast() - gamma * cvx.FullCovariance()
+        # Map profiles to cvxportfolio objectives
+        if request.profile == "min_variance":
+            gamma_risk = 100.0  # High risk aversion
+            objective = -gamma_risk * cvx.FullCovariance()
+        elif request.profile == "max_sharpe":
+            gamma_risk = 1.0
+            # Small trade cost to regularize weights
+            objective = cvx.ReturnsForecast() - gamma_risk * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
+        else:
+            # HRP/Risk Parity - cvxportfolio doesn't have a direct HRP policy,
+            # we use a balanced risk-aversion approach.
+            gamma_risk = 5.0
+            objective = cvx.ReturnsForecast() - gamma_risk * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
+
         constraints = [cvx.LongOnly(), cvx.LeverageLimit(1.0)]
 
         # Approximate cap via max weight constraint if available.

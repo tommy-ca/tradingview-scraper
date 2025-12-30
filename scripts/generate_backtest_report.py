@@ -12,6 +12,8 @@ SUMMARY_COLS = [
     "annualized_return",
     "annualized_vol",
     "avg_window_sharpe",
+    "sortino",
+    "calmar",
     "win_rate",
 ]
 
@@ -70,6 +72,8 @@ def generate_comparison_report():
         if isinstance(summary, dict):
             row = dict(summary)
             row["Profile"] = profile.upper()
+            row["sortino"] = summary.get("sortino")
+            row["calmar"] = summary.get("calmar")
             summary_rows.append(row)
 
         windows = data.get("windows") or []
@@ -277,6 +281,8 @@ def generate_engine_comparison_report():
         "annualized_return",
         "annualized_vol",
         "avg_window_sharpe",
+        "sortino",
+        "calmar",
         "realized_cvar_95",
         "worst_mdd",
         "win_rate",
@@ -288,6 +294,8 @@ def generate_engine_comparison_report():
         "annualized_return": ".2%",
         "annualized_vol": ".2%",
         "avg_window_sharpe": ".2f",
+        "sortino": ".2f",
+        "calmar": ".2f",
         "realized_cvar_95": ".2%",
         "worst_mdd": ".2%",
         "win_rate": ".0%",
@@ -336,6 +344,8 @@ def generate_engine_comparison_report():
                         "annualized_return": summary.get("annualized_return"),
                         "annualized_vol": summary.get("annualized_vol"),
                         "avg_window_sharpe": summary.get("avg_window_sharpe"),
+                        "sortino": summary.get("sortino"),
+                        "calmar": summary.get("calmar"),
                         "realized_cvar_95": summary.get("realized_cvar_95"),
                         "worst_mdd": worst_mdd,
                         "win_rate": summary.get("win_rate"),

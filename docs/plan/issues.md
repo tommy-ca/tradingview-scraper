@@ -150,12 +150,19 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 6. **Error Transparency**: Improve manifest parsing error feedback in `settings.py`.
 7. **Solver Parity**: Upgrade standalone `scripts/optimize_clustered_v2.py` to `cvxpy` matching the modular engine.
 
-### Phase 12 — Execution Fidelity & Optimizer Hardening
+### Phase 12 — Execution Fidelity & Optimizer Hardening (Finalized)
 1. **Metric Unification**: Centralize Sharpe/MDD/CVaR calculations to a shared utility to remove simulator bias.
 2. **Simulator Debugging**: Investigate "Execution Alpha" (Realized > Idealized) anomalies in `CvxPortfolioSimulator`.
 3. **Engine Tuning**: Calibrate `cvxportfolio` and `riskfolio` default parameters for better production performance.
 4. **Data Quality Gate**: Implement a mandatory health gate in `daily-run` that blocks optimization if data integrity is compromised.
 5. **Integrated Self-Healing**: Automatically trigger `make recover` within the pipeline if gaps persist after alignment.
+
+### Phase 13 — Visual Analytics & Tear-sheets (QuantStats)
+1. **Integration**: Implement `scripts/generate_tearsheets.py` using `quantstats`.
+2. **HTML Teardowns**: Produce full walk-forward tear-sheets for every engine/profile.
+3. **Gist Enrichment**: Publish QuantStats metric snapshots to the implementation Gist.
+4. **Benchmark Parity**: Ensure `SPY` benchmark data is correctly localized for all `quantstats` comparisons.
+5. **Metric Unification**: Centralize Sharpe/Sortino/Calmar calculations in `utils/metrics.py` using QuantStats.
 
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.

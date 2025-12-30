@@ -55,6 +55,12 @@ def natural_selection(
     with open(meta_path, "r") as f_meta:
         raw_candidates = json.load(f_meta)
 
+    if not raw_candidates or returns.columns.empty:
+        logger.warning("No candidates or returns available for selection.")
+        with open(output_path, "w") as f_out:
+            json.dump([], f_out)
+        return
+
     candidate_map = {c["symbol"]: c for c in raw_candidates}
 
     stats_df = None

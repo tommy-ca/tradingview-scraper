@@ -27,7 +27,8 @@
             "batch_size": { "type": "integer", "minimum": 1 },
             "backfill": { "type": "boolean" },
             "gapfill": { "type": "boolean" },
-            "max_symbols": { "type": "integer", "minimum": 1 }
+            "max_symbols": { "type": "integer", "minimum": 1 },
+            "strict_health": { "type": "boolean" }
           }
         },
         "selection": {

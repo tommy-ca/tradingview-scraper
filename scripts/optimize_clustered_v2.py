@@ -1,8 +1,9 @@
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
+import cvxpy as cp
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
@@ -33,7 +34,12 @@ class ClusteredOptimizerV2:
         # Ensure returns matches clusters
         all_symbols = [s for c in self.clusters.values() for s in c]
         available_symbols = [s for s in all_symbols if s in self.returns.columns]
-        self.returns = self.returns[available_symbols].fillna(0.0)
+
+        if not available_symbols:
+            logger.warning("No available symbols for optimization.")
+            self.returns = pd.DataFrame()
+        else:
+            self.returns = self.returns[available_symbols].fillna(0.0)
 
         # Build cluster benchmarks and aggregate risk stats
         self.cluster_benchmarks = pd.DataFrame()
@@ -110,59 +116,90 @@ class ClusteredOptimizerV2:
             else:
                 self.cluster_stats[c_id] = {"fragility": 1.0, "cvar": -0.05}
 
-    def _get_cov(self, df: pd.DataFrame):
-        return df.cov() * 252
-
-    def _min_var_obj(self, weights, cov, penalties=None):
-        base_vol = np.sqrt(np.dot(weights.T, np.dot(cov, weights)))
-        if penalties is not None:
-            # Penalize by weighted average fragility
-            penalty = np.dot(weights, penalties)
-            return base_vol * (1.0 + penalty * 0.2)
-        return base_vol
-
-    def _risk_parity_obj(self, weights, cov):
-        vol = np.sqrt(np.dot(weights.T, np.dot(cov, weights)))
-        if vol == 0:
-            return 0
-        mrc = np.dot(cov, weights) / vol
-        rc = weights * mrc
-        target_rc = vol / len(weights)
-        return np.sum(np.square(rc - target_rc))
-
-    def _max_sharpe_obj(self, weights, returns_df: pd.DataFrame, penalties=None):
-        cov = self._get_cov(returns_df)
-        vol = np.sqrt(np.dot(weights.T, np.dot(cov, weights)))
-        ret = np.sum(returns_df.mean() * weights) * 252
-        if vol == 0:
-            return 0
-        sharpe = ret / vol
-        if penalties is not None:
-            penalty = np.dot(weights, penalties)
-            return -(sharpe / (1.0 + penalty * 0.2))
-        return -sharpe
+    def _get_cov(self, df: pd.DataFrame) -> np.ndarray:
+        return df.cov().values * 252
 
     def optimize_across_clusters(self, method: str, cluster_cap: float = 0.25) -> pd.Series:
         if self.cluster_benchmarks.empty:
             return pd.Series(dtype=float)
 
         n = self.cluster_benchmarks.shape[1]
+        if n == 1:
+            return pd.Series([1.0], index=self.cluster_benchmarks.columns)
+
+        # Optimization Parameters
+        cov = self._get_cov(self.cluster_benchmarks)
+        mu = self.cluster_benchmarks.mean().values * 252
+        penalties = np.array([self.cluster_stats[c_col.replace("Cluster_", "")]["fragility"] for c_col in self.cluster_benchmarks.columns])
+
+        # CVXPY Setup
+        w = cp.Variable(n)
+        risk = cp.quad_form(w, cov)
+        p_term = (w @ penalties) * 0.2
+
+        constraints = [cp.sum(w) == 1.0, w >= 0.0, w <= cluster_cap]
+
+        if method == "min_var":
+            obj = cp.Minimize(risk + p_term)
+        elif method == "risk_parity":
+            # Log-barrier RP approximation
+            obj = cp.Minimize(0.5 * risk - (1.0 / n) * cp.sum(cp.log(w)))
+        elif method == "max_sharpe":
+            # Quadratic Utility
+            obj = cp.Maximize((mu @ w) - 0.5 * risk - p_term)
+        else:
+            raise ValueError(f"Unknown method {method}")
+
+        try:
+            prob = cp.Problem(obj, constraints)
+            prob.solve(solver=cp.ECOS if method == "risk_parity" else cp.OSQP)
+
+            if w.value is None or prob.status not in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}:
+                logger.warning(f"Solver {method} failed (Status: {prob.status}), falling back to SLSQP")
+                # Fallback to SLSQP if CVXPY fails
+                return self._optimize_slsqp(method, cluster_cap, n, cov, penalties, mu)
+
+            return pd.Series(np.array(w.value).flatten(), index=self.cluster_benchmarks.columns)
+        except Exception as e:
+            logger.error(f"CVXPY error: {e}, falling back to SLSQP")
+            return self._optimize_slsqp(method, cluster_cap, n, cov, penalties, mu)
+
+    def _optimize_slsqp(self, method: str, cluster_cap: float, n: int, cov: np.ndarray, penalties: np.ndarray, mu: np.ndarray) -> pd.Series:
+        """Legacy SLSQP fallback for robustness."""
         init_weights = np.array([1.0 / n] * n)
         bounds = tuple((0.0, cluster_cap) for _ in range(n))
         constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
 
-        cov = self._get_cov(self.cluster_benchmarks)
+        def min_var_obj(w, c, p):
+            vol = np.sqrt(np.dot(w.T, np.dot(c, w)))
+            penalty = np.dot(w, p)
+            return vol * (1.0 + penalty * 0.2)
 
-        penalties = np.array([self.cluster_stats[c_col.replace("Cluster_", "")]["fragility"] for c_col in self.cluster_benchmarks.columns])
+        def risk_parity_obj(w, c):
+            vol = np.sqrt(np.dot(w.T, np.dot(c, w)))
+            if vol == 0:
+                return 0
+            mrc = np.dot(c, w) / vol
+            rc = w * mrc
+            return np.sum(np.square(rc - vol / len(w)))
+
+        def max_sharpe_obj(w, m, c, p):
+            vol = np.sqrt(np.dot(w.T, np.dot(c, w)))
+            ret = np.sum(m * w)
+            if vol == 0:
+                return 0
+            sharpe = ret / vol
+            penalty = np.dot(w, p)
+            return -(sharpe / (1.0 + penalty * 0.2))
 
         if method == "min_var":
-            res = minimize(self._min_var_obj, init_weights, args=(cov, penalties), method="SLSQP", bounds=bounds, constraints=constraints)
+            res = minimize(min_var_obj, init_weights, args=(cov, penalties), method="SLSQP", bounds=bounds, constraints=constraints)
         elif method == "risk_parity":
-            res = minimize(self._risk_parity_obj, init_weights, args=(cov,), method="SLSQP", bounds=bounds, constraints=constraints)
+            res = minimize(risk_parity_obj, init_weights, args=(cov,), method="SLSQP", bounds=bounds, constraints=constraints)
         elif method == "max_sharpe":
-            res = minimize(self._max_sharpe_obj, init_weights, args=(self.cluster_benchmarks, penalties), method="SLSQP", bounds=bounds, constraints=constraints)
+            res = minimize(max_sharpe_obj, init_weights, args=(mu, cov, penalties), method="SLSQP", bounds=bounds, constraints=constraints)
         else:
-            raise ValueError(f"Unknown method {method}")
+            return pd.Series(init_weights, index=self.cluster_benchmarks.columns)
 
         return pd.Series(res.x, index=self.cluster_benchmarks.columns)
 
