@@ -30,9 +30,14 @@ Every simulator must output a standardized result schema, utilizing **QuantStats
 - **Efficiency**: Sharpe Ratio, **Sortino Ratio**, **Calmar Ratio**, and Win Rate.
 - **Operations**: 1-way Turnover ($ \sum |w_{t} - w_{t-1}| / 2 $).
 
-## 4. Visual Tear-sheets
+## 4. Visual Tear-sheets & Markdown Reports
 
-The framework automatically generates HTML tear-sheets using `quantstats.reports.html()` for all tournament benchmark points.
+The framework automatically generates comprehensive analytics for all tournament benchmark points:
+- **HTML Tear-sheets**: Interactive visual reports using `quantstats.reports.html()`.
+- **Markdown Full Reports**: High-density structured summaries including:
+    - **Key Performance Table**: (Sharpe, Sortino, Calmar, CVaR).
+    - **Monthly Returns Matrix**: (Year-by-month performance grid).
+    - **Stress Audit**: Breakdown of the worst 5 historical drawdowns.
 - **Location**: `artifacts/summaries/runs/<RUN_ID>/tearsheets/`
 - **Benchmark**: `AMEX:SPY` is used as the default relative performance reference.
 

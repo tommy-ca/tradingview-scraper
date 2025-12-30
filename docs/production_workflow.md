@@ -47,8 +47,9 @@ make clean-run
 9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Adaptive Thresholds**.
 10. **Regime Detection**: Multi-factor analysis (**Entropy + DWT Spectral Turbulence**).
 11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties**, supported by a multi-engine benchmarking framework (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
-12. **Validation**: Run `make tournament` to benchmark multiple optimization backends against the custom baseline.
-13. **Reporting**: Generate Implementation Dashboard, Strategy Resume, and sync to private Gist.
+12. **Validation**: Run `make tournament` to benchmark multiple optimization backends against the custom baseline across idealized and high-fidelity simulators.
+13. **Analytics**: Generate QuantStats HTML and Markdown tear-sheets for top performers.
+14. **Reporting**: Generate Implementation Dashboard, Strategy Resume, and sync essential artifacts to private Gist.
 
 
 ---
@@ -106,15 +107,13 @@ make audit
 - **Net vs Gross**: Tracks directional tilt vs total capital at risk.
 - **Hybrid Weighting**: Allocates within clusters based on both stability and momentum.
 
-### Stage 5: Implementation Oversight
+### Stage 5: Implementation Oversight & Reporting
 ```bash
-make report
-make display
-make gist
+make finalize
 ```
-- `make report`: Generates `artifacts/summaries/runs/<RUN_ID>/portfolio_report.md` with visual concentration bars (available via `artifacts/summaries/latest/portfolio_report.md` after a successful finalize).
-- `make display`: Opens the interactive terminal dashboard for immediate implementations.
-- `make gist`: Syncs all reports, clustermaps, and audit logs from `artifacts/summaries/latest/` (symlink to last successful finalized run) to your private repository; skips sync if missing/empty (set `GIST_ALLOW_EMPTY=1` to override).
+- **Golden Artifact Selection**: To ensure Gist readability, the pipeline programmatically selects "Essential" reports (typically ~32-36 files) from the 100+ generated artifacts.
+- **Markdown-Native Reports**: High-fidelity strategy teardowns are now provided in Markdown format for direct integration with the GitHub UI.
+- **Tearsheets**: Detailed QuantStats HTML reports are generated locally for every benchmark point.
 - **Live Output Example**: [GitHub Gist - Portfolio Summaries](https://gist.github.com/tommy-ca/e888e1eab0b86447c90c26e92ec4dc36)
 
 ---

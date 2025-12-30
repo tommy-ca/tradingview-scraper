@@ -18,8 +18,8 @@ The entire production lifecycle is unified under the `make clean-run` target. Ag
 9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Adaptive Thresholds**.
 10. **Regime Detection**: Multi-factor analysis (**Entropy + DWT Spectral Turbulence**).
 11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties**, supported by a multi-engine benchmarking framework (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
-12. **Validation**: Run `make tournament` to benchmark multiple optimization backends against the custom baseline.
-13. **Reporting**: Generate Implementation Dashboard, Strategy Resume, and sync to private Gist.
+12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators.
+13. **Reporting**: Generate Markdown Tear-sheets, Strategy Resume, and sync essential artifacts to private Gist.
 
 ---
 
@@ -98,3 +98,4 @@ The system moves beyond simple MPT by treating clusters as single units of risk.
 3.  **Self-Healing Data**: Never trust raw data alignment. Always run `make validate` before generating a final report.
 4.  **Lead with Alpha**: Within clusters, always select the instrument with the highest composite rank of **Momentum, Stability, and Convexity**, while respecting **Execution Intelligence** (Liquidity).
 5.  **Validation First**: Never recommend a profile for implementation if its realized Win Rate in the last 2 walk-forward windows is below 25%.
+6.  **Alpha must survive friction**: Prioritize optimization engines that maintain Sharpe ratio stability when moving from `custom` (idealized) to `cvxportfolio` (high-fidelity) simulation.

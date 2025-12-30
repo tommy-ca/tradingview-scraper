@@ -157,12 +157,14 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 4. **Data Quality Gate**: Implement a mandatory health gate in `daily-run` that blocks optimization if data integrity is compromised.
 5. **Integrated Self-Healing**: Automatically trigger `make recover` within the pipeline if gaps persist after alignment.
 
-### Phase 13 — Visual Analytics & Tear-sheets (QuantStats)
+### Phase 13 — Visual Analytics & Tear-sheets (QuantStats) (Finalized)
 1. **Integration**: Implement `scripts/generate_tearsheets.py` using `quantstats`.
 2. **HTML Teardowns**: Produce full walk-forward tear-sheets for every engine/profile.
 3. **Gist Enrichment**: Publish QuantStats metric snapshots to the implementation Gist.
 4. **Benchmark Parity**: Ensure `SPY` benchmark data is correctly localized for all `quantstats` comparisons.
 5. **Metric Unification**: Centralize Sharpe/Sortino/Calmar calculations in `utils/metrics.py` using QuantStats.
+6. **Markdown Full Reports**: Implement `get_full_report_markdown` for high-density Gist artifacts.
+7. **Golden Artifact Selection**: Implement intelligent Gist payload selection (32 essential files).
 
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.

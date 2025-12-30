@@ -1792,7 +1792,9 @@ make tournament
 *   **Cluster-Aware Optimization**: Strictly enforced 25% global concentration caps and **CVaR-penalized** objectives.
 *   **Self-Healing Data Layer**: Automated gap detection and targeted repair for 200-day alignment.
 *   **Decision Trail Audit**: Full post-mortem logs (`selection_audit.md`) documenting every universe pruning and allocation choice.
-*   **Multi-Engine Benchmarking**: Integrated "Tournament Mode" comparing `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, and `cvxportfolio`.
+*   **High-Fidelity Simulation**: Professional friction modeling (slippage/commissions) via integrated **CVXPortfolio** simulator.
+*   **Multi-Engine Benchmarking**: Integrated "Tournament Mode" comparing `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, and `cvxportfolio` across idealized and high-fidelity simulators.
+*   **Markdown Tear-sheets**: Automated generation of strategy performance teardowns (Sharpe, Sortino, Drawdown audits) using **QuantStats**.
 *   **JSON Manifest Control**: Reproducible workflow profiles via schema-validated `manifest.json`.
 *   **Live Output Example**: [Institutional Portfolio Implementation Gist](https://gist.github.com/tommy-ca/e888e1eab0b86447c90c26e92ec4dc36)
 
