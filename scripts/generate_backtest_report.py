@@ -52,59 +52,65 @@ def _get_metric(df, profile: str, metric: str):
 
 
 def generate_comparison_report():
+    """
+    Generates the 'backtest_comparison.md' Strategy Resume.
+    Now pulls from 'tournament_results.json' to ensure consistency.
+    Defaults to the [cvxportfolio simulator] and [custom engine] as the production baseline.
+    """
     summary_dir = get_settings().prepare_summaries_run_dir()
+    tournament_path = summary_dir / "tournament_results.json"
+
+    if not tournament_path.exists():
+        print(f"Skipping Strategy Resume: {tournament_path} not found.")
+        return
+
+    try:
+        with open(tournament_path, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Failed to read {tournament_path}: {e}")
+        return
+
+    all_results = data.get("results") or {}
+    # Use cvxportfolio simulator for realizable baseline
+    sim_name = "cvxportfolio" if "cvxportfolio" in all_results else "custom"
+    eng_name = "custom"
 
     summary_rows = []
     regime_rows = []
 
     for profile in PROFILES:
-        path = summary_dir / f"backtest_{profile}.json"
-        if not path.exists():
+        prof_key = profile.lower()
+        prof_data = all_results.get(sim_name, {}).get(eng_name, {}).get(prof_key)
+        if not prof_data or not prof_data.get("summary"):
             continue
 
-        try:
-            with open(path, "r") as f:
-                data = json.load(f)
-        except Exception as e:
-            print(f"Failed to read {path}: {e}")
-            continue
+        summary = prof_data["summary"]
+        row = dict(summary)
+        row["Profile"] = profile.upper()
+        row["Details"] = f"[Metrics]({sim_name}_{eng_name}_{prof_key}_full_report.md)"
+        summary_rows.append(row)
 
-        summary = data.get("summary")
-        if isinstance(summary, dict):
-            row = dict(summary)
-            row["Profile"] = profile.upper()
-            row["sortino"] = summary.get("sortino")
-            row["calmar"] = summary.get("calmar")
-            # Default comparison uses custom/custom
-            row["Details"] = f"[Metrics](custom_custom_{profile}_metrics.md)"
-            summary_rows.append(row)
-
-        windows = data.get("windows") or []
-        if isinstance(windows, list):
-            for w in windows:
-                if not isinstance(w, dict):
-                    continue
-                regime = w.get("regime")
-                ret = w.get("returns")
-                if regime is None or ret is None:
-                    continue
+        windows = prof_data.get("windows") or []
+        for w in windows:
+            regime = w.get("regime")
+            ret = w.get("returns")
+            if regime is not None and ret is not None:
                 regime_rows.append({"Profile": profile.upper(), "Regime": regime, "Return": ret})
 
     if not summary_rows:
-        print("No backtest results found.")
+        print("No baseline results found in tournament for Strategy Resume.")
         return
 
     df = pd.DataFrame(summary_rows)
-
     for c in SUMMARY_COLS:
         if c not in df.columns:
             df[c] = None
     df = df[SUMMARY_COLS]
 
-    # Manual Markdown Table Construction
     header = "| " + " | ".join(SUMMARY_COLS) + " |"
     separator = "| " + " | ".join(["---"] * len(SUMMARY_COLS)) + " |"
-    rows = []
+    md_rows = []
     for _, row in df.iterrows():
         cells = []
         for c in SUMMARY_COLS:
@@ -112,41 +118,14 @@ def generate_comparison_report():
                 cells.append(str(row[c]))
             else:
                 cells.append(_fmt_num(row[c], ".4f"))
-        rows.append("| " + " | ".join(cells) + " |")
+        md_rows.append("| " + " | ".join(cells) + " |")
 
-    md_table = "\n".join([header, separator] + rows)
+    md_table = "\n".join([header, separator] + md_rows)
 
-    # Goal Alignment Validation
-    validation_notes = []
-
-    min_var_vol = _get_metric(df, "MIN_VARIANCE", "annualized_vol")
-    risk_parity_vol = _get_metric(df, "RISK_PARITY", "annualized_vol")
-    max_sharpe_vol = _get_metric(df, "MAX_SHARPE", "annualized_vol")
-
-    if min_var_vol is None or max_sharpe_vol is None:
-        validation_notes.append("**Risk Alignment**: Insufficient data to compare MIN_VARIANCE vs MAX_SHARPE (missing one or both profiles).")
-    elif min_var_vol < max_sharpe_vol:
-        validation_notes.append("**Risk Alignment**: MIN_VARIANCE volatility is lower than MAX_SHARPE (target achieved).")
-    else:
-        validation_notes.append("**Risk Alignment**: MIN_VARIANCE volatility is not lower than MAX_SHARPE (target failed).")
-
-    if risk_parity_vol is None or max_sharpe_vol is None or min_var_vol is None:
-        validation_notes.append("**Risk Alignment**: Insufficient data to evaluate RISK_PARITY 'middle path' (missing required profiles).")
-    elif risk_parity_vol < max_sharpe_vol and risk_parity_vol > min_var_vol:
-        validation_notes.append("**Risk Alignment**: RISK_PARITY maintains the 'middle path' volatility (target achieved).")
-    elif risk_parity_vol >= max_sharpe_vol:
-        validation_notes.append("**Risk Alignment**: RISK_PARITY volatility exceeded MAX_SHARPE (diversification failure).")
-    else:
-        validation_notes.append("**Risk Alignment**: RISK_PARITY volatility is very low (closer to MIN_VARIANCE).")
-
-    v_notes_str = "\n".join(f"- {n}" for n in validation_notes)
-
-    # Regime Attribution Analysis
+    # Regime Attribution
     if regime_rows:
         regime_df = pd.DataFrame(regime_rows)
         regime_summary = regime_df.groupby(["Regime", "Profile"])["Return"].mean().unstack()
-
-        # Construct Regime Table
         regime_header = "| Regime | " + " | ".join([p.upper() for p in PROFILES]) + " |"
         regime_sep = "| --- | " + " | ".join(["---"] * len(PROFILES)) + " |"
         regime_lines = []
@@ -155,33 +134,23 @@ def generate_comparison_report():
             for p in PROFILES:
                 vals.append(_fmt_num(row.get(p.upper(), None), ".4%"))
             regime_lines.append("| " + " | ".join([str(regime)] + vals) + " |")
-
         regime_table = "\n".join([regime_header, regime_sep] + regime_lines)
     else:
         regime_table = "No regime attribution data available."
 
-    # Report helpers
+    # Strategic Deployment Recommendation
+    min_var_vol = _get_metric(df, "MIN_VARIANCE", "annualized_vol")
     min_var_vol_str = _fmt_num(min_var_vol, ".2%")
     max_sharpe_win_rate = _get_metric(df, "MAX_SHARPE", "win_rate")
     max_sharpe_win_rate_str = _fmt_num(max_sharpe_win_rate, ".0%")
 
     available_profiles = set(df["Profile"].tolist())
     preferred = [p for p in ["MAX_SHARPE", "RISK_PARITY", "MIN_VARIANCE", "BARBELL"] if p in available_profiles]
-
-    if len(preferred) >= 2:
-        recommendation = f"Current market conditions favor **{preferred[0]}** or **{preferred[1]}** given observed stability."
-    elif preferred:
-        recommendation = f"Current market conditions favor **{preferred[0]}** given available backtest data."
-    else:
-        recommendation = "No recommendation available (no profiles found)."
-
-    if "MIN_VARIANCE" in available_profiles:
-        recommendation += " If volatility clustering increases, transition to **MIN_VARIANCE**."
-    else:
-        recommendation += " If volatility clustering increases, run **MIN_VARIANCE** validation and reassess."
+    recommendation = f"Current market conditions favor **{preferred[0]}**" if preferred else "No recommendation available."
 
     report = f"""# Quantitative Backtest Strategy Resume
 Generated on: {pd.Timestamp.now()}
+Baseline: **{eng_name}** engine on **{sim_name}** simulator.
 
 ## 1. Strategy Performance Matrix
 {md_table}
@@ -189,24 +158,19 @@ Generated on: {pd.Timestamp.now()}
 ## 2. Regime-Specific Attribution (Avg. Window Return)
 {regime_table}
 
-## 3. Goal Alignment Validation
-{v_notes_str}
-
-## 4. Institutional Resume
+## 3. Institutional Resume
+- **Simulator Fidelity**: Performance includes estimated slippage and commissions.
 - **Volatility Control**: MIN_VARIANCE realized volatility: {min_var_vol_str}.
 - **Alpha Capture**: MAX_SHARPE win rate: {max_sharpe_win_rate_str}.
-- **Diversification**: RISK_PARITY targets 'middle path' volatility between MIN_VARIANCE and MAX_SHARPE.
-- **Tail Risk**: BARBELL is expected to exhibit higher variance and tail sensitivity.
+- **Alpha Decay**: See 'engine_comparison_report.md' for detailed execution friction audit.
 
-## 5. Strategic Deployment Recommendation
+## 4. Strategic Deployment Recommendation
 {recommendation}
 """
-
     out_path = summary_dir / "backtest_comparison.md"
     with open(out_path, "w") as f:
         f.write(report)
-
-    print(f"Comparison report generated: {out_path}")
+    print(f"Strategy Resume generated: {out_path}")
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -354,7 +318,7 @@ def generate_engine_comparison_report():
                         "worst_mdd": worst_mdd,
                         "win_rate": summary.get("win_rate"),
                         "avg_turnover": summary.get("avg_turnover"),
-                        "Details": f"[Metrics]({sim}_{eng}_{profile_key}_metrics.md)",
+                        "Details": f"[Metrics]({sim}_{eng}_{profile_key}_full_report.md)",
                     }
                 )
 

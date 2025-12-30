@@ -188,14 +188,7 @@ portfolio-audit: audit
 
 # --- Validation & Auditing ---
 
-backtest: backtest-all backtest-report
-
-backtest-all:
-	@echo ">>> Running Walk-Forward Validation for all profiles..."
-	$(PY) scripts/backtest_engine.py --profile min_variance --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
-	$(PY) scripts/backtest_engine.py --profile risk_parity --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
-	$(PY) scripts/backtest_engine.py --profile max_sharpe --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
-	$(PY) scripts/backtest_engine.py --profile barbell --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
+backtest: backtest-tournament backtest-report
 
 backtest-report:
 	$(PY) scripts/generate_backtest_report.py
@@ -293,7 +286,6 @@ drift-check:
 finalize:
 	$(MAKE) optimize-v2
 	$(MAKE) backtest
-	$(MAKE) tournament
 	$(MAKE) tearsheets
 	$(MAKE) prepare-gist
 	$(MAKE) audit
