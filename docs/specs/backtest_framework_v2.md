@@ -41,15 +41,23 @@ The framework automatically generates comprehensive analytics for all tournament
 - **Location**: `artifacts/summaries/runs/<RUN_ID>/tearsheets/`
 - **Benchmark**: `AMEX:SPY` is used as the default relative performance reference.
 
-## 4. Institutional Constants
+## 4. Institutional Standards (2025 Standard)
 
-| Parameter | Default Value | Description |
+| Parameter | Value | Description |
 | :--- | :--- | :--- |
-| `Slippage` | 0.0005 (5 bps) | Linear execution cost. |
-| `Commission` | 0.0001 (1 bp) | Trading fee per unit. |
-| `Cash Asset` | `USDT` | Reference asset for simulation liquidity. |
-| `Train Window` | 120 Days | History for optimization. |
-| `Test Window` | 20 Days | Walk-forward validation period. |
+| **Lookback** | 400 Days | Historical depth for discovery and secular validation. |
+| **Train Window** | 120 Days | Optimization history buffer. |
+| **Test Window** | 20 Days | Rolling validation window. |
+| **Total Test Target** | 200 Days | Total cumulative backtest period required for implementation approval. |
+| **Baseline** | `AMEX:SPY` | Primary benchmark for all multi-asset comparisons. |
+| **Friction** | 5bps Slippage / 1bp Commission | Real-world execution modeling. |
+
+## 5. Multi-Calendar Correlation Logic
+
+The framework supports mixed calendars (24/7 Crypto + 5/7 TradFi).
+- **Portfolio Returns**: Preserve all trading days (sat/sun included for crypto).
+- **Benchmark Alignment**: TradFi benchmarks (`SPY`) are mapped to the portfolio calendar. Benchmark returns on weekends are treated as `0.0`, ensuring that weekend crypto alpha is captured without benchmark bias.
+- **No Padding**: The returns matrix no longer zero-fills non-trading days for TradFi assets, preserving statistical variance and Sharpe accuracy.
 
 ## 5. Tournament Matrix (3D Benchmarking)
 

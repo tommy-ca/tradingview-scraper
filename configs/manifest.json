@@ -5,12 +5,13 @@
     "production": {
       "description": "Institutional high-integrity daily production run",
       "data": {
-        "lookback_days": 200,
+        "lookback_days": 400,
         "batch_size": 5,
         "backfill": true,
         "gapfill": true,
         "max_symbols": 200,
-        "strict_health": true
+        "strict_health": true,
+        "min_days_floor": 320
       },
       "selection": {
         "top_n": 3,
@@ -26,7 +27,8 @@
         "backtest_simulator": "custom",
         "backtest_slippage": 0.0005,
         "backtest_commission": 0.0001,
-        "backtest_cash_asset": "USDT"
+        "backtest_cash_asset": "USDT",
+        "baseline_symbol": "AMEX:SPY"
       },
       "tournament": {
         "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",

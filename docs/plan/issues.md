@@ -173,6 +173,13 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 4. **Zero-Tolerance Health Gate**: Enforce `strict_health` by default in the production profile.
 5. **Tournament Source-of-Truth**: Refactor all reporting to derive baseline Strategy Resumes from the 3D Tournament matrix.
 
+### Phase 15 — Secular Validation & Baseline Correction
+1. **SPY Remediation**: Force overwrite `AMEX:SPY` with 500d high-integrity data to fix price drift.
+2. **Lookback Extension**: Update production lookback to 400d to support a 200d total backtest window.
+3. **Calendar Hardening**: Update returns matrix logic to correctly handle 24/7 Crypto vs 5/7 TradFi without zero-padding bias.
+4. **Benchmarking Depth**: Ensure the 3D Tournament matrix covers the full 200d realized test target.
+5. **Universal Baseline**: Centralize `baseline_symbol` in the manifest for consistent reporting.
+
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.
 - Summary writers create `artifacts/summaries/runs/<RUN_ID>/` and update `artifacts/summaries/latest` as needed.

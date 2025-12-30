@@ -128,6 +128,15 @@ def get_full_report_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Se
     try:
         import quantstats as qs
 
+        # Align benchmark if provided
+        if benchmark is not None:
+            # Union of indices to handle different calendars (e.g. 24/7 Crypto vs 5/7 SPY)
+            combined_idx = daily_returns.index.union(benchmark.index)
+            # Reindex and fill benchmark with 0.0 for missing days (market closed)
+            # This ensures fair comparison during weekend crypto moves.
+            benchmark = benchmark.reindex(combined_idx).fillna(0.0)
+            daily_returns = daily_returns.reindex(combined_idx).fillna(0.0)
+
         md = []
         md.append(f"# Quantitative Strategy Tearsheet: {title}")
         md.append(f"Generated on: {pd.Timestamp.now()}\n")

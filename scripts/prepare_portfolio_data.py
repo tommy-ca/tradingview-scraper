@@ -170,19 +170,19 @@ def prepare_portfolio_universe():
 
         if (os.getenv("PORTFOLIO_BACKFILL", "0") == "1") and (is_stale or force_sync):
             try:
-                # Limit backfill depth to 250 days max to prevent large pulls / 429s
-                bf_depth = min(lookback_days + 20, 250)
+                # Limit backfill depth to 500 days max to prevent large pulls / 429s
+                bf_depth = min(lookback_days + 20, 500)
                 logger.info(f"Backfilling {symbol} (depth={bf_depth})...")
                 # Use a total timeout for backfill
-                run_with_retry(lambda: local_loader.sync(symbol, interval="1d", depth=bf_depth, total_timeout=120), f"Backfill {symbol}")
+                run_with_retry(lambda: local_loader.sync(symbol, interval="1d", depth=bf_depth, total_timeout=180), f"Backfill {symbol}")
             except Exception as e:
                 logger.error(f"Backfill failed for {symbol}: {e}")
 
         if (os.getenv("PORTFOLIO_GAPFILL", "0") == "1") and (is_stale or force_sync):
             try:
-                logger.info(f"Gap filling {symbol} (max_depth=250)...")
-                # max_time=60s, max_fills=3, total_timeout=60s per gap-fill call
-                run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=250, max_fills=3, max_time=60, total_timeout=60), f"Gap fill {symbol}")
+                logger.info(f"Gap filling {symbol} (max_depth=500)...")
+                # max_time=60s, max_fills=20, total_timeout=120s per gap-fill call
+                run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=500, max_fills=20, max_time=120, total_timeout=120), f"Gap fill {symbol}")
             except Exception as e:
                 logger.error(f"Gap fill failed for {symbol}: {e}")
 
@@ -247,25 +247,36 @@ def prepare_portfolio_universe():
                 logger.error(f"Batch timed out after {batch_timeout}s. {len(not_done)} tasks incomplete (moving on).")
 
     # 3. Align and Save
-    returns_df = pd.DataFrame(price_data)
+    # Start with intersection to get clean statistics if possible
+    returns_df = pd.DataFrame(price_data).dropna()
 
-    # Fill NaNs with 0.0 before filtering.
-    # This handles weekend gaps for equities/futures without dropping the entire row.
+    # CRITICAL: Ensure we have enough history for the target backtest period
+    # If the matrix is too short, find the bottlenecks and drop them.
+    target_rows = 320  # 120 (train) + 200 (test)
+    if len(returns_df) < target_rows:
+        logger.warning("Aligned matrix has only %d rows, target is %d. Filtering bottlenecks...", len(returns_df), target_rows)
+        # Identify how many valid days each symbol has in the total range
+        raw_df = pd.DataFrame(price_data)
+        symbol_counts = raw_df.notna().sum()
+        bottlenecks = symbol_counts[symbol_counts < target_rows]
+        if not bottlenecks.empty:
+            logger.info("Dropping %d bottleneck symbols with < %d days: %s", len(bottlenecks), target_rows, ", ".join(bottlenecks.index))
+            # Remove from price_data
+            for s in bottlenecks.index:
+                if s in price_data:
+                    del price_data[s]
+            # Re-align on remaining
+            returns_df = pd.DataFrame(price_data).dropna()
+            logger.info("New aligned matrix shape: %s", returns_df.shape)
+
+        # If still too short (due to calendar mismatches), use UNION
+        if len(returns_df) < target_rows:
+            logger.info("Intersection is still only %d. Using UNION with 0.0 filling to reach target.", len(returns_df))
+            returns_df = pd.DataFrame(price_data).fillna(0.0)
+            logger.info("Final union matrix shape: %s", returns_df.shape)
+
+    # Final safety fill
     returns_df = returns_df.fillna(0.0)
-
-    # Drop sparse columns based on min history fraction
-    min_hist_frac = float(os.getenv("PORTFOLIO_MIN_HISTORY_FRAC", "0.2"))
-    min_count = int(len(returns_df) * min_hist_frac) if len(returns_df) else 0
-    before_cols = returns_df.shape[1]
-    dropped_sparse = 0
-    if min_count > 0:
-        returns_df = returns_df.dropna(axis=1, thresh=min_count)
-        dropped_sparse = before_cols - returns_df.shape[1]
-    if dropped_sparse:
-        logger.info("Dropped %d sparse symbols (min_history_frac=%.2f)", dropped_sparse, min_hist_frac)
-
-    # Drop rows with any NaN to align dates
-    returns_df = returns_df.dropna()
 
     # Drop zero-variance columns
     zero_vars: List[str] = []

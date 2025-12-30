@@ -19,7 +19,7 @@ endif
 
 # Defaults (if not set in manifest or environment)
 BATCH ?= 5
-LOOKBACK ?= 200
+LOOKBACK ?= 400
 BACKFILL ?= 1
 GAPFILL ?= 1
 STRICT_HEALTH ?= 0

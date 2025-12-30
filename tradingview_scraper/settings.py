@@ -99,6 +99,7 @@ class TradingViewScraperSettings(BaseSettings):
     gapfill: bool = True
     max_symbols: int = 200
     strict_health: bool = False
+    min_days_floor: int = 0
 
     # Selection Logic
     top_n: int = 3
@@ -116,6 +117,7 @@ class TradingViewScraperSettings(BaseSettings):
     backtest_slippage: float = 0.0005  # 5 bps
     backtest_commission: float = 0.0001  # 1 bp
     backtest_cash_asset: str = "USDT"
+    baseline_symbol: str = "AMEX:SPY"
 
     # Tournament
     tournament_engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
@@ -242,6 +244,7 @@ if __name__ == "__main__":
             "backfill": "BACKFILL",
             "gapfill": "GAPFILL",
             "strict_health": "STRICT_HEALTH",
+            "min_days_floor": "PORTFOLIO_MIN_DAYS_FLOOR",
             "top_n": "TOP_N",
             "threshold": "THRESHOLD",
             "cluster_cap": "CLUSTER_CAP",
@@ -253,6 +256,7 @@ if __name__ == "__main__":
             "backtest_slippage": "BACKTEST_SLIPPAGE",
             "backtest_commission": "BACKTEST_COMMISSION",
             "backtest_cash_asset": "BACKTEST_CASH_ASSET",
+            "baseline_symbol": "BASELINE_SYMBOL",
             "tournament_engines": "TOURNAMENT_ENGINES",
             "tournament_profiles": "TOURNAMENT_PROFILES",
             "gist_id": "GIST_ID",

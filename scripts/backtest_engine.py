@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from tradingview_scraper.portfolio_engines.backtest_simulators import build_simulator
-from tradingview_scraper.portfolio_engines.base import EngineRequest, EngineUnavailableError
+from tradingview_scraper.portfolio_engines.base import EngineRequest, EngineUnavailableError, ProfileName
 from tradingview_scraper.portfolio_engines.engines import build_engine, list_available_engines, list_known_engines
 from tradingview_scraper.regime import MarketRegimeDetector
 from tradingview_scraper.risk import AntifragilityAuditor, TailRiskAuditor
@@ -158,9 +158,13 @@ class BacktestEngine:
         cluster_cap: float = 0.25,
         simulators: Optional[List[str]] = None,
     ) -> Dict:
+        settings = get_settings()
         profiles = [p.strip().lower() for p in (profiles or ["min_variance", "hrp", "max_sharpe", "barbell"]) if (p or "").strip()]
         engines = [e.strip().lower() for e in (engines or ["custom", "skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio"]) if (e or "").strip()]
         sim_names = [s.strip().lower() for s in (simulators or ["custom"]) if (s or "").strip()]
+
+        baseline_symbol = settings.baseline_symbol
+        baseline_returns = self.returns[baseline_symbol] if baseline_symbol in self.returns.columns else None
 
         known_engines = set(list_known_engines())
         available_engines = set(list_available_engines())
@@ -402,7 +406,7 @@ class BacktestEngine:
         if req_profile not in {"min_variance", "hrp", "max_sharpe", "barbell"}:
             raise ValueError(f"Unsupported profile: {profile}")
 
-        request = EngineRequest(profile=req_profile, cluster_cap=cluster_cap)
+        request = EngineRequest(profile=cast(ProfileName, req_profile), cluster_cap=cluster_cap)
         eng = build_engine(engine_norm)
         response = eng.optimize(returns=train_data, clusters=clusters, meta=cast(dict, self.meta), stats=stats_df, request=request)
         return response.weights

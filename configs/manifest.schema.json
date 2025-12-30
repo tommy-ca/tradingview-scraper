@@ -28,7 +28,8 @@
             "backfill": { "type": "boolean" },
             "gapfill": { "type": "boolean" },
             "max_symbols": { "type": "integer", "minimum": 1 },
-            "strict_health": { "type": "boolean" }
+            "strict_health": { "type": "boolean" },
+            "min_days_floor": { "type": "integer", "minimum": 0 }
           }
         },
         "selection": {
@@ -53,7 +54,8 @@
             "backtest_simulator": { "type": "string", "enum": ["custom", "cvxportfolio"] },
             "backtest_slippage": { "type": "number", "minimum": 0 },
             "backtest_commission": { "type": "number", "minimum": 0 },
-            "backtest_cash_asset": { "type": "string" }
+            "backtest_cash_asset": { "type": "string" },
+            "baseline_symbol": { "type": "string" }
           }
         },
         "tournament": {
