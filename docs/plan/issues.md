@@ -121,11 +121,18 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 4. Extend `BacktestEngine` with Tournament Mode to benchmark all engines (Custom + 4 Libraries) under the same constraints.
 5. **Reproducible Workflow Manifests**: Implement `configs/manifest.json` with multi-profile support and schema validation.
 
-### Phase 8 — Centralized Discovery Configuration
+### Phase 8 — Centralized Discovery Configuration (Finalized)
 1. **Discovery Schema**: Extend `manifest.schema.json` to include universe selector parameters (thresholds, enabled markets).
 2. **Selector Integration**: Update `BaseUniverseSelector` to ingest config from manifest profiles instead of external YAMLs.
 3. **Workflow Refactoring**: Update `make scan-all` and shell scripts to propagate `PROFILE` to discovery engines.
 4. **Validation**: Extend `make scan-lint` to validate the JSON discovery block against market-specific invariants.
+
+### Phase 9 — Multi-Simulator Backtesting Framework
+1. **Simulator Abstraction**: Refactor `BacktestEngine` to support modular simulation backends (`BaseSimulator`).
+2. **Returns Simulator**: Move existing idealized dot-product logic to a formal `ReturnsSimulator`.
+3. **CVXPortfolio Simulator**: Implement high-fidelity `CvxPortfolioSimulator` with transaction cost modeling (5bps slippage, 1bp commission).
+4. **Lakehouse Bridge**: Implement `LakehouseDataInterface` to provide Prices/Returns/Volumes from Parquet to `cvxportfolio`.
+5. **Alpha Decay Audit**: Update tournament reporting to compare Idealized vs. Realized Sharpe ratios.
 
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.
