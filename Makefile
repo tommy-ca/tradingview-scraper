@@ -295,6 +295,7 @@ finalize:
 	$(MAKE) backtest
 	$(MAKE) tournament
 	$(MAKE) tearsheets
+	$(MAKE) prepare-gist
 	$(MAKE) audit
 	$(MAKE) report
 	$(MAKE) drift-monitor
@@ -304,9 +305,21 @@ finalize:
 tearsheets:
 	@echo ">>> Generating QuantStats Tear-sheets..."
 	$(PY) scripts/generate_tearsheets.py
-	@echo ">>> Flattening top tearsheets for Gist..."
-	@mkdir -p artifacts/summaries/latest
-	@cp artifacts/summaries/runs/$(TV_RUN_ID)/tearsheets/custom_custom_*.html artifacts/summaries/runs/$(TV_RUN_ID)/ 2>/dev/null || true
+
+prepare-gist:
+	@echo ">>> Preparing Essential Gist Payload..."
+	@rm -rf artifacts/gist_payload
+	@mkdir -p artifacts/gist_payload
+	@# 1. Primary Reports (Markdown, PNG, JSON) - Follow symlinks (-L)
+	@find -L artifacts/summaries/latest -maxdepth 1 -name "*.md" -exec cp {} artifacts/gist_payload/ \;
+	@find -L artifacts/summaries/latest -maxdepth 1 -name "*.png" -exec cp {} artifacts/gist_payload/ \;
+	@find -L artifacts/summaries/latest -maxdepth 1 -name "*.json" -exec cp {} artifacts/gist_payload/ \;
+	@# 2. Selected Essential Tearsheets (from manifest)
+	@if [ -f artifacts/summaries/latest/essential_reports.json ]; then \
+		while IFS= read -r file; do \
+			cp artifacts/summaries/latest/tearsheets/"$$file" artifacts/gist_payload/ 2>/dev/null || true; \
+		done < <(python -c "import json; print('\n'.join(json.load(open('artifacts/summaries/latest/essential_reports.json'))))"); \
+	fi
 
 optimize-v2:
 	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/optimize_clustered_v2.py
@@ -322,7 +335,7 @@ display:
 	$(PY) scripts/display_portfolio_dashboard.py
 
 gist:
-	SUMMARY_DIR=$(SUMMARY_DIR) GIST_ID=$(GIST_ID) bash scripts/push_summaries_to_gist.sh
+	@SUMMARY_DIR=artifacts/gist_payload GIST_ID=$(GIST_ID) bash scripts/push_summaries_to_gist.sh
 
 gist-run:
 	SUMMARY_DIR=$(SUMMARY_RUN_DIR) GIST_ID=$(GIST_ID) bash scripts/push_summaries_to_gist.sh

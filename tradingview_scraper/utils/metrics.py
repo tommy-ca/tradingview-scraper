@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
     """
     empty_res = {
         "total_return": 0.0,
+        "annualized_return": 0.0,
         "realized_vol": 0.0,
         "sharpe": 0.0,
         "max_drawdown": 0.0,
@@ -44,7 +45,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
         realized_vol = float(qs.stats.volatility(rets, annualize=True))
 
         # 3. Sharpe Ratio (Annualized)
-        sharpe = float(qs.stats.sharpe(rets, rf=0.0))
+        sharpe = float(qs.stats.sharpe(rets, rf=0))
 
         # 4. Drawdown
         max_drawdown = float(qs.stats.max_drawdown(rets))
@@ -54,7 +55,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
         cvar_95 = float(qs.stats.expected_shortfall(rets, sigma=1, confidence=0.95))
 
         # 6. Advanced Stats
-        sortino = float(qs.stats.sortino(rets, rf=0.0))
+        sortino = float(qs.stats.sortino(rets, rf=0))
         calmar = float(qs.stats.calmar(rets))
         omega = float(qs.stats.omega(rets))
 
@@ -117,3 +118,66 @@ def get_metrics_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Series
         return cast(str, df.to_markdown())
     except Exception as e:
         return f"Error generating metrics markdown: {e}"
+
+
+def get_full_report_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Series] = None, title: str = "Strategy") -> str:
+    """
+    Constructs a comprehensive Markdown report using QuantStats.
+    Includes metrics, monthly returns, and drawdown audits.
+    """
+    try:
+        import quantstats as qs
+
+        md = []
+        md.append(f"# Quantitative Strategy Tearsheet: {title}")
+        md.append(f"Generated on: {pd.Timestamp.now()}\n")
+
+        # 1. Key Metrics Table
+        md.append("## 1. Key Performance Metrics")
+        metrics_df = qs.reports.metrics(daily_returns, benchmark=benchmark, display=False, mode="full")
+        if metrics_df is not None and not metrics_df.empty:
+            md.append(metrics_df.to_markdown())
+        md.append("")
+
+        # 2. Monthly Returns Matrix
+        md.append("## 2. Monthly Returns (%)")
+        monthly = qs.stats.monthly_returns(daily_returns)
+        if monthly is not None and not monthly.empty:
+            # Format as percentage for readability in table
+            monthly_fmt = (monthly * 100).round(2)
+            md.append(monthly_fmt.to_markdown())
+        md.append("")
+
+        # 3. Yearly Returns
+        md.append("## 3. Annual Performance")
+        if not daily_returns.empty:
+            # Reconstruct DatetimeIndex to ensure year access
+            dti = pd.to_datetime(daily_returns.index)
+            # Use Any to bypass DatetimeIndex attribute check
+            years = cast(Any, dti).year
+            yearly = daily_returns.groupby(years).apply(qs.stats.comp)
+            if not yearly.empty:
+                yearly_fmt = pd.DataFrame((yearly * 100).round(2))
+                yearly_fmt.columns = ["Return (%)"]
+                md.append(yearly_fmt.to_markdown())
+        md.append("")
+
+        # 4. Worst Drawdowns
+        md.append("## 4. Stress Audit: Worst 5 Drawdowns")
+        dd_series = qs.stats.to_drawdown_series(daily_returns)
+        dd_details = qs.stats.drawdown_details(dd_series)
+        if dd_details is not None and not dd_details.empty:
+            # Search for a drawdown column to sort by
+            cols = [str(c) for c in dd_details.columns if "drawdown" in str(c).lower()]
+            if cols:
+                # Bypass type check for sort_values
+                sorted_df = getattr(dd_details, "sort_values")(by=cols[0], ascending=True)
+                md.append(cast(pd.DataFrame, sorted_df).head(5).to_markdown())
+            else:
+                md.append(dd_details.head(5).to_markdown())
+        md.append("")
+
+        return "\n".join(md)
+
+    except Exception as e:
+        return f"# Strategy Report: {title}\n\nError generating full report: {e}"

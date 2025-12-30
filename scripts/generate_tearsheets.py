@@ -8,7 +8,7 @@ import pandas as pd
 import quantstats as qs
 
 from tradingview_scraper.settings import get_settings
-from tradingview_scraper.utils.metrics import get_metrics_markdown
+from tradingview_scraper.utils.metrics import get_full_report_markdown
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -19,6 +19,7 @@ def generate_tearsheets():
     settings = get_settings()
     summary_dir = settings.prepare_summaries_run_dir()
     returns_dir = summary_dir / "returns"
+    tournament_path = summary_dir / "tournament_results.json"
 
     if not returns_dir.exists():
         logger.warning(f"Returns directory missing: {returns_dir}")
@@ -43,7 +44,38 @@ def generate_tearsheets():
         except Exception as e:
             logger.warning(f"Could not load SPY benchmark: {e}")
 
-    # 2. Iterate through pkl files in returns dir
+    # 2. Parse Tournament Results to identify winners
+    best_engines = {}  # profile -> engine_name
+    if tournament_path.exists():
+        try:
+            with open(tournament_path, "r") as f:
+                tourney = json.load(f)
+
+            meta = tourney.get("meta", {})
+            results = tourney.get("results", {})
+
+            # Use 'cvxportfolio' simulator results to pick winners
+            realized_results = results.get("cvxportfolio", {})
+            for eng_name, eng_data in realized_results.items():
+                if "_status" in eng_data and eng_data["_status"].get("skipped"):
+                    continue
+                for prof_name, prof_data in eng_data.items():
+                    if prof_name == "_status":
+                        continue
+
+                    summary = prof_data.get("summary")
+                    if not summary:
+                        continue
+
+                    sharpe = summary.get("avg_window_sharpe", -999)
+                    if prof_name not in best_engines or sharpe > best_engines[prof_name]["sharpe"]:
+                        best_engines[prof_name] = {"engine": eng_name, "sharpe": sharpe}
+        except Exception as e:
+            logger.error(f"Failed to identify winners from tournament: {e}")
+
+    essential_reports = []
+
+    # 3. Iterate through pkl files in returns dir
     for pkl_path in returns_dir.glob("*.pkl"):
         try:
             name = pkl_path.stem
@@ -63,15 +95,39 @@ def generate_tearsheets():
             out_html = tearsheet_root / f"{name}.html"
             qs.reports.html(rets, benchmark=benchmark, output=str(out_html), title=f"Strategy: {name}", download_filename=f"{name}.html")
 
-            # Output Markdown metrics
-            out_md = tearsheet_root / f"{name}_metrics.md"
-            md_content = f"# Performance Metrics: {name}\n\n"
-            md_content += get_metrics_markdown(rets, benchmark=benchmark)
+            # Output Markdown Full Report
+            out_md = tearsheet_root / f"{name}_full_report.md"
+            md_content = get_full_report_markdown(rets, benchmark=benchmark, title=name)
             with open(out_md, "w") as f:
                 f.write(md_content)
 
+            # --- Essential Selection Logic ---
+            # Criteria:
+            # 1. Any 'custom' engine result (our baseline)
+            # 2. Any result identified as 'best' per profile in cvxportfolio simulation
+
+            is_essential = False
+            if "custom" in name:
+                is_essential = True
+
+            # Check if this file corresponds to a winner
+            # name format: {simulator}_{engine}_{profile}
+            parts = name.split("_")
+            if len(parts) >= 3:
+                sim, eng, prof = parts[0], parts[1], "_".join(parts[2:])
+                if prof in best_engines and eng == best_engines[prof]["engine"] and sim == "cvxportfolio":
+                    is_essential = True
+
+            if is_essential:
+                essential_reports.append(out_md.name)
+                essential_reports.append(out_html.name)
+
         except Exception as e:
             logger.error(f"Failed to generate tearsheet for {pkl_path.name}: {e}")
+
+    # Save manifest of essential reports
+    with open(summary_dir / "essential_reports.json", "w") as f:
+        json.dump(essential_reports, f, indent=2)
 
     logger.info(f"Tearsheet generation complete. Root: {tearsheet_root}")
 
