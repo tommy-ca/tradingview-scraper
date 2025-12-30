@@ -1,8 +1,7 @@
 import json
 import logging
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Optional, cast
 
 import pandas as pd
 import quantstats as qs
@@ -120,7 +119,7 @@ def generate_tearsheets():
 
             if is_essential:
                 essential_reports.append(out_md.name)
-                essential_reports.append(out_html.name)
+                # We no longer include HTML in the essential list for Gist synchronization.
 
         except Exception as e:
             logger.error(f"Failed to generate tearsheet for {pkl_path.name}: {e}")
