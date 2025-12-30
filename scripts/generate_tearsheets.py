@@ -125,6 +125,21 @@ def generate_tearsheets():
             logger.error(f"Failed to generate tearsheet for {pkl_path.name}: {e}")
 
     # Save manifest of essential reports
+    # Include core system reports by default
+    essential_reports.extend(
+        [
+            "data_health_selected.md",
+            "data_health_raw.md",
+            "backtest_comparison.md",
+            "engine_comparison_report.md",
+            "portfolio_report.md",
+            "selection_audit.md",
+            "portfolio_clustermap.png",
+            "volatility_clustermap.png",
+            "factor_map.png",
+        ]
+    )
+
     with open(summary_dir / "essential_reports.json", "w") as f:
         json.dump(essential_reports, f, indent=2)
 

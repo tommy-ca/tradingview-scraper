@@ -287,6 +287,7 @@ finalize:
 	$(MAKE) optimize-v2
 	$(MAKE) backtest
 	$(MAKE) tearsheets
+	$(MAKE) health-report
 	$(MAKE) prepare-gist
 	$(MAKE) audit
 	$(MAKE) report
