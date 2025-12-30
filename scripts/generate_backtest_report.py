@@ -5,7 +5,7 @@ import pandas as pd
 
 from tradingview_scraper.settings import get_settings
 
-PROFILES = ["min_variance", "risk_parity", "max_sharpe", "barbell"]
+PROFILES = ["min_variance", "hrp", "max_sharpe", "barbell"]
 SUMMARY_COLS = [
     "Profile",
     "total_cumulative_return",
@@ -96,7 +96,11 @@ def generate_comparison_report():
 
         summary = prof_data["summary"]
         row = dict(summary)
-        row["Profile"] = profile.upper()
+
+        # Mapping for display names as requested
+        display_names = {"min_variance": "MIN VARIANCE", "hrp": "HIERARCHICAL RISK PARITY (HRP)", "max_sharpe": "MAX SHARPE", "barbell": "ANTIFRAGILE BARBELL"}
+        disp_name = display_names.get(prof_key, profile.upper())
+        row["Profile"] = disp_name
         row["Details"] = f"[Metrics]({sim_name}_{eng_name}_{prof_key}_full_report.md)"
         summary_rows.append(row)
 
@@ -105,7 +109,7 @@ def generate_comparison_report():
             regime = w.get("regime")
             ret = w.get("returns")
             if regime is not None and ret is not None:
-                regime_rows.append({"Profile": profile.upper(), "Regime": regime, "Return": ret})
+                regime_rows.append({"Profile": disp_name, "Regime": regime, "Return": ret})
 
     if not summary_rows:
         print("No baseline results found in tournament for Strategy Resume.")
@@ -135,26 +139,32 @@ def generate_comparison_report():
     if regime_rows:
         regime_df = pd.DataFrame(regime_rows)
         regime_summary = regime_df.groupby(["Regime", "Profile"])["Return"].mean().unstack()
-        regime_header = "| Regime | " + " | ".join([p.upper() for p in PROFILES]) + " |"
-        regime_sep = "| --- | " + " | ".join(["---"] * len(PROFILES)) + " |"
+
+        pref_order = ["MIN VARIANCE", "HIERARCHICAL RISK PARITY (HRP)", "MAX SHARPE", "ANTIFRAGILE BARBELL"]
+        active_profiles = [p for p in pref_order if p in regime_summary.columns]
+
+        regime_header = "| Regime | " + " | ".join(active_profiles) + " |"
+        regime_sep = "| --- | " + " | ".join(["---"] * len(active_profiles)) + " |"
         regime_lines = []
         for regime, row in regime_summary.iterrows():
             vals = []
-            for p in PROFILES:
-                vals.append(_fmt_num(row.get(p.upper(), None), ".4%"))
+            for p in active_profiles:
+                vals.append(_fmt_num(row.get(p, None), ".4%"))
             regime_lines.append("| " + " | ".join([str(regime)] + vals) + " |")
         regime_table = "\n".join([regime_header, regime_sep] + regime_lines)
     else:
         regime_table = "No regime attribution data available."
 
     # Strategic Deployment Recommendation
-    min_var_vol = _get_metric(df, "MIN_VARIANCE", "annualized_vol")
+    min_var_vol = _get_metric(df, "MIN VARIANCE", "annualized_vol")
     min_var_vol_str = _fmt_num(min_var_vol, ".2%")
-    max_sharpe_win_rate = _get_metric(df, "MAX_SHARPE", "win_rate")
+    max_sharpe_win_rate = _get_metric(df, "MAX SHARPE", "win_rate")
     max_sharpe_win_rate_str = _fmt_num(max_sharpe_win_rate, ".0%")
 
     available_profiles = set(df["Profile"].tolist())
-    preferred = [p for p in ["MAX_SHARPE", "RISK_PARITY", "MIN_VARIANCE", "BARBELL"] if p in available_profiles]
+    # Order of preference for recommendation
+    pref_order = ["MAX SHARPE", "HIERARCHICAL RISK PARITY (HRP)", "MIN VARIANCE", "ANTIFRAGILE BARBELL"]
+    preferred = [p for p in pref_order if p in available_profiles]
     recommendation = f"Current market conditions favor **{preferred[0]}**" if preferred else "No recommendation available."
 
     report = f"""# Quantitative Backtest Strategy Resume
@@ -169,8 +179,8 @@ Baseline: **{eng_name}** engine on **{sim_name}** simulator.
 
 ## 3. Institutional Resume
 - **Simulator Fidelity**: Performance includes estimated slippage and commissions.
-- **Volatility Control**: MIN_VARIANCE realized volatility: {min_var_vol_str}.
-- **Alpha Capture**: MAX_SHARPE win rate: {max_sharpe_win_rate_str}.
+- **Volatility Control**: MIN VARIANCE realized volatility: {min_var_vol_str}.
+- **Alpha Capture**: MAX SHARPE win rate: {max_sharpe_win_rate_str}.
 - **Alpha Decay**: See 'engine_comparison_report.md' for detailed execution friction audit.
 
 ## 4. Strategic Deployment Recommendation
