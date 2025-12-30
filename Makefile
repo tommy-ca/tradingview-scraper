@@ -10,6 +10,7 @@ PROFILE ?= production
 ifneq ($(wildcard $(MANIFEST)),)
     # Extract variables from the selected profile using settings.py CLI
     # We strip 'export ' to get 'KEY=VALUE' which $(eval) can consume.
+    # We pass TV_MANIFEST_PATH and TV_PROFILE to ensure settings.py loads the right one.
     ENV_VARS := $(shell TV_MANIFEST_PATH=$(MANIFEST) TV_PROFILE=$(PROFILE) $(PY) -m tradingview_scraper.settings --export-env | sed 's/export //')
     $(foreach var,$(ENV_VARS),$(eval $(var)))
     # Export these variables to all sub-processes
@@ -284,6 +285,8 @@ drift-check:
 # --- Implementation (Optimization & Dashboard) ---
 
 finalize:
+	@mkdir -p artifacts/summaries/runs/$(TV_RUN_ID)
+	@cp $(MANIFEST) artifacts/summaries/runs/$(TV_RUN_ID)/manifest.json 2>/dev/null || true
 	$(MAKE) optimize-v2
 	$(MAKE) backtest
 	$(MAKE) tearsheets
@@ -303,11 +306,14 @@ prepare-gist:
 	@echo ">>> Preparing Essential Gist Payload..."
 	@rm -rf artifacts/gist_payload
 	@mkdir -p artifacts/gist_payload
-	@# 1. Primary Reports (Markdown, PNG, JSON) - Follow symlinks (-L)
+	@# 1. Archive Manifest for Provenance
+	@cp $(MANIFEST) artifacts/gist_payload/run_manifest.json 2>/dev/null || true
+	@echo "PROFILE=$(PROFILE)" > artifacts/gist_payload/run_profile.txt
+	@# 2. Primary Reports (Markdown, PNG, JSON) - Follow symlinks (-L)
 	@find -L artifacts/summaries/latest -maxdepth 1 -name "*.md" -exec cp {} artifacts/gist_payload/ \;
 	@find -L artifacts/summaries/latest -maxdepth 1 -name "*.png" -exec cp {} artifacts/gist_payload/ \;
 	@find -L artifacts/summaries/latest -maxdepth 1 -name "*.json" -exec cp {} artifacts/gist_payload/ \;
-	@# 2. Selected Essential Tearsheets (from manifest)
+	@# 3. Selected Essential Tearsheets (from manifest)
 	@if [ -f artifacts/summaries/latest/essential_reports.json ]; then \
 		while IFS= read -r file; do \
 			cp artifacts/summaries/latest/tearsheets/"$$file" artifacts/gist_payload/ 2>/dev/null || true; \

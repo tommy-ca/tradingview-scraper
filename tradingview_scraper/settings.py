@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, Tuple, Type
 
 from pydantic import Field
 from pydantic_settings import (
@@ -112,6 +112,7 @@ class TradingViewScraperSettings(BaseSettings):
     test_window: int = 20
     step_size: int = 20
     backtest_simulator: str = "custom"
+    backtest_simulators: str = "custom,cvxportfolio"
     backtest_slippage: float = 0.0005  # 5 bps
     backtest_commission: float = 0.0001  # 1 bp
     backtest_cash_asset: str = "USDT"
@@ -248,6 +249,7 @@ if __name__ == "__main__":
             "test_window": "BACKTEST_TEST",
             "step_size": "BACKTEST_STEP",
             "backtest_simulator": "BACKTEST_SIMULATOR",
+            "backtest_simulators": "BACKTEST_SIMULATORS",
             "backtest_slippage": "BACKTEST_SLIPPAGE",
             "backtest_commission": "BACKTEST_COMMISSION",
             "backtest_cash_asset": "BACKTEST_CASH_ASSET",
@@ -256,6 +258,8 @@ if __name__ == "__main__":
             "gist_id": "GIST_ID",
             "meta_refresh": "META_REFRESH",
             "meta_audit": "META_AUDIT",
+            "profile": "PROFILE",
+            "run_id": "TV_RUN_ID",
         }
         for field, env_name in mapping.items():
             val = getattr(settings, field)

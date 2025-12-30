@@ -28,3 +28,9 @@
 - [x] **Optimization Benchmarking:** 
     - [x] Update `BacktestEngine` with "Tournament Mode" for side-by-side comparison.
     - [x] Generate comparative reports across all 4 profiles (MinVar, HRP, MaxSharpe, Barbell).
+- [x] **Advanced Analytics:** Integrate QuantStats for institutional-grade teardowns and 3D benchmarking (Engine x Simulator x Profile).
+
+## 6. Infrastructure & Reproducibility
+- [x] **Workflow Manifests:** Centralized `manifest.json` for multi-profile production control.
+- [x] **Data Quality Gates:** Automated health audits and self-healing recovery loop (`make recover`).
+- [x] **High-Fidelity Simulation:** Integrated CVXPortfolio MarketSimulator with slippage/commission models.

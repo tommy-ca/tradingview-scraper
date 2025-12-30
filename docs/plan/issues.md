@@ -166,6 +166,13 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 6. **Markdown Full Reports**: Implement `get_full_report_markdown` for high-density Gist artifacts.
 7. **Golden Artifact Selection**: Implement intelligent Gist payload selection (32 essential files).
 
+### Phase 14 — Institutional Reproducibility & Workflow Hardening (Finalized)
+1. **Unified Configuration**: Align parameter names across JSON schema, Pydantic, and Shell.
+2. **Global Manifest Export**: Ensure manifest variables are available to all Makefile targets.
+3. **Provenance Archiving**: Automatically copy the active manifest into the run-scoped results directory.
+4. **Zero-Tolerance Health Gate**: Enforce `strict_health` by default in the production profile.
+5. **Tournament Source-of-Truth**: Refactor all reporting to derive baseline Strategy Resumes from the 3D Tournament matrix.
+
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.
 - Summary writers create `artifacts/summaries/runs/<RUN_ID>/` and update `artifacts/summaries/latest` as needed.
