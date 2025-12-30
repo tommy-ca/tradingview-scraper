@@ -40,9 +40,21 @@ Every simulator must output a standardized result schema including:
 | `Train Window` | 120 Days | History for optimization. |
 | `Test Window` | 20 Days | Walk-forward validation period. |
 
-## 5. Tournament Integration
+## 5. Tournament Matrix (3D Benchmarking)
 
-The "Tournament" now evaluates a matrix of `[Engine] x [Simulator]`.
-- **Idealized Performance**: Ranking by Returns Simulator.
-- **Realizable Performance**: Ranking by CVX Simulator.
-- **Alpha Decay**: The delta between Idealized and Realizable Sharpe.
+The "Tournament" now evaluates a 3D matrix of `[Simulator] x [Engine] x [Profile]`.
+
+### 5.1 Dimensions
+- **Simulators**: `ReturnsSimulator` (Idealized), `CvxPortfolioSimulator` (Realized).
+- **Engines**: `Custom (Cvxpy)`, `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `CvxPortfolio`.
+- **Profiles**: `MinVar`, `HRP`, `MaxSharpe`, `Antifragile Barbell`.
+
+### 5.2 Performance Optimization: Weight Caching
+To minimize compute overhead, the framework implements **Weight Caching**. For each window:
+1.  All enabled **Engines** generate weights for each **Profile**.
+2.  The resulting weights are cached in-memory.
+3.  All enabled **Simulators** consume the cached weights to compute realized performance.
+    - *Result*: Optimization happens once ($N_{eng} \times N_{prof}$), Simulation happens $N_{sim}$ times.
+
+### 5.3 Alpha Decay Audit
+The report includes an "Alpha Decay" table per profile, calculating the delta between Idealized Sharpe (zero friction) and Realized Sharpe (with slippage/commission).

@@ -127,12 +127,19 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 3. **Workflow Refactoring**: Update `make scan-all` and shell scripts to propagate `PROFILE` to discovery engines.
 4. **Validation**: Extend `make scan-lint` to validate the JSON discovery block against market-specific invariants.
 
-### Phase 9 — Multi-Simulator Backtesting Framework
+### Phase 9 — Multi-Simulator Backtesting Framework (Finalized)
 1. **Simulator Abstraction**: Refactor `BacktestEngine` to support modular simulation backends (`BaseSimulator`).
 2. **Returns Simulator**: Move existing idealized dot-product logic to a formal `ReturnsSimulator`.
 3. **CVXPortfolio Simulator**: Implement high-fidelity `CvxPortfolioSimulator` with transaction cost modeling (5bps slippage, 1bp commission).
 4. **Lakehouse Bridge**: Implement `LakehouseDataInterface` to provide Prices/Returns/Volumes from Parquet to `cvxportfolio`.
 5. **Alpha Decay Audit**: Update tournament reporting to compare Idealized vs. Realized Sharpe ratios.
+
+### Phase 10 — 3D Tournament Matrix (Engine x Simulator x Profile)
+1. **Test-Driven Schema**: Define 3D JSON schema in `tests/test_tournament_matrix.py`.
+2. **Weight Caching**: Refactor `run_tournament` to optimize once per window and simulate multiple times.
+3. **Multi-Simulator Support**: Accept a list of simulators in CLI and Makefile.
+4. **Matrix Reporting**: Update `generate_backtest_report.py` to produce "Alpha Decay" audit tables.
+5. **Full Validation**: Run production matrix and publish results to Gist.
 
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.

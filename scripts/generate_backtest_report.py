@@ -230,30 +230,31 @@ def generate_engine_comparison_report():
         return
 
     meta = data.get("meta") or {}
-    results = data.get("results") or {}
+    all_results = data.get("results") or {}
 
-    profiles = meta.get("profiles")
-    if not isinstance(profiles, list) or not profiles:
+    simulators = meta.get("simulators")
+    if not isinstance(simulators, list) or not simulators:
+        simulators = sorted([str(k) for k in all_results.keys()])
+
+    profiles_meta = meta.get("profiles")
+    if not isinstance(profiles_meta, list) or not profiles_meta:
         inferred = []
-        for eng_blob in results.values():
-            if not isinstance(eng_blob, dict):
+        for sim_blob in all_results.values():
+            if not isinstance(sim_blob, dict):
                 continue
-            inferred.extend([k for k in eng_blob.keys() if k != "_status"])
-        profiles = sorted(set(inferred))
+            for eng_blob in sim_blob.values():
+                if not isinstance(eng_blob, dict):
+                    continue
+                inferred.extend([k for k in eng_blob.keys() if k != "_status"])
+        profiles_meta = sorted(set(inferred))
 
-    engines = meta.get("engines")
-    if not isinstance(engines, list) or not engines:
-        engines = sorted([str(k) for k in results.keys()])
-
-    status_lines: List[str] = []
-    for eng in engines:
-        eng_blob = results.get(str(eng), {})
-        if not isinstance(eng_blob, dict):
-            continue
-        status = eng_blob.get("_status")
-        if isinstance(status, dict) and status.get("skipped"):
-            reason = status.get("reason", "skipped")
-            status_lines.append(f"- `{eng}`: {reason}")
+    engines_meta = meta.get("engines")
+    if not isinstance(engines_meta, list) or not engines_meta:
+        # Infer engines from first simulator
+        if simulators:
+            engines_meta = sorted([str(k) for k in all_results.get(simulators[0], {}).keys()])
+        else:
+            engines_meta = []
 
     md: List[str] = []
     md.append("# Multi-Engine Optimization Tournament Report")
@@ -264,15 +265,13 @@ def generate_engine_comparison_report():
         for k in ["train_window", "test_window", "step_size", "cluster_cap"]:
             if k in meta:
                 md.append(f"- **{k}**: {meta.get(k)}")
-        md.append(f"- **profiles**: {', '.join([str(p) for p in profiles])}")
-        md.append(f"- **engines**: {', '.join([str(e) for e in engines])}")
-
-    if status_lines:
-        md.append("\n## Engine Availability")
-        md.extend(status_lines)
+        md.append(f"- **simulators**: {', '.join([str(s) for s in (simulators or [])])}")
+        md.append(f"- **profiles**: {', '.join([str(p) for p in (profiles_meta or [])])}")
+        md.append(f"- **engines**: {', '.join([str(e) for e in (engines_meta or [])])}")
 
     cols = [
         "Engine",
+        "Simulator",
         "Windows",
         "total_cumulative_return",
         "annualized_return",
@@ -295,57 +294,61 @@ def generate_engine_comparison_report():
         "avg_turnover": ".2%",
     }
 
-    for profile in profiles:
+    for profile in profiles_meta or []:
         profile_key = str(profile)
         rows: List[Dict[str, Any]] = []
 
-        for eng in engines:
-            eng_blob = results.get(str(eng), {})
-            if not isinstance(eng_blob, dict):
-                continue
-
-            status = eng_blob.get("_status")
-            if isinstance(status, dict) and status.get("skipped"):
-                continue
-
-            prof_blob = eng_blob.get(profile_key)
-            if not isinstance(prof_blob, dict):
-                continue
-
-            summary = prof_blob.get("summary")
-            windows = prof_blob.get("windows") or []
-            if not isinstance(summary, dict) or not isinstance(windows, list) or not windows:
-                continue
-
-            mdds: List[float] = []
-            for w in windows:
-                if not isinstance(w, dict):
+        for sim in simulators or []:
+            sim_blob = all_results.get(sim, {})
+            for eng in engines_meta or []:
+                eng_blob = sim_blob.get(str(eng), {})
+                if not isinstance(eng_blob, dict):
                     continue
-                mdd = _safe_float(w.get("max_drawdown"))
-                if mdd is not None:
-                    mdds.append(mdd)
-            worst_mdd = min(mdds) if mdds else None
 
-            rows.append(
-                {
-                    "Engine": str(eng),
-                    "Windows": int(len(windows)),
-                    "total_cumulative_return": summary.get("total_cumulative_return"),
-                    "annualized_return": summary.get("annualized_return"),
-                    "annualized_vol": summary.get("annualized_vol"),
-                    "avg_window_sharpe": summary.get("avg_window_sharpe"),
-                    "realized_cvar_95": summary.get("realized_cvar_95"),
-                    "worst_mdd": worst_mdd,
-                    "win_rate": summary.get("win_rate"),
-                    "avg_turnover": summary.get("avg_turnover"),
-                }
-            )
+                status = eng_blob.get("_status")
+                if isinstance(status, dict) and status.get("skipped"):
+                    continue
+
+                prof_blob = eng_blob.get(profile_key)
+                if not isinstance(prof_blob, dict):
+                    continue
+
+                summary = prof_blob.get("summary")
+                windows = prof_blob.get("windows") or []
+                if not isinstance(summary, dict) or not isinstance(windows, list) or not windows:
+                    continue
+
+                mdds: List[float] = []
+                for w in windows:
+                    if not isinstance(w, dict):
+                        continue
+                    mdd = _safe_float(w.get("max_drawdown"))
+                    if mdd is not None:
+                        mdds.append(mdd)
+                worst_mdd = min(mdds) if mdds else None
+
+                rows.append(
+                    {
+                        "Engine": str(eng),
+                        "Simulator": str(sim),
+                        "Windows": int(len(windows)),
+                        "total_cumulative_return": summary.get("total_cumulative_return"),
+                        "annualized_return": summary.get("annualized_return"),
+                        "annualized_vol": summary.get("annualized_vol"),
+                        "avg_window_sharpe": summary.get("avg_window_sharpe"),
+                        "realized_cvar_95": summary.get("realized_cvar_95"),
+                        "worst_mdd": worst_mdd,
+                        "win_rate": summary.get("win_rate"),
+                        "avg_turnover": summary.get("avg_turnover"),
+                    }
+                )
 
         md.append(f"\n## Profile: {profile_key.upper()}")
         if not rows:
             md.append("No tournament results available.")
             continue
 
+        # Sort by Sharpe
         rows = sorted(rows, key=lambda r: _safe_float(r.get("avg_window_sharpe")) or float("-inf"), reverse=True)
 
         header = "| " + " | ".join(cols) + " |"
@@ -355,14 +358,34 @@ def generate_engine_comparison_report():
         for row in rows:
             cells: List[str] = []
             for c in cols:
-                if c in {"Engine", "Windows"}:
+                if c in {"Engine", "Simulator", "Windows"}:
                     cells.append(str(row.get(c, "")))
                 else:
                     cells.append(_fmt_num(row.get(c), fmts.get(c, ".4f")))
             lines.append("| " + " | ".join(cells) + " |")
 
         md.append("\n".join(lines))
-        md.append(f"\n- **Top Sharpe**: `{rows[0]['Engine']}` ({_fmt_num(rows[0].get('avg_window_sharpe'), '.2f')})")
+
+        # Alpha Decay Table
+        if "custom" in (simulators or []) and "cvxportfolio" in (simulators or []):
+            decay_rows = []
+            for eng in engines_meta or []:
+                ideal = next((r for r in rows if r["Engine"] == eng and r["Simulator"] == "custom"), None)
+                real = next((r for r in rows if r["Engine"] == eng and r["Simulator"] == "cvxportfolio"), None)
+                if ideal and real:
+                    i_s = _safe_float(ideal.get("avg_window_sharpe"))
+                    r_s = _safe_float(real.get("avg_window_sharpe"))
+                    if i_s is not None and r_s is not None and i_s != 0:
+                        decay = (r_s - i_s) / abs(i_s)
+                        decay_rows.append({"Engine": eng, "Idealized": i_s, "Realized": r_s, "Decay": decay})
+
+            if decay_rows:
+                md.append("\n### Execution Alpha Decay (Idealized vs. High-Fidelity)")
+                d_cols = ["Engine", "Idealized Sharpe", "Realized Sharpe", "Alpha Decay"]
+                md.append("| " + " | ".join(d_cols) + " |")
+                md.append("| " + " | ".join(["---"] * len(d_cols)) + " |")
+                for dr in decay_rows:
+                    md.append(f"| {dr['Engine']} | {dr['Idealized']:.2f} | {dr['Realized']:.2f} | {dr['Decay']:.1%} |")
 
     out_path = summary_dir / "engine_comparison_report.md"
     with open(out_path, "w") as f:

@@ -32,7 +32,7 @@ GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 BACKTEST_TRAIN ?= 120
 BACKTEST_TEST ?= 20
 BACKTEST_STEP ?= 20
-BACKTEST_SIMULATOR ?= custom
+BACKTEST_SIMULATORS ?= custom,cvxportfolio
 
 # Tournament Defaults
 TOURNAMENT_ENGINES ?= custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio
@@ -200,8 +200,8 @@ backtest-report:
 	$(PY) scripts/generate_backtest_report.py
 
 backtest-tournament:
-	@echo ">>> Running Multi-Engine Tournament Mode..."
-	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --engines $(TOURNAMENT_ENGINES) --profiles $(TOURNAMENT_PROFILES) --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulator $(BACKTEST_SIMULATOR)
+	@echo ">>> Running Multi-Engine Tournament Mode (3D Matrix)..."
+	CLUSTER_CAP=$(CLUSTER_CAP) $(PY) scripts/backtest_engine.py --tournament --engines $(TOURNAMENT_ENGINES) --profiles $(TOURNAMENT_PROFILES) --train $(BACKTEST_TRAIN) --test $(BACKTEST_TEST) --step $(BACKTEST_STEP) --simulators $(BACKTEST_SIMULATORS)
 
 tournament-report: backtest-report
 

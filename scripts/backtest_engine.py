@@ -156,32 +156,38 @@ class BacktestEngine:
         profiles: Optional[List[str]] = None,
         engines: Optional[List[str]] = None,
         cluster_cap: float = 0.25,
-        simulator_name: str = "custom",
+        simulators: Optional[List[str]] = None,
     ) -> Dict:
         profiles = [p.strip().lower() for p in (profiles or ["min_variance", "hrp", "max_sharpe", "barbell"]) if (p or "").strip()]
         engines = [e.strip().lower() for e in (engines or ["custom", "skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio"]) if (e or "").strip()]
+        sim_names = [s.strip().lower() for s in (simulators or ["custom"]) if (s or "").strip()]
 
-        simulator = build_simulator(simulator_name)
+        known_engines = set(list_known_engines())
+        available_engines = set(list_available_engines())
 
-        known = set(list_known_engines())
-        available = set(list_available_engines())
+        # Results structure: results[simulator][engine][profile]
+        results: Dict[str, Dict[str, Any]] = {s: {} for s in sim_names}
+        # Initialize engine status per simulator
+        for s in sim_names:
+            for eng in engines:
+                results[s][eng] = {}
+                if eng not in known_engines:
+                    results[s][eng]["_status"] = {"skipped": True, "reason": "unknown engine"}
+                    continue
+                if eng not in available_engines:
+                    results[s][eng]["_status"] = {"skipped": True, "reason": "engine not installed"}
+                    continue
+                for prof in profiles:
+                    results[s][eng][prof] = {"windows": [], "summary": None}
 
-        results: Dict[str, Dict[str, Any]] = {}
-        cumulative: Dict[tuple[str, str], pd.Series] = {}
-        prev_weights: Dict[tuple[str, str], pd.Series] = {}
-
-        for eng in engines:
-            results[eng] = {}
-            if eng not in known:
-                results[eng]["_status"] = {"skipped": True, "reason": "unknown engine"}
-                continue
-            if eng not in available:
-                results[eng]["_status"] = {"skipped": True, "reason": "engine not installed"}
-                continue
-
-            for prof in profiles:
-                results[eng][prof] = {"windows": [], "summary": None}
-                cumulative[(eng, prof)] = pd.Series(dtype=float)
+        # Shared state for tracking cumulative returns and previous weights
+        # Keys: (simulator, engine, profile)
+        cumulative: Dict[tuple[str, str, str], pd.Series] = {}
+        prev_weights: Dict[tuple[str, str, str], pd.Series] = {}
+        for s in sim_names:
+            for eng in engines:
+                for prof in profiles:
+                    cumulative[(s, eng, prof)] = pd.Series(dtype=float)
 
         total_len = len(self.returns)
         if total_len < train_window + test_window:
@@ -207,15 +213,17 @@ class BacktestEngine:
             clusters = self._cluster_data(train_data)
             regime = self.detector.detect_regime(train_data)[0]
 
+            # --- WEIGHT CACHING ---
+            # Optimization happens once per (engine, profile)
+            cached_weights: Dict[tuple[str, str], pd.DataFrame] = {}
+
             custom_optimizer = None
-            if "custom" in results and results["custom"].get("_status") is None:
+            if "custom" in engines and "custom" in available_engines:
                 custom_optimizer = self._init_optimizer(train_data, clusters, stats_df)
 
             for eng in engines:
-                eng_state = results.get(eng, {})
-                if eng_state.get("_status", {}).get("skipped"):
+                if eng not in available_engines:
                     continue
-
                 for prof in profiles:
                     try:
                         if eng == "custom" and custom_optimizer is not None:
@@ -229,9 +237,18 @@ class BacktestEngine:
                         else:
                             weights_df = self._compute_weights(train_data=train_data, clusters=clusters, stats_df=stats_df, profile=prof, engine=eng, cluster_cap=cluster_cap)
 
-                        if weights_df.empty:
-                            continue
+                        if not weights_df.empty:
+                            cached_weights[(eng, prof)] = weights_df
+                    except Exception as e:
+                        # Error during optimization is shared across all simulators
+                        for s in sim_names:
+                            results[s][eng][prof].setdefault("errors", []).append(f"Opt Error: {str(e)}")
 
+            # --- MULTI-SIMULATOR EVALUATION ---
+            for s_name in sim_names:
+                simulator = build_simulator(s_name)
+                for (eng, prof), weights_df in cached_weights.items():
+                    try:
                         perf = simulator.simulate(test_data, weights_df)
 
                         weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
@@ -240,10 +257,10 @@ class BacktestEngine:
                         if normalizer > 0:
                             w_series = w_series / (normalizer + 1e-12)
 
-                        prev = prev_weights.get((eng, prof))
+                        prev = prev_weights.get((s_name, eng, prof))
                         t_val = turnover(prev, w_series) if prev is not None and normalizer > 0 else None
                         if normalizer > 0:
-                            prev_weights[(eng, prof)] = w_series
+                            prev_weights[(s_name, eng, prof)] = w_series
 
                         top_cols = ["Symbol", "Weight"]
                         for extra in ["Net_Weight", "Direction", "Cluster_ID"]:
@@ -253,6 +270,7 @@ class BacktestEngine:
                         window_res = {
                             "engine": eng,
                             "profile": prof,
+                            "simulator": s_name,
                             "start_date": str(test_data.index[0]),
                             "end_date": str(test_data.index[-1]),
                             "regime": regime,
@@ -267,34 +285,29 @@ class BacktestEngine:
                             "top_assets": weights_df.head(5)[top_cols].to_dict(orient="records"),
                         }
 
-                        eng_state[prof]["windows"].append(window_res)
+                        results[s_name][eng][prof]["windows"].append(window_res)
 
-                        if cumulative[(eng, prof)].empty:
-                            cumulative[(eng, prof)] = perf["daily_returns"]
+                        if cumulative[(s_name, eng, prof)].empty:
+                            cumulative[(s_name, eng, prof)] = perf["daily_returns"]
                         else:
-                            cumulative[(eng, prof)] = pd.concat([cumulative[(eng, prof)], perf["daily_returns"]])
+                            cumulative[(s_name, eng, prof)] = pd.concat([cumulative[(s_name, eng, prof)], perf["daily_returns"]])
 
-                    except EngineUnavailableError:
-                        eng_state["_status"] = {"skipped": True, "reason": "engine not installed"}
-                        break
                     except Exception as e:
-                        eng_state[prof].setdefault("errors", []).append(str(e))
-                        continue
+                        results[s_name][eng][prof].setdefault("errors", []).append(f"Sim Error ({s_name}): {str(e)}")
 
         # Summaries
-        for eng, prof_map in results.items():
-            if prof_map.get("_status", {}).get("skipped"):
-                continue
-
-            for prof in profiles:
-                windows = prof_map.get(prof, {}).get("windows", [])
-                if not windows:
+        for s_name in sim_names:
+            for eng, prof_map in results[s_name].items():
+                if prof_map.get("_status", {}).get("skipped"):
                     continue
-
-                summary = self._summarize_results(windows, cumulative[(eng, prof)])
-                t_vals = [w.get("turnover") for w in windows if w.get("turnover") is not None]
-                summary["avg_turnover"] = float(np.mean(t_vals)) if t_vals else None
-                prof_map[prof]["summary"] = summary
+                for prof in profiles:
+                    windows = prof_map.get(prof, {}).get("windows", [])
+                    if not windows:
+                        continue
+                    summary = self._summarize_results(windows, cumulative[(s_name, eng, prof)])
+                    t_vals = [w.get("turnover") for w in windows if w.get("turnover") is not None]
+                    summary["avg_turnover"] = float(np.mean(t_vals)) if t_vals else None
+                    prof_map[prof]["summary"] = summary
 
         return {
             "meta": {
@@ -302,9 +315,9 @@ class BacktestEngine:
                 "test_window": test_window,
                 "step_size": step_size,
                 "cluster_cap": cluster_cap,
-                "simulator": simulator_name,
                 "profiles": profiles,
                 "engines": engines,
+                "simulators": sim_names,
                 "generated_at": str(pd.Timestamp.now()),
             },
             "results": results,
@@ -446,6 +459,7 @@ def main():
     parser.add_argument("--test", type=int, default=20)
     parser.add_argument("--step", type=int, default=20)
     parser.add_argument("--cluster-cap", type=float, default=float(os.getenv("CLUSTER_CAP", "0.25")))
+    parser.add_argument("--simulators", type=str, default="custom", help="Comma-separated simulators (custom, cvxportfolio)")
     parser.add_argument("--simulator", type=str, default="custom", choices=["custom", "cvxportfolio"])
 
     parser.add_argument("--tournament", action="store_true")
@@ -465,6 +479,8 @@ def main():
     if args.tournament:
         engines = [e.strip().lower() for e in (args.engines or "").split(",") if e.strip()]
         profiles = [p.strip().lower() for p in (args.profiles or "").split(",") if p.strip()]
+        sims = [s.strip().lower() for s in (args.simulators or "").split(",") if s.strip()]
+
         res = bt.run_tournament(
             train_window=args.train,
             test_window=args.test,
@@ -472,7 +488,7 @@ def main():
             profiles=profiles,
             engines=engines,
             cluster_cap=float(args.cluster_cap),
-            simulator_name=args.simulator,
+            simulators=sims,
         )
         output_file = output_dir / "tournament_results.json"
         with open(output_file, "w") as f:
