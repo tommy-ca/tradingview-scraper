@@ -1,13 +1,17 @@
 import json
 import logging
 import os
+import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, Optional, cast
 
 import pandas as pd
 
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.metrics import get_full_report_markdown
+
+# Add project root to path for scripts imports
+sys.path.append(os.getcwd())
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -99,7 +103,62 @@ class ReportGenerator:
         # 3. Generate Tournament Benchmark (engine_comparison_report.md)
         self._generate_tournament_benchmark()
 
+        # 4. Generate Cluster Analysis reports
+        self._generate_cluster_analysis()
+
+        # 5. Generate Universe Selection report
+        self._generate_selection_report()
+
         logger.info(f"Reporting complete. Artifacts in: {self.summary_dir}")
+
+    def _generate_selection_report(self):
+        """Generates the high-quality Universe Selection Report."""
+        try:
+            import importlib
+
+            gen_sel = importlib.import_module("scripts.generate_selection_report")
+            generate_selection_report = gen_sel.generate_selection_report
+
+            logger.info("Generating Universe Selection Report...")
+            generate_selection_report(
+                audit_path="data/lakehouse/selection_audit.json",
+                output_path=str(self.summary_dir / "selection_audit.md"),
+            )
+        except Exception as e:
+            logger.error(f"Selection Report failed: {e}")
+
+    def _generate_cluster_analysis(self):
+        """Generates Hierarchical and Volatility Cluster Analysis reports."""
+        try:
+            import importlib
+
+            analyze_c = importlib.import_module("scripts.analyze_clusters")
+            analyze_clusters = analyze_c.analyze_clusters
+
+            logger.info("Generating Hierarchical Cluster Analysis...")
+
+            # Paths for selected candidates
+            c_path = "data/lakehouse/portfolio_clusters.json"
+            m_path = "data/lakehouse/portfolio_meta.json"
+            o_path = self.summary_dir / "cluster_analysis.md"
+            i_path = self.summary_dir / "portfolio_clustermap.png"
+            v_path = self.summary_dir / "volatility_clustermap.png"
+
+            if os.path.exists(c_path):
+                analyze_clusters(
+                    clusters_path=str(c_path),
+                    meta_path=str(m_path),
+                    returns_path="data/lakehouse/portfolio_returns.pkl",
+                    stats_path="data/lakehouse/antifragility_stats.json",
+                    output_path=str(o_path),
+                    image_path=str(i_path),
+                    vol_image_path=str(v_path),
+                )
+            else:
+                logger.warning(f"Cluster file missing: {c_path}. Skipping detailed analysis.")
+
+        except Exception as e:
+            logger.error(f"Cluster Analysis failed: {e}")
 
     def _generate_strategy_teardowns(self):
         """Generates MD and HTML reports for each point in the tournament matrix."""
@@ -167,6 +226,7 @@ class ReportGenerator:
                 "portfolio_clustermap.png",
                 "volatility_clustermap.png",
                 "factor_map.png",
+                "cluster_analysis.md",
             ]
         )
         with open(self.summary_dir / "essential_reports.json", "w") as f:

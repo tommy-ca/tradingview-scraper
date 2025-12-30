@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Dict, List, cast
+from typing import Any, Dict, List, cast
 
 import matplotlib
 
@@ -51,21 +51,22 @@ def perform_subclustering(symbols: List[str], returns: pd.DataFrame, threshold: 
     return sub_clusters
 
 
-def visualize_volatility_clusters(returns: pd.DataFrame, output_path: str):
+def visualize_volatility_clusters(returns: pd.DataFrame, output_path: str) -> Any:
     """
     Generates a clustermap based on volatility co-movement (Log-Vol Correlation).
+    Returns the linkage matrix for further analysis.
     """
     if returns.empty or returns.shape[1] < 2:
-        return
+        return None
 
     logger.info(f"Generating volatility clustermap for {len(returns.columns)} assets...")
 
     clusterer = VolatilityClusterer(window=20)
     log_vol = clusterer.calculate_volatility_series(returns)
     if log_vol.empty:
-        return
+        return None
 
-    vol_corr = log_vol.corr()
+    vol_corr = log_vol.corr().fillna(0.0)
 
     # Emerald-to-Purple palette for volatility (risk-focused)
     cmap = sns.color_palette("viridis", as_cmap=True)
@@ -92,6 +93,9 @@ def visualize_volatility_clusters(returns: pd.DataFrame, output_path: str):
     plt.savefig(output_path, bbox_inches="tight", dpi=150)
     plt.close()
     logger.info(f"✅ Volatility clustermap saved to: {output_path}")
+
+    # Explicitly cast to Any to bypass linter checks on the Grid object
+    return cast(Any, g).dendrogram_col.linkage
 
 
 def visualize_clusters(returns: pd.DataFrame, output_path: str):
@@ -166,13 +170,13 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
 
     # Generate Visualizations
     visualize_clusters(returns, image_path)
-    visualize_volatility_clusters(returns, vol_image_path)
+    vol_linkage = visualize_volatility_clusters(returns, vol_image_path)
 
     # 1. Start Report Header
     report = []
     report.append(f"# 🧩 Hierarchical Cluster Analysis ({'RAW' if 'raw' in str(output_path) else 'SELECTED'})")
     report.append(f"**Date:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    report.append(f"**Total Clusters:** {len(clusters)}")
+    report.append(f"**Total Return Clusters:** {len(clusters)}")
     report.append("\n---")
 
     # 2. Add Visualization Maps
@@ -180,12 +184,33 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     report.append(f"![Portfolio Clustermap](./{os.path.basename(image_path)})")
     report.append("\n---")
 
-    report.append("## ⚡ Volatility Risk Clustermap")
+    report.append("## ⚡ Volatility Risk Analysis")
     report.append("Identifies systemic risk units based on volatility co-movement (Log-Vol Correlation). Assets that spike together are grouped.")
     report.append("### 🔍 Strategic Insight")
     report.append("- **Hidden Risk:** Assets that trend together but occupy different Volatility Units provide superior diversification.")
     report.append("- **Systemic Contagion:** Assets in the same Volatility Unit but different Return Clusters represent dangerous 'hidden' dependencies during market stress.")
     report.append(f"![Volatility Clustermap](./{os.path.basename(vol_image_path)})")
+
+    # Extract Volatility Clusters
+    if vol_linkage is not None:
+        # Use a distance threshold to extract flat clusters
+        vol_cluster_ids = sch.fcluster(vol_linkage, t=0.5, criterion="distance")
+        vol_clusters: Dict[int, List[str]] = {}
+        for sym, vc_id in zip(returns.columns, vol_cluster_ids):
+            vc_id_int = int(vc_id)
+            if vc_id_int not in vol_clusters:
+                vol_clusters[vc_id_int] = []
+            vol_clusters[vc_id_int].append(str(sym))
+
+        report.append("\n### 🌪️ Volatility Risk Units")
+        report.append("| Unit ID | Size | Assets |")
+        report.append("| :--- | :--- | :--- |")
+        for vc_id, vc_syms in sorted(vol_clusters.items(), key=lambda x: len(x[1]), reverse=True):
+            assets_str = ", ".join([f"`{s}`" for s in vc_syms[:5]])
+            if len(vc_syms) > 5:
+                assets_str += " ..."
+            report.append(f"| {vc_id} | {len(vc_syms)} | {assets_str} |")
+
     report.append("\n---")
 
     # 3. Calculate Cluster details
