@@ -39,7 +39,8 @@ git clone "https://gist.github.com/$GIST_ID.git" "$TEMP_DIR"
 # We first remove everything in the temp dir except .git to handle deletions.
 find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -not -name '.git' -exec rm -rf {} +
 # Then copy and flatten all files from SUMMARY_DIR, excluding binaries
-find "$SUMMARY_DIR" -type f -not -path '*/.*' -not -name '*.pkl' -exec cp {} "$TEMP_DIR/" \;
+# Use -L to follow symlinks (like 'latest')
+find -L "$SUMMARY_DIR" -type f -not -path '*/.*' -not -name '*.pkl' -exec cp {} "$TEMP_DIR/" \;
 
 # 3. Commit and push
 cd "$TEMP_DIR"
