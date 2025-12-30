@@ -115,12 +115,32 @@ def prepare_portfolio_universe():
         if c["symbol"] not in unique_candidates:
             unique_candidates[c["symbol"]] = c
 
+    # CRITICAL: Always ensure benchmark (SPY) is in candidates and LONG
+    from tradingview_scraper.settings import get_settings
+
+    baseline_symbol = get_settings().baseline_symbol
+
+    logger.info("Ensuring baseline symbol %s is LONG.", baseline_symbol)
+    unique_candidates[baseline_symbol] = {
+        "symbol": baseline_symbol,
+        "description": "SPY",
+        "sector": "Equities (S&P 500)",
+        "market": "US_ETF",
+        "asset_class": "EQUITIES",
+        "identity": "SPY",
+        "direction": "LONG",
+        "is_baseline": True,
+        "value_traded": 1e12,  # Force to top
+    }
+
     # Sort by value_traded descending to keep the most liquid first
-    universe = sorted(unique_candidates.values(), key=lambda x: x.get("value_traded", 0), reverse=True)
+    sorted_candidates = sorted(unique_candidates.values(), key=lambda x: x.get("value_traded", 0), reverse=True)
 
     max_symbols = int(os.getenv("PORTFOLIO_MAX_SYMBOLS", "200"))
     if max_symbols > 0:
-        universe = universe[:max_symbols]
+        universe = sorted_candidates[:max_symbols]
+    else:
+        universe = sorted_candidates
     logger.info(f"Portfolio Universe: {len(universe)} symbols after limiting (max={max_symbols}).")
 
     # 2. Fetch Historical Data
@@ -247,36 +267,21 @@ def prepare_portfolio_universe():
                 logger.error(f"Batch timed out after {batch_timeout}s. {len(not_done)} tasks incomplete (moving on).")
 
     # 3. Align and Save
-    # Start with intersection to get clean statistics if possible
-    returns_df = pd.DataFrame(price_data).dropna()
+    # We use the UNION of all dates to support mixed calendars (24/7 Crypto vs 5/7 TradFi)
+    all_dates = sorted(set().union(*(rets.index for rets in price_data.values())))
+    returns_df = pd.DataFrame(index=pd.Index(all_dates))
+
+    for symbol, rets in price_data.items():
+        returns_df[symbol] = rets
+
+    # Fill missing values with 0.0
+    # This correctly models 'holding' an asset when its market is closed.
+    returns_df = returns_df.fillna(0.0)
 
     # CRITICAL: Ensure we have enough history for the target backtest period
-    # If the matrix is too short, find the bottlenecks and drop them.
     target_rows = 320  # 120 (train) + 200 (test)
     if len(returns_df) < target_rows:
-        logger.warning("Aligned matrix has only %d rows, target is %d. Filtering bottlenecks...", len(returns_df), target_rows)
-        # Identify how many valid days each symbol has in the total range
-        raw_df = pd.DataFrame(price_data)
-        symbol_counts = raw_df.notna().sum()
-        bottlenecks = symbol_counts[symbol_counts < target_rows]
-        if not bottlenecks.empty:
-            logger.info("Dropping %d bottleneck symbols with < %d days: %s", len(bottlenecks), target_rows, ", ".join(bottlenecks.index))
-            # Remove from price_data
-            for s in bottlenecks.index:
-                if s in price_data:
-                    del price_data[s]
-            # Re-align on remaining
-            returns_df = pd.DataFrame(price_data).dropna()
-            logger.info("New aligned matrix shape: %s", returns_df.shape)
-
-        # If still too short (due to calendar mismatches), use UNION
-        if len(returns_df) < target_rows:
-            logger.info("Intersection is still only %d. Using UNION with 0.0 filling to reach target.", len(returns_df))
-            returns_df = pd.DataFrame(price_data).fillna(0.0)
-            logger.info("Final union matrix shape: %s", returns_df.shape)
-
-    # Final safety fill
-    returns_df = returns_df.fillna(0.0)
+        logger.warning("Aligned matrix has only %d rows, target is %d.", len(returns_df), target_rows)
 
     # Drop zero-variance columns
     zero_vars: List[str] = []

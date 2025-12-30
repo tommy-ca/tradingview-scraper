@@ -96,7 +96,7 @@ def generate_tearsheets():
 
             # Output Markdown Full Report
             out_md = tearsheet_root / f"{name}_full_report.md"
-            md_content = get_full_report_markdown(rets, benchmark=benchmark, title=name)
+            md_content = get_full_report_markdown(rets, benchmark=benchmark, title=name, mode=settings.report_mode)
             with open(out_md, "w") as f:
                 f.write(md_content)
 

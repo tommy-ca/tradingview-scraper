@@ -166,13 +166,26 @@ class BacktestEngine:
         baseline_symbol = settings.baseline_symbol
         baseline_returns = self.returns[baseline_symbol] if baseline_symbol in self.returns.columns else None
 
+        # Add "Market (Buy & Hold)" baseline to the weights set for all simulators
+        # This treats the benchmark like any other portfolio
+        market_weights = pd.DataFrame([{"Symbol": baseline_symbol, "Weight": 1.0, "Direction": "LONG", "Cluster_ID": "MARKET"}])
+
         known_engines = set(list_known_engines())
         available_engines = set(list_available_engines())
 
         # Results structure: results[simulator][engine][profile]
         results: Dict[str, Dict[str, Any]] = {s: {} for s in sim_names}
+        # Shared state for tracking cumulative returns and previous weights
+        # Keys: (simulator, engine, profile)
+        cumulative: Dict[tuple[str, str, str], pd.Series] = {}
+        prev_weights: Dict[tuple[str, str, str], pd.Series] = {}
+
         # Initialize engine status per simulator
         for s in sim_names:
+            # Market baseline initialization
+            results[s]["market"] = {"buy_hold": {"windows": [], "summary": None}}
+            cumulative[(s, "market", "buy_hold")] = pd.Series(dtype=float)
+
             for eng in engines:
                 results[s][eng] = {}
                 if eng not in known_engines:
@@ -183,14 +196,6 @@ class BacktestEngine:
                     continue
                 for prof in profiles:
                     results[s][eng][prof] = {"windows": [], "summary": None}
-
-        # Shared state for tracking cumulative returns and previous weights
-        # Keys: (simulator, engine, profile)
-        cumulative: Dict[tuple[str, str, str], pd.Series] = {}
-        prev_weights: Dict[tuple[str, str, str], pd.Series] = {}
-        for s in sim_names:
-            for eng in engines:
-                for prof in profiles:
                     cumulative[(s, eng, prof)] = pd.Series(dtype=float)
 
         total_len = len(self.returns)
@@ -221,7 +226,11 @@ class BacktestEngine:
             # Optimization happens once per (engine, profile)
             cached_weights: Dict[tuple[str, str], pd.DataFrame] = {}
 
+            # Inject Market Baseline
+            cached_weights[("market", "buy_hold")] = market_weights
+
             custom_optimizer = None
+
             if "custom" in engines and "custom" in available_engines:
                 custom_optimizer = self._init_optimizer(train_data, clusters, stats_df)
 
@@ -304,7 +313,9 @@ class BacktestEngine:
             for eng, prof_map in results[s_name].items():
                 if prof_map.get("_status", {}).get("skipped"):
                     continue
-                for prof in profiles:
+                # Include buy_hold if eng is market
+                iter_profiles = profiles if eng != "market" else ["buy_hold"]
+                for prof in iter_profiles:
                     windows = prof_map.get(prof, {}).get("windows", [])
                     if not windows:
                         continue

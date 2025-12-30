@@ -118,6 +118,7 @@ class TradingViewScraperSettings(BaseSettings):
     backtest_commission: float = 0.0001  # 1 bp
     backtest_cash_asset: str = "USDT"
     baseline_symbol: str = "AMEX:SPY"
+    report_mode: str = "full"
 
     # Tournament
     tournament_engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
@@ -257,6 +258,7 @@ if __name__ == "__main__":
             "backtest_commission": "BACKTEST_COMMISSION",
             "backtest_cash_asset": "BACKTEST_CASH_ASSET",
             "baseline_symbol": "BASELINE_SYMBOL",
+            "report_mode": "REPORT_MODE",
             "tournament_engines": "TOURNAMENT_ENGINES",
             "tournament_profiles": "TOURNAMENT_PROFILES",
             "gist_id": "GIST_ID",

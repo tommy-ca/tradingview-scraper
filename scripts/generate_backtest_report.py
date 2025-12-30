@@ -72,12 +72,21 @@ def generate_comparison_report():
         return
 
     all_results = data.get("results") or {}
-    # Use cvxportfolio simulator for realizable baseline
-    sim_name = "cvxportfolio" if "cvxportfolio" in all_results else "custom"
-    eng_name = "custom"
 
     summary_rows = []
     regime_rows = []
+
+    # Baseline Comparison Setup
+    sim_name = "cvxportfolio" if "cvxportfolio" in all_results else "custom"
+    eng_name = "custom"
+
+    # Add Market Baseline Row
+    market_prof = all_results.get(sim_name, {}).get("market", {}).get("buy_hold")
+    if market_prof and market_prof.get("summary"):
+        m_row = dict(market_prof["summary"])
+        m_row["Profile"] = "MARKET (SPY)"
+        m_row["Details"] = f"[Metrics]({sim_name}_market_buy_hold_full_report.md)"
+        summary_rows.append(m_row)
 
     for profile in PROFILES:
         prof_key = profile.lower()

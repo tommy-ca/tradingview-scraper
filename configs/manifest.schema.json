@@ -55,7 +55,8 @@
             "backtest_slippage": { "type": "number", "minimum": 0 },
             "backtest_commission": { "type": "number", "minimum": 0 },
             "backtest_cash_asset": { "type": "string" },
-            "baseline_symbol": { "type": "string" }
+            "baseline_symbol": { "type": "string" },
+            "report_mode": { "type": "string", "enum": ["basic", "full"] }
           }
         },
         "tournament": {
