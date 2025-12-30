@@ -134,12 +134,20 @@ These issues cover pipeline/backtesting/selection changes, scanner/universe-sele
 4. **Lakehouse Bridge**: Implement `LakehouseDataInterface` to provide Prices/Returns/Volumes from Parquet to `cvxportfolio`.
 5. **Alpha Decay Audit**: Update tournament reporting to compare Idealized vs. Realized Sharpe ratios.
 
-### Phase 10 — 3D Tournament Matrix (Engine x Simulator x Profile)
+### Phase 10 — 3D Tournament Matrix (Engine x Simulator x Profile) (Finalized)
 1. **Test-Driven Schema**: Define 3D JSON schema in `tests/test_tournament_matrix.py`.
 2. **Weight Caching**: Refactor `run_tournament` to optimize once per window and simulate multiple times.
 3. **Multi-Simulator Support**: Accept a list of simulators in CLI and Makefile.
 4. **Matrix Reporting**: Update `generate_backtest_report.py` to produce "Alpha Decay" audit tables.
 5. **Full Validation**: Run production matrix and publish results to Gist.
+
+### Phase 11 — Core Infrastructure Hardening & Performance
+1. **Async Reliability**: Fix `AsyncScreener` retry logic by reraising aiohttp exceptions.
+2. **Runtime Robustness**: Add guards for empty universes in `ClusteredOptimizerV2` and `natural_selection.py`.
+3. **Clustering Logic**: Enable distance-based clustering thresholds in `natural_selection.py`.
+4. **Scoring Consistency**: Centralize Liquidity/Alpha scoring math into a shared utility.
+5. **Correlation Optimization**: Vectorize robust correlation calculation to handle large universes.
+6. **Error Transparency**: Improve manifest parsing error feedback in `settings.py`.
 
 ## Acceptance Criteria
 - `data/lakehouse/selection_audit.json` contains an `optimization` section after `scripts/optimize_clustered_v2.py` runs.

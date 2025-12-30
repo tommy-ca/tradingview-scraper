@@ -48,6 +48,31 @@ class TestAsyncScreener(unittest.TestCase):
         self.assertEqual(mock_post.call_count, 3)
 
     @patch("aiohttp.ClientSession.post")
+    def test_screen_retry_on_connection_error(self, mock_post):
+        # Setup mock responses: first two fail with ClientError, third succeeds
+        mock_success = MagicMock()
+        mock_success.status = 200
+        mock_success.json = AsyncMock(return_value={"data": [{"s": "BINANCE:BTCUSDT", "d": [100]}]})
+
+        # mock_post is a context manager
+        cm_fail = MagicMock()
+        cm_fail.__aenter__.side_effect = aiohttp.ClientError("Connection reset")
+
+        cm_success = MagicMock()
+        cm_success.__aenter__.return_value = mock_success
+
+        mock_post.side_effect = [cm_fail, cm_fail, cm_success]
+
+        async def run_test():
+            async with aiohttp.ClientSession() as session:
+                return await self.screener.screen(session, "crypto", [], ["close"])
+
+        result = asyncio.run(run_test())
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(mock_post.call_count, 3)
+
+    @patch("aiohttp.ClientSession.post")
     @patch("tradingview_scraper.symbols.screener_async.save_json_file")
     def test_screen_export_json(self, mock_save_json, mock_post):
         # Setup mock response
