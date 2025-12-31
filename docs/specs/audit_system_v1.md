@@ -1,27 +1,28 @@
 # Specification: Immutable Audit Ledger (V1)
-**Status**: Draft / Proposed
+**Status**: Formalized
 **Date**: 2025-12-31
 
 ## 1. Overview
-This document defines the requirements and design for the **Immutable Audit Ledger**, a system designed to ensure 100% reproducibility and cryptographic integrity of the quantitative production pipeline. It moves the platform from passive logging to an active "Decision Ledger" that links every output to its specific input data and configuration.
+This document defines the requirements and implementation of the **Immutable Audit Ledger**, a system designed to ensure 100% reproducibility and cryptographic integrity of the quantitative production pipeline. It moves the platform from passive logging to an active "Decision Ledger" that links every output to its specific input data and configuration.
 
-## 2. Core Requirements
+## 2. Core implementation
 
 ### 2.1 Write-Ahead Logging (WAL) Principle
-Every significant pipeline step must record its **Intent** (Inputs + Parameters) before execution and its **Outcome** (Results + Artifact Hashes) after completion.
+Every significant pipeline step records its **Intent** (Inputs + Parameters) before execution and its **Outcome** (Results + Artifact Hashes) after completion. This is managed by the `AuditLedger` class in `tradingview_scraper/utils/audit.py`.
 
 ### 2.2 Cryptographic Chaining
-- Log entries must be chained using SHA-256 hashes.
-- Each record must contain a `prev_hash` field referencing the hash of the previous line.
-- The `hash` of the current record is calculated over the entire JSON content + the `prev_hash`.
+- Log entries are chained using SHA-256 hashes.
+- Each record contains a `prev_hash` field referencing the hash of the previous line.
+- The `hash` of the current record is calculated over the entire JSON content (canonicalized) + the `prev_hash`.
+- The ledger is stored as `audit.jsonl` in the run directory.
 
-### 2.3 Deterministic Data Hashing
-- The system must implement a standardized way to hash Pandas DataFrames (`df_hash`).
-- Hashes must be stable across different environments (ignoring non-essential metadata like internal memory addresses).
+### 2.3 Deterministic Data Hashing (`df_hash`)
+- The system implements `get_df_hash` to compute stable signatures of Pandas DataFrames.
+- **Determinism**: Shuffling rows or columns does not change the hash.
+- **Lineage**: Ensures that the exact returns matrix used for a backtest is identifiable and untampered.
 
-### 2.4 Persistence
-- The ledger is stored as a JSON-Lines file (`audit.jsonl`) within the run-scoped artifact directory.
-- A "Genesis Block" must be created at the start of every run, capturing the environment (Git SHA, Python Version, Manifest Hash).
+### 2.4 Verification Tool
+A standalone utility `scripts/verify_ledger.py` is provided to "replay" the audit chain and detect any tampering or inconsistencies in the record.
 
 ## 3. Data Schema
 

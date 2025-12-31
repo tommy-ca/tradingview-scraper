@@ -2,21 +2,22 @@
 
 This roadmap outlines the strategic development goals for the TradingView Scraper quantitative platform for 2026, focusing on alpha expansion, execution intelligence, and institutional resilience.
 
-## Q1 2026: Execution Intelligence & Churn Optimization
+## Q1 2026: Execution Intelligence & Churn Optimization (COMPLETED)
 
-### 1. Advanced Rebalancing Logic (Phase 1 & 2 - COMPLETED)
+### 1. Advanced Rebalancing Logic
 - **Drift-Aware Execution**: Upgraded `drift-monitor` with Partial Rebalancing and Order Generation.
 - **Turnover Penalties**: Implemented L1-norm penalty in Custom Optimizer.
 - **XS Momentum**: Transitioned to robust global percentile ranking.
 - **Spectral Regimes**: Integrated `TURBULENT` state detection and Barbell scaling.
 
-### 2. Immutable Audit & Reproducibility (Phase 5 - COMPLETED)
+### 2. Immutable Audit & Reproducibility
 - **Decision Ledger**: Implemented `audit.jsonl` with cryptographic chaining (SHA-256).
 - **Data Hashing**: Implemented deterministic `df_hash` for verifiable data lineage.
 - **Audit Orchestration**: Updated `run_production_pipeline.py` to wrap steps in audit blocks.
 - **Integrity Verification**: Created `scripts/verify_ledger.py` to detect data tampering.
 
-## Q2 2026: Strategy & Factor Expansion
+## Q2 2026: Strategy & Factor Expansion (PLANNED)
+
 
 ### 1. Relative Value & XS Momentum
 - **Cross-Sectional (XS) Momentum**: Implement ranking logic to filter the universe based on relative performance (percentiles) rather than absolute technical thresholds.

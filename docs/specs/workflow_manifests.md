@@ -29,6 +29,8 @@ To ensure stability while deploying high-impact quantitative upgrades, the syste
 | `feat_xs_momentum` | Global percentile ranking instead of local normalization. | `false` |
 | `feat_spectral_regimes` | `TURBULENT` regime state & Dynamic Barbell Scaling. | `false` |
 | `feat_decay_audit` | Slippage decay section in Markdown reports. | `false` |
+| `feat_audit_ledger` | Master switch for Immutable Audit System (`audit.jsonl`). | `false` |
+| `feat_pit_fidelity` | Enables production risk auditing in backtests. | `false` |
 
 Users can enable all 2026 features by using the `production_v2_canary` profile.
 

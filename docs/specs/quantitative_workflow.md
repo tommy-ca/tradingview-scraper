@@ -7,7 +7,7 @@ This document defines the standardized pipeline for transforming raw market data
 
 ## 2. The 13-Step Production Sequence
 
-The entire production lifecycle is managed via `make daily-run` and follows this rigorous sequence:
+The entire production lifecycle is managed via the **Python Orchestrator** (`scripts/run_production_pipeline.py`) or `make daily-run` and follows this rigorous sequence:
 
 1.  **Cleanup**: Wipe previous artifacts and intermediate files (`data/lakehouse/portfolio_*`) to ensure a clean state.
 2.  **Discovery**: Run multi-asset scanners (Equities, Crypto, Bonds, MTF Forex) in parallel using `make scan-all`.
