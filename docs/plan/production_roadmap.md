@@ -10,11 +10,11 @@ This roadmap outlines the strategic development goals for the TradingView Scrape
 - **XS Momentum**: Transitioned to robust global percentile ranking.
 - **Spectral Regimes**: Integrated `TURBULENT` state detection and Barbell scaling.
 
-### 2. Immutable Audit & Reproducibility (Phase 5 - PLANNED)
-- **Decision Ledger**: Implement `audit.jsonl` with cryptographic chaining (SHA-256).
-- **Data Hashing**: Implement deterministic `df_hash` for verifiable data lineage.
-- **Audit Orchestration**: Update `run_production_pipeline.py` to wrap steps in audit blocks.
-- **Integrity Verification**: Create `scripts/verify_ledger.py` to detect data tampering.
+### 2. Immutable Audit & Reproducibility (Phase 5 - COMPLETED)
+- **Decision Ledger**: Implemented `audit.jsonl` with cryptographic chaining (SHA-256).
+- **Data Hashing**: Implemented deterministic `df_hash` for verifiable data lineage.
+- **Audit Orchestration**: Updated `run_production_pipeline.py` to wrap steps in audit blocks.
+- **Integrity Verification**: Created `scripts/verify_ledger.py` to detect data tampering.
 
 ## Q2 2026: Strategy & Factor Expansion
 

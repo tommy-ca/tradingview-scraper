@@ -1,5 +1,5 @@
 ## 6. Audit & Reproducibility
-- [ ] **Immutable Ledger:** Implement `audit.jsonl` with SHA-256 chaining.
-- [ ] **Data Lineage:** Implement deterministic `df_hash` for return matrices.
-- [ ] **Audit Orchestration:** Wrap pipeline steps in WAL (Write-Ahead Logging) blocks.
-- [ ] **Verification Tool:** Create `scripts/verify_ledger.py` for integrity audits.
+- [x] **Immutable Ledger:** Implemented `audit.jsonl` with SHA-256 chaining.
+- [x] **Data Lineage:** Implemented deterministic `df_hash` for return matrices.
+- [x] **Audit Orchestration:** Wrapped pipeline steps in WAL (Write-Ahead Logging) blocks.
+- [x] **Verification Tool:** Created `scripts/verify_ledger.py` for integrity audits.
