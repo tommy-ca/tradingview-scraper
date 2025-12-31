@@ -2,7 +2,7 @@ import json
 import hashlib
 import logging
 import os
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,33 @@ def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
     return corr.fillna(0.0)
 
 
+def get_hierarchical_clusters(returns: pd.DataFrame, threshold: float = 0.5, max_clusters: int = 25) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Computes averaged distance matrix and performs Ward Linkage clustering.
+    Returns (cluster_ids, linkage_matrix).
+    """
+    if returns.empty:
+        return np.array([]), np.array([])
+
+    lookbacks = [60, 120, 200]
+    available_len = len(returns)
+    valid_lookbacks = [l for l in lookbacks if l <= available_len] or [available_len]
+
+    dist_matrices = []
+    for l in valid_lookbacks:
+        corr = get_robust_correlation(returns.tail(l))
+        dist_matrices.append(np.sqrt(0.5 * (1 - corr.values.clip(-1, 1))))
+
+    avg_dist = np.mean(dist_matrices, axis=0)
+    avg_dist = (avg_dist + avg_dist.T) / 2
+    np.fill_diagonal(avg_dist, 0)
+
+    link = sch.linkage(squareform(avg_dist, checks=False), method="ward")
+    cluster_ids = sch.fcluster(link, t=threshold, criterion="distance") if threshold > 0 else sch.fcluster(link, t=max_clusters, criterion="maxclust")
+
+    return cluster_ids, link
+
+
 def run_selection(
     returns: pd.DataFrame,
     raw_candidates: List[Dict[str, Any]],
@@ -43,21 +70,7 @@ def run_selection(
 
     candidate_map = {c["symbol"]: c for c in raw_candidates}
 
-    lookbacks = [60, 120, 200]
-    available_len = len(returns)
-    valid_lookbacks = [l for l in lookbacks if l <= available_len] or [available_len]
-
-    dist_matrices = []
-    for l in valid_lookbacks:
-        corr = get_robust_correlation(returns.tail(l))
-        dist_matrices.append(np.sqrt(0.5 * (1 - corr.values.clip(-1, 1))))
-
-    avg_dist = np.mean(dist_matrices, axis=0)
-    avg_dist = (avg_dist + avg_dist.T) / 2
-    np.fill_diagonal(avg_dist, 0)
-
-    link = sch.linkage(squareform(avg_dist, checks=False), method="ward")
-    cluster_ids = sch.fcluster(link, t=threshold, criterion="distance") if threshold > 0 else sch.fcluster(link, t=max_clusters, criterion="maxclust")
+    cluster_ids, link = get_hierarchical_clusters(returns, threshold, max_clusters)
 
     clusters: Dict[int, List[str]] = {}
     for sym, c_id in zip(returns.columns, cluster_ids):
@@ -90,7 +103,22 @@ def run_selection(
     selected_symbols = []
     for c_id, symbols in clusters.items():
         # Sub-selection within clusters
-        sub_rets = returns[symbols]
+        sub_rets = returns.loc[:, symbols]
+        if isinstance(sub_rets, pd.Series):
+            sub_rets = sub_rets.to_frame()
+
+        # Dynamic Top N based on Cluster Diversity
+        actual_top_n = top_n
+        if settings.features.feat_dynamic_selection and len(symbols) > 1:
+            c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
+            # Mean pairwise correlation excluding diagonal
+            n_syms = len(symbols)
+            upper_indices = np.triu_indices(n_syms, k=1)
+            mean_c = float(np.mean(c_corr.values[upper_indices])) if n_syms > 1 else 1.0
+            # Higher diversity -> more assets
+            # If mean_c is 0.2 (diverse), diversity is 0.8. If top_n=2, actual_top_n=round(2 * 0.8 + 0.5)=2
+            # If mean_c is 0.9 (redundant), diversity is 0.1. If top_n=2, actual_top_n=round(2 * 0.1 + 0.5)=1
+            actual_top_n = max(1, int(round(top_n * (1.0 - mean_c) + 0.5)))
 
         # MOMENTUM GATE (Local window)
         window = min(60, len(sub_rets))
@@ -125,13 +153,13 @@ def run_selection(
         longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and s in m_winners]
         if longs:
             # alpha_scores.loc[longs] returns a Series
-            top = cast(pd.Series, alpha_scores.loc[longs]).sort_values(ascending=False).head(top_n).index.tolist()
+            top = cast(pd.Series, alpha_scores.loc[longs]).sort_values(ascending=False).head(actual_top_n).index.tolist()
             selected_symbols.extend([str(s) for s in top])
 
         # SHORT selection
         shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
         if shorts:
-            top = cast(pd.Series, alpha_scores.loc[shorts]).sort_values(ascending=False).head(top_n).index.tolist()
+            top = cast(pd.Series, alpha_scores.loc[shorts]).sort_values(ascending=False).head(actual_top_n).index.tolist()
             selected_symbols.extend([str(s) for s in top])
 
     return [candidate_map[s] if s in candidate_map else {"symbol": s, "direction": "LONG"} for s in selected_symbols]

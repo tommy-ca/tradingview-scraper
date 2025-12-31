@@ -16,14 +16,18 @@ This roadmap outlines the strategic development goals for the TradingView Scrape
 - **Audit Orchestration**: Updated `run_production_pipeline.py` to wrap steps in audit blocks.
 - **Integrity Verification**: Created `scripts/verify_ledger.py` to detect data tampering.
 
-## Q2 2026: Strategy & Factor Expansion (PLANNED)
+## Q2 2026: Hierarchical Intelligence & Strategy Expansion (PLANNED)
 
+### 1. Unified Hierarchical Intelligence
+- **Cluster-Aware Selection**: Implement dynamic `Top N` per cluster based on cluster variance.
+- **Linkage Synchronization**: Unify distance metrics and linkage methods across selection, backtesting, and optimization.
+- **HERC Exploration**: Research Hierarchical Equal Risk Contribution (HERC) using CVaR as the primary risk measure.
 
-### 1. Relative Value & XS Momentum
-- **Cross-Sectional (XS) Momentum**: Implement ranking logic to filter the universe based on relative performance (percentiles) rather than absolute technical thresholds.
-- **Sector Rotation Engine**: Add first-class support for sector-level momentum analysis, allowing the optimizer to tilt towards outperforming industries.
+### 2. Relative Value & XS Momentum (COMPLETED)
+- **Cross-Sectional (XS) Momentum**: Implemented percentile-based ranking in `natural_selection.py`.
+- **Sector Rotation Engine**: Propagated sector metadata to the pruning layer.
 
-### 2. Short Mean Reversion
+### 3. Short Mean Reversion
 - **Selling Rips**: Develop specialized configurations for identifying overbought assets within confirmed downtrends across Equities, Forex, and Crypto.
 
 ## Q3 2026: Spectral Intelligence & Regime Detection

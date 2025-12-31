@@ -104,7 +104,8 @@
             "feat_pit_fidelity": { "type": "boolean" },
             "feat_rebalance_mode": { "type": "string", "enum": ["daily", "window"] },
             "feat_short_costs": { "type": "boolean" },
-            "short_borrow_cost": { "type": "number" }
+            "short_borrow_cost": { "type": "number" },
+            "feat_dynamic_selection": { "type": "boolean" }
           },
           "additionalProperties": false
         }

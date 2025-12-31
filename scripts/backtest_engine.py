@@ -286,24 +286,15 @@ class BacktestEngine:
         }
 
     def _cluster_data(self, df: pd.DataFrame, threshold: Optional[float] = None) -> Dict[str, List[str]]:
-        import scipy.cluster.hierarchy as sch
-        from scipy.spatial.distance import squareform
         import importlib
 
         settings = get_settings()
         t = threshold if threshold is not None else settings.threshold
 
-        get_robust_correlation = importlib.import_module("scripts.natural_selection").get_robust_correlation
-        corr = get_robust_correlation(df)
-        dist = np.sqrt(0.5 * (1 - corr.values.clip(-1, 1)))
-        dist = (dist + dist.T) / 2
-        np.fill_diagonal(dist, 0)
-        link = sch.linkage(squareform(dist, checks=False), method="ward")
+        ns = importlib.import_module("scripts.natural_selection")
+        get_hierarchical_clusters = ns.get_hierarchical_clusters
 
-        if settings.features.feat_pit_fidelity:
-            cluster_ids = sch.fcluster(link, t=t, criterion="distance")
-        else:
-            cluster_ids = sch.fcluster(link, t=10, criterion="maxclust")
+        cluster_ids, link = get_hierarchical_clusters(df, threshold=t, max_clusters=10)
 
         clusters = {}
         for sym, c_id in zip(df.columns, cluster_ids):

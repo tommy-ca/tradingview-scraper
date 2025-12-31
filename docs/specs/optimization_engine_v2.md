@@ -6,18 +6,39 @@ The Cluster-Aware Optimization Engine (v2) is an institutional-grade allocator d
 
 ### Layer 1: Across Clusters (Factor Level)
 The total capital is first distributed across high-level hierarchical risk buckets.
-- **Max Cluster Cap (25%)**: Strictly enforced to prevent systemic over-concentration.
+- **Max Cluster Cap (25%)**: Strictly enforced via linear constraints ($w_{cluster} \le 0.25$) to prevent systemic over-concentration in any single statistical factor.
 - **Fragility Penalty**: Refactored objective functions (`min_var`, `max_sharpe`) now include a penalty term for clusters with high **Expected Shortfall (CVaR)**.
 - **Turnover Control**: The custom engine implements an **L1-norm penalty** on weight changes relative to the previously implemented state (Gated by `feat_turnover_penalty`):
   $$Penalty_{Turnover} = \lambda \cdot \sum |w_{t} - w_{t-1}|$$
-  - This ensures that rebalancing only occurs when the risk/return benefit significantly outweighs the transaction cost.
-- **Net vs Gross Exposure**: The engine tracks both total capital at risk (Gross) and directional tilt (Net) for each factor.
 
-### Hierarchical Risk Parity (HRP) Implementation
+### Risk Profiles
+
+#### 1. Hierarchical Risk Parity (HRP)
 The HRP profile is implemented as a **Convex Risk Parity** optimization on cluster benchmarks:
-- **Objective**: Minimize variance while forcing logarithmic weight penalties to ensure diversity:
+- **Objective**: Minimize variance while forcing logarithmic weight penalties to ensure diversity across all discovered factors:
   $$Obj = 0.5 \cdot w^{T} \Sigma w - \frac{1}{n} \sum \log(w_{i})$$
-- **Linkage**: Uses **Ward Linkage** on robust correlations, which minimizes within-cluster variance when merging groups.
+- **Mathematical Rationale**: This approach avoids the instability of recursive bisection while achieving the same goal: ensuring that every cluster contributes to the portfolio's risk.
+
+#### 2. Antifragile Barbell
+The Barbell profile splits the portfolio into two distinct risk sleeves:
+- **Aggressor Sleeve (5-15%)**: Allocates to clusters with the highest **Antifragility Scores** (convexity leaders). These are often high-momentum, high-volatility clusters.
+- **Core Sleeve (85-95%)**: Allocates the remaining capital to the rest of the universe using the **HRP** profile for maximum stability.
+- **Dynamic Scaling**: The aggressor weight is regime-dependent:
+    - `QUIET`: 15%
+    - `NORMAL`: 10%
+    - `TURBULENT`: 8%
+    - `CRISIS`: 5%
+
+#### 3. Min Variance & Max Sharpe
+Standard convex profiles with additional constraints:
+- **Min Variance**: Pure risk minimization with cluster-level fragility penalties.
+- **Max Sharpe**: Risk-adjusted return maximization using training window mean returns ($\mu$).
+
+#### 4. Equal Weight (Dynamic Baseline)
+Used for isolated alpha attribution:
+- **Raw Pool EW**: Equal allocation to all discovered candidates.
+- **Filtered EW**: Equal allocation to all Top-N cluster leaders.
+- **Rationale**: Provides a rigorous benchmark to measure the impact of weighting vs. selection.
 
 ### Layer 2: Intra-Cluster (Instrument Level)
 Within each factor, weight is distributed using a **Momentum-Volatility Hybrid**:

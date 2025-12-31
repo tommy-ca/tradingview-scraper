@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 import pandas as pd
 
-ProfileName = Literal["min_variance", "hrp", "max_sharpe", "barbell"]
+ProfileName = Literal["min_variance", "hrp", "max_sharpe", "barbell", "equal_weight"]
 
 
 class EngineUnavailableError(RuntimeError):

@@ -1,5 +1,5 @@
 import unittest
-from typing import Dict, List
+from typing import Any, Dict, List, cast
 
 import numpy as np
 import pandas as pd
@@ -42,7 +42,7 @@ class TestCustomClusteredEngine(unittest.TestCase):
 
         all_rets = np.hstack([c0_rets, c1_rets, c2_rets])
         self.symbols = [f"S{i}" for i in range(10)]
-        self.returns = pd.DataFrame(all_rets, index=dates, columns=self.symbols)
+        self.returns = pd.DataFrame(all_rets, index=dates, columns=cast(Any, self.symbols))
 
         self.clusters = {"0": ["S0", "S1", "S2"], "1": ["S3", "S4", "S5"], "2": ["S6", "S7", "S8", "S9"]}
 
@@ -119,7 +119,7 @@ class TestCustomClusteredEngine(unittest.TestCase):
         # Low return cluster
         low_ret = rng.normal(0.0001, 0.02, (100, 2))
 
-        returns = pd.DataFrame(np.hstack([high_ret, low_ret]), index=dates, columns=["H1", "H2", "L1", "L2"])
+        returns = pd.DataFrame(np.hstack([high_ret, low_ret]), index=dates, columns=cast(Any, ["H1", "H2", "L1", "L2"]))
         clusters = {"HIGH": ["H1", "H2"], "LOW": ["L1", "L2"]}
 
         req = EngineRequest(profile="max_sharpe", cluster_cap=0.8)
@@ -139,7 +139,7 @@ class TestCustomClusteredEngine(unittest.TestCase):
         # High vol cluster
         high_vol = rng.normal(0, 0.05, (100, 2))
 
-        returns = pd.DataFrame(np.hstack([low_vol, high_vol]), index=dates, columns=["L1", "L2", "H1", "H2"])
+        returns = pd.DataFrame(np.hstack([low_vol, high_vol]), index=dates, columns=cast(Any, ["L1", "L2", "H1", "H2"]))
         clusters = {"LOW": ["L1", "L2"], "HIGH": ["H1", "H2"]}
 
         req = EngineRequest(profile="hrp", cluster_cap=0.8)
@@ -164,6 +164,23 @@ class TestCustomClusteredEngine(unittest.TestCase):
         # For single asset, cap is adjusted to 1.0 by _effective_cap
         self.assertAlmostEqual(float(resp.weights["Weight"].sum()), 1.0, places=5)
         self.assertEqual(len(resp.weights), 1)
+
+    def test_equal_weight_profile(self):
+        # This profile is handled by MarketBaselineEngine
+        from tradingview_scraper.portfolio_engines.engines import MarketBaselineEngine
+
+        engine = MarketBaselineEngine()
+
+        returns = pd.DataFrame(np.random.randn(10, 4), columns=cast(Any, ["A", "B", "C", "D"]))
+        req = EngineRequest(profile="equal_weight")
+
+        resp = engine.optimize(returns=returns, clusters={}, meta=None, stats=None, request=req)
+        weights = resp.weights
+
+        self.assertEqual(len(weights), 4)
+        self.assertAlmostEqual(float(weights["Weight"].sum()), 1.0, places=5)
+        self.assertTrue((weights["Weight"] == 0.25).all())
+        self.assertTrue((weights["Cluster_ID"] == "MARKET_EW").all())
 
 
 if __name__ == "__main__":

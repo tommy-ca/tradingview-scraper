@@ -11,15 +11,17 @@ The entire production lifecycle is managed via the **Python Orchestrator** (`scr
 
 1.  **Cleanup**: Wipe previous artifacts and intermediate files (`data/lakehouse/portfolio_*`) to ensure a clean state.
 2.  **Discovery**: Run multi-asset scanners (Equities, Crypto, Bonds, MTF Forex) in parallel using `make scan-all`.
-3.  **Aggregation**: Consolidate scans into a **Raw Pool** with canonical identity merging (Venue Neutrality) via `make portfolio-prep-raw`.
+3.  **Aggregation**: Consolidate scans into a **Raw Pool** with canonical identity merging (Venue Neutrality) via `make portfolio-prep-raw`. Produces `portfolio_candidates_raw.json` containing rich metadata (direction, sector, market).
 4.  **Lightweight Prep**: Fetch **60-day** history for the raw pool to establish baseline correlations and tactical momentum.
-5.  **Natural Selection (Pruning)**: Hierarchical clustering on the raw pool; select **Top N Assets** per cluster using **Execution Alpha** (Momentum + Stability + Liquidity). Uses global cross-sectional ranking when `feat_xs_momentum` is enabled.
-6.  **Enrichment**: Propagate sectors, industries, and descriptions to the filtered winners.
-7.  **High-Integrity Prep**: Fetch **500-day** secular history for winners with automated gap-repair via `make align`.
-8.  **Health Audit**: Validate 100% gap-free alignment for the implementation universe. Triggers `make recover` if gaps are found.
-9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Intersection Correlation**.
-10. **Regime Detection**: Multi-factor analysis using **Entropy + DWT Spectral Turbulence** to categorize the market environment (Spectral triggers gated by `feat_spectral_regimes`).
-11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties** and **Turnover Control**, benchmarking across multiple engines (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
+5.  **Natural Selection (Pruning)**: Hierarchical clustering on the raw pool using **Ward Linkage** and a multi-lookback distance matrix. Select **Top N Assets** per cluster using **Execution Alpha** (Global XS Momentum + Stability + Liquidity).
+    - **Diversity Constraint**: Clusters ensure that we don't over-select from redundant asset groups.
+    - **Scanner-Locked Integrity**: Directionality (LONG/SHORT) is preserved from the discovery source.
+...
+11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties** and **Turnover Control**.
+    - **Hierarchical Risk Parity (HRP)**: Distributes risk across the cluster tree to ensure no single statistical group dominates the variance.
+    - **Antifragile Barbell**: Allocates to high-convexity "Aggressor" clusters while maintaining a stable, HRP-weighted "Core".
+    - **Cluster Caps**: Enforces a strict 25% gross weight limit per hierarchical bucket.
+
 12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators (200d realized target). Must include **Cumulative Transition Friction** analysis to quantify rotation costs.
 13. **Reporting**: Generate QuantStats Markdown Tear-sheets, Strategy Resume, and sync essential artifacts to private Gist via `make finalize`.
 
