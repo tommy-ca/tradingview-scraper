@@ -8,16 +8,16 @@ The entire production lifecycle is unified under the `make clean-run` target. Ag
 
 ### The 14-Step Production Sequence
 1.  **Cleanup**: Wipe previous artifacts (`data/lakehouse/portfolio_*`).
-2.  **Discovery**: Run multi-asset scanners (Equities, Crypto, Bonds, MTF Forex).
+2.  **Discovery**: Run multi-asset scanners. **Audit Gate**: Verifies scanner success.
 3.  **Aggregation**: Consolidate scans into a **Raw Pool** with rich metadata.
 4.  **Lightweight Prep**: Fetch **60-day** history for the raw pool.
-5.  **Natural Selection (Pruning)**: Hierarchical clustering + Global XS Ranking.
+5.  **Natural Selection (Pruning)**: Hierarchical clustering + Global XS Ranking. **Audit Gate**: Verifies leader survival.
 6.  **Enrichment**: Propagate sectors, industries, and descriptions.
 7.  **High-Integrity Prep**: Fetch **500-day** secular history for winners.
-8.  **Health Audit**: Validate 100% gap-free alignment (Automated recovery).
+8.  **Health Audit**: Validate 100% gap-free alignment. **Self-Healing**: Automated recovery loop if gaps found.
 9.  **Factor Analysis**: Build hierarchical risk buckets (Ward Linkage).
 10. **Regime Detection**: Multi-factor analysis (Entropy + DWT).
-11. **Optimization**: Cluster-Aware allocation with Turnover Control.
+11. **Optimization**: Cluster-Aware allocation with Turnover Control. **Audit Gate**: Verifies profile integrity.
 12. **Validation**: Walk-Forward "Tournament" benchmarking (High-Fidelity).
 13. **Reporting**: QuantStats Tear-sheets + Alpha Isolation Audit.
 14. **Audit Verification**: Final cryptographic signature check of the run's decision ledger.

@@ -7,16 +7,18 @@ This runbook documents the institutional "Golden Path" for daily portfolio gener
 The entire production lifecycle is governed by **`configs/manifest.json`** and managed via a typed Python orchestrator, ensuring every run is 100% reproducible and resumable.
 
 ### Daily Production Run
+The orchestrator provides a **High-Fidelity CLI experience** with rich progress bars and live activity feedback. It automatically redirects internal logs to maintain a clean and transparent interface.
+
 ```bash
 # Run discovery + full 14-step pipeline (Default: production profile)
 python -m scripts.run_production_pipeline --profile production
-
-# Resume from Step 12 (Validation) after a timeout or fix
-python -m scripts.run_production_pipeline --profile production --start-step 12 --run-id 20251231-180000
-
-# Run with early-access 2026 features enabled
-python -m scripts.run_production_pipeline --profile production_v2_canary
 ```
+
+### Self-Healing & Data Integrity
+The pipeline includes an automated **Integrated Recovery Loop (Step 8)** managed by the Python orchestrator.
+- **Auto-Recovery**: If the initial health audit fails, the orchestrator automatically triggers a `make recover` pass (intensive gap-repair + matrix alignment).
+- **Audit Logging**: The recovery trigger and outcome are recorded in the `audit.jsonl` decision ledger.
+- **Hard Halt**: If data health issues persist after recovery, the pipeline halts immediately, preventing degraded data from reaching backtesting or implementation.
 
 ### Feature Rollout System
 The platform uses **Feature Flags** to gradually roll out high-impact quantitative upgrades. These are controlled in the `features` section of the manifest:
