@@ -152,6 +152,7 @@ def _solve_cvxpy(
     profile: str = "min_variance",
     risk_free_rate: float = 0.0,
     prev_weights: Optional[np.ndarray] = None,
+    l2_gamma: float = 0.0,
 ) -> np.ndarray:
     if n <= 0:
         return np.array([])
@@ -163,6 +164,9 @@ def _solve_cvxpy(
     risk = cp.quad_form(w, cov)
     p_term = (w @ penalties) * 0.2 if penalties is not None else 0.0
 
+    # L2 Regularization (Ridge) to prevent overfitting
+    l2_term = l2_gamma * cp.sum_squares(w) if l2_gamma > 0 else 0.0
+
     # Turnover penalty (L1 norm of change)
     # Default lambda is 0.001 (0.1% per 100% change)
     t_penalty = 0.0
@@ -171,14 +175,14 @@ def _solve_cvxpy(
         t_penalty = cp.norm(w - prev_weights, 1) * 0.001
 
     if profile == "min_variance":
-        obj = cp.Minimize(risk + p_term + t_penalty)
+        obj = cp.Minimize(risk + p_term + t_penalty + l2_term)
     elif profile == "hrp":
-        obj = cp.Minimize(0.5 * risk - (1.0 / n) * cp.sum(cp.log(w)) + t_penalty)
+        obj = cp.Minimize(0.5 * risk - (1.0 / n) * cp.sum(cp.log(w)) + t_penalty + l2_term)
     elif profile == "max_sharpe":
         m = mu if mu is not None else np.zeros(n)
-        obj = cp.Maximize((m @ w) - 0.5 * risk - p_term - t_penalty)
+        obj = cp.Maximize((m @ w) - 0.5 * risk - p_term - t_penalty - l2_term)
     else:
-        obj = cp.Minimize(risk + t_penalty)
+        obj = cp.Minimize(risk + t_penalty + l2_term)
 
     try:
         prob = cp.Problem(obj, constraints)
@@ -242,7 +246,7 @@ class CustomClusteredEngine(BaseRiskEngine):
                         if c_col in universe.cluster_benchmarks.columns:
                             idx = universe.cluster_benchmarks.columns.get_loc(c_col)
                             p_weights_np[idx] += float(weight)
-                    except:
+                    except Exception:
                         pass
 
             # Re-normalize if needed (if some assets disappeared)
@@ -250,7 +254,7 @@ class CustomClusteredEngine(BaseRiskEngine):
             if s > 0:
                 p_weights_np = p_weights_np / s
 
-        w = _solve_cvxpy(n=n, cap=cap, cov=cov, mu=mu, penalties=penalties, profile=request.profile, risk_free_rate=request.risk_free_rate, prev_weights=p_weights_np)
+        w = _solve_cvxpy(n=n, cap=cap, cov=cov, mu=mu, penalties=penalties, profile=request.profile, risk_free_rate=request.risk_free_rate, prev_weights=p_weights_np, l2_gamma=0.05)
         return _safe_series(w, universe.cluster_benchmarks.columns)
 
     def _barbell(self, *, universe: ClusteredUniverse, meta: Optional[Dict[str, Any]], stats: Optional[pd.DataFrame], request: EngineRequest) -> Tuple[pd.DataFrame, Dict[str, Any], List[str]]:

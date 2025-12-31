@@ -56,7 +56,19 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
 
     if daily_returns.empty:
         return empty_res
-    rets = daily_returns.dropna()
+
+    # Consistent Timezone Handling - Force Naive
+    rets = daily_returns.dropna().copy()
+    try:
+        new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in rets.index]
+        rets.index = pd.DatetimeIndex(new_idx)
+    except Exception as e_idx:
+        logger.debug(f"Metrics index forcing failed: {e_idx}")
+        if rets.index.tz is not None:
+            rets.index = rets.index.tz_convert(None).tz_localize(None)
+        else:
+            rets.index = rets.index.tz_localize(None)
+
     n_obs = len(rets)
     if n_obs == 0:
         return empty_res
@@ -106,6 +118,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
             "total_return": float(total_return),
             "annualized_return": float(annualized_return),
             "realized_vol": float(realized_vol_qs),
+            "annualized_vol": float(realized_vol_qs),
             "sharpe": float(sharpe),
             "max_drawdown": float(max_drawdown_qs),
             "var_95": float(var_95),
@@ -121,6 +134,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
             "total_return": float(total_return),
             "annualized_return": float(annualized_return),
             "realized_vol": float(realized_vol),
+            "annualized_vol": float(realized_vol),
             "sharpe": float(sharpe),
             "max_drawdown": float(max_drawdown),
             "var_95": float(rets.quantile(0.05)),
@@ -147,12 +161,34 @@ def get_full_report_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Se
     try:
         import quantstats as qs
 
-        rets = daily_returns.dropna()
-        n_obs = len(rets)
+        rets = daily_returns.dropna().copy()
+
+        # Consistent Timezone Handling - Force Naive
+        try:
+            new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in rets.index]
+            rets.index = pd.DatetimeIndex(new_idx)
+        except Exception:
+            if rets.index.tz is not None:
+                rets.index = rets.index.tz_convert(None).tz_localize(None)
+            else:
+                rets.index = rets.index.tz_localize(None)
+
         if benchmark is not None:
+            benchmark = benchmark.copy()
+            try:
+                new_b_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in benchmark.index]
+                benchmark.index = pd.DatetimeIndex(new_b_idx)
+            except Exception:
+                if benchmark.index.tz is not None:
+                    benchmark.index = benchmark.index.tz_convert(None).tz_localize(None)
+                else:
+                    benchmark.index = benchmark.index.tz_localize(None)
+
             idx = rets.index.union(benchmark.index)
             benchmark = benchmark.reindex(idx).fillna(0.0)
             rets = rets.reindex(idx).fillna(0.0)
+
+        n_obs = len(rets)
 
         md = [f"# Quantitative Strategy Tearsheet: {title}", f"Generated on: {pd.Timestamp.now()}\n"]
         md.append("## 1. Key Performance Metrics")
