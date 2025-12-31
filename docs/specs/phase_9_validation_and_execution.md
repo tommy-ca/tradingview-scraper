@@ -32,7 +32,18 @@ Given the mixed universe (24/7 Crypto vs. 5/7 TradFi), the engine handles missin
 - **Max Sharpe**: Goal is maximizing $\sum R_w / \sum \sigma_w$.
 - **Barbell**: Goal is capturing tail-events (high positive skew) in the "Aggressor" sleeve.
 
-## 2. Execution Intelligence (Execution Alpha)
+## 2. Cumulative Transition Modeling
+To prevent "Friction Amnesia", the engine preserves the realized portfolio value and holdings between walk-forward windows.
+- **Window N End $\rightarrow$ Window N+1 Start**: The simulator calculates the cost of closing positions that were removed from the universe and scaling positions to their new target weights.
+- **Transaction Cost Identity**: $C_t = \sum |w_{target, t} - w_{realized, t-1}| \cdot (\text{Slippage} + \text{Commission})$
+
+## 3. Capacity & Liquidity Guards
+The reporting suite includes a **Capacity Audit** to identify the maximum manageable AUM for each strategy.
+- **Slippage Decay Threshold**: If $Return_{Realized} < 0.5 \cdot Return_{Ideal}$, the strategy is flagged as "Capacity Constrained".
+- **Asset Bottleneck**: Identifies the single asset with the lowest liquidity in the optimal portfolio and calculates its impact on the total rebalance time.
+
+## 4. Execution Intelligence (Execution Alpha)
+...
 Selection within clusters now incorporates **Liquidity Risk** to ensure institutional viability.
 
 ### Selection Rank ($A$)

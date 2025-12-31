@@ -24,6 +24,7 @@ SUMMARY_COLS = [
     "annualized_return",
     "annualized_vol",
     "avg_window_sharpe",
+    "avg_turnover",
     "sortino",
     "calmar",
     "win_rate",
@@ -310,6 +311,12 @@ class ReportGenerator:
 
         # Build Tables
         df = pd.DataFrame(summary_rows)
+        # Apply formatting to specific columns
+        pct_cols = ["total_cumulative_return", "annualized_return", "annualized_vol", "avg_turnover", "win_rate"]
+        for c in pct_cols:
+            if c in df.columns:
+                df[c] = df[c].apply(lambda x: _fmt_num(x, ".2%"))
+
         for c in SUMMARY_COLS:
             if c not in df.columns:
                 df[c] = None
@@ -440,6 +447,12 @@ Baseline: **{eng_name}** engine on **{sim_name}** simulator.
             if rows:
                 md.append(f"\n## Profile: {profile_key.upper()}")
                 df_p = pd.DataFrame(rows).sort_values("Sharpe", ascending=False)
+                # Formatting
+                pct_cols = ["Return", "Vol", "MDD", "Turnover"]
+                for c in pct_cols:
+                    if c in df_p.columns:
+                        df_p[c] = df_p[c].apply(lambda x: _fmt_num(x, ".2%"))
+
                 md.append(df_p.to_markdown(index=False))
 
         with open(self.summary_dir / "engine_comparison_report.md", "w") as f:

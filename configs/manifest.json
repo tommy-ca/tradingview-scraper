@@ -121,15 +121,16 @@
         "dynamic_universe": true
       },
       "tournament": {
-        "engines": "market,custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
-        "profiles": "min_variance,hrp,max_sharpe,barbell"
+        "engines": "market,custom",
+        "profiles": "min_variance,hrp,barbell,equal_weight"
       },
       "discovery": {
-        "enabled_markets": ["futures", "crypto", "cfd", "forex", "bonds", "etf"]
+...
       },
       "env": {
         "META_REFRESH": "1",
-        "META_AUDIT": "1"
+        "META_AUDIT": "1",
+        "GIST_ID": "e888e1eab0b86447c90c26e92ec4dc36"
       },
       "features": {
         "feat_partial_rebalance": true,
@@ -140,6 +141,7 @@
         "feat_audit_ledger": true,
         "feat_pit_fidelity": true
       }
+
     },
     "repro_dev": {
       "description": "Lightweight reproducible development profile",

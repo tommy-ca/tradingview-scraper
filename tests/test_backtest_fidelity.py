@@ -70,7 +70,11 @@ def test_market_equal_weight_baseline(sample_returns):
 
 def test_cross_window_state_persistence(sample_returns, monkeypatch):
     """Verify that holdings are propagated between windows in run_tournament."""
+    # Mock _load_initial_state to return empty dict
+    monkeypatch.setattr(BacktestEngine, "_load_initial_state", lambda self: {})
+
     bt = BacktestEngine(returns_path=str(sample_returns))
+
     settings = get_settings()
     settings.features.feat_pit_fidelity = False  # Speed up
 

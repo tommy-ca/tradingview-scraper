@@ -43,6 +43,28 @@ class BacktestEngine:
 
         self.detector = MarketRegimeDetector()
 
+    def _load_initial_state(self) -> Dict[str, pd.Series]:
+        """Loads the last implemented state from portfolio_actual_state.json."""
+        state_path = "data/lakehouse/portfolio_actual_state.json"
+        if not os.path.exists(state_path):
+            return {}
+
+        try:
+            with open(state_path, "r") as f:
+                state = json.load(f)
+
+            initial_holdings = {}
+            for profile, data in state.items():
+                assets = data.get("assets", [])
+                if not assets:
+                    continue
+                w_series = pd.Series({a["Symbol"]: float(a.get("Weight", 0.0)) for a in assets})
+                initial_holdings[profile] = w_series
+            return initial_holdings
+        except Exception as e:
+            logger.warning(f"Failed to load initial state: {e}")
+            return {}
+
     def run_walk_forward(
         self,
         train_window: int = 120,
@@ -125,6 +147,9 @@ class BacktestEngine:
         cumulative: Dict[tuple[str, str, str], pd.Series] = {}
         prev_weights: Dict[tuple[str, str, str], pd.Series] = {}
 
+        # Warm-Start Initialization
+        initial_holdings = self._load_initial_state()
+
         # Setup Audit Ledger if enabled
         run_dir = settings.prepare_summaries_run_dir()
         ledger = None
@@ -140,7 +165,8 @@ class BacktestEngine:
                 for prof in profiles if eng != "market" else ["min_variance"]:
                     results[s][eng][prof] = {"windows": [], "summary": None}
                     cumulative[(s, eng, prof)] = pd.Series(dtype=float)
-                    prev_weights[(s, eng, prof)] = pd.Series(dtype=float)
+                    # Initialize with warm-start holdings if available
+                    prev_weights[(s, eng, prof)] = initial_holdings.get(prof, pd.Series(dtype=float))
 
         total_len = len(self.returns)
         if total_len < train_window + test_window:
@@ -224,6 +250,7 @@ class BacktestEngine:
                                 "vol": perf["realized_vol"],
                                 "sharpe": perf["sharpe"],
                                 "max_drawdown": perf["max_drawdown"],
+                                "turnover": perf.get("turnover", 0.0),
                                 "n_assets": len(weights_df),
                                 "top_assets": cast(Any, weights_df.head(5)).to_dict(orient="records"),
                             }
@@ -246,10 +273,13 @@ class BacktestEngine:
             "returns": {f"{s}_{e}_{p}": v for (s, e, p), v in cumulative.items() if not v.empty},
         }
 
-    def _cluster_data(self, df: pd.DataFrame, threshold: float = 0.5) -> Dict[str, List[str]]:
+    def _cluster_data(self, df: pd.DataFrame, threshold: Optional[float] = None) -> Dict[str, List[str]]:
         import scipy.cluster.hierarchy as sch
         from scipy.spatial.distance import squareform
         import importlib
+
+        settings = get_settings()
+        t = threshold if threshold is not None else settings.threshold
 
         get_robust_correlation = importlib.import_module("scripts.natural_selection").get_robust_correlation
         corr = get_robust_correlation(df)
@@ -258,9 +288,8 @@ class BacktestEngine:
         np.fill_diagonal(dist, 0)
         link = sch.linkage(squareform(dist, checks=False), method="ward")
 
-        settings = get_settings()
         if settings.features.feat_pit_fidelity:
-            cluster_ids = sch.fcluster(link, t=threshold, criterion="distance")
+            cluster_ids = sch.fcluster(link, t=t, criterion="distance")
         else:
             cluster_ids = sch.fcluster(link, t=10, criterion="maxclust")
 
@@ -305,6 +334,7 @@ class BacktestEngine:
                 "total_cumulative_return": summary["total_return"],
                 "avg_window_return": float(np.mean([w["returns"] for w in windows])),
                 "avg_window_sharpe": float(np.mean([w["sharpe"] for w in windows])),
+                "avg_turnover": float(np.mean([w.get("turnover", 0.0) for w in windows])),
                 "win_rate": float(np.mean([1 if w["returns"] > 0 else 0 for w in windows])),
             }
         )

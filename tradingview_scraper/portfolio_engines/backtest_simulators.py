@@ -65,6 +65,16 @@ class ReturnsSimulator(BaseSimulator):
 
         res = calculate_performance_metrics(daily_returns)
         res["daily_returns"] = daily_returns
+
+        # Idealized Turnover: sum of abs delta between start weights and target weights
+        if initial_holdings is not None:
+            combined_index = initial_holdings.index.union(w_norm.index)
+            h_start = initial_holdings.reindex(combined_index, fill_value=0.0)
+            h_target = w_norm.reindex(combined_index, fill_value=0.0)
+            res["turnover"] = float(np.abs(h_target.to_numpy() - h_start.to_numpy()).sum()) / 2.0
+        else:
+            res["turnover"] = 1.0  # 100% buy if starting from cash
+
         return res
 
 
@@ -140,6 +150,7 @@ class CvxPortfolioSimulator(BaseSimulator):
             res["daily_returns"] = realized_returns
             # Return final weights for next window
             res["final_weights"] = result.w.iloc[-1]
+            res["turnover"] = float(result.turnover.sum())  # Total turnover for the period
             return res
         except Exception as e:
             logger.error(f"cvxportfolio failed: {e}")

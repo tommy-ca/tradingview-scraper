@@ -63,14 +63,15 @@ Simulators maintain position state between walk-forward windows.
 ### 5.3 Multi-Engine Benchmarking (The Tournament)
 The `Tournament` mode runs a 3D matrix of (Profile x Engine x Simulator). This allows us to identify "Alpha Decay"—the difference between idealized mathematical returns and realized returns after friction and data gaps.
 
-## 5. Alpha Momentum Gates
-
-To prevent forced allocation into "best of the losers" clusters:
-- **Momentum Gate**: Assets with negative cumulative returns over the selection lookback are disqualified.
-- **Adaptive Weighting**: If an entire cluster fails the momentum gate, its weight is assigned to the **Cash Asset (USDT)**.
-- **Purpose**: Ensures the portfolio maintains a positive-expectancy bias even in variance-minimizing profiles.
+### 5.4 Initial Holdings & Warm Starts
+To eliminate the "First-Trade Bias" (where starting from 100% cash creates an artificial spike in turnover and transaction costs), the engine supports **Warm-Start Initialization**.
+- **Mechanism**: The backtester attempts to load the last implemented state from `data/lakehouse/portfolio_actual_state.json`.
+- **Initialization**: If found, the weights of the *first* walk-forward window are compared against these actual holdings. Transaction costs are only calculated for the delta.
+- **Fallback**: If no state file exists, the simulation assumes a start from 100% Cash (Institutional Conservative bias).
 
 ## 6. Institutional Standards (2025 Standard)
+...
+
 
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
@@ -112,3 +113,13 @@ The framework treats the market benchmark as a first-class **"Market" Engine**.
 ## 10. Unified QuantStats Reporting
 The reporting pipeline is rebased entirely on **QuantStats** to ensure mathematical consistency.
 - **Slippage Decay Audit**: Generates a detailed comparison between idealized and realized returns to quantify implementation friction (Gated by `feat_decay_audit`).
+
+## 11. Alpha Isolation (Selection vs. Optimization)
+
+The framework isolates alpha sources by comparing three distinct tiers:
+1. **Raw Pool EW**: Equal-weighted basket of all candidates found during discovery.
+2. **Filtered EW**: Equal-weighted basket of the Top N assets per cluster selected by the `NaturalSelection` logic.
+3. **Optimized Weights**: Cluster-weighted allocation produced by the optimization engine (e.g., MinVar, HRP).
+
+- **Selection Alpha**: Measured as the spread between Tier 2 and Tier 1. This quantifies the value of the pruning logic.
+- **Optimization Alpha**: Measured as the spread between Tier 3 and Tier 2. This quantifies the value of the statistical weighting engine.
