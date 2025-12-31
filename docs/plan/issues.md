@@ -66,9 +66,13 @@ This document tracks the phased development of the TradingView Scraper instituti
 5. **Immutable Baseline**: Ensure the "Market" engine loads raw data directly, bypassing direction flipping.
 6. **Detailed Analysis**: Added hierarchical and volatility cluster analysis reports integrated into the unified pipeline.
 
-### Phase 17 — Hierarchical Risk Parity (HRP) Audit & Alignment
-1. **Mathematical Audit**: Review and compare HRP objective functions across all 5 engines (Custom, skfolio, Riskfolio, PyPortfolioOpt, CvxPortfolio).
-2. **Linkage Standardization**: Force all HRP backends to use Ward linkage on Intersection Correlation to ensure structural consistency.
-3. **Risk Contribution Audit**: Implement a diagnostic script to measure Marginal Contribution to Risk (MCR) per cluster.
-4. **CvxPortfolio HRP Policy**: Implement a proper log-barrier risk parity policy for the CvxPortfolio engine.
-5. **Constraint Integrity**: Verify that capped-simplex projection preserves the risk-parity property at the cluster level.
+### Phase 17 — Hierarchical Risk Parity (HRP) Audit & Alignment (Finalized)
+1. **Mathematical Audit**: Review and compare HRP objective functions across all 5 engines.
+2. **Linkage Standardization**: Force all HRP backends to use Ward linkage.
+3. **Numerical Stability**: Implement Epsilon Jitter to prevent empty-slice warnings in QuantStats.
+
+### Phase 18 — VectorBT High-Performance Simulation
+1. **Simulator Integration**: Implement `VectorBTSimulator` utilizing vectorized returns-based rebalancing.
+2. **Standardized Metrics**: Force `vectorbt` results through the unified QuantStats metrics engine.
+3. **Tournament Extension**: Expand the 3D matrix to support a 3-way simulation comparison (Idealized vs Convex vs Vectorized).
+4. **Friction Calibration**: Map slippage and commissions to `vectorbt` fee structures.

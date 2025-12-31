@@ -113,7 +113,7 @@ class TradingViewScraperSettings(BaseSettings):
     test_window: int = 20
     step_size: int = 20
     backtest_simulator: str = "custom"
-    backtest_simulators: str = "custom,cvxportfolio"
+    backtest_simulators: str = "custom,cvxportfolio,vectorbt"
     backtest_slippage: float = 0.0005  # 5 bps
     backtest_commission: float = 0.0001  # 1 bp
     backtest_cash_asset: str = "USDT"

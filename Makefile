@@ -34,7 +34,7 @@ GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
 BACKTEST_TRAIN ?= 120
 BACKTEST_TEST ?= 20
 BACKTEST_STEP ?= 20
-BACKTEST_SIMULATORS ?= custom,cvxportfolio
+BACKTEST_SIMULATORS ?= custom,cvxportfolio,vectorbt
 
 # Tournament Defaults
 TOURNAMENT_ENGINES ?= custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio

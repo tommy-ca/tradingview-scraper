@@ -13,7 +13,7 @@ The framework decouples **Window Management** (rolling walk-forward logic) from 
 - **Assumptions**: Zero friction, perfect liquidity, instantaneous rebalancing.
 - **Use Case**: Rapid alpha validation and idealized benchmarking.
 
-### 2.2 CVXPortfolio Simulator (High-Fidelity)
+### 2.2 CVXPortfolio Simulator (Convex Policy)
 - **Method**: Utilizes `cvxportfolio.MarketSimulator`.
 - **Friction Models**:
     - **Slippage**: Default 5 bps (0.0005) per trade.
@@ -22,6 +22,14 @@ The framework decouples **Window Management** (rolling walk-forward logic) from 
 - **Cash Management**: Uses a stablecoin (USDT) as the base currency for the simulator's cash account.
 - **Use Case**: Institutional implementation audit and "Slippage Decay" analysis.
 
+### 2.3 VectorBT Simulator (High-Performance Vectorized)
+- **Method**: Utilizes `vectorbt.Portfolio.from_returns`.
+- **Friction Models**:
+    - **Slippage**: Default 5 bps per trade.
+    - **Fees**: Default 1 bp commission.
+- **Processing**: Numba-accelerated vectorized operations.
+- **Use Case**: Fast event-driven simulation and large-scale parameter sweeps.
+
 ## 3. Metrics & Standards
 
 Every simulator must output a standardized result schema, utilizing **QuantStats** for mathematical consistency:
@@ -29,6 +37,8 @@ Every simulator must output a standardized result schema, utilizing **QuantStats
 - **Risk**: Annualized Volatility, Max Drawdown, and CVaR (95%).
 - **Efficiency**: Sharpe Ratio, **Sortino Ratio**, **Calmar Ratio**, and Win Rate.
 - **Operations**: 1-way Turnover ($ \sum |w_{t} - w_{t-1}| / 2 $).
+
+All backends are forced through the unified `calculate_performance_metrics` utility to ensure zero mathematical drift between simulators.
 
 ## 4. Visual Tear-sheets & Markdown Reports
 
@@ -64,7 +74,7 @@ The framework supports mixed calendars (24/7 Crypto + 5/7 TradFi).
 The "Tournament" evaluates a 3D matrix of `[Simulator] x [Engine] x [Profile]`.
 
 ### 7.1 Dimensions
-- **Simulators**: `ReturnsSimulator` (Idealized), `CvxPortfolioSimulator` (Realized).
+- **Simulators**: `ReturnsSimulator` (Idealized), `CvxPortfolioSimulator` (Convex Policy), `VectorBTSimulator` (Vectorized Event-Driven).
 - **Engines**: `Custom (Cvxpy)`, `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `CvxPortfolio`, **`Market`**.
 - **Profiles**: `MinVar`, `HRP`, `MaxSharpe`, `Antifragile Barbell`, `BuyHold`.
 
@@ -80,7 +90,7 @@ To minimize compute overhead, the framework implements **Weight Caching**. For e
 1.  All enabled **Engines** generate weights for each **Profile**.
 2.  The resulting weights are cached in-memory.
 3.  All enabled **Simulators** consume the cached weights to compute realized performance.
-    - *Result*: Optimization happens once ({eng} \times N_{prof}$), Simulation happens {sim}$ times.
+    - *Result*: Optimization happens once ($N_{eng} \times N_{prof}$), Simulation happens $N_{sim}$ times.
 
 ### 7.4 Alpha Decay Audit
 The report includes an "Alpha Decay" table per profile, calculating the delta between Idealized Sharpe (zero friction) and Realized Sharpe (with slippage/commission).

@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -104,10 +106,6 @@ class CvxPortfolioSimulator(BaseSimulator):
         settings = get_settings()
 
         # 1. Prepare Data
-        # cvxportfolio expects returns and optionally volumes/prices.
-        # For simplicity in this bridge, we use the provided returns.
-        # We add a cash asset (stablecoin) as required by cvxportfolio.
-
         returns = test_data.copy()
         if not isinstance(returns.index, pd.DatetimeIndex):
             returns.index = pd.to_datetime(returns.index)
@@ -119,12 +117,10 @@ class CvxPortfolioSimulator(BaseSimulator):
             returns.index = returns.index.tz_convert("UTC")
 
         cash_key = settings.backtest_cash_asset
-        # Minimal returns for cash (0.0 unless we have data)
         returns[cash_key] = 0.0
 
         # 2. Define Policy (Fixed weights from optimizer)
         weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
-        # Only use symbols present in test_data
         available_symbols = [s for s in weights_df["Symbol"] if s in test_data.columns]
         weights_sub = weights_df[weights_df["Symbol"].isin(available_symbols)].copy()
 
@@ -144,31 +140,17 @@ class CvxPortfolioSimulator(BaseSimulator):
         policy = self.cvp.FixedWeights(w_series)
 
         # 3. Define Simulator with Friction
-        # We use transaction cost and holding cost models
-        tcost = self.cvp.TransactionCost(
-            a=settings.backtest_slippage,
-            b=0.0,  # No non-linear impact for now as we don't pass volumes
-        )
-
-        # Add commission as a separate term if needed, or bundle in 'a'
-        # cvxportfolio doesn't have a direct 'commission' param in TCost,
-        # but 'a' is the linear term (half-spread + commission).
         linear_friction = settings.backtest_slippage + settings.backtest_commission
 
         # cvxportfolio has a default min_history of 252 days.
-        # We need to disable or lower it for short test windows.
         try:
             simulator = self.cvp.MarketSimulator(returns=returns, costs=[self.cvp.TransactionCost(a=linear_friction)], cash_key=cash_key, min_history=pd.Timedelta(days=0))
         except Exception:
-            # Fallback if min_history is not supported in this version's init
             simulator = self.cvp.MarketSimulator(returns=returns, costs=[self.cvp.TransactionCost(a=linear_friction)], cash_key=cash_key)
 
         # 4. Run Simulation
         try:
-            # We run for the test_data period
             result = simulator.backtest(policy, start_time=test_data.index[0], end_time=test_data.index[-1])
-
-            # Extract realized daily returns (growth of total value)
             v = result.v  # portfolio value over time
             realized_returns = v.pct_change().dropna()
 
@@ -181,8 +163,73 @@ class CvxPortfolioSimulator(BaseSimulator):
             return ReturnsSimulator().simulate(test_data, weights_df)
 
 
+class VectorBTSimulator(BaseSimulator):
+    """
+    High-performance simulator using vectorbt.
+    Vectorized returns-based rebalancing with friction modeling.
+    """
+
+    def __init__(self):
+        try:
+            import vectorbt as vbt
+
+            self.vbt = vbt
+        except ImportError:
+            self.vbt = None
+            logger.warning("vectorbt not installed. VectorBTSimulator unavailable.")
+
+    def simulate(
+        self,
+        test_data: pd.DataFrame,
+        weights_df: pd.DataFrame,
+    ) -> Dict[str, Any]:
+        if self.vbt is None:
+            return ReturnsSimulator().simulate(test_data, weights_df)
+
+        settings = get_settings()
+
+        # 1. Align and Filter
+        weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
+        available = [s for s in weights_df["Symbol"] if s in test_data.columns]
+        if not available:
+            return ReturnsSimulator().simulate(test_data, weights_df)
+
+        w_series = weights_df.set_index("Symbol")[weight_col].reindex(available).fillna(0.0)
+        abs_sum = float(w_series.abs().sum())
+        if abs_sum > 1.0:
+            w_series = w_series / abs_sum
+
+        rets = test_data[available].fillna(0.0)
+
+        # 2. Build Portfolio
+        try:
+            # Rebalancing once at the start of the window
+            vbt_any = cast(Any, self.vbt)
+            pf = vbt_any.Portfolio.from_returns(
+                rets,
+                weights=w_series,
+                fees=settings.backtest_commission,
+                slippage=settings.backtest_slippage,
+                freq="D",
+                init_cash=100.0,
+            )
+
+            realized_returns = pf.returns()
+
+            res = calculate_performance_metrics(realized_returns)
+            res["daily_returns"] = realized_returns
+            return res
+
+        except Exception as e:
+            logger.error(f"vectorbt simulation failed: {e}")
+            return ReturnsSimulator().simulate(test_data, weights_df)
+
+
 def build_simulator(name: str = "custom") -> BaseSimulator:
     """Factory to build the requested simulator."""
-    if name.lower() == "cvxportfolio":
+    n = name.lower()
+    if n == "cvxportfolio":
         return CvxPortfolioSimulator()
+    if n == "vectorbt":
+        return VectorBTSimulator()
     return ReturnsSimulator()

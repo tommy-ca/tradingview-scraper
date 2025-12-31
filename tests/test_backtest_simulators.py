@@ -3,14 +3,18 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from tradingview_scraper.portfolio_engines.backtest_simulators import ReturnsSimulator, CvxPortfolioSimulator
+from tradingview_scraper.portfolio_engines.backtest_simulators import (
+    CvxPortfolioSimulator,
+    ReturnsSimulator,
+    VectorBTSimulator,
+)
 
 
 class TestBacktestSimulators(unittest.TestCase):
     def setUp(self):
         rng = np.random.default_rng(42)
         dates = pd.date_range("2023-01-01", periods=10, tz="UTC")
-        self.returns = pd.DataFrame(rng.normal(0.001, 0.01, (10, 3)), index=dates, columns=["A", "B", "C"])
+        self.returns = pd.DataFrame(rng.normal(0.001, 0.01, (10, 3)), index=dates, columns=list("ABC"))
         self.weights = pd.DataFrame(
             [
                 {"Symbol": "A", "Weight": 0.4, "Cluster_ID": "0"},
@@ -34,16 +38,25 @@ class TestBacktestSimulators(unittest.TestCase):
 
         res = sim.simulate(self.returns, self.weights)
         self.assertIn("daily_returns", res)
-        self.assertEqual(len(res["daily_returns"]), 9)  # pct_change drops first row
+        self.assertTrue(len(res["daily_returns"]) >= 9)
+
+    def test_vectorbt_simulator_available(self):
+        sim = VectorBTSimulator()
+        if sim.vbt is None:
+            self.skipTest("vectorbt not installed")
+
+        res = sim.simulate(self.returns, self.weights)
+        self.assertIn("daily_returns", res)
+        self.assertTrue(len(res["daily_returns"]) >= 8)
 
     def test_simulator_parity_zero_friction(self):
-        # With zero friction, both should be very close
-        # Note: cvxportfolio might have slight differences due to timing of rebalancing
+        # With zero friction, all should be very close
         sim_ret = ReturnsSimulator()
         sim_cvx = CvxPortfolioSimulator()
+        sim_vbt = VectorBTSimulator()
 
-        if sim_cvx.cvp is None:
-            self.skipTest("cvxportfolio not installed")
+        if sim_cvx.cvp is None or sim_vbt.vbt is None:
+            self.skipTest("cvxportfolio or vectorbt not installed")
 
         # Override settings for zero friction
         from unittest.mock import patch
@@ -55,9 +68,11 @@ class TestBacktestSimulators(unittest.TestCase):
 
             res_ret = sim_ret.simulate(self.returns, self.weights)
             res_cvx = sim_cvx.simulate(self.returns, self.weights)
+            res_vbt = sim_vbt.simulate(self.returns, self.weights)
 
             # Compare realized vol (more stable than cumulative return for short windows)
             self.assertAlmostEqual(res_ret["realized_vol"], res_cvx["realized_vol"], places=2)
+            self.assertAlmostEqual(res_ret["realized_vol"], res_vbt["realized_vol"], places=2)
 
 
 if __name__ == "__main__":

@@ -69,6 +69,7 @@ engines = [
 # Advanced analytics and tear-sheets.
 analytics = [
     "quantstats>=0.0.62",
+    "vectorbt>=0.26.2",
 ]
 
 # NOTE: `cvxportfolio` is GPL-3.0; keep isolated.

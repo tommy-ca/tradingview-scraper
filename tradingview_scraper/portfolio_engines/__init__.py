@@ -2,6 +2,7 @@ from .backtest_simulators import (
     BaseSimulator,
     CvxPortfolioSimulator,
     ReturnsSimulator,
+    VectorBTSimulator,
     build_simulator,
 )
 from .base import (
@@ -17,6 +18,7 @@ __all__ = [
     "BaseSimulator",
     "ReturnsSimulator",
     "CvxPortfolioSimulator",
+    "VectorBTSimulator",
     "build_simulator",
     "BaseRiskEngine",
     "EngineRequest",

@@ -109,7 +109,8 @@
       },
       "tournament": {
         "engines": "market,custom",
-        "profiles": "min_variance,hrp"
+        "profiles": "min_variance,hrp",
+        "simulators": "custom,cvxportfolio,vectorbt"
       },
       "discovery": {
         "enabled_markets": ["futures", "crypto"],
