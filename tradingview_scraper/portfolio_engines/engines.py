@@ -350,7 +350,8 @@ class SkfolioEngine(CustomClusteredEngine):
             model = HierarchicalRiskParity(risk_measure=RiskMeasure.VARIANCE)
         else:
             if request.profile == "max_sharpe":
-                model = MeanRisk(objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_measure=RiskMeasure.VARIANCE)
+                # L2 Regularization to match Custom engine robustness
+                model = MeanRisk(objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_measure=RiskMeasure.VARIANCE, l2_coef=0.05)
             else:
                 model = MeanRisk(objective_function=ObjectiveFunction.MINIMIZE_RISK, risk_measure=RiskMeasure.VARIANCE)
         try:
@@ -426,7 +427,8 @@ class RiskfolioEngine(CustomClusteredEngine):
             port = rp.Portfolio(returns=X)
             port.assets_stats(method_mu="hist", method_cov="ledoit")
             obj = "Sharpe" if request.profile == "max_sharpe" else "MinRisk"
-            w = port.optimization(model="Classic", rm="MV", obj=obj, rf=cast(Any, float(request.risk_free_rate)), l=0)
+            # L2 Regularization (Ridge) enabled with l=0.05
+            w = port.optimization(model="Classic", rm="MV", obj=obj, rf=cast(Any, float(request.risk_free_rate)), l=0.05)
         w_series = w.iloc[:, 0] if isinstance(w, pd.DataFrame) else pd.Series(w)
         return _enforce_cap_series(w_series.reindex(X.columns).fillna(0.0).astype(float), cap)
 

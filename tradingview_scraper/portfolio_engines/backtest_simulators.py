@@ -254,17 +254,50 @@ class VectorBTSimulator(BaseSimulator):
 
         try:
             vbt_any = cast(Any, self.vbt)
-            pf = vbt_any.Portfolio.from_returns(
-                test_data[available].fillna(0.0),
-                weights=w_series,
+            # Convert returns to cumulative prices
+            returns_data = test_data[available].fillna(0.0)
+            prices = (1.0 + returns_data).cumprod()
+
+            # Align weights to the full test window index
+            # If w_series is just a Series of weights, broadcast it to all dates
+            full_weights = pd.DataFrame(
+                np.tile(w_series.values, (len(prices), 1)),
+                index=prices.index,
+                columns=prices.columns
+            )
+
+            pf = vbt_any.Portfolio.from_orders(
+                prices,
+                size=full_weights,
+                size_type="targetpercent",
                 fees=settings.backtest_commission,
                 slippage=settings.backtest_slippage,
                 freq="D",
                 init_cash=100.0,
             )
+            # pf.returns() may return a DataFrame if not grouped; we want the aggregate portfolio returns
+            # For a portfolio with cash sharing (default), returns() is the daily portfolio return series.
             realized_returns = pf.returns()
+            if isinstance(realized_returns, pd.DataFrame):
+                realized_returns = realized_returns.iloc[:, 0]
+
             res = calculate_performance_metrics(realized_returns)
             res["daily_returns"] = realized_returns
+            
+            # Extract Turnover (Average Daily Turnover)
+            try:
+                # Try accessing standard stats first (robust if available)
+                stats = pf.stats(metrics=["Turnover"])
+                if "Turnover" in stats:
+                    res["turnover"] = float(stats["Turnover"])
+                else:
+                    # Fallback: (Total Value Traded / Average Value)
+                    total_traded = pf.trades.value.sum() if hasattr(pf, 'trades') else 0.0
+                    avg_val = pf.value().mean()
+                    res["turnover"] = float(total_traded / avg_val) if avg_val > 0 else 0.0
+            except Exception:
+                res["turnover"] = 0.0
+
             return res
         except Exception as e:
             logger.error(f"vectorbt failed: {e}")
