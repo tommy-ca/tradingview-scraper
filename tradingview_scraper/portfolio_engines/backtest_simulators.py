@@ -258,10 +258,11 @@ class VectorBTSimulator(BaseSimulator):
             returns_data = test_data[available].fillna(0.0)
             prices = (1.0 + returns_data).cumprod()
 
-            # Align weights to the full test window index
-            # If w_series is just a Series of weights, broadcast it to all dates
+            # Align weights: create a DataFrame where every row is the target weights
+            # Ensure columns match prices columns exactly
+            w_values = w_series.values.reshape(1, -1) # Shape (1, n_assets)
             full_weights = pd.DataFrame(
-                np.tile(w_series.values, (len(prices), 1)),
+                np.tile(w_values, (len(prices), 1)),
                 index=prices.index,
                 columns=prices.columns
             )
@@ -272,9 +273,12 @@ class VectorBTSimulator(BaseSimulator):
                 size_type="targetpercent",
                 fees=settings.backtest_commission,
                 slippage=settings.backtest_slippage,
-                freq="D",
+                # freq="D", # Removed to rely on index
                 init_cash=100.0,
+                cash_sharing=True,
+                group_by=True,
             )
+            
             # pf.returns() may return a DataFrame if not grouped; we want the aggregate portfolio returns
             # For a portfolio with cash sharing (default), returns() is the daily portfolio return series.
             realized_returns = pf.returns()
@@ -286,15 +290,23 @@ class VectorBTSimulator(BaseSimulator):
             
             # Extract Turnover (Average Daily Turnover)
             try:
-                # Try accessing standard stats first (robust if available)
-                stats = pf.stats(metrics=["Turnover"])
-                if "Turnover" in stats:
-                    res["turnover"] = float(stats["Turnover"])
+                # Robust way: Use Orders (Executions)
+                # Value Traded = Size * Price for all orders
+                if hasattr(pf, 'orders') and hasattr(pf.orders, 'records_readable'):
+                    orders_rec = pf.orders.records_readable
+                    if not orders_rec.empty and 'Size' in orders_rec.columns and 'Price' in orders_rec.columns:
+                        total_traded = (orders_rec['Size'] * orders_rec['Price']).sum()
+                        avg_val = pf.value().mean()
+                        res["turnover"] = float(total_traded / avg_val) if avg_val > 0 else 0.0
+                    else:
+                        res["turnover"] = 0.0
                 else:
-                    # Fallback: (Total Value Traded / Average Value)
-                    total_traded = pf.trades.value.sum() if hasattr(pf, 'trades') else 0.0
-                    avg_val = pf.value().mean()
-                    res["turnover"] = float(total_traded / avg_val) if avg_val > 0 else 0.0
+                    # Fallback to stats if orders not available
+                    stats = pf.stats(metrics=["Turnover"])
+                    if "Turnover" in stats:
+                        res["turnover"] = float(stats["Turnover"])
+                    else:
+                        res["turnover"] = 0.0
             except Exception:
                 res["turnover"] = 0.0
 
