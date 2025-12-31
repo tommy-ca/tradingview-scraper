@@ -101,7 +101,10 @@
             "feat_spectral_regimes": { "type": "boolean" },
             "feat_decay_audit": { "type": "boolean" },
             "feat_audit_ledger": { "type": "boolean" },
-            "feat_pit_fidelity": { "type": "boolean" }
+            "feat_pit_fidelity": { "type": "boolean" },
+            "feat_rebalance_mode": { "type": "string", "enum": ["daily", "window"] },
+            "feat_short_costs": { "type": "boolean" },
+            "short_borrow_cost": { "type": "number" }
           },
           "additionalProperties": false
         }

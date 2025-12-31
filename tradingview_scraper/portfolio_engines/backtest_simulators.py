@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -42,6 +42,7 @@ class ReturnsSimulator(BaseSimulator):
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
+        settings = get_settings()
         weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
         weights_series = weights_df.set_index("Symbol")[weight_col].astype(float)
         symbols = [s for s in weights_series.index if s in test_data.columns]
@@ -55,25 +56,55 @@ class ReturnsSimulator(BaseSimulator):
         if normalizer <= 0:
             return calculate_performance_metrics(pd.Series(dtype=float))
 
-        w_norm = cast(pd.Series, w / normalizer)
+        w_target = cast(pd.Series, w / normalizer)
 
-        # Daily Rebalancing Logic:
-        # returns_t = sum(w_target * asset_return_t)
-        # This assumes the portfolio is reset to the target weights at the end of each day.
-        daily_np = (np.asarray(test_data[symbols], dtype=float) * w_norm.values).sum(axis=1)
-        daily_returns = pd.Series(daily_np, index=test_data.index).dropna()
+        # Borrow costs application
+        returns_mtx = test_data[symbols].copy()
+        total_borrow_cost = 0.0
+        num_days = len(returns_mtx)
+        if settings.features.feat_short_costs:
+            borrow_daily = settings.features.short_borrow_cost / 252.0
+            for sym in symbols:
+                if w_target[sym] < 0:
+                    returns_mtx[sym] = returns_mtx[sym] - borrow_daily
+                    total_borrow_cost += abs(float(w_target[sym])) * borrow_daily * num_days
+
+        # Simulation Mode: Daily Reset vs. Window Drift
+        if settings.features.feat_rebalance_mode == "window":
+            # Set weights on Day 1, let them drift
+            daily_returns_list = []
+            curr_w = w_target.values
+            for i in range(len(returns_mtx)):
+                r_day = returns_mtx.iloc[i].values
+                # Portfolio return for the day
+                port_ret = np.sum(curr_w * r_day)
+                daily_returns_list.append(port_ret)
+                # Update weights for next day (Drift)
+                # w_next = w_prev * (1 + r_asset) / (1 + r_port)
+                # Note: we handle the case where port_ret is -1.0 (bankruptcy)
+                denom = 1.0 + port_ret
+                if abs(denom) < 1e-9:
+                    curr_w = np.zeros_like(curr_w)
+                else:
+                    curr_w = curr_w * (1.0 + r_day) / denom
+            daily_returns = pd.Series(daily_returns_list, index=test_data.index)
+        else:
+            # Daily Rebalancing Logic (Legacy/Reset)
+            daily_np = (np.asarray(returns_mtx, dtype=float) * w_target.values).sum(axis=1)
+            daily_returns = pd.Series(daily_np, index=test_data.index).dropna()
 
         res = calculate_performance_metrics(daily_returns)
         res["daily_returns"] = daily_returns
+        res["borrow_costs"] = total_borrow_cost
 
-        # Idealized Turnover: sum of abs delta between start weights and target weights
+        # Idealized Turnover
         if initial_holdings is not None:
-            combined_index = initial_holdings.index.union(w_norm.index)
+            combined_index = initial_holdings.index.union(w_target.index)
             h_start = initial_holdings.reindex(combined_index, fill_value=0.0)
-            h_target = w_norm.reindex(combined_index, fill_value=0.0)
+            h_target = w_target.reindex(combined_index, fill_value=0.0)
             res["turnover"] = float(np.abs(h_target.to_numpy() - h_start.to_numpy()).sum()) / 2.0
         else:
-            res["turnover"] = 1.0  # 100% buy if starting from cash
+            res["turnover"] = 1.0
 
         return res
 
@@ -128,22 +159,34 @@ class CvxPortfolioSimulator(BaseSimulator):
         w_series = w_series.reindex(returns.columns, fill_value=0.0)
         w_series[cash_key] = 1.0 - w_series.drop(cash_key).abs().sum()
 
-        policy = self.cvp.FixedWeights(w_series)
-        friction = settings.backtest_slippage + settings.backtest_commission
+        # Policy Selection: Daily Reset vs. Window Drift
+        if settings.features.feat_rebalance_mode == "window":
+            # Rebalance on Day 1, then HOLD (Drift)
+            # We provide a DataFrame where only the first row is defined
+            w_df = pd.DataFrame(index=returns.index, columns=w_series.index)
+            w_df.iloc[0] = w_series
+            policy = self.cvp.FixedWeights(w_df)
+        else:
+            # Daily rebalance to target (Reset)
+            policy = self.cvp.FixedWeights(w_series)
 
-        # Prepare initial weights for transition modeling
+        # Costs
+        cost_list: List[Any] = [self.cvp.TransactionCost(a=settings.backtest_slippage + settings.backtest_commission)]
+        if settings.features.feat_short_costs:
+            cost_list.append(self.cvp.HoldingCost(short_fees=settings.features.short_borrow_cost))
+
+        # Initial weights for the very first trade (transition from previous window)
         h_init = None
         if initial_holdings is not None:
             h_init = initial_holdings.reindex(returns.columns, fill_value=0.0)
-            # Re-normalize just in case
             h_sum = h_init.abs().sum()
             if h_sum > 0:
                 h_init = h_init / h_sum
 
         try:
-            simulator = self.cvp.MarketSimulator(returns=returns, costs=[self.cvp.TransactionCost(a=friction)], cash_key=cash_key, min_history=pd.Timedelta(days=0))
-            # If h_init is provided, pass it to backtest as 'h'
+            simulator = self.cvp.MarketSimulator(returns=returns, costs=cost_list, cash_key=cash_key, min_history=pd.Timedelta(days=0))
             result = simulator.backtest(policy, start_time=test_data.index[0], end_time=test_data.index[-1], h=h_init)
+
             realized_returns = result.v.pct_change().dropna()
 
             res = calculate_performance_metrics(realized_returns)
@@ -151,6 +194,26 @@ class CvxPortfolioSimulator(BaseSimulator):
             # Return final weights for next window
             res["final_weights"] = result.w.iloc[-1]
             res["turnover"] = float(result.turnover.sum())  # Total turnover for the period
+
+            # Extract borrow costs if present
+            # cvxportfolio costs are Series indexed by time
+            # result.costs is a list of costs series if multiple costs
+            b_cost = 0.0
+            if settings.features.feat_short_costs and len(cost_list) > 1:
+                # Assuming HoldingCost is the second one
+                # Actually it's safer to look at result.costs
+                # result.costs is a DataFrame in newer versions or list
+                try:
+                    # Sum the specific cost series
+                    # If it's a DataFrame, it might have columns
+                    if isinstance(result.costs, pd.DataFrame):
+                        # Filter columns that look like holding costs
+                        h_cols = [c for c in result.costs.columns if "HoldingCost" in str(c)]
+                        if h_cols:
+                            b_cost = float(result.costs[h_cols].sum().sum())
+                except:
+                    pass
+            res["borrow_costs"] = b_cost
             return res
         except Exception as e:
             logger.error(f"cvxportfolio failed: {e}")

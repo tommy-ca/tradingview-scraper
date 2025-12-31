@@ -86,7 +86,10 @@
         "feat_spectral_regimes": false,
         "feat_decay_audit": false,
         "feat_audit_ledger": false,
-        "feat_pit_fidelity": false
+        "feat_pit_fidelity": false,
+        "feat_rebalance_mode": "daily",
+        "feat_short_costs": false,
+        "short_borrow_cost": 0.02
       }
     },
     "production_v2_canary": {
@@ -139,11 +142,14 @@
         "feat_spectral_regimes": true,
         "feat_decay_audit": true,
         "feat_audit_ledger": true,
-        "feat_pit_fidelity": true
+        "feat_pit_fidelity": true,
+        "feat_rebalance_mode": "window",
+        "feat_short_costs": true,
+        "short_borrow_cost": 0.02
       }
-
     },
     "repro_dev": {
+
       "description": "Lightweight reproducible development profile",
       "data": {
         "lookback_days": 60,
@@ -170,7 +176,10 @@
         "feat_spectral_regimes": true,
         "feat_decay_audit": true,
         "feat_audit_ledger": true,
-        "feat_pit_fidelity": true
+        "feat_pit_fidelity": true,
+        "feat_rebalance_mode": "window",
+        "feat_short_costs": true,
+        "short_borrow_cost": 0.02
       }
     }
 

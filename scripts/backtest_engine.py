@@ -251,10 +251,19 @@ class BacktestEngine:
                                 "sharpe": perf["sharpe"],
                                 "max_drawdown": perf["max_drawdown"],
                                 "turnover": perf.get("turnover", 0.0),
+                                "borrow_costs": perf.get("borrow_costs", 0.0),
                                 "n_assets": len(weights_df),
                                 "top_assets": cast(Any, weights_df.head(5)).to_dict(orient="records"),
                             }
                         )
+
+                        if ledger:
+                            ledger.record_outcome(
+                                step="backtest_simulate",
+                                status="success",
+                                output_hashes={"test_returns": get_df_hash(perf["daily_returns"])},
+                                metrics={"engine": eng, "profile": prof, "sim": s_name, "sharpe": perf["sharpe"], "turnover": perf.get("turnover", 0.0)},
+                            )
                         cumulative[(s_name, eng, prof)] = pd.concat([cumulative[(s_name, eng, prof)], perf["daily_returns"]])
                     except Exception as e:
                         results[s_name][eng][prof].setdefault("errors", []).append(str(e))

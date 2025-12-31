@@ -69,6 +69,23 @@ To eliminate the "First-Trade Bias" (where starting from 100% cash creates an ar
 - **Initialization**: If found, the weights of the *first* walk-forward window are compared against these actual holdings. Transaction costs are only calculated for the delta.
 - **Fallback**: If no state file exists, the simulation assumes a start from 100% Cash (Institutional Conservative bias).
 
+## 12. Rebalance Fidelity (Drift vs. Reset)
+
+The framework supports two rebalancing modes controlled by the `feat_rebalance_mode` flag:
+
+### 12.1 Daily Reset (`daily`)
+The portfolio is mathematically reset to the target weights at the end of every trading day. This is the legacy research mode used for purely statistical risk-parity studies. It ignores the "Drift Risk" that occurs when assets diverge within a rebalance period.
+
+### 12.2 Window Drift (`window`)
+Target weights are established only on the first day of the walk-forward window. Assets are allowed to drift based on their realized price returns for the remainder of the period (e.g., 20 days). This provides a high-fidelity validation of the actual implementation slippage.
+
+## 13. Directional Integrity (Scanner-Locked)
+
+To maintain strategy-locked alpha, the backtester enforces **Scanner-Locked Directions**:
+- **Long-Only Scanners**: Assets discovered via long-only technical filters are strictly constrained to positive weights ($w \ge 0$).
+- **Short-Only Scanners**: Assets discovered via short-only technical filters are strictly constrained to negative weights ($w \le 0$).
+- **Borrow Costs**: Simulators apply an annualized borrow fee (default 2% p.a., gated by `feat_short_costs`) to all short positions to reflect institutional financing friction.
+
 ## 6. Institutional Standards (2025 Standard)
 ...
 

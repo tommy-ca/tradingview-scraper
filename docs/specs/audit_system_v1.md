@@ -77,7 +77,12 @@ A standalone utility `scripts/verify_ledger.py` is provided to "replay" the audi
   },
   "outcome": {
     "output_hashes": { "window_weights": "sha256...", "test_returns": "sha256..." },
-    "metrics": { "realized_sharpe": 1.4, "turnover": 0.12 }
+    "metrics": { 
+      "realized_sharpe": 1.4, 
+      "turnover": 0.12,
+      "drift_decay": -0.002,
+      "borrow_costs": 0.0005
+    }
   },
   "prev_hash": "...",
   "hash": "..."

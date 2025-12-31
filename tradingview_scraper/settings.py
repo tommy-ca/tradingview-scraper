@@ -29,6 +29,9 @@ class FeatureFlags(BaseModel):
     feat_decay_audit: bool = False
     feat_audit_ledger: bool = False
     feat_pit_fidelity: bool = False
+    feat_rebalance_mode: str = "daily"  # "daily" or "window"
+    feat_short_costs: bool = False
+    short_borrow_cost: float = 0.02  # 2% p.a.
 
 
 class ManifestSettingsSource(PydanticBaseSettingsSource):
