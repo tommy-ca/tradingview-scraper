@@ -88,8 +88,13 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
         sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
         max_drawdown_qs = float(qs.stats.max_drawdown(rets))
         var_95 = float(qs.stats.value_at_risk(rets_j, sigma=1, confidence=0.95))
+
+        # Guard for CVaR calculation to avoid Mean of empty slice warning
         try:
-            cvar_95 = float(qs.stats.expected_shortfall(rets_j, sigma=1, confidence=0.95))
+            if any(rets_j < var_95):
+                cvar_95 = float(qs.stats.expected_shortfall(rets_j, sigma=1, confidence=0.95))
+            else:
+                cvar_95 = var_95
         except Exception:
             cvar_95 = var_95
 

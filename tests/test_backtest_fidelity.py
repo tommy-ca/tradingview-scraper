@@ -20,8 +20,11 @@ from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileNam
 @pytest.fixture
 def sample_returns(tmp_path):
     """Create a synthetic returns matrix for testing."""
+    # Seed for reproducibility
+    rng = np.random.default_rng(42)
     dates = pd.date_range("2023-01-01", periods=100, tz="UTC")
-    df = pd.DataFrame(np.random.normal(0.001, 0.02, (100, 5)), index=dates, columns=["A", "B", "C", "D", "E"])  # type: ignore
+    # Using a slightly negative mean to ensure some negative values for CVaR
+    df = pd.DataFrame(rng.normal(-0.001, 0.02, (100, 5)), index=dates, columns=["A", "B", "C", "D", "E"])  # type: ignore
     # Force some volatility differences for PIT testing
     df["E"] = df["E"] * 5  # High risk asset
 

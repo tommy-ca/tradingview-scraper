@@ -79,7 +79,7 @@ class BacktestEngine:
         simulator = build_simulator(simulator_name)
 
         results = []
-        cumulative_returns = pd.Series(dtype=float)
+        cumulative_list = []
         prev_w_series = pd.Series(dtype=float)
 
         total_len = len(self.returns)
@@ -121,8 +121,9 @@ class BacktestEngine:
                 "top_assets": cast(Any, weights_df.head(5)).to_dict(orient="records"),
             }
             results.append(window_res)
-            cumulative_returns = pd.concat([cumulative_returns, test_perf["daily_returns"]])
+            cumulative_list.append(test_perf["daily_returns"])
 
+        cumulative_returns = cast(pd.Series, pd.concat(cumulative_list)) if cumulative_list else pd.Series(dtype=float)
         summary = self._summarize_results(results, cumulative_returns)
         return {"summary": summary, "windows": results}
 
@@ -144,7 +145,7 @@ class BacktestEngine:
 
         available_engines = set(list_available_engines())
         results: Dict[str, Dict[str, Any]] = {s: {} for s in sim_names}
-        cumulative: Dict[tuple[str, str, str], pd.Series] = {}
+        cumulative: Dict[tuple[str, str, str], List[pd.Series]] = {}
         prev_weights: Dict[tuple[str, str, str], pd.Series] = {}
 
         # Warm-Start Initialization
@@ -164,7 +165,7 @@ class BacktestEngine:
                     continue
                 for prof in profiles if eng != "market" else ["min_variance"]:
                     results[s][eng][prof] = {"windows": [], "summary": None}
-                    cumulative[(s, eng, prof)] = pd.Series(dtype=float)
+                    cumulative[(s, eng, prof)] = []
                     # Initialize with warm-start holdings if available
                     prev_weights[(s, eng, prof)] = initial_holdings.get(prof, pd.Series(dtype=float))
 
@@ -264,7 +265,7 @@ class BacktestEngine:
                                 output_hashes={"test_returns": get_df_hash(perf["daily_returns"])},
                                 metrics={"engine": eng, "profile": prof, "sim": s_name, "sharpe": perf["sharpe"], "turnover": perf.get("turnover", 0.0)},
                             )
-                        cumulative[(s_name, eng, prof)] = pd.concat([cumulative[(s_name, eng, prof)], perf["daily_returns"]])
+                        cumulative[(s_name, eng, prof)].append(perf["daily_returns"])
                     except Exception as e:
                         results[s_name][eng][prof].setdefault("errors", []).append(str(e))
 
@@ -275,11 +276,13 @@ class BacktestEngine:
                 for prof, p_data in prof_map.items():
                     if prof == "_status" or not p_data.get("windows"):
                         continue
-                    p_data["summary"] = self._summarize_results(p_data["windows"], cumulative[(s_name, eng, prof)])
+
+                    full_rets = cast(pd.Series, pd.concat(cumulative[(s_name, eng, prof)])) if cumulative[(s_name, eng, prof)] else pd.Series(dtype=float)
+                    p_data["summary"] = self._summarize_results(p_data["windows"], full_rets)
         return {
             "meta": {"train_window": train_window, "test_window": test_window, "simulators": sim_names},
             "results": results,
-            "returns": {f"{s}_{e}_{p}": v for (s, e, p), v in cumulative.items() if not v.empty},
+            "returns": {f"{s}_{e}_{p}": cast(pd.Series, pd.concat(v)) for (s, e, p), v in cumulative.items() if v},
         }
 
     def _cluster_data(self, df: pd.DataFrame, threshold: Optional[float] = None) -> Dict[str, List[str]]:
@@ -338,6 +341,19 @@ class BacktestEngine:
         from tradingview_scraper.utils.metrics import calculate_performance_metrics
 
         summary = calculate_performance_metrics(cumulative_returns)
+
+        if not windows:
+            summary.update(
+                {
+                    "total_cumulative_return": summary.get("total_return", 0.0),
+                    "avg_window_return": 0.0,
+                    "avg_window_sharpe": 0.0,
+                    "avg_turnover": 0.0,
+                    "win_rate": 0.0,
+                }
+            )
+            return summary
+
         summary.update(
             {
                 "total_cumulative_return": summary["total_return"],
