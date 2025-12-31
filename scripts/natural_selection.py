@@ -1,14 +1,15 @@
 import json
 import logging
 import os
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
 import scipy.cluster.hierarchy as sch
 from scipy.spatial.distance import squareform
 
-from tradingview_scraper.utils.scoring import calculate_liquidity_score, normalize_series
+from tradingview_scraper.settings import get_settings
+from tradingview_scraper.utils.scoring import calculate_liquidity_score, normalize_series, rank_series
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("natural_selection")
@@ -17,17 +18,121 @@ AUDIT_FILE = "data/lakehouse/selection_audit.json"
 
 
 def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculates a robust correlation matrix using intersection of active trading days
-    to avoid dilution from padding (e.g. TradFi weekends vs Crypto 24/7).
-    """
     if returns.empty:
         return pd.DataFrame()
-
-    # Vectorized correlation with min_periods requirement
-    # This handles active trading day intersections efficiently
     corr = returns.replace(0, np.nan).corr(min_periods=20)
     return corr.fillna(0.0)
+
+
+def run_selection(
+    returns: pd.DataFrame,
+    raw_candidates: List[Dict[str, Any]],
+    stats_df: Optional[pd.DataFrame] = None,
+    top_n: int = 2,
+    threshold: float = 0.5,
+    max_clusters: int = 25,
+    m_gate: float = 0.0,
+) -> List[Dict[str, Any]]:
+    """
+    Core selection logic that operates on DataFrames.
+    """
+    if returns.columns.empty or not raw_candidates:
+        return []
+
+    candidate_map = {c["symbol"]: c for c in raw_candidates}
+
+    lookbacks = [60, 120, 200]
+    available_len = len(returns)
+    valid_lookbacks = [l for l in lookbacks if l <= available_len] or [available_len]
+
+    dist_matrices = []
+    for l in valid_lookbacks:
+        corr = get_robust_correlation(returns.tail(l))
+        dist_matrices.append(np.sqrt(0.5 * (1 - corr.values.clip(-1, 1))))
+
+    avg_dist = np.mean(dist_matrices, axis=0)
+    avg_dist = (avg_dist + avg_dist.T) / 2
+    np.fill_diagonal(avg_dist, 0)
+
+    link = sch.linkage(squareform(avg_dist, checks=False), method="ward")
+    cluster_ids = sch.fcluster(link, t=threshold, criterion="distance") if threshold > 0 else sch.fcluster(link, t=max_clusters, criterion="maxclust")
+
+    clusters: Dict[int, List[str]] = {}
+    for sym, c_id in zip(returns.columns, cluster_ids):
+        cid = int(c_id)
+        if cid not in clusters:
+            clusters[cid] = []
+        clusters[cid].append(str(sym))
+
+    # --- ALPHA SCORES ---
+    settings = get_settings()
+    if settings.features.feat_xs_momentum:
+        # 1. CROSS-SECTIONAL MOMENTUM & ALPHA SCORES (Unified XS)
+        # We calculate these for the entire universe to ensure true XS ranking
+        mom_all = returns.mean() * 252
+        vol_all = returns.std() * np.sqrt(252)
+        stab_all = 1.0 / (vol_all + 1e-9)
+        liq_all = pd.Series({s: calculate_liquidity_score(s, candidate_map) for s in returns.columns})
+        conv_all = pd.Series(0.0, index=returns.columns)
+        if stats_df is not None:
+            common = [s for s in returns.columns if s in stats_df.index]
+            if common:
+                conv_all.loc[common] = stats_df.loc[common, "Antifragility_Score"]
+
+        # Unified Execution Alpha (XS) using rank_series for robustness
+        alpha_scores = 0.3 * rank_series(mom_all) + 0.2 * rank_series(stab_all) + 0.2 * rank_series(conv_all) + 0.3 * rank_series(liq_all)
+    else:
+        # Legacy placeholder - will be calculated per cluster
+        alpha_scores = pd.Series(0.0, index=returns.columns)
+
+    selected_symbols = []
+    for c_id, symbols in clusters.items():
+        # Sub-selection within clusters
+        sub_rets = returns[symbols]
+
+        # MOMENTUM GATE (Local window)
+        window = min(60, len(sub_rets))
+        sub_tail = sub_rets.tail(window)
+        cum_rets = (1 + sub_tail).prod() - 1
+        m_winners = cum_rets[cum_rets >= m_gate].index.tolist()
+
+        if not settings.features.feat_xs_momentum:
+            # LEGACY: Local normalization within cluster
+            mom_local = sub_rets.mean() * 252
+            vol_local = sub_rets.std() * np.sqrt(252)
+            stab_local = 1.0 / (vol_local + 1e-9)
+            conv_local = pd.Series(0.0, index=symbols)
+            if stats_df is not None:
+                common_local = [s for s in symbols if s in stats_df.index]
+                if common_local:
+                    conv_local.loc[common_local] = stats_df.loc[common_local, "Antifragility_Score"]
+            liq_local = pd.Series({s: calculate_liquidity_score(s, candidate_map) for s in symbols})
+
+            cluster_alpha = 0.3 * normalize_series(mom_local) + 0.2 * normalize_series(stab_local) + 0.2 * normalize_series(conv_local) + 0.3 * normalize_series(liq_local)
+            alpha_scores.loc[symbols] = cluster_alpha
+
+        id_to_best: Dict[str, str] = {}
+        for s in symbols:
+            ident = candidate_map.get(s, {}).get("identity", s)
+            if ident not in id_to_best or alpha_scores[s] > alpha_scores[id_to_best[ident]]:
+                id_to_best[ident] = s
+
+        uniques = list(id_to_best.values())
+
+        # LONG selection
+        longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and s in m_winners]
+        if longs:
+            # alpha_scores.loc[longs] returns a Series
+            top = cast(pd.Series, alpha_scores.loc[longs]).sort_values(ascending=False).head(top_n).index.tolist()
+            selected_symbols.extend([str(s) for s in top])
+
+        # SHORT selection
+        shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
+        if shorts:
+            top = cast(pd.Series, alpha_scores.loc[shorts]).sort_values(ascending=False).head(top_n).index.tolist()
+            selected_symbols.extend([str(s) for s in top])
+
+    return [candidate_map[s] if s in candidate_map else {"symbol": s, "direction": "LONG"} for s in selected_symbols]
 
 
 def natural_selection(
@@ -35,172 +140,42 @@ def natural_selection(
     meta_path: str = "data/lakehouse/portfolio_candidates_raw.json",
     stats_path: str = "data/lakehouse/antifragility_stats.json",
     output_path: str = "data/lakehouse/portfolio_candidates.json",
-    top_n_per_cluster: int = 3,  # Target Top 3 per direction
-    dist_threshold: float = 0.4,
+    top_n_per_cluster: Optional[int] = None,
+    dist_threshold: Optional[float] = None,
     max_clusters: int = 25,
+    min_momentum_score: Optional[float] = None,
 ):
+    settings = get_settings()
+    top_n = top_n_per_cluster if top_n_per_cluster is not None else settings.top_n
+    threshold = dist_threshold if dist_threshold is not None else settings.threshold
+    m_gate = min_momentum_score if min_momentum_score is not None else settings.min_momentum_score
+
     if not os.path.exists(returns_path) or not os.path.exists(meta_path):
-        logger.error("Returns matrix or raw candidates file missing.")
+        logger.error("Data missing.")
         return
 
-    # 1. Load Data
     with open(returns_path, "rb") as f_in:
-        returns_raw = pd.read_pickle(f_in)
-
-    if not isinstance(returns_raw, pd.DataFrame):
-        returns = pd.DataFrame(returns_raw)
-    else:
-        returns = returns_raw
+        returns = cast(pd.DataFrame, pd.read_pickle(f_in))
 
     with open(meta_path, "r") as f_meta:
         raw_candidates = json.load(f_meta)
 
-    if not raw_candidates or returns.columns.empty:
-        logger.warning("No candidates or returns available for selection.")
-        with open(output_path, "w") as f_out:
-            json.dump([], f_out)
-        return
+    stats_df = pd.read_json(stats_path).set_index("Symbol") if os.path.exists(stats_path) else None
 
-    candidate_map = {c["symbol"]: c for c in raw_candidates}
-
-    stats_df = None
-    if os.path.exists(stats_path):
-        stats_df = pd.read_json(stats_path).set_index("Symbol")
-
-    # Audit Data Collection with explicit typing
-    audit_selection: Dict[str, Any] = {"total_raw_symbols": len(returns.columns), "lookbacks_used": [], "clusters": {}, "total_selected": 0}
-
-    # 2. Multi-Lookback Persistent Clustering
-    lookbacks = [60, 120, 200]
-    available_len = len(returns)
-    valid_lookbacks = [l for l in lookbacks if l <= available_len]
-
-    if not valid_lookbacks:
-        valid_lookbacks = [available_len]
-
-    audit_selection["lookbacks_used"] = valid_lookbacks
-
-    logger.info(f"Natural Selection using multi-lookback: {valid_lookbacks}")
-
-    dist_matrices = []
-    for l in valid_lookbacks:
-        rets_subset = returns.tail(l)
-        corr = get_robust_correlation(rets_subset)
-        dist = np.sqrt(0.5 * (1 - corr.values.clip(-1, 1)))
-        dist_matrices.append(dist)
-
-    avg_dist_matrix = np.mean(dist_matrices, axis=0)
-    avg_dist_matrix = (avg_dist_matrix + avg_dist_matrix.T) / 2
-    np.fill_diagonal(avg_dist_matrix, 0)
-
-    condensed = squareform(avg_dist_matrix, checks=False)
-    link = sch.linkage(condensed, method="ward")
-
-    # Use distance-based threshold if provided, otherwise maxclust fallback
-    if dist_threshold > 0:
-        cluster_ids = sch.fcluster(link, t=dist_threshold, criterion="distance")
-    else:
-        cluster_ids = sch.fcluster(link, t=max_clusters, criterion="maxclust")
-
-    clusters: Dict[int, List[str]] = {}
-    for sym, c_id in zip(returns.columns, cluster_ids):
-        c_id_int = int(c_id)
-        if c_id_int not in clusters:
-            clusters[c_id_int] = []
-        clusters[c_id_int].append(str(sym))
-
-    logger.info(f"Natural Selection: Identified {len(clusters)} risk clusters from {len(returns.columns)} symbols (Target={max_clusters}).")
-
-    # 3. Selection within Clusters: Top LONG and Top SHORT
-    selected_symbols = []
-    for c_id, symbols in clusters.items():
-        # Alpha Ranking
-        sub_rets = returns[symbols]
-        mom = sub_rets.mean() * 252
-        vol = sub_rets.std() * np.sqrt(252)
-        stab = 1.0 / (vol + 1e-9)
-
-        conv = pd.Series(0.0, index=symbols)
-        if stats_df is not None:
-            common = [s for s in symbols if s in stats_df.index]
-            if common:
-                conv.loc[common] = stats_df.loc[common, "Antifragility_Score"]
-
-        # Liquidity Score (Value Traded + Spread Proxy)
-        liq = pd.Series({s: calculate_liquidity_score(s, candidate_map) for s in symbols})
-
-        # Map symbols to identities and directions
-        sym_to_ident = {s: candidate_map.get(s, {}).get("identity", s) for s in symbols}
-        directions = pd.Series({s: candidate_map.get(s, {}).get("direction", "LONG") for s in symbols})
-
-        alpha_scores = 0.3 * normalize_series(mom) + 0.2 * normalize_series(stab) + 0.2 * normalize_series(conv) + 0.3 * normalize_series(liq)
-
-        # Audit cluster info
-        audit_selection["clusters"][str(c_id)] = {"size": len(symbols), "members": symbols, "selected": []}
-
-        # --- REFINEMENT: Identity-based merging within cluster ---
-        # For each identity in this cluster, find the best symbol (venue)
-        identity_to_best_sym: Dict[str, str] = {}
-        for s in symbols:
-            ident = sym_to_ident[s]
-            if ident not in identity_to_best_sym or alpha_scores[s] > alpha_scores[identity_to_best_sym[ident]]:
-                identity_to_best_sym[ident] = s
-
-        # Best symbols are the unique candidates for this cluster
-        unique_cluster_candidates = list(identity_to_best_sym.values())
-
-        # Pick Top N LONGs from unique identities
-        long_syms = [s for s in unique_cluster_candidates if directions[s] == "LONG"]
-        if long_syms:
-            top_longs = alpha_scores[long_syms].sort_values(ascending=False).head(top_n_per_cluster).index.tolist()
-            selected_symbols.extend([str(s) for s in top_longs])
-            audit_selection["clusters"][str(c_id)]["selected"].extend([str(s) for s in top_longs])
-
-        # Pick Top N SHORTS from unique identities
-        short_syms = [s for s in unique_cluster_candidates if directions[s] == "SHORT"]
-        if short_syms:
-            top_shorts = alpha_scores[short_syms].sort_values(ascending=False).head(top_n_per_cluster).index.tolist()
-            selected_symbols.extend([str(s) for s in top_shorts])
-            audit_selection["clusters"][str(c_id)]["selected"].extend([str(s) for s in top_shorts])
-
-        n_sel = len([s for s in selected_symbols if s in symbols])
-        logger.info(f"  Cluster {c_id}: Selected {n_sel}/{len(symbols)} (L: {len(long_syms)}, S: {len(short_syms)}) [Merged {len(symbols) - len(unique_cluster_candidates)} redundant venues]")
-
-    # 4. Save Final Candidates
-    final_candidates = []
-    for sym in selected_symbols:
-        if sym in candidate_map:
-            # Metadata propagation: implementation_alternatives
-            final_candidates.append(candidate_map[sym])
-        else:
-            final_candidates.append({"symbol": sym, "direction": "LONG", "market": "UNKNOWN"})
-
-    audit_selection["total_selected"] = len(final_candidates)
+    winners = run_selection(returns, raw_candidates, stats_df, top_n, threshold, max_clusters, m_gate)
 
     with open(output_path, "w") as f_out:
-        json.dump(final_candidates, f_out, indent=2)
-
-    # Update Audit Log
-    full_audit: Dict[str, Any] = {}
-    if os.path.exists(AUDIT_FILE):
-        with open(AUDIT_FILE, "r") as f_audit:
-            full_audit = cast(Dict[str, Any], json.load(f_audit))
-
-    full_audit["selection"] = audit_selection
-    with open(AUDIT_FILE, "w") as f_audit_out:
-        json.dump(full_audit, f_audit_out, indent=2)
-
-    logger.info(f"Natural Selection Complete: Generated {len(final_candidates)} candidates in {output_path}")
-    logger.info(f"Audit log updated: {AUDIT_FILE}")
+        json.dump(winners, f_out, indent=2)
+    logger.info(f"Natural Selection Complete: {len(winners)} candidates.")
 
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--top-n", type=int, default=3, help="Number of symbols to pick per direction per cluster")
-    parser.add_argument("--threshold", type=float, default=0.4, help="Clustering distance threshold")
-    parser.add_argument("--max-clusters", type=int, default=25, help="Target maximum number of clusters")
+    parser.add_argument("--top-n", type=int)
+    parser.add_argument("--threshold", type=float)
+    parser.add_argument("--max-clusters", type=int, default=25)
+    parser.add_argument("--min-momentum", type=float)
     args = parser.parse_args()
-
-    natural_selection(top_n_per_cluster=args.top_n, dist_threshold=args.threshold, max_clusters=args.max_clusters)
+    natural_selection(top_n_per_cluster=args.top_n, dist_threshold=args.threshold, max_clusters=args.max_clusters, min_momentum_score=args.min_momentum)

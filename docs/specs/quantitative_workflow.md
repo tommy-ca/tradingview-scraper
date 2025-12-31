@@ -1,11 +1,33 @@
 # Specification: Quantitative Workflow Pipeline
 **Status**: Formalized
-**Date**: 2025-12-21
+**Date**: 2025-12-31
 
 ## 1. Overview
-This document defines the standardized pipeline for transforming raw market data into an optimized, multi-asset portfolio.
+This document defines the standardized pipeline for transforming raw market data into an optimized, multi-asset portfolio. The workflow is unified under a 13-step production sequence.
 
-## 2. Pipeline Stages
+## 2. The 13-Step Production Sequence
+
+The entire production lifecycle is managed via `make daily-run` and follows this rigorous sequence:
+
+1.  **Cleanup**: Wipe previous artifacts and intermediate files (`data/lakehouse/portfolio_*`) to ensure a clean state.
+2.  **Discovery**: Run multi-asset scanners (Equities, Crypto, Bonds, MTF Forex) in parallel using `make scan-all`.
+3.  **Aggregation**: Consolidate scans into a **Raw Pool** with canonical identity merging (Venue Neutrality) via `make portfolio-prep-raw`.
+4.  **Lightweight Prep**: Fetch **60-day** history for the raw pool to establish baseline correlations and tactical momentum.
+5.  **Natural Selection (Pruning)**: Hierarchical clustering on the raw pool; select **Top N Assets** per cluster using **Execution Alpha** (Momentum + Stability + Liquidity). Uses global cross-sectional ranking when `feat_xs_momentum` is enabled.
+6.  **Enrichment**: Propagate sectors, industries, and descriptions to the filtered winners.
+7.  **High-Integrity Prep**: Fetch **500-day** secular history for winners with automated gap-repair via `make align`.
+8.  **Health Audit**: Validate 100% gap-free alignment for the implementation universe. Triggers `make recover` if gaps are found.
+9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Intersection Correlation**.
+10. **Regime Detection**: Multi-factor analysis using **Entropy + DWT Spectral Turbulence** to categorize the market environment (Spectral triggers gated by `feat_spectral_regimes`).
+11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties** and **Turnover Control**, benchmarking across multiple engines (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
+12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators (200d realized target).
+13. **Reporting**: Generate QuantStats Markdown Tear-sheets, Strategy Resume, and sync essential artifacts to private Gist via `make finalize`.
+
+## 4. Audit & Reproducibility (Requirement)
+Every stage of the pipeline must contribute to the **Immutable Audit Ledger** (`audit.jsonl`).
+- **Intent Logging**: Scripts must log their expected inputs and parameters before starting.
+- **Outcome Verification**: Scripts must log the SHA-256 hashes of all generated DataFrames and JSON artifacts.
+- **Lineage**: The ledger must maintain a cryptographic chain from the Genesis manifest to the final portfolio reports.
 
 ### Stage 1: Discovery & Scans
 *   **Tools**: `tradingview_scraper.futures_universe_selector`, `tradingview_scraper.cfd_universe_selector`, `tradingview_scraper.bond_universe_selector`

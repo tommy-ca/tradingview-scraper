@@ -14,7 +14,7 @@ class TestBacktestSimulators(unittest.TestCase):
     def setUp(self):
         rng = np.random.default_rng(42)
         dates = pd.date_range("2023-01-01", periods=10, tz="UTC")
-        self.returns = pd.DataFrame(rng.normal(0.001, 0.01, (10, 3)), index=dates, columns=list("ABC"))
+        self.returns = pd.DataFrame(rng.normal(0.001, 0.01, (10, 3)), index=dates, columns=["A", "B", "C"])  # type: ignore
         self.weights = pd.DataFrame(
             [
                 {"Symbol": "A", "Weight": 0.4, "Cluster_ID": "0"},

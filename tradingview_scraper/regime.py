@@ -7,6 +7,8 @@ import pandas as pd
 import pywt  # type: ignore
 from scipy.stats import entropy
 
+from tradingview_scraper.settings import get_settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,5 +131,11 @@ class MarketRegimeDetector:
             regime = "QUIET"
         else:
             regime = "NORMAL"
+
+        # Refined labeling for DWT-heavy regimes
+        settings = get_settings()
+        if settings.features.feat_spectral_regimes and turbulence > 0.7 and regime != "CRISIS":
+            regime = "TURBULENT"
+            logger.info("Regime upgraded to TURBULENT due to high spectral noise.")
 
         return regime, float(regime_score)

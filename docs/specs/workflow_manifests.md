@@ -16,8 +16,23 @@ The manifest adheres to `configs/manifest.schema.json`. Key sections include:
 - **`risk`**: Hierarchical risk constraints (e.g., global cluster weight caps).
 - **`backtest`**: Walk-forward validation windows (Train/Test/Step) and simulator settings.
 - **`env`**: Environment variable overrides (e.g., GIST_ID, META_REFRESH).
+- **`features`**: Gradual rollout feature gates for 2026 Quantitative roadmap features.
 
-## 3. Profile Selection Logic
+## 3. Feature Gates (Gradual Rollout)
+
+To ensure stability while deploying high-impact quantitative upgrades, the system uses a `features` section in the manifest.
+
+| Flag Name | Controlled Logic | Default (`production`) |
+| :--- | :--- | :--- |
+| `feat_partial_rebalance` | Dust trade filtering & execution status in drift monitor. | `false` |
+| `feat_turnover_penalty` | L1-norm penalty in CVXPY optimization to reduce churn. | `false` |
+| `feat_xs_momentum` | Global percentile ranking instead of local normalization. | `false` |
+| `feat_spectral_regimes` | `TURBULENT` regime state & Dynamic Barbell Scaling. | `false` |
+| `feat_decay_audit` | Slippage decay section in Markdown reports. | `false` |
+
+Users can enable all 2026 features by using the `production_v2_canary` profile.
+
+## 4. Profile Selection Logic
 
 The system follows a strict hierarchy for resolving configuration values:
 

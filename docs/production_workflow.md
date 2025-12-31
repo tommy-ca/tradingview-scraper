@@ -4,19 +4,27 @@ This runbook documents the institutional "Golden Path" for daily portfolio gener
 
 ## 1. Automated Execution (Recommended)
 
-The entire production lifecycle is governed by **`configs/manifest.json`**, ensuring every run is 100% reproducible.
+The entire production lifecycle is governed by **`configs/manifest.json`** and managed via a typed Python orchestrator, ensuring every run is 100% reproducible and resumable.
 
 ### Daily Production Run
 ```bash
 # Run discovery + full 13-step pipeline (Default: production profile)
-make daily-run
+python -m scripts.run_production_pipeline --profile production
 
-# Run a lightweight development smoke-test
-make daily-run PROFILE=repro_dev
+# Run via Makefile wrapper (Legacy/Convenience)
+make daily-run PROFILE=production
 
-# Optional: Refresh and audit metadata catalogs before the run
-make daily-run META_REFRESH=1 META_AUDIT=1
+# Run with early-access 2026 features enabled
+python -m scripts.run_production_pipeline --profile production_v2_canary
 ```
+
+### Feature Rollout System
+The platform uses **Feature Flags** to gradually roll out high-impact quantitative upgrades. These are controlled in the `features` section of the manifest:
+- **`feat_turnover_penalty`**: Mathematically reduces rebalancing churn in the custom optimizer.
+- **`feat_partial_rebalance`**: Filters out small weight changes (<1%) in the drift monitor.
+- **`feat_xs_momentum`**: Uses global percentile ranks for robust leader selection.
+- **`feat_spectral_regimes`**: Activates DWT-based `TURBULENT` regime detection and adaptive barbell scaling.
+- **`feat_decay_audit`**: Generates high-fidelity slippage decay analysis in final reports.
 
 **What it does (13-Step Production Sequence):**
 1.  **Cleanup**: Wipe previous artifacts (`data/lakehouse/portfolio_*`).

@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Tuple, Type
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -17,6 +17,16 @@ from pydantic_settings import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class FeatureFlags(BaseModel):
+    """Gradual rollout toggles for 2026 Quantitative features."""
+
+    feat_partial_rebalance: bool = False
+    feat_turnover_penalty: bool = False
+    feat_xs_momentum: bool = False
+    feat_spectral_regimes: bool = False
+    feat_decay_audit: bool = False
 
 
 class ManifestSettingsSource(PydanticBaseSettingsSource):
@@ -58,11 +68,11 @@ class ManifestSettingsSource(PydanticBaseSettingsSource):
 
         # Flatten nested JSON into flat keys for BaseSettings
         flattened = {}
-        for section in ["data", "selection", "risk", "backtest", "tournament", "discovery"]:
+        for section in ["data", "selection", "risk", "backtest", "tournament", "discovery", "features"]:
             if section in profile_data:
-                if section == "discovery":
-                    # Keep discovery structured for specialized consumption
-                    flattened["discovery"] = profile_data[section]
+                if section in {"discovery", "features"}:
+                    # Keep structured for specialized consumption or nested models
+                    flattened[section] = profile_data[section]
                 else:
                     for k, v in profile_data[section].items():
                         flattened[k] = v
@@ -104,6 +114,7 @@ class TradingViewScraperSettings(BaseSettings):
     # Selection Logic
     top_n: int = 3
     threshold: float = 0.4
+    min_momentum_score: float = 0.0
 
     # Optimization
     cluster_cap: float = 0.25
@@ -119,6 +130,7 @@ class TradingViewScraperSettings(BaseSettings):
     backtest_cash_asset: str = "USDT"
     baseline_symbol: str = "AMEX:SPY"
     report_mode: str = "full"
+    dynamic_universe: bool = False
 
     # Tournament
     engines: str = "market,custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
@@ -126,6 +138,9 @@ class TradingViewScraperSettings(BaseSettings):
 
     # Discovery (Structured)
     discovery: Dict[str, Any] = Field(default_factory=dict)
+
+    # Feature Flags
+    features: FeatureFlags = Field(default_factory=FeatureFlags)
 
     # Environment overrides (GIST_ID, etc.)
     gist_id: str = "e888e1eab0b86447c90c26e92ec4dc36"
@@ -248,6 +263,7 @@ if __name__ == "__main__":
             "min_days_floor": "PORTFOLIO_MIN_DAYS_FLOOR",
             "top_n": "TOP_N",
             "threshold": "THRESHOLD",
+            "min_momentum_score": "MIN_MOMENTUM_SCORE",
             "cluster_cap": "CLUSTER_CAP",
             "train_window": "BACKTEST_TRAIN",
             "test_window": "BACKTEST_TEST",
@@ -259,6 +275,7 @@ if __name__ == "__main__":
             "backtest_cash_asset": "BACKTEST_CASH_ASSET",
             "baseline_symbol": "BASELINE_SYMBOL",
             "report_mode": "REPORT_MODE",
+            "dynamic_universe": "DYNAMIC_UNIVERSE",
             "engines": "TOURNAMENT_ENGINES",
             "profiles": "TOURNAMENT_PROFILES",
             "gist_id": "GIST_ID",
@@ -272,3 +289,8 @@ if __name__ == "__main__":
             if isinstance(val, bool):
                 val = "1" if val else "0"
             print(f"export {env_name}={val}")
+
+        # Export Feature Flags
+        for feat_name, enabled in settings.features.model_dump().items():
+            val = "1" if enabled else "0"
+            print(f"export {feat_name.upper()}={val}")

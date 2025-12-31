@@ -7,7 +7,9 @@ This specification defines the institutional upgrades for the quantitative platf
 The system tracks the "Last Implemented State" and compares it to the "Current Optimal Target" to minimize churn while maintaining risk parity.
 
 - **State file**: `data/lakehouse/portfolio_actual_state.json`
-- **Initialization behavior**: If the state file is missing, `make drift-monitor` will snapshot the current optimized portfolio as the baseline and exit (no drift report on first run).
+- **Partial Rebalancing**: The monitor supports filtering "Dust Trades" via the `feat_partial_rebalance` flag.
+    - **Threshold**: Only weight changes $\ge 1\%$ are marked as `EXECUTE` when enabled.
+    - **Order Generation**: Generates implementation-ready CSV orders using the `--orders` flag.
 - **Operator action**: After implementing new target weights, run `make accept-state` to update the baseline.
 
 ### Thresholds

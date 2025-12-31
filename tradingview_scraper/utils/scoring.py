@@ -1,6 +1,7 @@
+from typing import Any, Dict
+
 import numpy as np
 import pandas as pd
-from typing import Any, Dict, Optional
 
 
 def calculate_liquidity_score(symbol: str, meta: Dict[str, Any], alpha: float = 0.7, beta: float = 0.3) -> float:
@@ -23,6 +24,13 @@ def calculate_liquidity_score(symbol: str, meta: Dict[str, Any], alpha: float = 
 
     # Weighted Liquidity
     return alpha * np.log1p(max(vt, 0.0)) + beta * np.log1p(spread_proxy)
+
+
+def rank_series(s: pd.Series) -> pd.Series:
+    """Percentile ranking for robust cross-sectional comparison."""
+    if len(s) <= 1:
+        return pd.Series(0.5, index=s.index)
+    return s.rank(pct=True)
 
 
 def normalize_series(s: pd.Series) -> pd.Series:

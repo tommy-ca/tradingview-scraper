@@ -5,10 +5,14 @@ import os
 import shutil
 import sys
 from datetime import datetime
+from typing import Optional
 
+import pandas as pd
 from rich import box  # type: ignore
 from rich.console import Console  # type: ignore
 from rich.table import Table  # type: ignore
+
+from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("portfolio_state")
@@ -60,7 +64,7 @@ def accept_state(*, backup: bool = True) -> int:
         return 1
 
 
-def track_drift():
+def track_drift(min_trade_threshold: float = 0.01, orders_output: Optional[str] = None):
     console = Console()
     try:
         optimized_data = _load_optimized_data()
@@ -81,11 +85,17 @@ def track_drift():
         actual_state = json.load(f)
 
     console.print("\n[bold cyan]📉 Portfolio Rebalancing Drift Analysis[/]")
-    console.print("[dim]Comparing current optimal vs. last implemented state.[/]\n")
+    settings = get_settings()
+    if settings.features.feat_partial_rebalance:
+        console.print(f"[dim]Comparing current optimal vs. last implemented state. (Min Trade: {min_trade_threshold:.2%})[/]\n")
+    else:
+        console.print("[dim]Comparing current optimal vs. last implemented state.[/]\n")
+
+    all_orders = []
 
     for profile_name in optimized_data["profiles"].keys():
-        current_assets = {a["Symbol"]: a["Weight"] for a in optimized_data["profiles"][profile_name]["assets"]}
-        last_assets = {a["Symbol"]: a["Weight"] for a in actual_state.get(profile_name, {}).get("assets", [])}
+        current_assets = {a["Symbol"]: a for a in optimized_data["profiles"][profile_name]["assets"]}
+        last_assets = {a["Symbol"]: a for a in actual_state.get(profile_name, {}).get("assets", [])}
 
         all_symbols = sorted(set(current_assets.keys()) | set(last_assets.keys()))
 
@@ -95,31 +105,69 @@ def track_drift():
         table.add_column("Target %", justify="right", style="bold green")
         table.add_column("Drift", justify="right", style="bold magenta")
         table.add_column("Action", justify="center")
+        if settings.features.feat_partial_rebalance:
+            table.add_column("Status", justify="center")
 
         total_drift = 0.0
+        significant_drift = 0.0
+
         for sym in all_symbols:
-            w_last = float(last_assets.get(sym, 0.0))
-            w_target = float(current_assets.get(sym, 0.0))
+            w_last = float(last_assets.get(sym, {}).get("Weight", 0.0))
+            w_target = float(current_assets.get(sym, {}).get("Weight", 0.0))
             drift = w_target - w_last
             total_drift += abs(drift)
 
-            if abs(drift) < 0.001:
+            if abs(drift) < 0.0001:  # Absolute zero check
                 continue
 
-            action = "BUY" if drift > 0 else "SELL"
-            table.add_row(str(sym), f"{w_last:.2%}", f"{w_target:.2%}", f"{drift:+.2%}", f"[bold {'green' if drift > 0 else 'red'}]{action}[/]")
+            if settings.features.feat_partial_rebalance:
+                is_significant = abs(drift) >= min_trade_threshold
+                status = "[green]EXECUTE[/]" if is_significant else "[yellow]SKIP (Dust)[/]"
+
+                if is_significant:
+                    significant_drift += abs(drift)
+                    action = "BUY" if drift > 0 else "SELL"
+                    asset_data = current_assets.get(sym) or last_assets.get(sym) or {}
+                    all_orders.append(
+                        {
+                            "Profile": profile_name,
+                            "Symbol": sym,
+                            "Action": action,
+                            "Size": abs(drift),
+                            "Target_Weight": w_target,
+                            "Market": asset_data.get("Market", "UNKNOWN"),
+                            "Description": asset_data.get("Description", "N/A"),
+                        }
+                    )
+                else:
+                    action = "HOLD" if drift > 0 else "REDUCE"
+
+                table.add_row(str(sym), f"{w_last:.2%}", f"{w_target:.2%}", f"{drift:+.2%}", f"[bold {'green' if drift > 0 else 'red'}]{action}[/]", status)
+            else:
+                action = "BUY" if drift > 0 else "SELL"
+                table.add_row(str(sym), f"{w_last:.2%}", f"{w_target:.2%}", f"{drift:+.2%}", f"[bold {'green' if drift > 0 else 'red'}]{action}[/]")
 
         console.print(table)
-        console.print(f"[dim]Total Turnover Required: {total_drift / 2:.2%}[/]\n")
+        if settings.features.feat_partial_rebalance:
+            console.print(f"[dim]Total Churn: {total_drift / 2:.2%} | Significant Churn: {significant_drift / 2:.2%}[/]\n")
+        else:
+            console.print(f"[dim]Total Turnover Required: {total_drift / 2:.2%}[/]\n")
+
+    if orders_output and all_orders:
+        orders_df = pd.DataFrame(all_orders)
+        orders_df.to_csv(orders_output, index=False)
+        console.print(f"[bold green]✅ Generated {len(all_orders)} orders to:[/] {orders_output}\n")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Portfolio drift monitor and state snapshotter")
     parser.add_argument("--accept", action="store_true", help="Overwrite the last implemented state with the current optimized portfolio (use after implementation)")
     parser.add_argument("--no-backup", action="store_true", help="Disable backup when overwriting an existing state file")
+    parser.add_argument("--min-trade", type=float, default=0.01, help="Minimum weight change to trigger an order (default: 0.01 / 1%)")
+    parser.add_argument("--orders", type=str, help="Path to output rebalance orders as CSV")
     args = parser.parse_args()
 
     if args.accept:
         sys.exit(accept_state(backup=not args.no_backup))
 
-    track_drift()
+    track_drift(min_trade_threshold=args.min_trade, orders_output=args.orders)

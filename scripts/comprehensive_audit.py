@@ -5,6 +5,9 @@ Avoids pandas complexity by using basic Python data structures.
 """
 
 import logging
+from typing import Any, Dict, List, Optional, cast
+
+import pandas as pd
 
 from tradingview_scraper.symbols.stream.metadata import DEFAULT_EXCHANGE_METADATA, ExchangeCatalog, MetadataCatalog
 
@@ -34,10 +37,10 @@ def comprehensive_exchange_symbol_audit():
     print(f"Total exchanges: {len(ex_df)}")
 
     # Exchange coverage analysis
-    active_df = df[df["valid_until"].isna()]
+    active_df = cast(pd.DataFrame, df[df["valid_until"].isna()])
 
     print("\n--- Exchange Coverage ---")
-    exchange_counts = active_df["exchange"].value_counts()
+    exchange_counts = cast(pd.Series, active_df["exchange"]).value_counts()
     for exchange, count in exchange_counts.items():
         print(f"{exchange:<15}: {count:>3} symbols")
 
@@ -89,9 +92,9 @@ def comprehensive_exchange_symbol_audit():
     # Exchange distribution for symbol types
     print("\n--- Symbol Type by Exchange ---")
     type_by_exchange = {}
-    for exchange in active_df["exchange"].dropna().unique():
+    for exchange in cast(pd.Series, active_df["exchange"]).dropna().unique():
         ex_symbols = active_df[active_df["exchange"] == exchange]
-        type_counts = ex_symbols["type"].value_counts().to_dict()
+        type_counts = cast(pd.Series, ex_symbols["type"]).value_counts().to_dict()
         type_by_exchange[exchange] = type_counts
 
     for exchange, types in sorted(type_by_exchange.items()):
@@ -118,26 +121,26 @@ def comprehensive_exchange_symbol_audit():
     session_issues = 0
     for exchange in crypto_exchanges:
         ex_symbols = active_df[active_df["exchange"] == exchange]
-        non_24x7 = ex_symbols[~ex_symbols["session"].fillna("Unknown").eq("24x7")]
+        non_24x7 = ex_symbols[~cast(pd.Series, ex_symbols["session"]).fillna("Unknown").eq("24x7")]
         session_issues += len(non_24x7)
 
     print(f"Crypto exchange session issues: {session_issues}")
 
     # Timezone analysis
     print("\n--- Timezone Distribution ---")
-    tz_counts = active_df["timezone"].value_counts()
+    tz_counts = cast(pd.Series, active_df["timezone"]).value_counts()
     for tz, count in tz_counts.items():
         print(f"{tz:<25}: {count:>3} symbols")
 
     # Duplicate analysis
     print("\n--- Duplicate Analysis ---")
-    symbol_counts = df["symbol"].value_counts()
+    symbol_counts = cast(pd.Series, df["symbol"]).value_counts()
     duplicates = symbol_counts[symbol_counts > 1]
 
     print(f"Symbols with duplicates: {len(duplicates)}")
     if len(duplicates) > 0:
         print("Top duplicated symbols:")
-        top_duplicates = duplicates.sort_values(ascending=False).head(10)
+        top_duplicates = cast(pd.Series, cast(pd.Series, duplicates).sort_values(ascending=False)).head(10)
         for symbol, count in top_duplicates.items():
             print(f"  {symbol}: {count} versions")
 

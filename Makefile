@@ -81,7 +81,7 @@ export TV_RUN_ID
 .PHONY: clean-exports clean-all clean-daily clean-run
 
 # High-level entry points
-.PHONY: run-daily run-clean run-scan daily-run clean-run accept-state
+.PHONY: run-daily run-clean run-scan daily-run python-run clean-run accept-state
 
 # Metadata catalogs
 .PHONY: meta-refresh meta-stats meta-audit-offline meta-audit meta-explore meta-validate
@@ -403,6 +403,10 @@ daily-run:
 	$(MAKE) portfolio-analyze
 	@echo ">>> Step 11, 12 & 13: Optimization, Validation & Reporting"
 	$(MAKE) portfolio-finalize
+
+# New Python-based orchestrator (2026 Standard)
+python-run:
+	$(PY) python -m scripts.run_production_pipeline --profile $(PROFILE) --manifest $(MANIFEST)
 
 # After reviewing and implementing, snapshot current optimized as "actual" state.
 accept-state:

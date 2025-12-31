@@ -8,7 +8,16 @@ The Cluster-Aware Optimization Engine (v2) is an institutional-grade allocator d
 The total capital is first distributed across high-level hierarchical risk buckets.
 - **Max Cluster Cap (25%)**: Strictly enforced to prevent systemic over-concentration.
 - **Fragility Penalty**: Refactored objective functions (`min_var`, `max_sharpe`) now include a penalty term for clusters with high **Expected Shortfall (CVaR)**.
+- **Turnover Control**: The custom engine implements an **L1-norm penalty** on weight changes relative to the previously implemented state (Gated by `feat_turnover_penalty`):
+  $$Penalty_{Turnover} = \lambda \cdot \sum |w_{t} - w_{t-1}|$$
+  - This ensures that rebalancing only occurs when the risk/return benefit significantly outweighs the transaction cost.
 - **Net vs Gross Exposure**: The engine tracks both total capital at risk (Gross) and directional tilt (Net) for each factor.
+
+### Hierarchical Risk Parity (HRP) Implementation
+The HRP profile is implemented as a **Convex Risk Parity** optimization on cluster benchmarks:
+- **Objective**: Minimize variance while forcing logarithmic weight penalties to ensure diversity:
+  $$Obj = 0.5 \cdot w^{T} \Sigma w - \frac{1}{n} \sum \log(w_{i})$$
+- **Linkage**: Uses **Ward Linkage** on robust correlations, which minimizes within-cluster variance when merging groups.
 
 ### Layer 2: Intra-Cluster (Instrument Level)
 Within each factor, weight is distributed using a **Momentum-Volatility Hybrid**:

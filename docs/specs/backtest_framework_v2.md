@@ -10,7 +10,7 @@ The framework decouples **Window Management** (rolling walk-forward logic) from 
 
 ### 2.1 Returns Simulator (Internal Baseline)
 - **Method**: Direct dot-product of weights and daily returns.
-- **Assumptions**: Zero friction, perfect liquidity, instantaneous rebalancing.
+- **Daily Rebalancing**: Models daily rebalancing to target weights, ensuring mathematical parity with policy-based simulators.
 - **Use Case**: Rapid alpha validation and idealized benchmarking.
 
 ### 2.2 CVXPortfolio Simulator (Convex Policy)
@@ -40,69 +40,60 @@ Every simulator must output a standardized result schema, utilizing **QuantStats
 
 All backends are forced through the unified `calculate_performance_metrics` utility to ensure zero mathematical drift between simulators.
 
-## 4. Visual Tear-sheets & Markdown Reports
+## 4. Dynamic Universe Rebalancing
 
-The framework automatically generates comprehensive analytics for all tournament benchmark points:
-- **HTML Tear-sheets**: Interactive visual reports using `quantstats.reports.html()`.
-- **Markdown Full Reports**: High-density structured summaries including:
-    - **Key Performance Table**: (Sharpe, Sortino, Calmar, CVaR).
-    - **Monthly Returns Matrix**: (Year-by-month performance grid).
-    - **Stress Audit**: Breakdown of the worst 5 historical drawdowns.
-- **Location**: `artifacts/summaries/runs/<RUN_ID>/tearsheets/`
-- **Benchmark**: `AMEX:SPY` is used as the default relative performance reference.
+The framework supports **Adaptive Selection** at each rebalancing step, enabling the portfolio to evolve as market regimes shift.
+- **Dynamic Pruning**: Re-runs the "Natural Selection" phase at the start of every walk-forward window using only the trailing history available at that point in time (Point-in-Time safety).
+- **Identity Evolution**: Allows the portfolio to rotate out of stale assets and into new market leaders as correlations and momentum diverge within clusters.
+- **Transition Costs**: Simulators (especially `CvxPortfolioSimulator`) correctly model the friction of closing old positions and opening new ones during these universe shifts.
+- **Implementation**: Managed in `BacktestEngine.run_tournament` by calling `run_selection` from `scripts.natural_selection` at each iteration.
 
-## 5. Institutional Standards (2025 Standard)
+## 5. Alpha Momentum Gates
+
+To prevent forced allocation into "best of the losers" clusters:
+- **Momentum Gate**: Assets with negative cumulative returns over the selection lookback are disqualified.
+- **Adaptive Weighting**: If an entire cluster fails the momentum gate, its weight is assigned to the **Cash Asset (USDT)**.
+- **Purpose**: Ensures the portfolio maintains a positive-expectancy bias even in variance-minimizing profiles.
+
+## 6. Institutional Standards (2025 Standard)
 
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
 | **Lookback** | 500 Days | Historical depth for discovery and secular validation. |
 | **Train Window** | 252 Days | Full trading year history for optimization history buffer. |
 | **Test Window** | 20 Days | Rolling validation window. |
-| **Total Test Target** | 200 Days | Total cumulative backtest period required for implementation approval. |
+| **Threshold** | 0.55 | Tighter clustering distance for high-conviction groups. |
+| **Top N** | 1 | Focus capital on the single lead alpha asset per cluster. |
 | **Baseline** | `AMEX:SPY` | Primary benchmark for all multi-asset comparisons. |
 | **Friction** | 5bps Slippage / 1bp Commission | Real-world execution modeling. |
 
-## 6. Multi-Calendar Correlation Logic
+## 7. Multi-Calendar Correlation Logic
 
 The framework supports mixed calendars (24/7 Crypto + 5/7 TradFi).
 - **Portfolio Returns**: Preserve all trading days (sat/sun included for crypto).
 - **Benchmark Alignment**: TradFi benchmarks (`SPY`) are mapped to the portfolio calendar. Benchmark returns on weekends are treated as `0.0`, ensuring that weekend crypto alpha is captured without benchmark bias.
 - **No Padding**: The returns matrix no longer zero-fills non-trading days for TradFi assets, preserving statistical variance and Sharpe accuracy.
 
-## 7. Tournament Matrix (3D Benchmarking)
+## 8. Tournament Matrix (3D Benchmarking)
 
 The "Tournament" evaluates a 3D matrix of `[Simulator] x [Engine] x [Profile]`.
 
-### 7.1 Dimensions
+### 8.1 Dimensions
 - **Simulators**: `ReturnsSimulator` (Idealized), `CvxPortfolioSimulator` (Convex Policy), `VectorBTSimulator` (Vectorized Event-Driven).
 - **Engines**: `Custom (Cvxpy)`, `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `CvxPortfolio`, **`Market`**.
 - **Profiles**: `MinVar`, `HRP`, `MaxSharpe`, `Antifragile Barbell`, `BuyHold`.
 
-### 7.2 Hierarchical Risk Parity (HRP) Standards
+### 8.2 Hierarchical Risk Parity (HRP) Standards
 The HRP profile aims for equal risk contribution across hierarchical clusters.
 - **Custom Engine**: Implements a **Convex Risk Parity** approximation using a log-barrier objective on cluster benchmarks.
-- **Third-Party Engines**: Utilize their respective native HRP implementations (Recursive Bisection or Quasi-Diagonalization).
-- **Constraint Handling**: All HRP outputs are strictly subjected to the **25% global cluster cap** via capped-simplex projection.
 - **Linkage**: The standard production linkage is **Ward** on **Intersection Correlation**.
 
-### 7.3 Performance Optimization: Weight Caching
-To minimize compute overhead, the framework implements **Weight Caching**. For each window:
-1.  All enabled **Engines** generate weights for each **Profile**.
-2.  The resulting weights are cached in-memory.
-3.  All enabled **Simulators** consume the cached weights to compute realized performance.
-    - *Result*: Optimization happens once ($N_{eng} \times N_{prof}$), Simulation happens $N_{sim}$ times.
-
-### 7.4 Alpha Decay Audit
-The report includes an "Alpha Decay" table per profile, calculating the delta between Idealized Sharpe (zero friction) and Realized Sharpe (with slippage/commission).
-
-## 8. Market Baseline Engine
+## 9. Market Baseline Engine
 The framework treats the market benchmark as a first-class **"Market" Engine**.
 - **Strategy**: 100% Long `baseline_symbol` (default: `AMEX:SPY`).
 - **Standardized**: Appears in the 3D Tournament matrix alongside optimization engines.
 - **Zero-Bias**: Sourced directly from raw lakehouse data, bypassing scanner-specific direction flipping.
 
-## 9. Unified QuantStats Reporting
+## 10. Unified QuantStats Reporting
 The reporting pipeline is rebased entirely on **QuantStats** to ensure mathematical consistency.
-- **Strategy Resume**: Aggregates realized performance from the `cvxportfolio` simulator for all engines.
-- **Markdown Teardowns**: Every benchmark point links to a detailed `full_report.md` containing monthly returns and drawdown audits.
-- **Consistency**: High-level metrics (Sharpe, Sortino, Calmar) are derived from the same QuantStats engine as the detailed teardowns.
+- **Slippage Decay Audit**: Generates a detailed comparison between idealized and realized returns to quantify implementation friction (Gated by `feat_decay_audit`).

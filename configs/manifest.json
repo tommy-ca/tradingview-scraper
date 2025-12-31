@@ -14,8 +14,9 @@
         "min_days_floor": 320
       },
       "selection": {
-        "top_n": 3,
-        "threshold": 0.4
+        "top_n": 2,
+        "threshold": 0.45,
+        "min_momentum_score": -0.05
       },
       "risk": {
         "cluster_cap": 0.25
@@ -29,7 +30,8 @@
         "backtest_commission": 0.0001,
         "backtest_cash_asset": "USDT",
         "baseline_symbol": "AMEX:SPY",
-        "report_mode": "full"
+        "report_mode": "full",
+        "dynamic_universe": true
       },
       "tournament": {
         "engines": "market,custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
@@ -76,6 +78,63 @@
         "META_REFRESH": "1",
         "META_AUDIT": "1",
         "GIST_ID": "e888e1eab0b86447c90c26e92ec4dc36"
+      },
+      "features": {
+        "feat_partial_rebalance": false,
+        "feat_turnover_penalty": false,
+        "feat_xs_momentum": false,
+        "feat_spectral_regimes": false,
+        "feat_decay_audit": false
+      }
+    },
+    "production_v2_canary": {
+      "description": "2026 Quantitative features early access profile",
+      "data": {
+        "lookback_days": 500,
+        "batch_size": 5,
+        "backfill": true,
+        "gapfill": true,
+        "max_symbols": 200,
+        "strict_health": true,
+        "min_days_floor": 320
+      },
+      "selection": {
+        "top_n": 2,
+        "threshold": 0.45,
+        "min_momentum_score": -0.05
+      },
+      "risk": {
+        "cluster_cap": 0.25
+      },
+      "backtest": {
+        "train_window": 252,
+        "test_window": 20,
+        "step_size": 20,
+        "backtest_simulator": "cvxportfolio",
+        "backtest_slippage": 0.0005,
+        "backtest_commission": 0.0001,
+        "backtest_cash_asset": "USDT",
+        "baseline_symbol": "AMEX:SPY",
+        "report_mode": "full",
+        "dynamic_universe": true
+      },
+      "tournament": {
+        "engines": "market,custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
+        "profiles": "min_variance,hrp,max_sharpe,barbell"
+      },
+      "discovery": {
+        "enabled_markets": ["futures", "crypto", "cfd", "forex", "bonds", "etf"]
+      },
+      "env": {
+        "META_REFRESH": "1",
+        "META_AUDIT": "1"
+      },
+      "features": {
+        "feat_partial_rebalance": true,
+        "feat_turnover_penalty": true,
+        "feat_xs_momentum": true,
+        "feat_spectral_regimes": true,
+        "feat_decay_audit": true
       }
     },
     "repro_dev": {
@@ -90,9 +149,11 @@
         "min_days_floor": 20
       },
       "selection": {
-        "top_n": 2,
-        "threshold": 0.5
+        "top_n": 1,
+        "threshold": 0.55,
+        "min_momentum_score": 0.0
       },
+
       "risk": {
         "cluster_cap": 0.25
       },
@@ -124,6 +185,13 @@
       "env": {
         "META_REFRESH": "0",
         "META_AUDIT": "0"
+      },
+      "features": {
+        "feat_partial_rebalance": true,
+        "feat_turnover_penalty": true,
+        "feat_xs_momentum": true,
+        "feat_spectral_regimes": true,
+        "feat_decay_audit": true
       }
     }
   }

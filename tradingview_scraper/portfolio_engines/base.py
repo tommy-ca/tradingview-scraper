@@ -20,6 +20,9 @@ class EngineRequest:
     risk_free_rate: float = 0.0
     aggressor_weight: float = 0.10
     max_aggressor_clusters: int = 5
+    regime: str = "NORMAL"
+    # Optional previous weights for turnover regularization (Symbol -> Weight)
+    prev_weights: Optional[pd.Series] = None
 
 
 @dataclass(frozen=True)

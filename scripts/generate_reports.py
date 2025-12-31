@@ -100,7 +100,11 @@ class ReportGenerator:
         # 2. Generate Strategy Resume (backtest_comparison.md)
         self._generate_strategy_resume()
 
-        # 3. Generate Tournament Benchmark (engine_comparison_report.md)
+        # 3. Generate Slippage Decay Audit
+        if self.settings.features.feat_decay_audit:
+            self._generate_decay_audit()
+
+        # 4. Generate Tournament Benchmark (engine_comparison_report.md)
         self._generate_tournament_benchmark()
 
         # 4. Generate Cluster Analysis reports
@@ -219,6 +223,13 @@ class ReportGenerator:
             [
                 "backtest_comparison.md",
                 "engine_comparison_report.md",
+            ]
+        )
+        if self.settings.features.feat_decay_audit:
+            essential_reports.append("slippage_decay_audit.md")
+
+        essential_reports.extend(
+            [
                 "portfolio_report.md",
                 "selection_audit.md",
                 "data_health_selected.md",
@@ -330,6 +341,62 @@ Baseline: **{eng_name}** engine on **{sim_name}** simulator.
 """
         with open(self.summary_dir / "backtest_comparison.md", "w") as f:
             f.write(report)
+
+    def _generate_decay_audit(self):
+        """Generates a report on Slippage Decay (Idealized vs High-Fidelity)."""
+        md = []
+        md.append("# Execution Slippage & Alpha Decay Audit")
+        md.append(f"Generated on: {pd.Timestamp.now()}")
+        md.append("\nThis report compares the **Idealized Returns** (Zero friction) against **High-Fidelity Simulation** (Slippage + Commission).\n")
+
+        decay_rows = []
+        sim_ideal = "custom"
+        sim_real = "cvxportfolio"
+
+        if sim_ideal not in self.all_results or sim_real not in self.all_results:
+            return
+
+        for eng_name in self.all_results[sim_ideal].keys():
+            if eng_name == "_status" or eng_name == "market":
+                continue
+            for prof_name in self.all_results[sim_ideal][eng_name].keys():
+                if prof_name == "_status":
+                    continue
+
+                ideal_sum = self.all_results[sim_ideal][eng_name][prof_name].get("summary")
+                real_sum = self.all_results[sim_real][eng_name][prof_name].get("summary")
+
+                if ideal_sum and real_sum:
+                    ann_ideal = _safe_float(ideal_sum.get("annualized_return")) or 0.0
+                    ann_real = _safe_float(real_sum.get("annualized_return")) or 0.0
+                    sharpe_ideal = _safe_float(ideal_sum.get("avg_window_sharpe")) or 0.0
+                    sharpe_real = _safe_float(real_sum.get("avg_window_sharpe")) or 0.0
+
+                    decay_ann = ann_ideal - ann_real
+                    decay_sharpe = sharpe_ideal - sharpe_real
+
+                    decay_rows.append(
+                        {
+                            "Engine": eng_name,
+                            "Profile": prof_name,
+                            "Ann. Return (Ideal)": f"{ann_ideal:.2%}",
+                            "Ann. Return (Real)": f"{ann_real:.2%}",
+                            "Return Decay": f"{decay_ann:.2%}",
+                            "Sharpe Decay": f"{decay_sharpe:.2f}",
+                        }
+                    )
+
+        if decay_rows:
+            df_decay = pd.DataFrame(decay_rows)
+            md.append(df_decay.to_markdown(index=False))
+            md.append("\n### Interpretation")
+            md.append("- **Return Decay**: The annualized percentage lost to friction. High decay (>5%) suggests the strategy is trading too frequently or in illiquid assets.")
+            md.append("- **Sharpe Decay**: The degradation in risk-adjusted stability. Significant decay suggests the alpha is fragile.")
+        else:
+            md.append("\nInsufficient data for decay comparison.")
+
+        with open(self.summary_dir / "slippage_decay_audit.md", "w") as f:
+            f.write("\n".join(md))
 
     def _generate_tournament_benchmark(self):
         """Comparative benchmark of all optimization engines."""

@@ -29,6 +29,7 @@ The platform uses a schema-validated JSON manifest system to ensure every run is
 
 ### Workflow Profiles (configs/manifest.json)
 - **`production`**: Institutional high-integrity settings (500d history, 252d train, 25% global caps, all optimizers enabled).
+- **`production_v2_canary`**: Early-access profile with **Feature Flags** enabled (Turnover Penalty, XS Momentum, Spectral Regimes).
 - **`repro_dev`**: Lightweight development profile for fast end-to-end testing (60d history, 50 symbol limit).
 
 ### Execution
@@ -84,7 +85,9 @@ The system moves beyond simple MPT by treating clusters as single units of risk.
 
 ## 6. Strategic Guiding Principles for Agents
 
-1.  **Alpha must survive friction**: Prioritize optimization engines that maintain Sharpe ratio stability in high-fidelity simulation.
-2.  **Spectral Intelligence**: Prioritize spectral (DWT) and entropy metrics for regime detection over simple volatility ratios.
-3.  **Provenance First**: Always verify that the `manifest.json` has been archived in the run directory.
-4.  **No Padding**: Ensure the returns matrix preserves real trading calendars; never zero-fill weekends for TradFi assets.
+1.  **Alpha must survive friction**: Prioritize optimization engines that maintain Sharpe ratio stability in high-fidelity simulation. Use `feat_turnover_penalty` to minimize churn.
+2.  **Spectral Intelligence**: Prioritize spectral (DWT) and entropy metrics for regime detection over simple volatility ratios. Use `feat_spectral_regimes` for adaptive scaling.
+3.  **Execution Integrity**: Use `feat_partial_rebalance` to avoid noisy small trades. Generate implementation orders via `scripts/track_portfolio_state.py --orders`.
+4.  **Provenance First**: Always verify that the `manifest.json` has been archived in the run directory.
+5.  **Audit Integrity**: Every production decision must be backed by an entry in the `audit.jsonl` ledger. Never bypass the audit chain for manual weight overrides.
+6.  **No Padding**: Ensure the returns matrix preserves real trading calendars; never zero-fill weekends for TradFi assets.

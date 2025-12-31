@@ -36,7 +36,8 @@
           "type": "object",
           "properties": {
             "top_n": { "type": "integer", "minimum": 1 },
-            "threshold": { "type": "number", "minimum": 0, "maximum": 1 }
+            "threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+            "min_momentum_score": { "type": "number" }
           }
         },
         "risk": {
@@ -56,14 +57,16 @@
             "backtest_commission": { "type": "number", "minimum": 0 },
             "backtest_cash_asset": { "type": "string" },
             "baseline_symbol": { "type": "string" },
-            "report_mode": { "type": "string", "enum": ["basic", "full"] }
+            "report_mode": { "type": "string", "enum": ["basic", "full"] },
+            "dynamic_universe": { "type": "boolean" }
           }
         },
         "tournament": {
           "type": "object",
           "properties": {
             "engines": { "type": "string" },
-            "profiles": { "type": "string" }
+            "profiles": { "type": "string" },
+            "simulators": { "type": "string" }
           }
         },
         "discovery": {
