@@ -5,9 +5,9 @@
 ## 1. Overview
 This document defines the standardized pipeline for transforming raw market data into an optimized, multi-asset portfolio. The workflow is unified under a 13-step production sequence.
 
-## 2. The 13-Step Production Sequence
+## 2. The 14-Step Production Sequence
 
-The entire production lifecycle is managed via the **Python Orchestrator** (`scripts/run_production_pipeline.py`) or `make daily-run` and follows this rigorous sequence:
+The entire production lifecycle is managed via the **Python Orchestrator** (`scripts/run_production_pipeline.py`) and follows this rigorous sequence:
 
 1.  **Cleanup**: Wipe previous artifacts and intermediate files (`data/lakehouse/portfolio_*`) to ensure a clean state.
 2.  **Discovery**: Run multi-asset scanners (Equities, Crypto, Bonds, MTF Forex) in parallel using `make scan-all`.
@@ -16,14 +16,23 @@ The entire production lifecycle is managed via the **Python Orchestrator** (`scr
 5.  **Natural Selection (Pruning)**: Hierarchical clustering on the raw pool using **Ward Linkage** and a multi-lookback distance matrix. Select **Top N Assets** per cluster using **Execution Alpha** (Global XS Momentum + Stability + Liquidity).
     - **Diversity Constraint**: Clusters ensure that we don't over-select from redundant asset groups.
     - **Scanner-Locked Integrity**: Directionality (LONG/SHORT) is preserved from the discovery source.
-...
+6.  **Enrichment**: Propagate sectors, industries, and descriptions to the filtered winners.
+7.  **High-Integrity Prep**: Fetch **500-day** secular history for winners with automated gap-repair via `make align`.
+8.  **Health Audit**: Validate 100% gap-free alignment for the implementation universe. Triggers `make recover` if gaps are found.
+9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Intersection Correlation**.
+10. **Regime Detection**: Multi-factor analysis using **Entropy + DWT Spectral Turbulence** to categorize the market environment (Spectral triggers gated by `feat_spectral_regimes`).
 11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties** and **Turnover Control**.
-    - **Hierarchical Risk Parity (HRP)**: Distributes risk across the cluster tree to ensure no single statistical group dominates the variance.
-    - **Antifragile Barbell**: Allocates to high-convexity "Aggressor" clusters while maintaining a stable, HRP-weighted "Core".
-    - **Cluster Caps**: Enforces a strict 25% gross weight limit per hierarchical bucket.
-
 12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators (200d realized target). Must include **Cumulative Transition Friction** analysis to quantify rotation costs.
-13. **Reporting**: Generate QuantStats Markdown Tear-sheets, Strategy Resume, and sync essential artifacts to private Gist via `make finalize`.
+13. **Reporting**: Generate QuantStats Markdown Tear-sheets, Strategy Resume, Alpha Isolation Audit, and sync essential artifacts to private Gist via `make finalize`.
+14. **Audit Integrity Check**: Final cryptographic signature check of the run's decision ledger (`audit.jsonl`).
+
+## 3. Resumability & Orchestration
+
+The orchestrator supports **Stateful Resumability** to minimize compute waste during pipeline failures.
+```bash
+# Resume from Step 11 (Optimization) using a specific Run ID
+python -m scripts.run_production_pipeline --profile production --start-step 11 --run-id 20251231-150000
+```
 
 ## 4. Audit & Reproducibility (Requirement)
 Every stage of the pipeline must contribute to the **Immutable Audit Ledger** (`audit.jsonl`).

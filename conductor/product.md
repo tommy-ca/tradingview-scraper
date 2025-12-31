@@ -11,9 +11,12 @@ A Python library designed to scrape various data from TradingView.com, including
 * **Reliability & Performance:** Provide a high-performance and robust interface for accessing TradingView data programmatically, ensuring data integrity and timely delivery.
 
 ## Key Features
-* **Asynchronous Quantitative Pipeline (V1):** A unified orchestrator that parallelizes discovery, alpha generation, and risk optimization, reducing discovery latency by >60%.
-* **Robust Risk Management:** Integrated market regime detection (QUIET/NORMAL/CRISIS) and covariance shrinkage (Ledoit-Wolf) to ensure numerically stable and adaptive portfolio construction.
-* **Taleb-Inspired Antifragile Allocation:** Support for Barbell optimization that shifts risk budgets toward a safe core during market stress while maintaining exposure to convex tail-gain aggressors.
+* **Asynchronous Quantitative Pipeline (V2):** A formalized 14-step orchestrator that parallelizes discovery, alpha generation, and risk optimization. Features stateful resumability and 100% decision auditability.
+* **High-Fidelity Implementation Simulation:** Institutional-grade backtesting that models slippage, commissions, and borrow costs via `cvxportfolio`. Includes warm-start support to eliminate first-trade bias and cross-window state persistence.
+* **Immutable Decision Ledger:** Chained SHA-256 audit logs (`audit.jsonl`) that provide a cryptographic record of every pipeline intent and outcome, ensuring deterministic data lineage and reproducibility.
+* **Advanced Risk Management:** Integrated market regime detection (QUIET/NORMAL/TURBULENT/CRISIS) using DWT Spectral Turbulence and PIT risk auditing to ensure adaptive portfolio construction.
+* **Taleb-Inspired Antifragile Allocation:** Support for Barbell optimization that shifts risk budgets toward a safe core during market stress while maintaining exposure to convex tail-gain aggressors. Now with dynamic regime-based aggressor scaling.
+* **Isolated Alpha Attribution:** Systematic separation of Selection Alpha (pruning value) from Optimization Alpha (weighting value), enabling granular strategy teardowns.
 * **Real-time Async Streaming:** Modern, `asyncio`-based WebSocket architecture for non-blocking, multi-asset data streaming. Features automated heartbeat handling and state recovery for high-uptime real-time monitoring.
 * **Architecture Parity:** 100% logic and data format parity between synchronous and asynchronous modules. Shared serialization ensures that data structures remain consistent regardless of the execution model.
 * **Comprehensive Data Extraction:** Scrape a wide range of data points including technical indicators, community ideas, and financial news directly from TradingView.

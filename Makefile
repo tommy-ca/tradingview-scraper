@@ -180,6 +180,9 @@ run-scan: scan-all
 
 portfolio-prep-raw: prep-raw
 portfolio-prune: prune
+enrich-candidates:
+	$(PY) scripts/enrich_candidates_metadata.py
+
 portfolio-align: align
 portfolio-analyze: analyze
 portfolio-finalize: finalize
@@ -207,14 +210,11 @@ tournament: backtest-tournament reports
 
 validate: audit-data backtest
 
-# Step 8 includes automated recovery and a hard health gate.
-# STRICT_HEALTH=1 (default in production) ensures no degraded assets reach optimization.
+# Simplified audit-health: policy moved to Python orchestrator
 audit-health:
 	@echo ">>> Auditing Data Health & Integrity"
 	@STRICT_ARG=""; if [ "$(STRICT_HEALTH)" = "1" ]; then STRICT_ARG="--strict"; fi; \
-	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health $$STRICT_ARG || \
-	(echo ">>> Health Check Failed. Attempting Automated Recovery..."; $(MAKE) recover && \
-	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health $$STRICT_ARG)
+	$(PY) scripts/validate_portfolio_artifacts.py --mode selected --only-health $$STRICT_ARG
 
 audit-logic:
 	@echo ">>> Auditing Portfolio Quantitative Logic"

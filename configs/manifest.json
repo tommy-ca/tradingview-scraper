@@ -25,7 +25,7 @@
         "train_window": 252,
         "test_window": 20,
         "step_size": 20,
-        "backtest_simulator": "custom",
+        "backtest_simulator": "cvxportfolio",
         "backtest_slippage": 0.0005,
         "backtest_commission": 0.0001,
         "backtest_cash_asset": "USDT",
@@ -34,8 +34,8 @@
         "dynamic_universe": true
       },
       "tournament": {
-        "engines": "market,custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
-        "profiles": "min_variance,hrp,max_sharpe,barbell"
+        "engines": "market,custom",
+        "profiles": "min_variance,hrp,barbell,equal_weight"
       },
       "discovery": {
         "enabled_markets": ["futures", "crypto", "cfd", "forex", "bonds", "etf"],
@@ -80,17 +80,17 @@
         "GIST_ID": "e888e1eab0b86447c90c26e92ec4dc36"
       },
       "features": {
-        "feat_partial_rebalance": false,
-        "feat_turnover_penalty": false,
-        "feat_xs_momentum": false,
-        "feat_spectral_regimes": false,
-        "feat_decay_audit": false,
-        "feat_audit_ledger": false,
-        "feat_pit_fidelity": false,
-        "feat_rebalance_mode": "daily",
-        "feat_short_costs": false,
+        "feat_partial_rebalance": true,
+        "feat_turnover_penalty": true,
+        "feat_xs_momentum": true,
+        "feat_spectral_regimes": true,
+        "feat_decay_audit": true,
+        "feat_audit_ledger": true,
+        "feat_pit_fidelity": true,
+        "feat_rebalance_mode": "window",
+        "feat_short_costs": true,
         "short_borrow_cost": 0.02,
-        "feat_dynamic_selection": false
+        "feat_dynamic_selection": true
       }
     },
     "production_v2_canary": {
@@ -129,12 +129,11 @@
         "profiles": "min_variance,hrp,barbell,equal_weight"
       },
       "discovery": {
-...
+        "enabled_markets": ["futures", "crypto", "cfd", "forex", "bonds", "etf"]
       },
       "env": {
         "META_REFRESH": "1",
-        "META_AUDIT": "1",
-        "GIST_ID": "e888e1eab0b86447c90c26e92ec4dc36"
+        "META_AUDIT": "1"
       },
       "features": {
         "feat_partial_rebalance": true,
@@ -151,7 +150,6 @@
       }
     },
     "repro_dev": {
-
       "description": "Lightweight reproducible development profile",
       "data": {
         "lookback_days": 60,
@@ -184,8 +182,6 @@
         "short_borrow_cost": 0.02,
         "feat_dynamic_selection": true
       }
-    }
-
     }
   }
 }

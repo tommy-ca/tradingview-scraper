@@ -6,20 +6,21 @@ This document provides a comprehensive guide for AI agents working on the Tradin
 
 The entire production lifecycle is unified under the `make clean-run` target. Agents should adhere to this sequence to ensure data integrity and de-risked allocation.
 
-### The 13-Step Production Sequence
+### The 14-Step Production Sequence
 1.  **Cleanup**: Wipe previous artifacts (`data/lakehouse/portfolio_*`).
 2.  **Discovery**: Run multi-asset scanners (Equities, Crypto, Bonds, MTF Forex).
-3.  **Aggregation**: Consolidate scans into a **Raw Pool** with canonical identity merging (Venue Neutrality).
-4.  **Lightweight Prep**: Fetch **60-day** history for the raw pool to establish baseline correlations.
-5.  **Natural Selection (Pruning)**: Hierarchical clustering on the raw pool; select **Top 3 Assets** per cluster using **Execution Intelligence**.
-6.  **Enrichment**: Propagate sectors, industries, and descriptions to the filtered winners.
-7.  **High-Integrity Prep**: Fetch **500-day** secular history for winners with automated gap-repair.
-8.  **Health Audit**: Validate 100% gap-free alignment for the implementation universe (Triggers `make recover` if gaps found).
-9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Adaptive Thresholds**.
-10. **Regime Detection**: Multi-factor analysis (**Entropy + DWT Spectral Turbulence**).
-11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties**, supported by a multi-engine benchmarking framework (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
-12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators (200d realized target).
-13. **Reporting**: Generate QuantStats Markdown Tear-sheets, Strategy Resume, and sync essential artifacts to private Gist.
+3.  **Aggregation**: Consolidate scans into a **Raw Pool** with rich metadata.
+4.  **Lightweight Prep**: Fetch **60-day** history for the raw pool.
+5.  **Natural Selection (Pruning)**: Hierarchical clustering + Global XS Ranking.
+6.  **Enrichment**: Propagate sectors, industries, and descriptions.
+7.  **High-Integrity Prep**: Fetch **500-day** secular history for winners.
+8.  **Health Audit**: Validate 100% gap-free alignment (Automated recovery).
+9.  **Factor Analysis**: Build hierarchical risk buckets (Ward Linkage).
+10. **Regime Detection**: Multi-factor analysis (Entropy + DWT).
+11. **Optimization**: Cluster-Aware allocation with Turnover Control.
+12. **Validation**: Walk-Forward "Tournament" benchmarking (High-Fidelity).
+13. **Reporting**: QuantStats Tear-sheets + Alpha Isolation Audit.
+14. **Audit Verification**: Final cryptographic signature check of the run's decision ledger.
 
 ---
 

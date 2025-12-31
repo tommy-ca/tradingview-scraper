@@ -163,11 +163,12 @@ class BacktestEngine:
                 if eng not in available_engines:
                     results[s][eng]["_status"] = {"skipped": True, "reason": "engine unavailable"}
                     continue
-                for prof in profiles if eng != "market" else ["min_variance"]:
-                    results[s][eng][prof] = {"windows": [], "summary": None}
-                    cumulative[(s, eng, prof)] = []
-                    # Initialize with warm-start holdings if available
-                    prev_weights[(s, eng, prof)] = initial_holdings.get(prof, pd.Series(dtype=float))
+                target_profiles = profiles if eng != "market" else ["min_variance", "equal_weight"]
+                for prof in target_profiles:
+                    if prof not in results[s][eng]:
+                        results[s][eng][prof] = {"windows": [], "summary": None}
+                        cumulative[(s, eng, prof)] = []
+                        prev_weights[(s, eng, prof)] = initial_holdings.get(prof, pd.Series(dtype=float))
 
         total_len = len(self.returns)
         if total_len < train_window + test_window:
@@ -197,10 +198,17 @@ class BacktestEngine:
             stats_df_final = self._audit_training_stats(train_data)
 
             cached_weights = {}
+            # 1. Standard Engines
             for eng in engines:
                 if eng not in available_engines:
                     continue
-                for prof in profiles if eng != "market" else ["min_variance"]:
+
+                # Special Case: market engine with 'equal_weight' profile
+                # If dynamic_universe is ON, we might want both Raw and Filtered EW.
+                # We'll treat 'equal_weight' as Filtered EW if pruning happened.
+
+                target_profiles = profiles if eng != "market" else ["min_variance", "equal_weight"]
+                for prof in target_profiles:
                     try:
                         p_weights = prev_weights.get(("cvxportfolio" if "cvxportfolio" in sim_names else sim_names[0], eng, prof))
 
@@ -221,6 +229,25 @@ class BacktestEngine:
                     except Exception as e:
                         for s in sim_names:
                             results[s][eng][prof].setdefault("errors", []).append(str(e))
+
+            # 2. Raw Pool Baseline (if pruning is active)
+            if settings.dynamic_universe and "market" in engines:
+                prof = "raw_pool_ew"
+                eng = "market"
+                if prof not in results[sim_names[0]][eng]:
+                    for s in sim_names:
+                        results[s][eng][prof] = {"windows": [], "summary": None}
+                        cumulative[(s, eng, prof)] = []
+                        prev_weights[(s, eng, prof)] = pd.Series(dtype=float)
+
+                try:
+                    # Raw Pool EW uses all discovered symbols
+                    weights_df = self._compute_weights(train_data_raw, {}, pd.DataFrame(), "equal_weight", "market", 1.0, {}, None, regime)
+                    if not weights_df.empty:
+                        cached_weights[("market", "raw_pool_ew")] = weights_df
+                except Exception as e:
+                    for s in sim_names:
+                        results[s][eng][prof].setdefault("errors", []).append(str(e))
 
             for s_name in sim_names:
                 simulator = build_simulator(s_name)

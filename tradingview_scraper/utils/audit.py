@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
@@ -63,6 +64,9 @@ class AuditLedger:
 
     def _append(self, record: Dict[str, Any]):
         """Calculates hash, chains to previous, and appends to disk."""
+        # Refresh last_hash from disk to support nested/concurrent processes
+        self._initialize_chain()
+
         ts = datetime.now().isoformat()
         record["ts"] = ts
         record["prev_hash"] = self.last_hash or "0" * 64
@@ -116,6 +120,3 @@ class AuditLedger:
             },
         }
         self._append(record)
-
-
-import sys  # Needed for sys.version

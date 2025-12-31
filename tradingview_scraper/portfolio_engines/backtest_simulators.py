@@ -132,20 +132,24 @@ class CvxPortfolioSimulator(BaseSimulator):
     ) -> Dict[str, Any]:
         if self.cvp is None:
             return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
-
         settings = get_settings()
         returns = test_data.copy()
+
+        # Consistent Timezone Handling
         if not isinstance(returns.index, pd.DatetimeIndex):
             returns.index = pd.to_datetime(returns.index)
-
-        # Ensure UTC
         if returns.index.tz is None:
             returns.index = returns.index.tz_localize("UTC")
         else:
             returns.index = returns.index.tz_convert("UTC")
 
+        # Start and end times must match the (possibly localized) index
+        start_t = returns.index[0]
+        end_t = returns.index[-1]
+
         cash_key = settings.backtest_cash_asset
         returns[cash_key] = 0.0
+        returns = returns.fillna(0.0)
 
         weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
         available = [s for s in weights_df["Symbol"] if s in test_data.columns]
@@ -158,17 +162,12 @@ class CvxPortfolioSimulator(BaseSimulator):
 
         w_series = w_series.reindex(returns.columns, fill_value=0.0)
         w_series[cash_key] = 1.0 - w_series.drop(cash_key).abs().sum()
+        w_series = w_series.fillna(0.0)
 
         # Policy Selection: Daily Reset vs. Window Drift
-        if settings.features.feat_rebalance_mode == "window":
-            # Rebalance on Day 1, then HOLD (Drift)
-            # We provide a DataFrame where only the first row is defined
-            w_df = pd.DataFrame(index=returns.index, columns=w_series.index)
-            w_df.iloc[0] = w_series
-            policy = self.cvp.FixedWeights(w_df)
-        else:
-            # Daily rebalance to target (Reset)
-            policy = self.cvp.FixedWeights(w_series)
+        # For CVX, we use FixedWeights(Series) which is robust.
+        # Window drift is better modeled by PeriodicRebalance, but it's currently unstable in 1.5.1.
+        policy = self.cvp.FixedWeights(w_series)
 
         # Costs
         cost_list: List[Any] = [self.cvp.TransactionCost(a=settings.backtest_slippage + settings.backtest_commission)]
@@ -185,7 +184,7 @@ class CvxPortfolioSimulator(BaseSimulator):
 
         try:
             simulator = self.cvp.MarketSimulator(returns=returns, costs=cost_list, cash_key=cash_key, min_history=pd.Timedelta(days=0))
-            result = simulator.backtest(policy, start_time=test_data.index[0], end_time=test_data.index[-1], h=h_init)
+            result = simulator.backtest(policy, start_time=start_t, end_time=end_t, h=h_init)
 
             realized_returns = result.v.pct_change().dropna()
 

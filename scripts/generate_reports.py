@@ -101,7 +101,10 @@ class ReportGenerator:
         # 2. Generate Strategy Resume (backtest_comparison.md)
         self._generate_strategy_resume()
 
-        # 3. Generate Slippage Decay Audit
+        # 3. Generate Alpha Isolation Audit
+        self._generate_alpha_isolation()
+
+        # 4. Generate Slippage Decay Audit
         if self.settings.features.feat_decay_audit:
             self._generate_decay_audit()
 
@@ -224,6 +227,7 @@ class ReportGenerator:
             [
                 "backtest_comparison.md",
                 "engine_comparison_report.md",
+                "alpha_isolation_audit.md",
             ]
         )
         if self.settings.features.feat_decay_audit:
@@ -272,15 +276,30 @@ class ReportGenerator:
         summary_rows = []
         regime_rows = []
 
-        # 1. Add Market Baseline
+        # 1. Add Market Baselines
         market_data = self.all_results.get(sim_name, {}).get("market", {})
         if market_data:
-            first_prof = next((k for k in market_data.keys() if k != "_status"), None)
+            # Traditional SPY hold
+            first_prof = next((k for k in market_data.keys() if k not in ["_status", "raw_pool_ew", "equal_weight"]), None)
             if first_prof and market_data[first_prof].get("summary"):
                 m_row = dict(market_data[first_prof]["summary"])
-                m_row["Profile"] = "MARKET (SPY)"
+                m_row["Profile"] = "MARKET (HOLD)"
                 m_row["Details"] = f"[Metrics]({sim_name}_market_{first_prof}_full_report.md)"
                 summary_rows.append(m_row)
+
+            # Raw Pool EW
+            if market_data.get("raw_pool_ew", {}).get("summary"):
+                raw_row = dict(market_data["raw_pool_ew"]["summary"])
+                raw_row["Profile"] = "MARKET (RAW EW)"
+                raw_row["Details"] = f"[Metrics]({sim_name}_market_raw_pool_ew_full_report.md)"
+                summary_rows.append(raw_row)
+
+            # Filtered EW
+            if market_data.get("equal_weight", {}).get("summary"):
+                filt_row = dict(market_data["equal_weight"]["summary"])
+                filt_row["Profile"] = "MARKET (FILTERED EW)"
+                filt_row["Details"] = f"[Metrics]({sim_name}_market_equal_weight_full_report.md)"
+                summary_rows.append(filt_row)
 
         # 2. Add Risk Profiles
         display_names = {
@@ -348,6 +367,54 @@ Baseline: **{eng_name}** engine on **{sim_name}** simulator.
 """
         with open(self.summary_dir / "backtest_comparison.md", "w") as f:
             f.write(report)
+
+    def _generate_alpha_isolation(self):
+        """Generates a report isolating Selection vs. Optimization alpha."""
+        sim_name = "cvxportfolio" if "cvxportfolio" in self.all_results else "custom"
+        market_blob = self.all_results.get(sim_name, {}).get("market", {})
+
+        md = []
+        md.append("# Alpha Isolation & Attribution Audit")
+        md.append(f"Generated on: {pd.Timestamp.now()}")
+        md.append("\nThis report isolates the value added by **Pruning (Selection)** vs. **Weighting (Optimization)**.\n")
+
+        # 1. Selection Alpha
+        raw_ew = market_blob.get("raw_pool_ew", {}).get("summary")
+        filt_ew = market_blob.get("equal_weight", {}).get("summary")
+
+        if raw_ew and filt_ew:
+            ann_raw = _safe_float(raw_ew.get("annualized_return")) or 0.0
+            ann_filt = _safe_float(filt_ew.get("annualized_return")) or 0.0
+            sel_alpha = ann_filt - ann_raw
+
+            md.append("## 1. Selection Alpha (Pruning Value)")
+            md.append(f"- **Raw Pool EW Return**: {ann_raw:.2%}")
+            md.append(f"- **Filtered EW Return**: {ann_filt:.2%}")
+            md.append(f"- **Selection Alpha**: **{sel_alpha:+.2%}**")
+            md.append("\n*Selection Alpha is the return gained by using Hierarchical Clustering and Execution Alpha to filter the universe into leaders.*\n")
+        else:
+            md.append("## 1. Selection Alpha (Pruning Value)")
+            md.append("\nInsufficient data to calculate Selection Alpha (Need both Raw Pool EW and Filtered EW).\n")
+
+        # 2. Optimization Alpha
+        md.append("## 2. Optimization Alpha (Weighting Value)")
+        opt_rows = []
+        if filt_ew:
+            ann_filt = _safe_float(filt_ew.get("annualized_return")) or 0.0
+            for prof in PROFILES:
+                prof_sum = self.all_results.get(sim_name, {}).get("custom", {}).get(prof, {}).get("summary")
+                if prof_sum:
+                    ann_opt = _safe_float(prof_sum.get("annualized_return")) or 0.0
+                    opt_alpha = ann_opt - ann_filt
+                    opt_rows.append({"Profile": prof.upper(), "Ann. Return": f"{ann_opt:.2%}", "Opt. Alpha": f"{opt_alpha:+.2%}"})
+
+        if opt_rows:
+            df_opt = pd.DataFrame(opt_rows)
+            md.append(df_opt.to_markdown(index=False))
+            md.append("\n*Optimization Alpha is the return gained by using advanced risk engines (HRP, MinVar, etc.) instead of Equal Weighting the filtered leaders.*\n")
+
+        with open(self.summary_dir / "alpha_isolation_audit.md", "w") as f:
+            f.write("\n".join(md))
 
     def _generate_decay_audit(self):
         """Generates a report on Slippage Decay (Idealized vs High-Fidelity)."""
