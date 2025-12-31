@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, cast
+from typing import Any, Dict, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,7 @@ class BaseSimulator(ABC):
         self,
         test_data: pd.DataFrame,
         weights_df: pd.DataFrame,
+        initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
         """
         Simulate portfolio performance over a test window.
@@ -39,6 +40,7 @@ class ReturnsSimulator(BaseSimulator):
         self,
         test_data: pd.DataFrame,
         weights_df: pd.DataFrame,
+        initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
         weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
         weights_series = weights_df.set_index("Symbol")[weight_col].astype(float)
@@ -58,7 +60,6 @@ class ReturnsSimulator(BaseSimulator):
         # Daily Rebalancing Logic:
         # returns_t = sum(w_target * asset_return_t)
         # This assumes the portfolio is reset to the target weights at the end of each day.
-        # This matches the 'FixedWeights' policy in cvxportfolio and vectorbt.
         daily_np = (np.asarray(test_data[symbols], dtype=float) * w_norm.values).sum(axis=1)
         daily_returns = pd.Series(daily_np, index=test_data.index).dropna()
 
@@ -86,9 +87,10 @@ class CvxPortfolioSimulator(BaseSimulator):
         self,
         test_data: pd.DataFrame,
         weights_df: pd.DataFrame,
+        initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
         if self.cvp is None:
-            return ReturnsSimulator().simulate(test_data, weights_df)
+            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
 
         settings = get_settings()
         returns = test_data.copy()
@@ -119,17 +121,29 @@ class CvxPortfolioSimulator(BaseSimulator):
         policy = self.cvp.FixedWeights(w_series)
         friction = settings.backtest_slippage + settings.backtest_commission
 
+        # Prepare initial weights for transition modeling
+        h_init = None
+        if initial_holdings is not None:
+            h_init = initial_holdings.reindex(returns.columns, fill_value=0.0)
+            # Re-normalize just in case
+            h_sum = h_init.abs().sum()
+            if h_sum > 0:
+                h_init = h_init / h_sum
+
         try:
             simulator = self.cvp.MarketSimulator(returns=returns, costs=[self.cvp.TransactionCost(a=friction)], cash_key=cash_key, min_history=pd.Timedelta(days=0))
-            result = simulator.backtest(policy, start_time=test_data.index[0], end_time=test_data.index[-1])
+            # If h_init is provided, pass it to backtest as 'h'
+            result = simulator.backtest(policy, start_time=test_data.index[0], end_time=test_data.index[-1], h=h_init)
             realized_returns = result.v.pct_change().dropna()
 
             res = calculate_performance_metrics(realized_returns)
             res["daily_returns"] = realized_returns
+            # Return final weights for next window
+            res["final_weights"] = result.w.iloc[-1]
             return res
         except Exception as e:
             logger.error(f"cvxportfolio failed: {e}")
-            return ReturnsSimulator().simulate(test_data, weights_df)
+            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
 
 
 class VectorBTSimulator(BaseSimulator):
@@ -149,15 +163,16 @@ class VectorBTSimulator(BaseSimulator):
         self,
         test_data: pd.DataFrame,
         weights_df: pd.DataFrame,
+        initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
         if self.vbt is None:
-            return ReturnsSimulator().simulate(test_data, weights_df)
+            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
 
         settings = get_settings()
         weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
         available = [s for s in weights_df["Symbol"] if s in test_data.columns]
         if not available:
-            return ReturnsSimulator().simulate(test_data, weights_df)
+            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
 
         w_series = weights_df.set_index("Symbol")[weight_col].reindex(available).fillna(0.0)
         abs_sum = float(w_series.abs().sum())
@@ -180,7 +195,7 @@ class VectorBTSimulator(BaseSimulator):
             return res
         except Exception as e:
             logger.error(f"vectorbt failed: {e}")
-            return ReturnsSimulator().simulate(test_data, weights_df)
+            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
 
 
 def build_simulator(name: str = "custom") -> BaseSimulator:

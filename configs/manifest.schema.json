@@ -100,7 +100,8 @@
             "feat_xs_momentum": { "type": "boolean" },
             "feat_spectral_regimes": { "type": "boolean" },
             "feat_decay_audit": { "type": "boolean" },
-            "feat_audit_ledger": { "type": "boolean" }
+            "feat_audit_ledger": { "type": "boolean" },
+            "feat_pit_fidelity": { "type": "boolean" }
           },
           "additionalProperties": false
         }

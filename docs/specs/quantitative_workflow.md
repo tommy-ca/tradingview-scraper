@@ -20,7 +20,7 @@ The entire production lifecycle is managed via `make daily-run` and follows this
 9.  **Factor Analysis**: Build hierarchical risk buckets using **Ward Linkage** and **Intersection Correlation**.
 10. **Regime Detection**: Multi-factor analysis using **Entropy + DWT Spectral Turbulence** to categorize the market environment (Spectral triggers gated by `feat_spectral_regimes`).
 11. **Optimization**: Cluster-Aware V2 allocation with **Fragility (CVaR) Penalties** and **Turnover Control**, benchmarking across multiple engines (`skfolio`, `Riskfolio`, `PyPortfolioOpt`, `cvxportfolio`).
-12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators (200d realized target).
+12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators (200d realized target). Must include **Cumulative Transition Friction** analysis to quantify rotation costs.
 13. **Reporting**: Generate QuantStats Markdown Tear-sheets, Strategy Resume, and sync essential artifacts to private Gist via `make finalize`.
 
 ## 4. Audit & Reproducibility (Requirement)

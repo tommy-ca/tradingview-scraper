@@ -16,7 +16,9 @@ from tradingview_scraper.portfolio_engines.backtest_simulators import build_simu
 from tradingview_scraper.portfolio_engines.base import EngineRequest, EngineUnavailableError, ProfileName
 from tradingview_scraper.portfolio_engines.engines import build_engine, list_available_engines, list_known_engines
 from tradingview_scraper.regime import MarketRegimeDetector
+from tradingview_scraper.risk import AntifragilityAuditor
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.utils.audit import AuditLedger, get_df_hash  # type: ignore
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -123,6 +125,12 @@ class BacktestEngine:
         cumulative: Dict[tuple[str, str, str], pd.Series] = {}
         prev_weights: Dict[tuple[str, str, str], pd.Series] = {}
 
+        # Setup Audit Ledger if enabled
+        run_dir = settings.prepare_summaries_run_dir()
+        ledger = None
+        if settings.features.feat_audit_ledger:
+            ledger = AuditLedger(run_dir)
+
         for s in sim_names:
             for eng in engines:
                 results[s][eng] = {}
@@ -168,7 +176,19 @@ class BacktestEngine:
                 for prof in profiles if eng != "market" else ["min_variance"]:
                     try:
                         p_weights = prev_weights.get(("cvxportfolio" if "cvxportfolio" in sim_names else sim_names[0], eng, prof))
+
+                        if ledger:
+                            ledger.record_intent(
+                                step="backtest_optimize",
+                                params={"engine": eng, "profile": prof, "start": str(train_data.index[0]), "end": str(train_data.index[-1])},
+                                input_hashes={"train_returns": get_df_hash(train_data)},
+                            )
+
                         weights_df = self._compute_weights(train_data, clusters, stats_df_final, prof, eng, cluster_cap, candidate_meta, cast(pd.Series, p_weights), regime)
+
+                        if ledger and not weights_df.empty:
+                            ledger.record_outcome(step="backtest_optimize", status="success", output_hashes={"window_weights": get_df_hash(weights_df)}, metrics={"n_assets": len(weights_df)})
+
                         if not weights_df.empty:
                             cached_weights[(eng, prof)] = weights_df
                     except Exception as e:
@@ -181,9 +201,17 @@ class BacktestEngine:
                     if (s_name, eng, prof) not in cumulative:
                         continue
                     try:
-                        perf = simulator.simulate(test_data, weights_df)
-                        w_series = weights_df.set_index("Symbol")["Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"].astype(float).fillna(0.0)
-                        prev_weights[(s_name, eng, prof)] = w_series
+                        p_holdings = prev_weights.get((s_name, eng, prof))
+                        perf = simulator.simulate(test_data, weights_df, initial_holdings=p_holdings)
+
+                        # Capture realized ending state for next window transition
+                        if "final_weights" in perf:
+                            prev_weights[(s_name, eng, prof)] = perf["final_weights"]
+                        else:
+                            # Fallback: target weights become starting holdings
+                            w_series = weights_df.set_index("Symbol")["Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"].astype(float).fillna(0.0)
+                            prev_weights[(s_name, eng, prof)] = w_series
+
                         results[s_name][eng][prof]["windows"].append(
                             {
                                 "engine": eng,
@@ -218,7 +246,7 @@ class BacktestEngine:
             "returns": {f"{s}_{e}_{p}": v for (s, e, p), v in cumulative.items() if not v.empty},
         }
 
-    def _cluster_data(self, df: pd.DataFrame) -> Dict[str, List[str]]:
+    def _cluster_data(self, df: pd.DataFrame, threshold: float = 0.5) -> Dict[str, List[str]]:
         import scipy.cluster.hierarchy as sch
         from scipy.spatial.distance import squareform
         import importlib
@@ -229,7 +257,13 @@ class BacktestEngine:
         dist = (dist + dist.T) / 2
         np.fill_diagonal(dist, 0)
         link = sch.linkage(squareform(dist, checks=False), method="ward")
-        cluster_ids = sch.fcluster(link, t=10, criterion="maxclust")
+
+        settings = get_settings()
+        if settings.features.feat_pit_fidelity:
+            cluster_ids = sch.fcluster(link, t=threshold, criterion="distance")
+        else:
+            cluster_ids = sch.fcluster(link, t=10, criterion="maxclust")
+
         clusters = {}
         for sym, c_id in zip(df.columns, cluster_ids):
             cid = str(c_id)
@@ -239,6 +273,11 @@ class BacktestEngine:
         return clusters
 
     def _audit_training_stats(self, df: pd.DataFrame) -> pd.DataFrame:
+        settings = get_settings()
+        if settings.features.feat_pit_fidelity:
+            auditor = AntifragilityAuditor()
+            return auditor.audit(df)
+
         return pd.DataFrame([{"Symbol": s, "Vol": df[s].std() * np.sqrt(252), "Return": df[s].mean() * 252, "Antifragility_Score": 0.5} for s in df.columns])
 
     def _compute_weights(

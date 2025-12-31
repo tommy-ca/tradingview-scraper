@@ -59,6 +59,30 @@ Every significant pipeline step must record its **Intent** (Inputs + Parameters)
 }
 ```
 
+### 3.3 Backtest Window Entry
+```json
+{
+  "type": "action",
+  "step": "backtest_window",
+  "status": "success",
+  "meta": {
+    "window_start": "2023-01-01",
+    "window_end": "2023-01-20",
+    "engine": "custom",
+    "profile": "max_sharpe"
+  },
+  "intent": {
+    "input_hashes": { "train_returns": "sha256..." }
+  },
+  "outcome": {
+    "output_hashes": { "window_weights": "sha256...", "test_returns": "sha256..." },
+    "metrics": { "realized_sharpe": 1.4, "turnover": 0.12 }
+  },
+  "prev_hash": "...",
+  "hash": "..."
+}
+```
+
 ## 4. Pipeline Integration Points
 
 | Stage | Audit Evidence Captured |

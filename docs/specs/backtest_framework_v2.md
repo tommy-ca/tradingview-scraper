@@ -48,6 +48,21 @@ The framework supports **Adaptive Selection** at each rebalancing step, enabling
 - **Transition Costs**: Simulators (especially `CvxPortfolioSimulator`) correctly model the friction of closing old positions and opening new ones during these universe shifts.
 - **Implementation**: Managed in `BacktestEngine.run_tournament` by calling `run_selection` from `scripts.natural_selection` at each iteration.
 
+## 5. High-Fidelity Simulations
+
+To ensure backtest results mirror real-world implementation, the framework employs several advanced modeling techniques:
+
+### 5.1 Point-in-Time (PIT) Risk Auditing
+The backtester no longer uses static risk scores. At each window start, it executes the production `AntifragilityAuditor` on the training returns. This ensures that the optimizer reacts to historical tail-risk events (e.g., flash crashes) just as it would in live production.
+
+### 5.2 State Persistence (Cross-Window Transitions)
+Simulators maintain position state between walk-forward windows.
+- **Friction Continuity**: When moving from Window N to Window N+1, the simulator calculates transaction costs for the delta between the *realized ending weights* of the previous window and the *target weights* of the new window.
+- **Cash Management**: Residual cash and dividends are preserved across the simulation timeline.
+
+### 5.3 Multi-Engine Benchmarking (The Tournament)
+The `Tournament` mode runs a 3D matrix of (Profile x Engine x Simulator). This allows us to identify "Alpha Decay"—the difference between idealized mathematical returns and realized returns after friction and data gaps.
+
 ## 5. Alpha Momentum Gates
 
 To prevent forced allocation into "best of the losers" clusters:

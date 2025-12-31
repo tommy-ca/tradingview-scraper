@@ -85,7 +85,8 @@
         "feat_xs_momentum": false,
         "feat_spectral_regimes": false,
         "feat_decay_audit": false,
-        "feat_audit_ledger": false
+        "feat_audit_ledger": false,
+        "feat_pit_fidelity": false
       }
     },
     "production_v2_canary": {
@@ -136,53 +137,25 @@
         "feat_xs_momentum": true,
         "feat_spectral_regimes": true,
         "feat_decay_audit": true,
-        "feat_audit_ledger": true
+        "feat_audit_ledger": true,
+        "feat_pit_fidelity": true
       }
     },
     "repro_dev": {
-      "description": "Lightweight development profile for fast end-to-end testing",
+      "description": "Lightweight reproducible development profile",
       "data": {
         "lookback_days": 60,
-        "batch_size": 10,
-        "backfill": true,
-        "gapfill": true,
-        "max_symbols": 50,
-        "strict_health": false,
-        "min_days_floor": 20
+        "batch_size": 5,
+        "max_symbols": 50
       },
       "selection": {
-        "top_n": 1,
-        "threshold": 0.55,
-        "min_momentum_score": 0.0
-      },
-
-      "risk": {
-        "cluster_cap": 0.25
+        "top_n": 3,
+        "threshold": 0.4
       },
       "backtest": {
         "train_window": 30,
         "test_window": 10,
-        "step_size": 10,
-        "backtest_simulator": "custom",
-        "backtest_slippage": 0.0005,
-        "backtest_commission": 0.0001,
-        "backtest_cash_asset": "USDT",
-        "baseline_symbol": "AMEX:SPY",
-        "report_mode": "basic"
-      },
-      "tournament": {
-        "engines": "market,custom",
-        "profiles": "min_variance,hrp",
-        "simulators": "custom,cvxportfolio,vectorbt"
-      },
-      "discovery": {
-        "enabled_markets": ["futures", "crypto"],
-        "futures_long": { "base_preset": "futures_trend_momentum.yaml", "limit": 10 },
-        "futures_short": { "base_preset": "futures_trend_momentum_short.yaml", "limit": 10 },
-        "cfd_long": { "base_preset": "cfd_trend_momentum.yaml", "limit": 5 },
-        "cfd_short": { "base_preset": "cfd_trend_momentum_short.yaml", "limit": 5 },
-        "crypto_binance_perp_long": { "base_preset": "crypto_cex_trend_binance_perp_daily_long.yaml", "limit": 10 },
-        "crypto_binance_perp_short": { "base_preset": "crypto_cex_trend_binance_perp_daily_short.yaml", "limit": 10 }
+        "step_size": 10
       },
       "env": {
         "META_REFRESH": "0",
@@ -194,8 +167,11 @@
         "feat_xs_momentum": true,
         "feat_spectral_regimes": true,
         "feat_decay_audit": true,
-        "feat_audit_ledger": true
+        "feat_audit_ledger": true,
+        "feat_pit_fidelity": true
       }
+    }
+
     }
   }
 }

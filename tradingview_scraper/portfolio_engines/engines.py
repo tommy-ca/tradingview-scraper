@@ -476,7 +476,31 @@ class MarketBaselineEngine(BaseRiskEngine):
     def optimize(self, *, returns: pd.DataFrame, clusters: Dict[str, List[str]], meta: Optional[Dict[str, Any]], stats: Optional[pd.DataFrame] = None, request: EngineRequest) -> EngineResponse:
         from tradingview_scraper.settings import get_settings
 
-        symbol = get_settings().baseline_symbol
+        settings = get_settings()
+
+        # Mode detection: if profile is 'equal_weight' or if baseline_symbol is missing
+        if request.profile == "equal_weight" or not settings.baseline_symbol or settings.baseline_symbol not in returns.columns:
+            n = len(returns.columns)
+            if n == 0:
+                return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(), meta={"backend": "market_ew"}, warnings=["empty returns"])
+
+            w = 1.0 / n
+            rows = []
+            for s in returns.columns:
+                m = (meta or {}).get(str(s), {})
+                rows.append(
+                    {
+                        "Symbol": str(s),
+                        "Weight": w,
+                        "Net_Weight": w * (1.0 if m.get("direction", "LONG") == "LONG" else -1.0),
+                        "Direction": m.get("direction", "LONG"),
+                        "Cluster_ID": "MARKET_EW",
+                        "Description": m.get("description", "N/A"),
+                    }
+                )
+            return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(rows), meta={"backend": "market_ew"}, warnings=[])
+
+        symbol = settings.baseline_symbol
         weights = pd.DataFrame([{"Symbol": symbol, "Weight": 1.0, "Direction": "LONG", "Cluster_ID": "MARKET", "Net_Weight": 1.0, "Description": "Market Baseline"}])
         return EngineResponse(engine=self.name, request=request, weights=weights, meta={"backend": "market_hold"}, warnings=[])
 
