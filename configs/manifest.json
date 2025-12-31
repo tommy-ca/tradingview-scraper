@@ -84,7 +84,8 @@
         "feat_turnover_penalty": false,
         "feat_xs_momentum": false,
         "feat_spectral_regimes": false,
-        "feat_decay_audit": false
+        "feat_decay_audit": false,
+        "feat_audit_ledger": false
       }
     },
     "production_v2_canary": {
@@ -134,7 +135,8 @@
         "feat_turnover_penalty": true,
         "feat_xs_momentum": true,
         "feat_spectral_regimes": true,
-        "feat_decay_audit": true
+        "feat_decay_audit": true,
+        "feat_audit_ledger": true
       }
     },
     "repro_dev": {
@@ -191,7 +193,8 @@
         "feat_turnover_penalty": true,
         "feat_xs_momentum": true,
         "feat_spectral_regimes": true,
-        "feat_decay_audit": true
+        "feat_decay_audit": true,
+        "feat_audit_ledger": true
       }
     }
   }

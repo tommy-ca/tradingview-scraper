@@ -21,7 +21,9 @@ class ClusteredOptimizerV2:
     def __init__(self, returns_path: str, clusters_path: str, meta_path: str, stats_path: Optional[str] = None):
         self.settings = get_settings()
         self.run_dir = self.settings.prepare_summaries_run_dir()
-        self.ledger = AuditLedger(self.run_dir)
+        self.ledger = None
+        if self.settings.features.feat_audit_ledger:
+            self.ledger = AuditLedger(self.run_dir)
 
         # Explicitly cast to DataFrame to satisfy linter
         with open(returns_path, "rb") as f_in:
@@ -126,10 +128,12 @@ class ClusteredOptimizerV2:
 
     def run_profile(self, profile: str, method: str, cluster_cap: float = 0.25, prev_weights: Optional[pd.Series] = None) -> pd.DataFrame:
         """Entry point for standard risk profiles."""
-        self.ledger.record_intent(step=f"optimize_{profile}", params={"method": method, "cap": cluster_cap}, input_hashes={"returns": get_df_hash(self.returns)})
+        if self.ledger:
+            self.ledger.record_intent(step=f"optimize_{profile}", params={"method": method, "cap": cluster_cap}, input_hashes={"returns": get_df_hash(self.returns)})
         cluster_weights = self.optimize_across_clusters(method, cluster_cap, prev_weights)
         weights_df = self._build_final_weights(cluster_weights)
-        self.ledger.record_outcome(step=f"optimize_{profile}", status="success", output_hashes={"weights": get_df_hash(weights_df)}, metrics={"n_assets": len(weights_df)})
+        if self.ledger:
+            self.ledger.record_outcome(step=f"optimize_{profile}", status="success", output_hashes={"weights": get_df_hash(weights_df)}, metrics={"n_assets": len(weights_df)})
         return weights_df
 
     def run_barbell(self, cluster_cap: float = 0.25, regime: str = "NORMAL") -> pd.DataFrame:

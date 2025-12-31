@@ -153,7 +153,9 @@ def natural_selection(
     m_gate = min_momentum_score if min_momentum_score is not None else settings.min_momentum_score
 
     run_dir = settings.prepare_summaries_run_dir()
-    ledger = AuditLedger(run_dir)
+    ledger = None
+    if settings.features.feat_audit_ledger:
+        ledger = AuditLedger(run_dir)
 
     if not os.path.exists(returns_path) or not os.path.exists(meta_path):
         logger.error("Data missing.")
@@ -162,7 +164,8 @@ def natural_selection(
     with open(returns_path, "rb") as f_in:
         returns = cast(pd.DataFrame, pd.read_pickle(f_in))
 
-    ledger.record_intent(step="natural_selection", params={"top_n": top_n, "threshold": threshold}, input_hashes={"returns": get_df_hash(returns)})
+    if ledger:
+        ledger.record_intent(step="natural_selection", params={"top_n": top_n, "threshold": threshold}, input_hashes={"returns": get_df_hash(returns)})
 
     with open(meta_path, "r") as f_meta:
         raw_candidates = json.load(f_meta)
@@ -174,7 +177,8 @@ def natural_selection(
     with open(output_path, "w") as f_out:
         json.dump(winners, f_out, indent=2)
 
-    ledger.record_outcome(step="natural_selection", status="success", output_hashes={"candidates": hashlib.sha256(json.dumps(winners).encode()).hexdigest()}, metrics={"n_winners": len(winners)})
+    if ledger:
+        ledger.record_outcome(step="natural_selection", status="success", output_hashes={"candidates": hashlib.sha256(json.dumps(winners).encode()).hexdigest()}, metrics={"n_winners": len(winners)})
     logger.info(f"Natural Selection Complete: {len(winners)} candidates.")
 
 

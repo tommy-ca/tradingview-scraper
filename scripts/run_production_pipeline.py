@@ -32,11 +32,13 @@ class ProductionPipeline:
 
         # Setup Audit Ledger
         self.run_dir = self.settings.prepare_summaries_run_dir()
-        self.ledger = AuditLedger(self.run_dir)
+        self.ledger = None
+        if self.settings.features.feat_audit_ledger:
+            self.ledger = AuditLedger(self.run_dir)
 
-        # Record Genesis
-        manifest_hash = self._get_file_hash(self.manifest_path)
-        self.ledger.record_genesis(self.run_id, self.profile, manifest_hash)
+            # Record Genesis
+            manifest_hash = self._get_file_hash(self.manifest_path)
+            self.ledger.record_genesis(self.run_id, self.profile, manifest_hash)
 
     def _get_file_hash(self, path: Path) -> str:
         if not path.exists():
@@ -48,7 +50,8 @@ class ProductionPipeline:
         logger.info(f">>> Step: {name}")
 
         # Log Intent
-        self.ledger.record_intent(step=name.lower(), params={"cmd": " ".join(command)}, input_hashes={})
+        if self.ledger:
+            self.ledger.record_intent(step=name.lower(), params={"cmd": " ".join(command)}, input_hashes={})
 
         full_env = os.environ.copy()
         if env:
@@ -57,11 +60,13 @@ class ProductionPipeline:
         try:
             result = subprocess.run(command, env=full_env, check=True, capture_output=True, text=True)
             # Log Outcome
-            self.ledger.record_outcome(step=name.lower(), status="success", output_hashes={}, metrics={"stdout_len": len(result.stdout)})
+            if self.ledger:
+                self.ledger.record_outcome(step=name.lower(), status="success", output_hashes={}, metrics={"stdout_len": len(result.stdout)})
             return True
         except subprocess.CalledProcessError as e:
             logger.error(f"Step '{name}' failed with return code {e.returncode}")
-            self.ledger.record_outcome(step=name.lower(), status="failure", output_hashes={}, metrics={"error": e.stderr[-500:]})
+            if self.ledger:
+                self.ledger.record_outcome(step=name.lower(), status="failure", output_hashes={}, metrics={"error": e.stderr[-500:]})
             return False
 
     def execute(self):

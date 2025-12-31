@@ -27,6 +27,7 @@ class FeatureFlags(BaseModel):
     feat_xs_momentum: bool = False
     feat_spectral_regimes: bool = False
     feat_decay_audit: bool = False
+    feat_audit_ledger: bool = False
 
 
 class ManifestSettingsSource(PydanticBaseSettingsSource):
