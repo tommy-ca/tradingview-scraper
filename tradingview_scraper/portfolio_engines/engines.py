@@ -531,9 +531,11 @@ class CVXPortfolioEngine(CustomClusteredEngine):
             gamma_risk = 1.0
             # Small trade cost to regularize weights
             objective = cvx.ReturnsForecast() - gamma_risk * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
+        elif request.profile == "hrp":
+            # HRP proxy: high risk aversion to approximate risk parity behavior
+            gamma_risk = 10.0
+            objective = cvx.ReturnsForecast() * 0.0 - gamma_risk * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
         else:
-            # HRP/Risk Parity - cvxportfolio doesn't have a direct HRP policy,
-            # we use a balanced risk-aversion approach.
             gamma_risk = 5.0
             objective = cvx.ReturnsForecast() - gamma_risk * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
 

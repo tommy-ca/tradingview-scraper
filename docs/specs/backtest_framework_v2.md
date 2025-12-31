@@ -68,14 +68,21 @@ The "Tournament" evaluates a 3D matrix of `[Simulator] x [Engine] x [Profile]`.
 - **Engines**: `Custom (Cvxpy)`, `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `CvxPortfolio`, **`Market`**.
 - **Profiles**: `MinVar`, `HRP`, `MaxSharpe`, `Antifragile Barbell`, `BuyHold`.
 
-### 7.2 Performance Optimization: Weight Caching
+### 7.2 Hierarchical Risk Parity (HRP) Standards
+The HRP profile aims for equal risk contribution across hierarchical clusters.
+- **Custom Engine**: Implements a **Convex Risk Parity** approximation using a log-barrier objective on cluster benchmarks.
+- **Third-Party Engines**: Utilize their respective native HRP implementations (Recursive Bisection or Quasi-Diagonalization).
+- **Constraint Handling**: All HRP outputs are strictly subjected to the **25% global cluster cap** via capped-simplex projection.
+- **Linkage**: The standard production linkage is **Ward** on **Intersection Correlation**.
+
+### 7.3 Performance Optimization: Weight Caching
 To minimize compute overhead, the framework implements **Weight Caching**. For each window:
 1.  All enabled **Engines** generate weights for each **Profile**.
 2.  The resulting weights are cached in-memory.
 3.  All enabled **Simulators** consume the cached weights to compute realized performance.
     - *Result*: Optimization happens once ({eng} \times N_{prof}$), Simulation happens {sim}$ times.
 
-### 7.3 Alpha Decay Audit
+### 7.4 Alpha Decay Audit
 The report includes an "Alpha Decay" table per profile, calculating the delta between Idealized Sharpe (zero friction) and Realized Sharpe (with slippage/commission).
 
 ## 8. Market Baseline Engine

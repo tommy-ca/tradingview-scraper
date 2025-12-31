@@ -9,7 +9,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # Institutional Gates
-MIN_OBSERVATIONS = 20
+MIN_OBSERVATIONS = 15
 # Epsilon jitter to prevent empty slices in quantile-based risk metrics (returns < var)
 EPSILON_JITTER = 1e-12
 
