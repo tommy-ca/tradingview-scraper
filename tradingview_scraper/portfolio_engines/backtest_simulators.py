@@ -48,12 +48,12 @@ class ReturnsSimulator(BaseSimulator):
             return calculate_performance_metrics(pd.Series(dtype=float))
 
         # Re-normalize weights for available symbols
-        w = weights_series[symbols].astype(float)
+        w = cast(pd.Series, weights_series[symbols].astype(float))
         normalizer = float(w.abs().sum()) if weight_col == "Net_Weight" else float(w.sum())
         if normalizer <= 0:
             return calculate_performance_metrics(pd.Series(dtype=float))
 
-        w_norm = w / normalizer
+        w_norm = cast(pd.Series, w / normalizer)
 
         # Daily Rebalancing Logic:
         # returns_t = sum(w_target * asset_return_t)
