@@ -5,7 +5,7 @@ Avoids pandas complexity by using basic Python data structures.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, cast
+from typing import cast
 
 import pandas as pd
 
@@ -137,7 +137,17 @@ def comprehensive_exchange_symbol_audit():
     symbol_counts = cast(pd.Series, df["symbol"]).value_counts()
     duplicates = symbol_counts[symbol_counts > 1]
 
-    print(f"Symbols with duplicates: {len(duplicates)}")
+    active_symbol_counts = cast(pd.Series, active_df["symbol"]).value_counts()
+    active_duplicates = active_symbol_counts[active_symbol_counts > 1]
+
+    print(f"Symbols with history (duplicates): {len(duplicates)}")
+    print(f"Symbols with multiple ACTIVE records: {len(active_duplicates)}")
+
+    if len(active_duplicates) > 0:
+        print("⚠ WARNING: Active duplicates detected!")
+        for symbol, count in active_duplicates.items():
+            print(f"  {symbol}: {count} active versions")
+
     if len(duplicates) > 0:
         print("Top duplicated symbols:")
         top_duplicates = cast(pd.Series, cast(pd.Series, duplicates).sort_values(ascending=False)).head(10)
@@ -225,8 +235,9 @@ if __name__ == "__main__":
         print("   Ensure all symbols follow EXCHANGE:SYMBOL pattern")
 
     if results["duplicates_count"] > 0:
-        print("\n5. CLEAN UP DUPLICATES:")
-        print("   Implement proper SCD Type 2 cleanup")
+        # In SCD Type 2, duplicates (history) are fine, only active duplicates are bad
+        # We check quality_score for other things
+        pass
 
     if results["quality_score"] < 90:
         print("\n6. IMPROVE DATA QUALITY:")

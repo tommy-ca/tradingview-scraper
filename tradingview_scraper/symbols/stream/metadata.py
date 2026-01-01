@@ -34,7 +34,7 @@ DEFAULT_EXCHANGE_METADATA = {
     "ICE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
     "OANDA": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FOREX},
     "FX_IDC": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
-    "FOREX": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
+    "FOREX": {"timezone": "America/New_York", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
 }
 
 
