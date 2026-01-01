@@ -29,6 +29,7 @@ CLUSTER_CAP ?= 0.25
 META_REFRESH ?= 0
 META_AUDIT ?= 0
 GIST_ID ?= e888e1eab0b86447c90c26e92ec4dc36
+SELECTION_MODE ?= 
 
 # Backtest Defaults
 BACKTEST_TRAIN ?= 120
@@ -242,18 +243,18 @@ prune:
 	$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
 	$(PY) scripts/audit_antifragility.py
 	$(MAKE) select TOP_N=$(TOP_N) THRESHOLD=$(THRESHOLD)
-	$(PY) scripts/enrich_candidates_metadata.py
 
 select:
-	$(PY) scripts/natural_selection.py --top-n $(TOP_N) --threshold $(THRESHOLD)
+	$(PY) scripts/enrich_candidates_metadata.py
+	$(PY) scripts/natural_selection.py --top-n $(TOP_N) --threshold $(THRESHOLD) --mode $(SELECTION_MODE)
 
 # --- Data Preparation (Self-Healing) ---
 
 prep:
 	PORTFOLIO_MAX_SYMBOLS=200 PORTFOLIO_BATCH_SIZE=$(BATCH) PORTFOLIO_LOOKBACK_DAYS=$(LOOKBACK) PORTFOLIO_BACKFILL=$(BACKFILL) PORTFOLIO_GAPFILL=$(GAPFILL) $(PY) scripts/prepare_portfolio_data.py
 	@if [ "$(GAPFILL)" = "1" ]; then \
-		echo "Running final repair pass..."; \
-		$(PY) scripts/repair_portfolio_gaps.py --type all; \
+		echo "Running final aggressive repair pass..."; \
+		$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15; \
 	fi
 
 align:
@@ -354,7 +355,7 @@ sync-dev:
 	uv sync --extra dev
 
 test:
-	$(PY) pytest
+	uv run --with pytest pytest
 
 lint:
 	uvx ruff check .

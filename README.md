@@ -24,10 +24,20 @@ To get started with the TradingView Scraper library, follow these steps:
 
 1. **Install with uv** (recommended):
    ```sh
+   # Install uv (if not already installed)
    curl -LsSf https://astral-sh.uv.io/install.sh | sh
-   uv venv --python 3.12
-   source .venv/bin/activate
-   uv sync --extra engines --extra engines-gpl --extra analytics --extra dev
+   
+   # Synchronize environment with all core and optional backends
+   uv sync --all-extras
+   ```
+
+2. **Run commands with uv**:
+   ```sh
+   # Run the production pipeline
+   uv run python -m scripts.run_production_pipeline --profile production
+   
+   # Run tests
+   uv run pytest
    ```
 
 ## Automated Daily Pipeline
