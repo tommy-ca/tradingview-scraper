@@ -233,16 +233,20 @@ class SelectionEngineV3(BaseSelectionEngine):
             "liquidity": liq_all,
             "antifragility": af_all,
             "survival": regime_all,
-            "efficiency": er_all,  # Integrated ER scoring
         }
         methods = {
             "survival": "cdf",
             "liquidity": "cdf",
-            "efficiency": "cdf",
             "momentum": "rank",
             "stability": "rank",
             "antifragility": "rank",
         }
+
+        # Rollout: Efficiency Integrated Scoring
+        if settings.features.feat_efficiency_scoring:
+            mps_metrics["efficiency"] = er_all
+            methods["efficiency"] = "cdf"
+
         mps = calculate_mps_score(mps_metrics, methods=methods)
 
         max_frag = float(frag_all.max())
@@ -280,26 +284,29 @@ class SelectionEngineV3(BaseSelectionEngine):
             if s_score < 0.1:
                 _record_veto(str(s), f"Failed Darwinian Health Gate (Regime Survival={s_score:.4f})")
 
-        # Spectral Predictability Vetoes (New in 2026-01-01)
-        for s in returns.columns:
-            if str(s) in disqualified:
-                continue
+        # Spectral Predictability Vetoes (New in 2026-01-01) - Rollout Gate
+        if settings.features.feat_predictability_vetoes:
+            for s in returns.columns:
+                if str(s) in disqualified:
+                    continue
 
-            pe = float(pe_all[s])
-            if pe > 0.9:
-                _record_veto(str(s), f"High Entropy ({pe:.4f})")
-                continue
+                pe = float(pe_all[s])
+                if pe > settings.features.entropy_max_threshold:
+                    _record_veto(str(s), f"High Entropy ({pe:.4f})")
+                    continue
 
-            er = float(er_all[s])
-            if er < 0.1:
-                _record_veto(str(s), f"Low Efficiency ({er:.4f})")
-                continue
+                er = float(er_all[s])
+                if er < settings.features.efficiency_min_threshold:
+                    _record_veto(str(s), f"Low Efficiency ({er:.4f})")
+                    continue
 
-            h = float(hurst_all[s])
-            if 0.45 < h < 0.55:
-                # Discard random walk zone
-                _record_veto(str(s), f"Random Walk zone (Hurst={h:.4f})")
-                continue
+                h = float(hurst_all[s])
+                if settings.features.hurst_random_walk_min < h < settings.features.hurst_random_walk_max:
+                    # Discard random walk zone
+                    _record_veto(str(s), f"Random Walk zone (Hurst={h:.4f})")
+                    continue
+        else:
+            logger.debug("Predictability vetoes skipped (feature flag disabled)")
 
         # Metadata Completeness
         required_meta = ["tick_size", "lot_size", "price_precision"]
