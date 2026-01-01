@@ -8,14 +8,17 @@ TradingView Scraper is a Python library for scraping trading data, ideas, news, 
 
 ## Development Commands
 
-### Installation and Setup
+### Installation and Setup (UV Native)
 ```bash
-# Install dependencies (including dev)
-uv sync --extra dev
+# Prepare environment with all core and optional backends
+uv sync --all-extras
 
-# Install the package in development mode
-# (uv sync installs the package in editable mode by default if configured, or just use uv sync)
-uv sync
+# Update lockfile after pyproject.toml changes
+uv lock
+
+# Export requirements for non-uv environments (compatibility)
+uv export --no-dev --format requirements-txt > requirements.txt
+uv export --extra dev --format requirements-txt > dev-requirements.txt
 ```
 
 ### Testing
@@ -25,38 +28,27 @@ uv run pytest
 
 # Run specific test file
 uv run pytest tests/test_ideas.py
-uv run pytest tests/test_indicators.py
-uv run pytest tests/test_realtime_price.py
-
-# Run tests with verbose output
-uv run pytest -v
 ```
 
 ### Code Quality
 ```bash
-# Lint with ruff (replaces flake8)
-uvx ruff check .
+# Lint with ruff
+uv run ruff check .
 
 # Format with ruff
-uvx ruff format .
+uv run ruff format .
 
-# Run pylint (used in CI)
-uv run pylint $(git ls-files '*.py')
+# Type checking
+uv run ty
+```
 
-# Audit portfolio logic and constraints
-make audit
+### Portfolio Backtesting (Tournament Matrix)
+```bash
+# Run the multi-engine, multi-profile tournament
+uv run scripts/backtest_engine.py --tournament
 
-# Run hierarchical cluster and sub-cluster analysis
-make corr-report
-
-# Display terminal-based implementation dashboard
-make display
-
-# Monitor portfolio drift and rebalancing signals
-make drift-monitor
-
-# Synchronize latest finalized summary artifacts to private GitHub Gist
-make gist
+# Generate unified quantitative reports
+TV_RUN_ID=<id> uv run scripts/generate_reports.py
 ```
 
 ### Analytical Reports

@@ -28,7 +28,7 @@ The entire production lifecycle is managed via the **Python Orchestrator** (`scr
 The orchestrator supports **Stateful Resumability** to minimize compute waste during pipeline failures.
 ```bash
 # Resume from Step 11 (Optimization) using a specific Run ID
-python -m scripts.run_production_pipeline --profile production --start-step 11 --run-id 20251231-150000
+uv run python -m scripts.run_production_pipeline --profile production --start-step 11 --run-id 20251231-150000
 ```
 
 ## 4. Audit & Reproducibility (Requirement)

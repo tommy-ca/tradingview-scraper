@@ -27,6 +27,8 @@ To ensure stability while deploying high-impact quantitative upgrades, the syste
 | `feat_partial_rebalance` | Dust trade filtering & execution status in drift monitor. | `false` |
 | `feat_turnover_penalty` | L1-norm penalty in CVXPY optimization to reduce churn. | `false` |
 | `feat_xs_momentum` | Global percentile ranking instead of local normalization. | `false` |
+| `selection_mode` | Selection specification engine ('legacy', 'v2', 'v3'). | `v3` |
+| `feat_dynamic_selection` | Scales winners per cluster based on pairwise correlation. | `false` |
 | `feat_spectral_regimes` | `TURBULENT` regime state & Dynamic Barbell Scaling. | `false` |
 | `feat_decay_audit` | Slippage decay section in Markdown reports. | `false` |
 | `feat_audit_ledger` | Master switch for Immutable Audit System (`audit.jsonl`). | `false` |

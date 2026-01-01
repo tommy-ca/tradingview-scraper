@@ -32,7 +32,19 @@ The production workflow implements an automated loop to ensure data health:
 4.  **Targeted Repair**: Automatically triggers `scripts/repair_portfolio_gaps.py` for symbols with identified internal holes.
 5.  **Neutral Alignment**: Any remaining minor gaps are filled with **0.0 (neutral returns)** during matrix alignment to preserve cross-asset synchronization.
 
-## 4. Operational Guardrails
+## 4. Temporal Normalization (Timezone Stripping)
+
+To ensure 100% reliability of time-series operations (slicing, alignment, reindexing), the pipeline enforces a **strictly timezone-naive DatetimeIndex**.
+
+- **Contamination Handling**: If an index becomes "contaminated" with mixed tz-aware/naive objects (e.g., from `yfinance` or `quantstats`), standard `tz_localize` fails.
+- **Ultra-Robust Remediation**: All loaders implement element-wise normalization:
+  ```python
+  new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in df.index]
+  df.index = pd.DatetimeIndex(new_idx)
+  ```
+- **Fallback**: System-wide fallback to `pd.to_datetime(idx, utc=True).tz_convert(None)` ensures continuity if element-wise stripping fails.
+
+## 5. Operational Guardrails
 
 - **WebSocket Resilience**:
     - **Total Execution Timeout**: Main collection loop exits if `total_timeout` is reached.

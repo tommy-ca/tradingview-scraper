@@ -1,0 +1,43 @@
+# Specification: Audit Ledger 2.0 - Transparency & Replayability (Jan 2026)
+
+This document defines the standards for institutional-grade auditable transparency within the TradingView Scraper quantitative framework.
+
+## 1. Requirements
+
+To meet MiFID II and SEC regulatory expectations for algorithmic trading, the audit ledger must support the following:
+
+| Requirement | Implementation | Rationale |
+| :--- | :--- | :--- |
+| **Integrity** | SHA-256 Hash Chaining | Prevents tampering with historical records. |
+| **Reproducibility** | Parameter Persistence | Every input (train window, lambda, gamma) must be recorded. |
+| **Replayability** | Deterministic Replay Tool | Ability to rerun a specific window from a ledger entry. |
+| **Lineage** | Data Hashing | Verifies that the input data at T=0 matches the data during reconstruction. |
+| **Provenance** | Environment Metadata | Record library versions (`uv.lock`) and Git commit hash. |
+
+## 2. Technical Design
+
+### A. Record Schema Expansion
+The `Action` record in the ledger will be expanded to include:
+- `env_hash`: Hash of the `uv.lock` and project configuration.
+- `data_slice_hash`: Hash of the specific training window slice used.
+- `state_seed`: The random seed used for any stochastic optimizers.
+
+### B. Replay Orchestrator
+A new tool, `scripts/replay_backtest.py`, will be developed to:
+1.  Parse a specific `hash` from the audit ledger.
+2.  Restore the `params` recorded in the `intent` block.
+3.  Locate the historical data (matching the `input_hashes`).
+4.  Execute the step and verify the `outcome_hash`.
+
+## 3. Implementation Status (Jan 2026)
+
+1.  **Enhance `AuditLedger` Class**: **COMPLETED**. Integrated `get_env_hash()` and `git_hash` into the Genesis block.
+2.  **Robust Data Hashing**: **COMPLETED**. Implemented ultra-stable `get_df_hash` that forces naive UTC indexing for deterministic replay parity across environments.
+3.  **Cluster Lineage Verification**: **COMPLETED**. Optimization intents now record the hash of the hierarchical cluster state, preventing mismatched tree reconstructions during replay.
+4.  **Develop Replay CLI**: **PROTOTYPED**. Verified the ability to reconstruct window parameters and verify data lineage.
+
+## 4. Institutional Standards Compliance
+The system now adheres to the following standards:
+- **Authenticity**: Every run starts with a genesis block pinning the Git commit and library environment.
+- **Integrity**: Each record is linked via SHA-256 to its predecessor, preventing un-traceable modifications.
+- **Reconstructibility**: Decisions are recorded with full parameter sets, allowing for point-in-time forensic analysis.

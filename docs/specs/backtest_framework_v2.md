@@ -60,10 +60,28 @@ Simulators maintain position state between walk-forward windows.
 - **Friction Continuity**: When moving from Window N to Window N+1, the simulator calculates transaction costs for the delta between the *realized ending weights* of the previous window and the *target weights* of the new window.
 - **Cash Management**: Residual cash and dividends are preserved across the simulation timeline.
 
-### 5.3 Multi-Engine Benchmarking (The Tournament)
-The `Tournament` mode runs a 3D matrix of (Profile x Engine x Simulator). This allows us to identify "Alpha Decay"—the difference between idealized mathematical returns and realized returns after friction and data gaps.
+### 5.3 Multi-Engine Benchmarking (The 4D Tournament)
+The `Tournament` mode evaluates a 4D matrix of `[Simulator] x [Selection Spec] x [Engine] x [Profile]`. This allows us to isolate the performance impact of pruning logic versus weighting logic.
 
-### 5.4 Initial Holdings & Warm Starts
+#### Dimensions:
+- **Simulators**: `ReturnsSimulator` (Idealized), `CvxPortfolioSimulator` (High-Fidelity).
+- **Selection Specs**: Controlled by feature flags (e.g., `feat_selection_darwinian`, `feat_selection_robust`). Standard specs include `Darwinian (V3)`, `Robust (V3)`, `Relative (V2)`, `Passive (Legacy)`.
+- **Engines**: `Custom`, `skfolio`, `Riskfolio`, `PyPortfolioOpt`, `CvxPortfolio`.
+- **Profiles**: `MinVar`, `HRP`, `MaxSharpe`, `Barbell`, `EqualWeight`.
+
+### 5.4 Alpha Isolation (Tiered Benchmarking)
+The framework isolates alpha sources by comparing returns across three distinct tiers:
+
+1. **Tier 1: Raw Pool EW ($R_{raw}$)**: Equal-weighted basket of all candidates discovered by scanners, before any pruning.
+2. **Tier 2: Filtered EW ($R_{filtered}$)**: Equal-weighted basket of candidates passing a specific **Selection Spec**.
+3. **Tier 3: Optimized ($R_{optimized}$)**: Weights produced by the risk engine using the filtered universe.
+
+**Metric Equations:**
+- **Selection Alpha ($A_s$):** $R_{filtered} - R_{raw}$ (Value of statistical pruning).
+- **Optimization Alpha ($A_o$):** $R_{optimized} - R_{filtered}$ (Value of portfolio optimization).
+- **Selection Efficiency:** The ratio of $A_s$ to total excess return.
+
+### 5.5 High-Fidelity Simulations
 To eliminate the "First-Trade Bias" (where starting from 100% cash creates an artificial spike in turnover and transaction costs), the engine supports **Warm-Start Initialization**.
 - **Mechanism**: The backtester attempts to load the last implemented state from `data/lakehouse/portfolio_actual_state.json`.
 - **Initialization**: If found, the weights of the *first* walk-forward window are compared against these actual holdings. Transaction costs are only calculated for the delta.
@@ -100,9 +118,11 @@ To maintain strategy-locked alpha, the backtester enforces **Scanner-Locked Dire
 | **Baseline** | `AMEX:SPY` | Primary benchmark for all multi-asset comparisons. |
 | **Friction** | 5bps Slippage / 1bp Commission | Real-world execution modeling. |
 
-## 7. Multi-Calendar Correlation Logic
+## 7. Multi-Calendar Correlation Logic & Index Integrity
 
 The framework supports mixed calendars (24/7 Crypto + 5/7 TradFi).
+- **Index Standard**: All returns and prices are strictly **Timezone Naive**. This prevents slicing errors and ensures consistency across disparate optimization engines (`cvxpy`, `skfolio`, `vectorbt`).
+- **Sanitization**: Loaders implement "Ultra-Robust" element-wise index stripping (`replace(tzinfo=None)`) to handle contaminated indices from external sources.
 - **Portfolio Returns**: Preserve all trading days (sat/sun included for crypto).
 - **Benchmark Alignment**: TradFi benchmarks (`SPY`) are mapped to the portfolio calendar. Benchmark returns on weekends are treated as `0.0`, ensuring that weekend crypto alpha is captured without benchmark bias.
 - **No Padding**: The returns matrix no longer zero-fills non-trading days for TradFi assets, preserving statistical variance and Sharpe accuracy.
@@ -114,6 +134,29 @@ The "Tournament" evaluates a 3D matrix of `[Simulator] x [Engine] x [Profile]`.
 ### 8.1 Dimensions
 - **Simulators**: `ReturnsSimulator` (Idealized), `CvxPortfolioSimulator` (Convex Policy), `VectorBTSimulator` (Vectorized Event-Driven).
 - **Engines**: `Custom (Cvxpy)`, `skfolio`, `Riskfolio-Lib`, `PyPortfolioOpt`, `CvxPortfolio`, **`Market`**.
+    - **Regularization**: All Mean-Variance based engines (Custom, Skfolio, Riskfolio) must utilize **L2 Regularization** (Ridge) to prevent overfitting and "Ghost Alpha".
+        - `custom`: `0.05 * sum(weights^2)` penalty.
+        - `skfolio`: `l2_coef=0.05`.
+        - `riskfolio`: `l=0.05`.
+
+### 2. Simulators (Execution Fidelity)
+
+The framework supports multiple simulation backends to triangulate performance:
+
+1.  **`CvxPortfolio` (Primary)**: 
+    - **Role**: High-fidelity source of truth.
+    - **Features**: Accurate slippage, spread, and commission modeling. Correctly handles turnover and friction.
+    - **Status**: **Stable**. Used for all final validations.
+
+2.  **`Custom` (Baseline)**:
+    - **Role**: Fast, idealized execution.
+    - **Features**: Idealized rebalancing (no friction). Good for checking logic but overestimates net returns.
+    - **Status**: **Stable**.
+
+3.  **`VectorBT` (Experimental)**:
+    - **Role**: High-performance vectorized backtesting.
+    - **Features**: Extremely fast for large datasets.
+    - **Status**: **Unstable**. Currently reports 0.00% turnover for weight-based rebalancing strategies due to signal alignment issues. Under investigation (see `docs/research/vectorbt_anomaly_investigation.md`).
 - **Profiles**: `MinVar`, `HRP`, `MaxSharpe`, `Antifragile Barbell`, `BuyHold`.
 
 ### 8.2 Hierarchical Risk Parity (HRP) Standards
@@ -121,11 +164,51 @@ The HRP profile aims for equal risk contribution across hierarchical clusters.
 - **Custom Engine**: Implements a **Convex Risk Parity** approximation using a log-barrier objective on cluster benchmarks.
 - **Linkage**: The standard production linkage is **Ward** on **Intersection Correlation**.
 
-## 9. Market Baseline Engine
-The framework treats the market benchmark as a first-class **"Market" Engine**.
-- **Strategy**: 100% Long `baseline_symbol` (default: `AMEX:SPY`).
-- **Standardized**: Appears in the 3D Tournament matrix alongside optimization engines.
-- **Zero-Bias**: Sourced directly from raw lakehouse data, bypassing scanner-specific direction flipping.
+4.  **`Market` (Institutional Benchmark)**:
+    - **Goal**: Standard institutional hurdle rate and **Simulator Calibration**.
+    - **Strategy**: Equal-weight allocation across fixed high-liquidity indices (default: `["AMEX:SPY"]`).
+    - **Logic**: Independent of active scanning universe pruning.
+    - **Calibration Role**: By running a fixed-weight benchmark through all simulators, we calibrate for:
+        - **Return Parity**: Ensuring simulators agree on the base return of known assets (e.g., SPY).
+        - **Turnover Baseline**: Measuring the drift-induced turnover vs. rebalancing-induced turnover.
+        - **Friction Sensitivity**: Identifying how different slippage/cost models impact a static portfolio.
+
+### 3. Audit & Reporting Fidelity (Jan 2026)
+
+To ensure institutional-grade transparency, the reporting engine now extracts deep context from the **Audit Ledger**:
+
+- **Simulator Synchronization**: All simulators are calibrated to a normalized **Turnover Metric** defined as `Sum(Abs(Trades)) / 2 / Portfolio Value`.
+    - `CvxPortfolio`: Normalized (divided by 2.0). High-fidelity friction modeling.
+    - `VectorBT`: Window-Aware. Normalized (divided by 2.0). Fast vectorized execution.
+    - `Custom`: Frictionless baseline. Rebalance-delta turnover.
+- **Cash Awareness**: Simulators are synchronized to treat unallocated weight as Cash (0% return), preventing volatility inflation in the baseline engine.
+- **Benchmark Consistency**: All simulators are verified against a fixed single-asset benchmark (e.g., SPY) to ensure zero-bias return parity.
+
+### 4. Simulator Fidelity & Calibration Standards (Jan 2026)
+
+To maintain a "Source of Truth" for quantitative results, the following calibration standards are enforced:
+
+| Standard | Requirement | Mechanism |
+| :--- | :--- | :--- |
+| **Return Parity** | Annualized Return difference < 0.5% | Fixed Day-0 price alignment across all backends. |
+| **Turnover Sync** | Metric: `Sum(Abs(Trades)) / 2 / Value` | Harmonized normalization across CVX, VBT, and Custom. |
+| **Rebalance Mode** | Strict adherence to `feat_rebalance_mode` | Syncing 'window' vs 'daily' logic to ensure identical churn. |
+| **Audit Trail** | Per-window weight & meta persistence | Hash-chained ledger (`audit.jsonl`) for 100% reproducibility. |
+
+The `CvxPortfolio` simulator remains the **High-Fidelity Reference**, while `VectorBT` is the **High-Performance Exploratory** engine.
+
+### 5. Backend Integrity & Dependency Management (Jan 2026)
+
+To ensure the reproducibility of tournament results across institutional environments, the following dependency standards are enforced:
+
+- **Single Source of Truth**: All optimization backends (`skfolio`, `riskfolio-lib`, `pyportfolioopt`, `clarabel`, `cvxportfolio`) are formally codified in `pyproject.toml` under the `[project.optional-dependencies]` section.
+- **Lockfile Primacy**: The `uv.lock` file is the immutable record of the production-validated environment. All development and CI/CD runs must use `uv sync --all-extras` to ensure environment parity.
+- **Multi-Backend Synchronization**:
+    - **`engines`**: Contains BSD/MIT licensed solvers (`skfolio`, `riskfolio`, `pyportfolioopt`, `clarabel`).
+    - **`engines-gpl`**: Isolates `cvxportfolio` to prevent license contamination of the core library.
+    - **`analytics`**: Contains reporting and simulation tools (`quantstats`, `vectorbt`).
+- **Compatibility Layer**: Autogenerated `requirements.txt` and `dev-requirements.txt` are provided for legacy CI/CD pipelines but are derived exclusively from the `uv` lockfile.
+
 
 ## 10. Unified QuantStats Reporting
 The reporting pipeline is rebased entirely on **QuantStats** to ensure mathematical consistency.
