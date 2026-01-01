@@ -214,7 +214,6 @@ class SelectionEngineV3(BaseSelectionEngine):
         corr = get_robust_correlation(returns)
         if not corr.empty:
             eigenvalues = np.linalg.eigvalsh(corr.values)
-            # Condition number: Max / Min (with absolute value and epsilon for stability)
             min_ev = np.abs(eigenvalues).min()
             kappa = float(eigenvalues.max() / (min_ev + 1e-15))
             if kappa > 1e6:
@@ -257,8 +256,11 @@ class SelectionEngineV3(BaseSelectionEngine):
                 continue
             meta = candidate_map.get(str(s), {})
             adv = float(meta.get("value_traded") or meta.get("Value.Traded") or 1e-9)
+
+            # SAFE ACCESS: fix diagnostics
             vol_val = float(vol_all[s]) if s in vol_all.index else 0.5
             eci = float(vol_val * np.sqrt(order_size / adv))
+
             annual_alpha = float(mom_all[s]) if s in mom_all.index else 0.0
             if annual_alpha - eci < 0.02:
                 _record_veto(str(s), f"High ECI ({eci:.4f}) relative to Alpha ({annual_alpha:.4f})")
@@ -273,7 +275,12 @@ class SelectionEngineV3(BaseSelectionEngine):
 
         # Calculate avg_eci safely
         valid_advs = [float(candidate_map.get(str(s), {}).get("value_traded") or 1e-9) for s in returns.columns]
-        metrics["avg_eci"] = float(np.mean([float(vol_all[s]) * np.sqrt(1e6 / adv) for s, adv in zip(returns.columns, valid_advs)]))
+
+        avg_eci_vals = []
+        for s, adv in zip(returns.columns, valid_advs):
+            v = float(vol_all[s]) if s in vol_all.index else 0.5
+            avg_eci_vals.append(v * np.sqrt(1e6 / adv))
+        metrics["avg_eci"] = float(np.mean(avg_eci_vals))
 
         selected_symbols = []
         audit_clusters = {}

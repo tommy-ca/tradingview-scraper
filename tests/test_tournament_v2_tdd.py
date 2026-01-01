@@ -25,7 +25,7 @@ def test_tournament_v2_spec_configuration(tmp_path):
 
     symbols = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "SPY"]
     dates = pd.date_range("2025-01-01", periods=200)
-    df_returns = pd.DataFrame(np.random.randn(200, len(symbols)) * 0.01, columns=symbols, index=dates)
+    df_returns = pd.DataFrame(np.random.randn(200, len(symbols)) * 0.01, columns=pd.Index(symbols), index=dates)
     df_returns.to_pickle(returns_path)
 
     candidates = [{"symbol": s, "identity": s, "direction": "LONG", "value_traded": 1e9} for s in symbols]

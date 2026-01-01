@@ -8,7 +8,7 @@ from tradingview_scraper.settings import get_settings
 def test_v2_selection_basic():
     """Verify CARS 2.0 (v2) selection logic."""
     symbols = ["S1", "S2", "S3"]
-    returns = pd.DataFrame(np.random.randn(200, 3) * 0.01, columns=symbols, index=pd.date_range("2023-01-01", periods=200))
+    returns = pd.DataFrame(np.random.randn(200, 3) * 0.01, columns=pd.Index(symbols), index=pd.date_range("2023-01-01", periods=200))
 
     # S1 is clearly best
     returns["S1"] += 0.05
@@ -31,7 +31,7 @@ def test_legacy_selection_logic():
     """Verify legacy local normalization logic."""
     symbols = ["S1", "S2"]
     data = np.random.randn(200, 2) * 0.01
-    returns = pd.DataFrame(data, columns=symbols, index=pd.date_range("2023-01-01", periods=200))
+    returns = pd.DataFrame(data, columns=pd.Index(symbols), index=pd.date_range("2023-01-01", periods=200))
 
     # S1 is better
     returns["S1"] += 0.05

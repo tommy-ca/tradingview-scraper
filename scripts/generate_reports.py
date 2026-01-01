@@ -189,7 +189,7 @@ class ReportGenerator:
 
     def _generate_strategy_teardowns(self):
         best_engines = self._identify_tournament_winners()
-        essential_reports = []
+        essential_reports: List[str] = []
         if not self.returns_dir.exists():
             return
         for pkl_path in self.returns_dir.glob("*.pkl"):
@@ -230,31 +230,25 @@ class ReportGenerator:
                 logger.error(f"Failed teardown for {pkl_path.name}: {e}")
 
         essential_reports.extend(
-            cast(
-                List[str],
-                [
-                    str(self.summary_dir / "backtest_comparison.md"),
-                    str(self.summary_dir / "engine_comparison_report.md"),
-                    str(self.summary_dir / "alpha_isolation_audit.md"),
-                ],
-            )
+            [
+                str(self.summary_dir / "backtest_comparison.md"),
+                str(self.summary_dir / "engine_comparison_report.md"),
+                str(self.summary_dir / "alpha_isolation_audit.md"),
+            ]
         )
         if self.settings.features.feat_decay_audit:
             essential_reports.append(str(self.summary_dir / "slippage_decay_audit.md"))
         essential_reports.extend(
-            cast(
-                List[str],
-                [
-                    str(self.summary_dir / "portfolio_report.md"),
-                    str(self.summary_dir / "selection_audit.md"),
-                    str(self.summary_dir / "data_health_selected.md"),
-                    str(self.summary_dir / "manifest.json"),
-                    str(self.summary_dir / "portfolio_clustermap.png"),
-                    str(self.summary_dir / "volatility_clustermap.png"),
-                    str(self.summary_dir / "factor_map.png"),
-                    str(self.summary_dir / "cluster_analysis.md"),
-                ],
-            )
+            [
+                str(self.summary_dir / "portfolio_report.md"),
+                str(self.summary_dir / "selection_audit.md"),
+                str(self.summary_dir / "data_health_selected.md"),
+                str(self.summary_dir / "manifest.json"),
+                str(self.summary_dir / "portfolio_clustermap.png"),
+                str(self.summary_dir / "volatility_clustermap.png"),
+                str(self.summary_dir / "factor_map.png"),
+                str(self.summary_dir / "cluster_analysis.md"),
+            ]
         )
         with open(self.summary_dir / "essential_reports.json", "w") as f:
             json.dump(essential_reports, f, indent=2)
@@ -280,7 +274,8 @@ class ReportGenerator:
     def _generate_strategy_resume(self):
         sim_name = "cvxportfolio" if "cvxportfolio" in self.all_results else "custom"
         best_engines = self._identify_tournament_winners()
-        summary_rows, regime_rows = [], []
+        summary_rows: List[Dict[str, Any]] = []
+        regime_rows: List[Dict[str, Any]] = []
         market_data = self.all_results.get(sim_name, {}).get("market", {})
         if market_data:
             first_prof = next((k for k in market_data.keys() if k not in ["_status", "raw_pool_ew"]), None)
@@ -357,7 +352,8 @@ class ReportGenerator:
         else:
             md.extend(["## 1. Selection Alpha (Pruning Value)", "\nInsufficient data to calculate Selection Alpha (Need both Raw Pool EW and Filtered EW).\n"])
         md.append("## 2. Optimization Alpha (Weighting Value)")
-        opt_rows, best_engines = [], self._identify_tournament_winners()
+        opt_rows: List[Dict[str, Any]] = []
+        best_engines = self._identify_tournament_winners()
         if filt_ew:
             ann_filt = _safe_float(filt_ew.get("annualized_return")) or 0.0
             for prof in PROFILES:
@@ -384,7 +380,8 @@ class ReportGenerator:
             f"Generated on: {pd.Timestamp.now()}",
             "\nThis report compares the **Idealized Returns** (Zero friction) against **High-Fidelity Simulation** (Slippage + Commission).\n",
         ]
-        decay_rows, sim_ideal, sim_real = [], "custom", "cvxportfolio"
+        decay_rows: List[Dict[str, Any]] = []
+        sim_ideal, sim_real = "custom", "cvxportfolio"
         if sim_ideal not in self.all_results or sim_real not in self.all_results:
             return
         for eng_name in self.all_results[sim_ideal].keys():
@@ -434,7 +431,7 @@ class ReportGenerator:
             ).to_markdown(index=False)
         )
         md.append("\n## Risk Fidelity Audit (Vol vs. Concentration)")
-        fidelity_rows = []
+        fidelity_rows: List[Dict[str, Any]] = []
         for eng in sorted(list(set(e for s in simulators for e in self.all_results.get(s, {})))):
             if eng == "_status":
                 continue
@@ -454,7 +451,7 @@ class ReportGenerator:
             df_fid["Vol-HHI Corr"] = df_fid["Vol-HHI Corr"].apply(lambda x: f"{x:.4f}")
             md.append("\n" + df_fid.to_markdown(index=False))
         for profile in profiles:
-            rows = []
+            rows: List[Dict[str, Any]] = []
             for sim in simulators:
                 sim_blob = self.all_results.get(sim, {})
                 for eng in sim_blob.keys():
