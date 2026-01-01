@@ -82,8 +82,6 @@ class BacktestEngine:
         b_params = bayesian_params or {}
         profiles = [p.strip().lower() for p in (profiles or ["min_variance", "hrp", "max_sharpe", "barbell"]) if (p or "").strip()]
         engines = [e.strip().lower() for e in (engines or ["custom", "skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio"]) if (e or "").strip()]
-        if "market" not in engines:
-            engines.append("market")
         sim_names = [s.strip().lower() for s in (simulators or ["custom", "cvxportfolio", "vectorbt", "nautilus"]) if (s or "").strip()]
 
         returns_to_use = cast(pd.DataFrame, self.returns)
@@ -112,8 +110,8 @@ class BacktestEngine:
                     cumulative[(s, eng, prof)] = []
                     prev_weights[(s, eng, prof)] = initial_holdings.get(prof, pd.Series(dtype=float))
 
-                if eng == "market" and settings.dynamic_universe:
-                    for prof in ["raw_pool_ew"]:
+                if eng == "custom" and settings.dynamic_universe:
+                    for prof in ["market_baseline", "benchmark_baseline"]:
                         results[s][eng][prof] = {"windows": [], "summary": None}
                         cumulative[(s, eng, prof)] = []
                         prev_weights[(s, eng, prof)] = pd.Series(dtype=float)
@@ -127,7 +125,13 @@ class BacktestEngine:
         for start_idx in range(0, total_len - train_window - test_window + 1, step_size):
             train_end = start_idx + train_window
             train_data_raw = returns_to_use.iloc[start_idx:train_end]
+
+            # EXTENDED TEST DATA: include one extra day for simulator alignment
+            test_end_idx = min(train_end + test_window + 1, total_len)
+            test_data_extended = returns_to_use.iloc[train_end:test_end_idx]
+            # Standard test data for metadata and non-extended simulators
             test_data = returns_to_use.iloc[train_end : train_end + test_window]
+
             regime = self.detector.detect_regime(train_data_raw)[0]
             market_env, _ = cast(Any, self.detector).detect_quadrant_regime(train_data_raw)
             stats_df = self._audit_training_stats(train_data_raw)
@@ -150,7 +154,7 @@ class BacktestEngine:
                 if eng not in available_engines:
                     continue
                 for prof in results[sim_names[0]][eng].keys():
-                    if prof in ["_status", "raw_pool_ew"]:
+                    if prof in ["_status", "market_baseline", "benchmark_baseline"]:
                         continue
                     try:
                         p_weights = prev_weights.get((sim_names[0], eng, prof))
@@ -185,14 +189,17 @@ class BacktestEngine:
                     except Exception as e:
                         logger.error(f"Engine {eng} Profile {prof} failed: {e}")
 
-            if settings.dynamic_universe and "market" in engines:
+            # Special Baselines
+            if settings.dynamic_universe and "custom" in engines:
                 try:
-                    # Raw Pool EW uses all discovered symbols (unpruned)
-                    w_df = self._compute_weights(train_data_raw, {}, pd.DataFrame(), "market", "market", 1.0, {}, None, regime)
-                    if not w_df.empty:
-                        cached_weights[("market", "raw_pool_ew")] = w_df
+                    w_market = self._compute_weights(train_data_raw, {}, pd.DataFrame(), "market", "custom", 1.0, {}, None, regime)
+                    if not w_market.empty:
+                        cached_weights[("custom", "market_baseline")] = w_market
+                    w_bench = self._compute_weights(train_data_raw, {}, pd.DataFrame(), "benchmark", "custom", 1.0, {}, None, regime)
+                    if not w_bench.empty:
+                        cached_weights[("custom", "benchmark_baseline")] = w_bench
                 except Exception as e:
-                    logger.error(f"Failed raw_pool_ew: {e}")
+                    logger.error(f"Failed baselines: {e}")
 
             for s_name in sim_names:
                 simulator = build_simulator(s_name)
@@ -200,7 +207,15 @@ class BacktestEngine:
                     if (s_name, eng, prof) not in cumulative:
                         continue
                     try:
-                        perf = simulator.simulate(test_data, w_df, initial_holdings=prev_weights.get((s_name, eng, prof)))
+                        # Use EXTENDED data for simulators that support it (CVXPortfolio)
+                        perf = simulator.simulate(test_data_extended, w_df, initial_holdings=prev_weights.get((s_name, eng, prof)))
+
+                        # IMPORTANT: result['daily_returns'] must be capped back to test_window length
+                        # to avoid window overlap in cumulative calculations
+                        d_returns = perf["daily_returns"]
+                        if len(d_returns) > test_window:
+                            d_returns = d_returns.iloc[:test_window]
+
                         prev_weights[(s_name, eng, prof)] = perf.get("final_weights", w_df.set_index("Symbol")["Weight"].fillna(0.0))
                         results[s_name][eng][prof]["windows"].append(
                             {
@@ -224,10 +239,10 @@ class BacktestEngine:
                             ledger.record_outcome(
                                 step="backtest_simulate",
                                 status="success",
-                                output_hashes={"test_returns": get_df_hash(perf["daily_returns"])},
+                                output_hashes={"test_returns": get_df_hash(d_returns)},
                                 metrics={"eng": eng, "prof": prof, "sim": s_name, "sharpe": perf["sharpe"]},
                             )
-                        cumulative[(s_name, eng, prof)].append(perf["daily_returns"])
+                        cumulative[(s_name, eng, prof)].append(d_returns)
                     except Exception as e:
                         results[s_name][eng][prof].setdefault("errors", []).append(str(e))
 
