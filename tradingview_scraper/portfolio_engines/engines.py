@@ -324,7 +324,7 @@ class CustomClusteredEngine(BaseRiskEngine):
                 )
             return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(rows), meta={"backend": "market_static"}, warnings=[])
 
-        # 2. BENCHMARK Profile: unpruned candidates pool, EW risk profile
+        # 2. BENCHMARK Profile: equal-weight risk profile
         if request.profile == "benchmark":
             targets = list(returns.columns)
             if not targets:
@@ -466,7 +466,6 @@ class SkfolioEngine(CustomClusteredEngine):
         return bool(importlib.util.find_spec("skfolio"))
 
     def _optimize_cluster_weights(self, *, universe: ClusteredUniverse, request: EngineRequest) -> pd.Series:
-        from skfolio.cluster import HierarchicalClustering, LinkageMethod
         from skfolio.measures import RiskMeasure
         from skfolio.optimization import HierarchicalRiskParity, MeanRisk, ObjectiveFunction, RiskBudgeting
 
@@ -479,14 +478,15 @@ class SkfolioEngine(CustomClusteredEngine):
 
             model = EqualWeighted()
         elif request.profile == "hrp":
+            # skfolio native HRP
             # Optimized skfolio HRP parameters found via Multi-Objective Optuna (Jan 2026 - v2)
             # Best Balance: linkage='ward', risk_measure='standard_deviation', distance='distance_correlation'
+            from skfolio.cluster import HierarchicalClustering, LinkageMethod
             from skfolio.distance import DistanceCorrelation
 
             model = HierarchicalRiskParity(
                 risk_measure=RiskMeasure.STANDARD_DEVIATION, distance_estimator=DistanceCorrelation(), hierarchical_clustering_estimator=HierarchicalClustering(linkage_method=LinkageMethod.WARD)
             )
-
         elif request.profile == "risk_parity":
             # Risk Parity via equal risk budgeting in skfolio
             model = RiskBudgeting(risk_measure=RiskMeasure.VARIANCE)

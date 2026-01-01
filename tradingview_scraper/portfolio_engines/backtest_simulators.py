@@ -12,6 +12,26 @@ from tradingview_scraper.utils.metrics import calculate_performance_metrics
 logger = logging.getLogger("backtest_simulators")
 
 
+def _calculate_standard_turnover(w_target: pd.Series, h_init: Optional[pd.Series]) -> float:
+    """
+    Calculates one-way turnover for a rebalance from h_init to w_target.
+    If h_init is None, assumes 100% buy-in from cash.
+    """
+    if h_init is None:
+        # One-way turnover for full buy-in is sum(w)/1.0 = 1.0 (if w sums to 1)
+        # We use abs().sum() / 2.0 because w includes cash (implicitly or explicitly)
+        # Wait, if w doesn't include cash explicitly, we should add it.
+        return float(w_target.abs().sum()) / 2.0
+
+    # Align both series
+    all_assets = sorted(list(set(w_target.index) | set(h_init.index)))
+    w1 = w_target.reindex(all_assets, fill_value=0.0)
+    w0 = h_init.reindex(all_assets, fill_value=0.0)
+
+    # Standard one-way turnover formula
+    return float((w1 - w0).abs().sum()) / 2.0
+
+
 class BaseSimulator(ABC):
     """Abstract base class for all backtest simulators."""
 
@@ -41,38 +61,23 @@ class ReturnsSimulator(BaseSimulator):
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
         settings = get_settings()
-
-        # Determine the target number of days (usually 20)
-        # If we got extended data (N+1), we only use the first N days
-        # to stay consistent with the optimization intent.
-        # But wait, the optimization intent IS for those N days.
-        # If we got 21 days, it means the 21st day is for CVX alignment.
-        # ReturnsSimulator and others should just use the first 20.
-
-        # Heuristic: if we have initial_holdings, it's a walk-forward window.
-        # Standard test_window is usually 20.
-        # Better: let's assume we use all but the last day if length > 20?
-        # No, just use a fixed max of 20 for this tournament setup.
         target_len = 20
-        if len(returns) > target_len:
-            returns_to_use = returns.iloc[:target_len]
-        else:
-            returns_to_use = returns
+        returns_to_use = returns.iloc[:target_len] if len(returns) > target_len else returns
 
         w_series = weights_df.set_index("Symbol")["Weight"].astype(float)
-        available_symbols = [s for s in w_series.index if s in returns_to_use.columns]
 
+        # Add cash to weights if missing for turnover calculation
+        if "cash" not in w_series.index:
+            w_series["cash"] = 1.0 - w_series.sum()
+
+        available_symbols = [s for s in w_series.index if s in returns_to_use.columns]
         p_returns = returns_to_use[available_symbols].mul(w_series[available_symbols]).sum(axis=1)
 
-        if initial_holdings is not None:
-            h_init = initial_holdings.reindex(w_series.index, fill_value=0.0)
-            turnover = float((w_series - h_init).abs().sum()) / 2.0
-        else:
-            turnover = float(w_series.abs().sum()) / 2.0
+        turnover = _calculate_standard_turnover(w_series, initial_holdings)
+        total_friction = turnover * 2.0 * (settings.backtest_slippage + settings.backtest_commission)
 
-        friction = turnover * 2.0 * (settings.backtest_slippage + settings.backtest_commission)
         if len(p_returns) > 0:
-            p_returns.iloc[0] -= friction
+            p_returns = p_returns - (total_friction / len(p_returns))
 
         res = calculate_performance_metrics(p_returns)
         res["daily_returns"] = p_returns
@@ -132,14 +137,19 @@ class CVXPortfolioSimulator(BaseSimulator):
             simulator = self.cvp.MarketSimulator(returns=returns_cvx, costs=cost_list, cash_key=cash_key, min_history=pd.Timedelta(days=0))
             result = simulator.backtest(policy, start_time=start_t, end_time=end_t, h=h_init)
 
-            # Shift returns back to match the original returns index
-            # and only keep the first 20 (original window)
             realized_returns = result.v.pct_change().shift(-1).dropna()
             if len(realized_returns) > 20:
                 realized_returns = realized_returns.iloc[:20]
 
             res = calculate_performance_metrics(realized_returns)
-            res.update({"daily_returns": realized_returns, "final_weights": result.w.iloc[-1], "turnover": float(result.turnover.sum())})
+            res.update(
+                {
+                    "daily_returns": realized_returns,
+                    "final_weights": result.w.iloc[-1],
+                    # Use standard turnover for parity
+                    "turnover": _calculate_standard_turnover(w_series, initial_holdings),
+                }
+            )
             return res
         except Exception as e:
             logger.error(f"cvxportfolio failed: {e}")
@@ -162,35 +172,23 @@ class VectorBTSimulator(BaseSimulator):
         settings = get_settings()
 
         target_len = 20
-        if len(returns) > target_len:
-            returns_to_use = returns.iloc[:target_len]
-        else:
-            returns_to_use = returns
+        returns_to_use = returns.iloc[:target_len] if len(returns) > target_len else returns
 
         w_series = weights_df.set_index("Symbol")["Weight"].astype(float)
-        returns_vbt = returns_to_use.copy()
-        for m in [s for s in w_series.index if s not in returns_vbt.columns]:
-            returns_vbt[m] = 0.0
 
-        w_df = pd.DataFrame([w_series.values], columns=w_series.index, index=returns_vbt.index[:1])
+        # 1. Price calculation: Correct cumulative returns
+        # We start with price 1.0 and multiply by (1+r) at each step
+        prices = (1.0 + returns_to_use[w_series.index]).cumprod()
 
-        portfolio = vbt.Portfolio.from_orders(
-            close=returns_vbt[w_series.index] + 1.0,
-            size=w_df,
-            size_type="target_percent",
-            fees=settings.backtest_slippage + settings.backtest_commission,
-            freq="D",
-        )
+        # 2. VectorBT expects target weights for rebalancing
+        # We rebalance every day to these weights for parity with CVXPortfolio
+        w_df = pd.DataFrame([w_series.values] * len(prices), columns=w_series.index, index=prices.index)
+
+        portfolio = vbt.Portfolio.from_orders(close=prices, size=w_df, size_type="target_percent", fees=settings.backtest_slippage + settings.backtest_commission, freq="D", init_cash=100.0)
         p_returns = portfolio.returns()
         res = calculate_performance_metrics(p_returns)
         res["daily_returns"] = p_returns
-
-        if initial_holdings is not None:
-            h_init = initial_holdings.reindex(w_series.index, fill_value=0.0)
-            res["turnover"] = float((w_series - h_init).abs().sum()) / 2.0
-        else:
-            res["turnover"] = float(w_series.abs().sum()) / 2.0
-
+        res["turnover"] = _calculate_standard_turnover(w_series, initial_holdings)
         return res
 
 
