@@ -115,23 +115,22 @@ def prepare_portfolio_universe():
         if c["symbol"] not in unique_candidates:
             unique_candidates[c["symbol"]] = c
 
-    # CRITICAL: Always ensure benchmark (SPY) is in candidates and LONG
+    # CRITICAL: Always ensure benchmarks are in candidates and LONG
     from tradingview_scraper.settings import get_settings
 
-    baseline_symbol = get_settings().baseline_symbol
-
-    logger.info("Ensuring baseline symbol %s is LONG.", baseline_symbol)
-    unique_candidates[baseline_symbol] = {
-        "symbol": baseline_symbol,
-        "description": "SPY",
-        "sector": "Equities (S&P 500)",
-        "market": "US_ETF",
-        "asset_class": "EQUITIES",
-        "identity": "SPY",
-        "direction": "LONG",
-        "is_baseline": True,
-        "value_traded": 1e12,  # Force to top
-    }
+    for b_sym in get_settings().benchmark_symbols:
+        logger.info("Ensuring benchmark symbol %s is LONG.", b_sym)
+        unique_candidates[b_sym] = {
+            "symbol": b_sym,
+            "description": f"Benchmark ({b_sym})",
+            "sector": "INDEX",
+            "market": "BENCHMARK",
+            "asset_class": "BENCHMARK",
+            "identity": b_sym,
+            "direction": "LONG",
+            "is_baseline": True,
+            "value_traded": 1e12,  # Force to top
+        }
 
     # Sort by value_traded descending to keep the most liquid first
     sorted_candidates = sorted(unique_candidates.values(), key=lambda x: x.get("value_traded", 0), reverse=True)

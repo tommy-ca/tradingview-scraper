@@ -33,6 +33,7 @@ class FeatureFlags(BaseModel):
     feat_short_costs: bool = False
     short_borrow_cost: float = 0.02  # 2% p.a.
     feat_dynamic_selection: bool = False
+    feat_regime_survival: bool = False
 
     # Selection Specification Mode: 'v2', 'v3', 'legacy'
     selection_mode: str = "v3"

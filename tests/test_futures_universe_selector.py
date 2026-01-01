@@ -337,14 +337,20 @@ def test_dedupe_by_symbol_keeps_best_volume():
     assert result["total_selected"] == 1
     assert result["data"][0]["symbol"].startswith("OKX:ABCUSDT")
 
-    def test_process_data(self, selector):
-        raw_data = [
-            {"symbol": "BINANCE:BTCUSDT", "Value.Traded": 10000000, "Volatility.D": 1.0, "Recommend.All": 0.5, "name": "BTC", "close": 50000, "volume": 100},
-            {"symbol": "BINANCE:ETHUSDT", "Value.Traded": 5000000, "Volatility.D": 1.0, "Recommend.All": 0.5, "name": "ETH", "close": 3000, "volume": 100},
-        ]
-        result = selector.process_data(raw_data)
-        assert result["status"] == "success"
-        assert len(result["data"]) >= 1
+
+def test_process_data():
+    cfg = SelectorConfig(
+        volume={"min": 0},
+        trend={"recommendation": {"enabled": False}, "adx": {"enabled": False}, "momentum": {"enabled": False}},
+    )
+    selector = FuturesUniverseSelector(config=cfg)
+    raw_data = [
+        {"symbol": "BINANCE:BTCUSDT", "Value.Traded": 10000000, "Volatility.D": 1.0, "Recommend.All": 0.5, "name": "BTC", "close": 50000, "volume": 100},
+        {"symbol": "BINANCE:ETHUSDT", "Value.Traded": 5000000, "Volatility.D": 1.0, "Recommend.All": 0.5, "name": "ETH", "close": 3000, "volume": 100},
+    ]
+    result = selector.process_data(raw_data)
+    assert result["status"] == "success"
+    assert len(result["data"]) >= 1
 
 
 if __name__ == "__main__":

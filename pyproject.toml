@@ -7,7 +7,7 @@ name = "tradingview-scraper"
 version = "0.4.20"
 description = "Tradingview scraper tool"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11,<3.13"
 license = {text = "MIT"}
 authors = [
     {name = "Mostafa Najmi", email = "m.n.irib@gmail.com"}
@@ -42,6 +42,8 @@ dependencies = [
     "rich>=13.7.0",
     "seaborn>=0.12.2",
     "matplotlib>=3.7.1",
+    "hmmlearn>=0.3.0",
+    "statsmodels>=0.14.0",
 ]
 
 [project.urls]
@@ -57,19 +59,22 @@ dev = [
     "ty",
     "pytest-benchmark",
     "locust",
+    "optuna",
 ]
 
 # Optional optimization backends (benchmarking only).
 engines = [
     "skfolio",
     "riskfolio-lib",
-    "PyPortfolioOpt",
+    "pyportfolioopt",
+    "clarabel",
 ]
 
 # Advanced analytics and tear-sheets.
 analytics = [
     "quantstats>=0.0.62",
     "vectorbt>=0.26.2",
+    "nautilus_trader>=1.195.0",
 ]
 
 # NOTE: `cvxportfolio` is GPL-3.0; keep isolated.

@@ -86,19 +86,36 @@ def build_clustered_universe(
 
             liq[s] = 0.7 * np.log1p(max(vt, 0.0)) + 0.3 * np.log1p(spread_proxy)
 
-        alpha_exec = 0.3 * _norm(mom) + 0.2 * _norm(stab) + 0.2 * _norm(conv) + 0.3 * _norm(liq)
-        w_alpha = alpha_exec / (alpha_exec.sum() + 1e-9)
-
-        inv_vars = 1.0 / (vols**2 + 1e-9)
+        # 1. HERC 2.0: Intra-Cluster Risk Parity
+        # We assign weights based on inverse variance to ensure equal risk
+        # contribution within each cluster bucket.
+        inv_vars = 1.0 / (vols**2 + 1e-12)
         w_ivp = inv_vars / inv_vars.sum()
 
-        w_hybrid = 0.5 * w_ivp + 0.5 * w_alpha
-        w_hybrid = w_hybrid / w_hybrid.sum()
+        # Intra-cluster weights are now purely risk-based
+        w_intra = w_ivp
 
-        cluster_benchmarks[f"Cluster_{c_id}"] = (sub_rets * w_hybrid).sum(axis=1)
-        intra_cluster_weights[str(c_id)] = w_hybrid
+        # 2. Cluster Benchmark Calculation
+        # The benchmark return for this cluster is the risk-weighted average of its assets.
+        bench_rets = (sub_rets * w_intra).sum(axis=1)
+        if bench_rets.std() > 1e-12:
+            cluster_benchmarks[f"Cluster_{c_id}"] = bench_rets
+            intra_cluster_weights[str(c_id)] = w_intra
+        else:
+            # Skip zero-variance cluster
+            continue
 
-        # Aggregate cluster fragility (CVaR)
+        # Aggregate cluster fragility (CVaR) and structural metrics
+        if stats is not None and not stats.empty and "Symbol" not in stats.columns:
+            # Fallback stats logic
+            pass
+
+        # Use the actual detector to get structural metrics for the cluster benchmark
+        from tradingview_scraper.regime import MarketRegimeDetector
+
+        detector = MarketRegimeDetector()
+        c_hurst = detector._hurst_exponent(bench_rets.values)
+
         if stats is not None and not stats.empty and "Symbol" in stats.columns:
             c_af_stats = stats[stats["Symbol"].isin(valid_symbols)]
             if not c_af_stats.empty:
@@ -128,11 +145,11 @@ def build_clustered_universe(
                 else:
                     cvar_value = -0.05
 
-                cluster_stats[str(c_id)] = {"fragility": fragility, "cvar": cvar_value}
+                cluster_stats[str(c_id)] = {"fragility": fragility, "cvar": cvar_value, "hurst": c_hurst}
             else:
-                cluster_stats[str(c_id)] = {"fragility": 1.0, "cvar": -0.05}
+                cluster_stats[str(c_id)] = {"fragility": 1.0, "cvar": -0.05, "hurst": c_hurst}
         else:
-            cluster_stats[str(c_id)] = {"fragility": 1.0, "cvar": -0.05}
+            cluster_stats[str(c_id)] = {"fragility": 1.0, "cvar": -0.05, "hurst": c_hurst}
 
     return ClusteredUniverse(
         returns=aligned_returns,

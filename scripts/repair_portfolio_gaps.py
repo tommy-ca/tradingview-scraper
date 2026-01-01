@@ -15,7 +15,7 @@ def repair_gaps():
     parser = argparse.ArgumentParser(description="Repair data gaps in the portfolio lakehouse.")
     parser.add_argument("--type", type=str, choices=["crypto", "trad", "all"], default="all", help="Asset type to repair")
     parser.add_argument("--symbol", type=str, help="Specific symbol to repair")
-    parser.add_argument("--max-fills", type=int, default=5, help="Max gaps to fill per symbol")
+    parser.add_argument("--max-fills", type=int, default=10, help="Max gaps to fill per symbol")
     parser.add_argument("--max-time", type=int, default=120, help="Max seconds per symbol repair")
     parser.add_argument("--timeout", type=int, default=60, help="Total timeout per API call")
     args = parser.parse_args()

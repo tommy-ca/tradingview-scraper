@@ -98,7 +98,12 @@ class BarbellOptimizer:
     Combines a Maximum Diversification Core with high-optionality Aggressors.
     """
 
-    REGIME_SPLITS = {"QUIET": {"core": 0.85, "aggressor": 0.15}, "NORMAL": {"core": 0.90, "aggressor": 0.10}, "CRISIS": {"core": 0.95, "aggressor": 0.05}}
+    REGIME_SPLITS = {
+        "QUIET": {"core": 0.85, "aggressor": 0.15},
+        "NORMAL": {"core": 0.90, "aggressor": 0.10},
+        "CRISIS": {"core": 0.95, "aggressor": 0.05},
+        "TURBULENT": {"core": 0.97, "aggressor": 0.03},
+    }
 
     def _calculate_diversification_ratio(self, weights, volatilities, cov_matrix):
         weighted_vol = np.dot(weights, volatilities)
@@ -138,9 +143,14 @@ class BarbellOptimizer:
         cov_matrix = ShrinkageCovariance().estimate(cast(pd.DataFrame, core_returns))
 
         init_weights = np.array([1.0 / n_core] * n_core)
+
         # Dynamic upper bound to ensure feasibility (sum of weights = 1.0)
-        # If n_core is small (e.g. 3), each asset must be allowed at least 1/3 weight.
-        upper_bound = max(0.2, 1.1 / n_core)
+        # In TURBULENT regimes, we cap individual core assets at 10% to prevent idiosyncratic crashes.
+        if regime == "TURBULENT":
+            upper_bound = max(0.1, 1.1 / n_core)
+        else:
+            upper_bound = max(0.2, 1.1 / n_core)
+
         bounds = tuple((0.0, upper_bound) for _ in range(n_core))
         constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
 

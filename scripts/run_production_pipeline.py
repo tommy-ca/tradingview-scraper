@@ -12,7 +12,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from rich.console import Console
 from rich.progress import (
     BarColumn,
-    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
     TaskProgressColumn,
@@ -200,11 +199,11 @@ class ProductionPipeline:
                 data = json.load(f)
             profiles = list(data.get("profiles", {}).keys())
             return {"metrics": {"optimized_profiles": profiles}}
-        except:
+        except Exception:
             return {}
 
     def execute(self, start_step: int = 1):
-        self.console.print(f"\n[bold cyan]🚀 Starting Production Pipeline[/]")
+        self.console.print("\n[bold cyan]🚀 Starting Production Pipeline[/]")
         self.console.print(f"[dim]Profile:[/] {self.profile} | [dim]Run ID:[/] {self.run_id} | [dim]Start Step:[/] {start_step}\n")
 
         all_steps: List[Tuple[str, List[str], Optional[Callable[[], Any]]]] = [
@@ -212,6 +211,7 @@ class ProductionPipeline:
             ("Discovery", ["make", "scan-all"], self.validate_discovery),
             ("Aggregation", ["make", "portfolio-prep-raw"], None),
             ("Lightweight Prep", ["make", "prep", "LOOKBACK=60", "BATCH=5"], None),
+            ("Forensic Risk Audit", ["python", "scripts/audit_antifragility.py"], None),
             ("Natural Selection", ["make", "select"], self.validate_selection),
             ("Enrichment", ["make", "enrich-candidates"], None),
             ("High-Integrity Alignment", ["make", "portfolio-align"], None),

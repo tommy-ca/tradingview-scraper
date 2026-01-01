@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from datetime import datetime
 from typing import Any, Dict, List, Optional, cast
 
 import cvxpy as cp
@@ -27,7 +28,15 @@ class ClusteredOptimizerV2:
 
         # Explicitly cast to DataFrame to satisfy linter
         with open(returns_path, "rb") as f_in:
-            self.returns = cast(pd.DataFrame, pd.read_pickle(f_in))
+            df = cast(pd.DataFrame, pd.read_pickle(f_in))
+            # Ultra-robust forcing of naive index
+            try:
+                new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in df.index]
+                df.index = pd.DatetimeIndex(new_idx)
+            except Exception as e_idx:
+                logger.warning(f"Fallback indexing for returns: {e_idx}")
+                df.index = pd.to_datetime(df.index, utc=True).tz_convert(None)
+            self.returns = df
 
         with open(clusters_path, "r") as f:
             self.clusters = cast(Dict[str, List[str]], json.load(f))
@@ -52,6 +61,7 @@ class ClusteredOptimizerV2:
         self.cluster_benchmarks = pd.DataFrame()
         self.intra_cluster_weights = {}  # ClusterID -> Series of weights summing to 1
         self.cluster_stats = {}  # ClusterID -> Aggregated stats
+        self.last_aggressor_ids = []
 
         for c_id, symbols in self.clusters.items():
             valid_symbols = [s for s in symbols if s in self.returns.columns]
@@ -181,8 +191,13 @@ class ClusteredOptimizerV2:
 
         w_agg_series = pd.Series(agg_weight / len(aggressor_ids), index=[f"Cluster_{c}" for c in aggressor_ids])
 
+        self.last_aggressor_ids = [str(c) for c in aggressor_ids]
         cluster_weights = pd.concat([w_core_series, w_agg_series])
-        return self._build_final_weights(cluster_weights)
+        weights_df = self._build_final_weights(cluster_weights)
+
+        # Add Type to assets for audit
+        weights_df["Type"] = weights_df["Cluster_ID"].apply(lambda x: "AGGRESSOR" if str(x) in self.last_aggressor_ids else "CORE")
+        return weights_df
 
     def optimize_across_clusters(self, method: str, cluster_cap: float = 0.25, prev_weights: Optional[pd.Series] = None) -> pd.Series:
         if self.cluster_benchmarks.empty:
@@ -257,6 +272,108 @@ class ClusteredOptimizerV2:
                         "Cluster_ID": c_id,
                         "Description": m.get("description", "N/A"),
                         "Sector": m.get("sector", "N/A"),
+                        "Market": m.get("market", "UNKNOWN"),
                     }
                 )
         return pd.DataFrame(rows).sort_values("Weight", ascending=False)
+
+
+if __name__ == "__main__":
+    from tradingview_scraper.regime import MarketRegimeDetector
+
+    optimizer = ClusteredOptimizerV2(
+        returns_path="data/lakehouse/portfolio_returns.pkl",
+        clusters_path="data/lakehouse/portfolio_clusters.json",
+        meta_path="data/lakehouse/portfolio_meta.json",
+        stats_path="data/lakehouse/antifragility_stats.json",
+    )
+
+    detector = MarketRegimeDetector()
+    regime, score = detector.detect_regime(optimizer.returns)
+    logger.info(f"Regime Detected for Optimization: {regime} (Score: {score:.2f})")
+
+    cap = float(os.getenv("CLUSTER_CAP", "0.25"))
+
+    # Generate results for each profile
+    profiles = {}
+    for p_name, method in [
+        ("min_variance", "min_variance"),
+        ("hrp", "hrp"),
+        ("max_sharpe", "max_sharpe"),
+        ("equal_weight", "equal_weight"),
+    ]:
+        logger.info(f"Optimizing profile: {p_name}")
+        weights_df = optimizer.run_profile(p_name, method, cap)
+
+        # Build cluster summary for this profile
+        cluster_summary = []
+        for c_id in optimizer.clusters.keys():
+            sub = weights_df[weights_df["Cluster_ID"] == str(c_id)]
+            if sub.empty:
+                continue
+            gross = sub["Weight"].sum()
+            net = sub["Net_Weight"].sum()
+            cluster_summary.append(
+                {
+                    "Cluster_Label": f"Cluster {c_id}",
+                    "Gross_Weight": float(gross),
+                    "Net_Weight": float(net),
+                    "Lead_Asset": sub.iloc[0]["Symbol"],
+                    "Asset_Count": len(sub),
+                    "Type": "CORE",  # Placeholder
+                    "Sectors": list(sub["Sector"].unique()),
+                }
+            )
+
+        profiles[p_name] = {
+            "assets": weights_df.to_dict(orient="records"),
+            "clusters": cluster_summary,
+        }
+
+    # Add Antifragile Barbell
+    logger.info("Optimizing profile: barbell")
+    barbell_df = optimizer.run_barbell(cap, regime)
+    if not barbell_df.empty:
+        barbell_summary = []
+        for c_id in optimizer.clusters.keys():
+            sub = barbell_df[barbell_df["Cluster_ID"] == str(c_id)]
+            if sub.empty:
+                continue
+            gross = sub["Weight"].sum()
+            net = sub["Net_Weight"].sum()
+            barbell_summary.append(
+                {
+                    "Cluster_Label": f"Cluster {c_id}",
+                    "Gross_Weight": float(gross),
+                    "Net_Weight": float(net),
+                    "Lead_Asset": sub.iloc[0]["Symbol"],
+                    "Asset_Count": len(sub),
+                    "Type": "AGGRESSOR" if str(c_id) in optimizer.last_aggressor_ids else "CORE",
+                    "Sectors": list(sub["Sector"].unique()),
+                }
+            )
+        profiles["barbell"] = {
+            "assets": barbell_df.to_dict(orient="records"),
+            "clusters": barbell_summary,
+        }
+
+    # Build cluster registry
+    registry = {}
+    for c_id, symbols in optimizer.clusters.items():
+        # Find primary sector from meta
+        sectors = [optimizer.meta.get(s, {}).get("sector", "N/A") for s in symbols]
+        primary = max(set(sectors), key=sectors.count) if sectors else "N/A"
+        registry[c_id] = {"symbols": symbols, "primary_sector": primary}
+
+    output = {
+        "profiles": profiles,
+        "cluster_registry": registry,
+        "optimization": {"regime": {"name": regime, "score": float(score)}},
+        "metadata": {"generated_at": datetime.now().isoformat(), "cluster_cap": cap},
+    }
+
+    output_path = "data/lakehouse/portfolio_optimized_v2.json"
+    with open(output_path, "w") as f:
+        json.dump(output, f, indent=2)
+
+    logger.info(f"✅ Clustered Optimization V2 Complete. Saved to: {output_path}")

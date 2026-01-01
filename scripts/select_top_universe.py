@@ -250,12 +250,12 @@ def select_top_universe(mode: str = "raw"):
 
         group.sort(key=lambda x: x["_alpha_score"], reverse=True)
         primary = group[0]
-        if len(group) > 1:
-            primary["implementation_alternatives"] = [
-                {"symbol": x["symbol"], "market": x["_category"], "alpha_score": float(x["_alpha_score"]), "volume": float(x.get("volume", 0))} for x in group[1:]
-            ]
-        else:
-            primary["implementation_alternatives"] = []
+
+        # Track detailed alternatives for high-fidelity venue swapping
+        primary["implementation_alternatives"] = [
+            {"symbol": x["symbol"], "market": x["_category"], "asset_class": x["_asset_class"], "alpha_score": float(x["_alpha_score"]), "value_traded": float(x.get("Value.Traded", 0) or 0)}
+            for x in group[1:]
+        ]
 
         merged_pool.append(primary)
 

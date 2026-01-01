@@ -1431,7 +1431,7 @@ class FuturesUniverseSelector:
                 rows.append(er)
 
         # 6. Aggregation (Deduplicate by base currency)
-        if self.config.dedupe_by_symbol:
+        if self.config.dedupe_by_symbol and not self.config.attach_perp_counterparts:
             rows = self._aggregate_by_base(rows)
 
         # 7. Sorting & Limiting (Base Universe)
