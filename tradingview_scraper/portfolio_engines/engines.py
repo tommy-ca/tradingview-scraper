@@ -467,7 +467,6 @@ class SkfolioEngine(CustomClusteredEngine):
 
     def _optimize_cluster_weights(self, *, universe: ClusteredUniverse, request: EngineRequest) -> pd.Series:
         from skfolio.cluster import HierarchicalClustering, LinkageMethod
-        from skfolio.distance import PearsonDistance
         from skfolio.measures import RiskMeasure
         from skfolio.optimization import HierarchicalRiskParity, MeanRisk, ObjectiveFunction, RiskBudgeting
 
@@ -480,11 +479,14 @@ class SkfolioEngine(CustomClusteredEngine):
 
             model = EqualWeighted()
         elif request.profile == "hrp":
-            # Optimized skfolio HRP parameters found via Optuna (Jan 2026)
-            # Best: linkage='complete', risk_measure='standard_deviation', distance='pearson'
+            # Optimized skfolio HRP parameters found via Multi-Objective Optuna (Jan 2026 - v2)
+            # Best Balance: linkage='ward', risk_measure='standard_deviation', distance='distance_correlation'
+            from skfolio.distance import DistanceCorrelation
+
             model = HierarchicalRiskParity(
-                risk_measure=RiskMeasure.STANDARD_DEVIATION, distance_estimator=PearsonDistance(), hierarchical_clustering_estimator=HierarchicalClustering(linkage_method=LinkageMethod.COMPLETE)
+                risk_measure=RiskMeasure.STANDARD_DEVIATION, distance_estimator=DistanceCorrelation(), hierarchical_clustering_estimator=HierarchicalClustering(linkage_method=LinkageMethod.WARD)
             )
+
         elif request.profile == "risk_parity":
             # Risk Parity via equal risk budgeting in skfolio
             model = RiskBudgeting(risk_measure=RiskMeasure.VARIANCE)
