@@ -64,29 +64,37 @@ def cleanup_metadata_catalog():
     crypto_session_mask = crypto_mask & df["type"].isin(crypto_types) & df["session"].isna()
     df.loc[crypto_session_mask, "session"] = "24x7"
 
-    # 3. Remove duplicates, keeping only latest active record
-    logger.info("Removing duplicates...")
+    # 3. Resolve SCD Type 2 duplicates, ensuring only one active record per symbol
+    logger.info("Resolving SCD Type 2 duplicates...")
 
-    # Sort by symbol and updated_at to get latest record first
-    df_sorted = df.sort_values(["symbol", "updated_at"], ascending=[True, False])
+    if not df.empty:
+        # Sort by symbol and valid_from/updated_at to ensure chronological order
+        df = df.sort_values(["symbol", "valid_from", "updated_at"], ascending=[True, True, True])
 
-    # Keep first occurrence of each symbol (latest active record) and all historical records
-    deduplicated = []
-    seen_symbols = set()
+        resolved_records = []
+        for symbol, group in df.groupby("symbol"):
+            group = group.copy()
+            # Sort group chronologically
+            group = group.sort_values(["valid_from", "updated_at"])
 
-    for idx, row in df_sorted.iterrows():
-        sym = row["symbol"]
+            records = group.to_dict("records")
+            for i in range(len(records) - 1):
+                # If this record is supposed to be active but there's a later one,
+                # we must expire it.
+                if pd.isna(records[i]["valid_until"]):
+                    next_start = records[i + 1]["valid_from"]
+                    if pd.isna(next_start):
+                        # Fallback if valid_from is missing
+                        next_start = records[i + 1]["updated_at"]
 
-        # Always keep historical records
-        if pd.notna(row.get("valid_until")):
-            deduplicated.append(row)
-        # Only keep latest active record for each symbol
-        elif sym not in seen_symbols:
-            deduplicated.append(row)
-            seen_symbols.add(sym)
+                    records[i]["valid_until"] = next_start
+                    logger.info(f"Fixed duplicate active record for {symbol} at index {i}")
 
-    # Create cleaned DataFrame
-    cleaned_df = pd.DataFrame(deduplicated)
+            resolved_records.extend(records)
+
+        cleaned_df = pd.DataFrame(resolved_records)
+    else:
+        cleaned_df = df
 
     # 4. Validate and fix exchange information
     logger.info("Validating exchange information...")
