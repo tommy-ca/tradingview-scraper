@@ -9,8 +9,8 @@
 - [x] Task: Integrate Efficiency Ratio as a scoring multiplier in MPS. b59a155
 - [x] Task: Verify that vetoes are correctly logged in the `SelectionResponse`. b59a155
 
-## Phase 3: Validation & Auditing
-- [~] Task: Run a tournament comparing `v3` vs `v3.1_spectral` (using new filters).
-- [ ] Task: Verify `audit.jsonl` contains the expected "Vetoed: Predictability" entries.
-- [ ] Task: Final Report: `docs/research/spectral_alpha_results_2026.md`.
-- [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
+## Phase 3: Validation & Auditing [checkpoint: 3a4122d]
+- [x] Task: Run a tournament comparing `v3` vs `v3.1_spectral` (using new filters). 3a4122d
+- [x] Task: Verify `audit.jsonl` contains the expected "Vetoed: Predictability" entries. 3a4122d
+- [x] Task: Final Report: `docs/research/spectral_alpha_results_2026.md`. 3a4122d
+- [x] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md) 3a4122d
