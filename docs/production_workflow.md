@@ -10,9 +10,12 @@ The entire production lifecycle is governed by **`configs/manifest.json`** and m
 The orchestrator provides a **High-Fidelity CLI experience** with rich progress bars and live activity feedback. It automatically redirects internal logs to maintain a clean and transparent interface.
 
 ```bash
-# Run discovery + full 14-step pipeline (Default: production profile)
-python -m scripts.run_production_pipeline --profile production
+# Run discovery + full 14-step pipeline (Default: production_2026_q1)
+uv run python -m scripts.run_production_pipeline
 ```
+
+**Winning Strategy (Q1 2026)**: 
+The platform defaults to the **`skfolio` Barbell** strategy, which was selected for its superior risk-adjusted stability (3.83 Sharpe) and execution efficiency (16% turnover) during the Jan 2026 validation tournament.
 
 ### Self-Healing & Data Integrity
 The pipeline includes an automated **Integrated Recovery Loop (Step 8)** managed by the Python orchestrator.
@@ -40,10 +43,12 @@ The platform uses **Feature Flags** to gradually roll out high-impact quantitati
 7.  **High-Integrity Prep**: Fetch **500-day** secular history for winners.
 8.  **Health Audit**: Validate 100% gap-free alignment (Automated recovery).
 9.  **Factor Analysis**: Build hierarchical risk buckets (Ward Linkage).
-10. **Regime Detection**: Multi-factor analysis (Entropy + DWT).
-11. **Optimization**: Cluster-Aware allocation with Turnover Control.
-12. **Validation**: Walk-Forward "Tournament" benchmarking (High-Fidelity).
-13. **Reporting**: QuantStats Tear-sheets + Alpha Isolation Audit.
+10. **Regime Detection**: Multi-factor analysis (All Weather Quadrants + HMM).
+11. **Optimization**: Adaptive allocation (Meta-Engine) using the **skfolio Barbell** standard.
+12. **Validation**: Walk-Forward "Tournament" benchmarking across 4 simulators (CVX, VBT, Nautilus, Custom).
+    - **Selection Gate**: Verify `Filtered EW` > `Raw EW`.
+    - **Optimizer Sanity**: Standardized L2 regularization ($\\gamma=0.05$) and Ledoit-Wolf shrinkage.
+13. **Reporting**: QuantStats Tear-sheets + Alpha Isolation Audit + Risk Fidelity Audit.
 14. **Audit Verification**: Final cryptographic check of the `audit.jsonl` ledger.
 
 ---
