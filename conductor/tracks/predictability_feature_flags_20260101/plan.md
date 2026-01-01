@@ -10,7 +10,7 @@
 - [x] Task: Replace hardcoded thresholds with settings-based values. b9b1016
 - [x] Task: Verify that `v3.1` (inheriting from `v3`) also respects these flags. b9b1016
 
-## Phase 3: Verification
-- [~] Task: TDD - Add test case to `tests/test_selection_predictability.py` to verify flag behavior.
-- [ ] Task: Run a "dry run" with flags disabled to ensure zero regressions in standard `v3`.
-- [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
+## Phase 3: Verification [checkpoint: 814d6b9]
+- [x] Task: TDD - Add test case to `tests/test_selection_predictability.py` to verify flag behavior. 814d6b9
+- [x] Task: Run a "dry run" with flags disabled to ensure zero regressions in standard `v3`. 814d6b9
+- [x] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md) 814d6b9
