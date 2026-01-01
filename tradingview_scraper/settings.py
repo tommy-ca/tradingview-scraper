@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Tuple, Type
+from typing import Any, Dict, List, Tuple, Type
 
 from pydantic import BaseModel, Field
 from pydantic_settings import (
@@ -33,6 +33,12 @@ class FeatureFlags(BaseModel):
     feat_short_costs: bool = False
     short_borrow_cost: float = 0.02  # 2% p.a.
     feat_dynamic_selection: bool = False
+
+    # Universe Selection 3.0 (Operation Darwin)
+    feat_universe_v3: bool = False
+    feat_mps_scoring: bool = False
+    feat_regime_survival: bool = False
+    feat_engine_parity: bool = False
 
 
 class ManifestSettingsSource(PydanticBaseSettingsSource):
@@ -134,13 +140,13 @@ class TradingViewScraperSettings(BaseSettings):
     backtest_slippage: float = 0.0005  # 5 bps
     backtest_commission: float = 0.0001  # 1 bp
     backtest_cash_asset: str = "USDT"
-    baseline_symbol: str = "AMEX:SPY"
+    benchmark_symbols: List[str] = Field(default_factory=lambda: ["AMEX:SPY"])
     report_mode: str = "full"
     dynamic_universe: bool = False
 
     # Tournament
-    engines: str = "market,custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
-    profiles: str = "min_variance,hrp,max_sharpe,barbell"
+    engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
+    profiles: str = "min_variance,hrp,max_sharpe,barbell,benchmark,market"
 
     # Discovery (Structured)
     discovery: Dict[str, Any] = Field(default_factory=dict)
@@ -250,6 +256,9 @@ class TradingViewScraperSettings(BaseSettings):
                 return
 
 
+TradingViewScraperSettings.model_rebuild()
+
+
 @lru_cache
 def get_settings() -> TradingViewScraperSettings:
     return TradingViewScraperSettings()
@@ -279,7 +288,7 @@ if __name__ == "__main__":
             "backtest_slippage": "BACKTEST_SLIPPAGE",
             "backtest_commission": "BACKTEST_COMMISSION",
             "backtest_cash_asset": "BACKTEST_CASH_ASSET",
-            "baseline_symbol": "BASELINE_SYMBOL",
+            "benchmark_symbols": "BENCHMARK_SYMBOLS",
             "report_mode": "REPORT_MODE",
             "dynamic_universe": "DYNAMIC_UNIVERSE",
             "engines": "TOURNAMENT_ENGINES",
@@ -294,6 +303,8 @@ if __name__ == "__main__":
             val = getattr(settings, field)
             if isinstance(val, bool):
                 val = "1" if val else "0"
+            elif isinstance(val, list):
+                val = ",".join(val)
             print(f"export {env_name}={val}")
 
         # Export Feature Flags
