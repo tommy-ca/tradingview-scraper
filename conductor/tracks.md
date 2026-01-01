@@ -127,6 +127,60 @@ This file tracks all major tracks for the project. Each track has its own detail
 ## [x] Track: Async Streamer Feature Parity
 *Link: [./conductor/tracks/async_streamer_parity_20251221/](./conductor/tracks/async_streamer_parity_20251221/)*
 
+---
+
+## [x] Track: Tournament 4D Audit & Investigation
+*Link: [./conductor/tracks/tournament_4d_audit_20260101/](./conductor/tracks/tournament_4d_audit_20260101/)*
+
+---
+
+## [x] Track: Audit Ledger vs Tournament Data Integrity
+*Link: [./conductor/tracks/audit_ledger_integrity_20260101/](./conductor/tracks/audit_ledger_integrity_20260101/)*
+
+---
+
+## [x] Track: V2 Selection Relaxation Research
+*Link: [./conductor/tracks/v2_selection_relaxation_research_20260101/](./conductor/tracks/v2_selection_relaxation_research_20260101/)*
+
+---
+
+## [x] Track: Final Comprehensive Audit & Benchmark (Legacy V3 & Nautilus)
+*Link: [./conductor/tracks/final_comprehensive_audit_20260101/](./conductor/tracks/final_comprehensive_audit_20260101/)*
+
+---
+
+## [x] Track: Grand Validation Tournament (Risk & Selection)
+*Link: [./conductor/tracks/grand_validation_tournament_20260101/](./conductor/tracks/grand_validation_tournament_20260101/)*
+
+---
+
+## [x] Track: Risk Parity & HERC Benchmarking
+*Link: [./conductor/tracks/risk_parity_benchmarking_20260101/](./conductor/tracks/risk_parity_benchmarking_20260101/)*
+
+---
+
+## [x] Track: CVXPortfolio Risk Parity & HRP Implementation
+*Link: [./conductor/tracks/cvxportfolio_risk_implementation_20260101/](./conductor/tracks/cvxportfolio_risk_implementation_20260101/)*
+
+---
+
+## [x] Track: Optimization Engine Fidelity & Selection Tuning
+*Link: [./conductor/tracks/optimization_engine_fidelity_20260101/](./conductor/tracks/optimization_engine_fidelity_20260101/)*
+
+---
+
+## [x] Track: Selection Alpha Benchmark (V2 vs V3 vs Raw)
+*Link: [./conductor/tracks/selection_alpha_benchmark_20260101/](./conductor/tracks/selection_alpha_benchmark_20260101/)*
+
+---
+
+## [x] Track: V3 Selection Pipeline Audit & Improvement
+*Link: [./conductor/tracks/v3_selection_audit_20260101/](./conductor/tracks/v3_selection_audit_20260101/)*
+
+---
+
+## [x] Track: Selection Quality Benchmark
+*Link: [./conductor/tracks/selection_quality_benchmark_20260101/](./conductor/tracks/selection_quality_benchmark_20260101/)*
 
 
 
@@ -140,3 +194,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 
 
+
+
+---
+
+## [~] Track: Audit Remediation 2026-01-01
+*Link: [./conductor/tracks/audit_remediation_20260101/](./conductor/tracks/audit_remediation_20260101/)*

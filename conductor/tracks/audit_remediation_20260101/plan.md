@@ -20,4 +20,4 @@
     - [ ] Sub-task: Review `calculate_coverage_score` logic in `scripts/comprehensive_audit.py`.
     - [ ] Sub-task: Identify missing categories (e.g., Options, Bonds).
     - [ ] Sub-task: Write `docs/research/coverage_gap_analysis_2026.md` with findings.
-- [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
