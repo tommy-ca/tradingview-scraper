@@ -28,12 +28,13 @@ The custom engine implements the original HRP algorithm as defined by Lopez de P
 - **Regularization**: Tikhonov ($10^{-6}$) applied to the covariance matrix for numerical stability.
 
 ### B. skfolio
-- **Characteristics**: Focuses on diversification. 
-- **Optimized State (Jan 2026)**: Parameters tuned via Optuna:
-    - **Linkage**: Complete Linkage (Standardized for stability).
-    - **Risk Measure**: Standard Deviation (Better capturing tail volatility than Variance).
-    - **Distance**: Pearson.
-- **Resilience**: Highly stable in CRISIS regimes with a realized Sharpe of **4.01** and industry-leading MDD of **-1.36%**.
+- **Characteristics**: Focuses on diversification and non-linear risk capture. 
+- **Optimized State (Jan 2026 - v2)**: Parameters tuned via Multi-Objective Optuna (Sharpe vs. Turnover) with Nested Time-Series Cross-Validation:
+    - **Linkage**: Ward Linkage (Minimizes intra-cluster variance).
+    - **Risk Measure**: Standard Deviation.
+    - **Distance**: **Distance Correlation** (Captures non-linear dependencies).
+- **Resilience**: Highly stable in CRISIS regimes with a realized Sharpe of **3.91** and industry-leading MDD of **-1.47%** in 2025 tournament runs.
+
 
 ### C. Riskfolio-Lib
 - **Characteristics**: Supports advanced codependence measures. Our implementation uses Pearson for parity with other engines but benefits from **Ward Linkage**, which minimizes variance within clusters.
