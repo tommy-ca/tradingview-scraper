@@ -16,7 +16,7 @@
 - [x] Task: Run `scripts/comprehensive_audit.py` to verify remediation. 7fde571
     - [ ] Sub-task: Confirm `FOREX` exchange is no longer missing.
     - [ ] Sub-task: Confirm "Symbols with duplicates" metric (should be 0 active duplicates, or audit script updated to count only active duplicates).
-- [ ] Task: Analyze Coverage Score.
+- [x] Task: Analyze Coverage Score. fcee52b
     - [ ] Sub-task: Review `calculate_coverage_score` logic in `scripts/comprehensive_audit.py`.
     - [ ] Sub-task: Identify missing categories (e.g., Options, Bonds).
     - [ ] Sub-task: Write `docs/research/coverage_gap_analysis_2026.md` with findings.
