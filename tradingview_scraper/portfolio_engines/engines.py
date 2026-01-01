@@ -272,18 +272,14 @@ class CustomClusteredEngine(BaseRiskEngine):
         return True
 
     def optimize(self, *, returns: pd.DataFrame, clusters: Dict[str, List[str]], meta: Optional[Dict[str, Any]], stats: Optional[pd.DataFrame], request: EngineRequest) -> EngineResponse:
-        if request.profile == "market":
-            settings = get_settings()
-            # If clusters are empty and we are in market engine, it's likely the raw pool EW
-            if not clusters:
-                bench_targets = list(returns.columns)
-            else:
-                bench_targets = [s for s in settings.benchmark_symbols if s in returns.columns]
-                if not bench_targets:
-                    bench_targets = list(returns.columns)
+        settings = get_settings()
 
+        # 1. MARKET Profile: force SPY only (one asset)
+        if request.profile == "market":
+            bench_targets = [s for s in settings.benchmark_symbols if s in returns.columns]
             if not bench_targets:
-                return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(), meta={"backend": "market_empty"}, warnings=["empty returns"])
+                return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(), meta={"backend": "market_empty"}, warnings=["benchmark symbol missing"])
+
             w = 1.0 / len(bench_targets)
             rows = []
             for s in bench_targets:
@@ -294,17 +290,43 @@ class CustomClusteredEngine(BaseRiskEngine):
                         "Weight": w,
                         "Net_Weight": w * (1.0 if m.get("direction", "LONG") == "LONG" else -1.0),
                         "Direction": m.get("direction", "LONG"),
-                        "Cluster_ID": "MARKET_BENCHMARK",
+                        "Cluster_ID": "MARKET",
                         "Description": m.get("description", "N/A"),
                     }
                 )
-            return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(rows), meta={"backend": "market_benchmark"}, warnings=[])
+            return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(rows), meta={"backend": "market_static"}, warnings=[])
+
+        # 2. BENCHMARK Profile: unpruned candidates pool, EW risk profile
+        if request.profile == "benchmark":
+            targets = list(returns.columns)
+            if not targets:
+                return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(), meta={"backend": "benchmark_empty"}, warnings=["empty returns"])
+
+            w = 1.0 / len(targets)
+            rows = []
+            for s in targets:
+                m = (meta or {}).get(str(s), {})
+                rows.append(
+                    {
+                        "Symbol": str(s),
+                        "Weight": w,
+                        "Net_Weight": w * (1.0 if m.get("direction", "LONG") == "LONG" else -1.0),
+                        "Direction": m.get("direction", "LONG"),
+                        "Cluster_ID": "BENCHMARK",
+                        "Description": m.get("description", "N/A"),
+                    }
+                )
+            return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(rows), meta={"backend": "benchmark_ew"}, warnings=[])
+
+        # Standard clustered optimization for other profiles
         universe = build_clustered_universe(returns=returns, clusters=clusters, meta=meta, stats=stats)
         if universe.cluster_benchmarks.empty:
             return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), meta={"backend": "custom"}, warnings=["empty universe"])
+
         if request.profile == "barbell":
             weights_df, meta_out, warn = self._barbell(universe=universe, meta=meta, stats=stats, request=request)
             return EngineResponse(engine=self.name, request=request, weights=weights_df, meta=meta_out, warnings=warn)
+
         cluster_weights = self._optimize_cluster_weights(universe=universe, request=request)
         weights_df = _weights_df_from_cluster_weights(universe=universe, cluster_weights=cluster_weights, meta=meta)
         return EngineResponse(engine=self.name, request=request, weights=weights_df, meta={"backend": "custom"}, warnings=[])
@@ -316,33 +338,10 @@ class CustomClusteredEngine(BaseRiskEngine):
         mu_eq = cast(Any, np.asarray(universe.cluster_benchmarks.mean(), dtype=float)) * 252
         penalties = _cluster_penalties(universe)
         mu = mu_eq
-        if request.profile in ["max_sharpe", "adaptive"]:
-            try:
-                from tradingview_scraper.portfolio_engines.bayesian import BlackLittermanEstimator
 
-                req_any = cast(Any, request)
-                bp = req_any.bayesian_params
-                bl = BlackLittermanEstimator(tau=bp.get("tau", 0.05), omega_scale=bp.get("omega_scale", 1.0))
-                c_hurst = {f"Cluster_{c}": stats.get("hurst", 0.5) for c, stats in universe.cluster_stats.items()}
-                p, q = bl.generate_regime_views(
-                    list(universe.cluster_benchmarks.columns),
-                    req_any.market_environment,
-                    c_hurst,
-                    expansion_target=bp.get("expansion_target", 0.15),
-                    inflation_target=bp.get("inflation_target", 0.08),
-                    crisis_target=bp.get("crisis_target", -0.10),
-                    n_assets=bp.get("n_view_assets", 3),
-                )
-                mu = bl.estimate(mu_eq, cov, p, q)
-            except Exception:
-                pass
-        if request.profile == "benchmark":
-            vols = np.sqrt(np.diag(cov))
-            inv_vols = 1.0 / (vols + 1e-12)
-            weights = inv_vols / inv_vols.sum()
-            return pd.Series(weights, index=universe.cluster_benchmarks.columns).fillna(1.0 / n if n > 0 else 0.0)
         if request.profile == "equal_weight":
             return pd.Series(1.0 / n if n > 0 else 0.0, index=universe.cluster_benchmarks.columns)
+
         if request.profile == "hrp":
             try:
                 import riskfolio as rp
@@ -352,10 +351,7 @@ class CustomClusteredEngine(BaseRiskEngine):
                 w_series = w.iloc[:, 0] if isinstance(w, pd.DataFrame) else pd.Series(w)
                 return _enforce_cap_series(w_series.reindex(universe.cluster_benchmarks.columns).fillna(0.0).astype(float), cap)
             except ImportError:
-                vols = np.sqrt(np.diag(cov))
-                inv_vols = 1.0 / (vols + 1e-12)
-                weights = inv_vols / inv_vols.sum()
-                return pd.Series(weights, index=universe.cluster_benchmarks.columns).fillna(1.0 / n if n > 0 else 0.0)
+                return pd.Series(1.0 / n if n > 0 else 0.0, index=universe.cluster_benchmarks.columns)
 
         req_any = cast(Any, request)
         l2_gamma = {"EXPANSION": 0.05, "INFLATIONARY_TREND": 0.10, "STAGNATION": 0.10, "CRISIS": 0.20}.get(req_any.market_environment, 0.05)
@@ -439,34 +435,34 @@ class SkfolioEngine(CustomClusteredEngine):
         return bool(importlib.util.find_spec("skfolio"))
 
     def _optimize_cluster_weights(self, *, universe: ClusteredUniverse, request: EngineRequest) -> pd.Series:
-        from skfolio.cluster import HierarchicalClustering, LinkageMethod
-        from skfolio.distance import PearsonDistance
         from skfolio.measures import RiskMeasure
         from skfolio.optimization import HierarchicalRiskParity, MeanRisk, ObjectiveFunction, RiskBudgeting
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
-        if request.profile in ["benchmark", "equal_weight"]:
-            return super()._optimize_cluster_weights(universe=universe, request=request)
-        cap = _effective_cap(request.cluster_cap, n)
-        if request.profile == "hrp":
-            model = HierarchicalRiskParity(
-                risk_measure=RiskMeasure.VARIANCE, distance_estimator=PearsonDistance(), hierarchical_clustering_estimator=HierarchicalClustering(linkage_method=LinkageMethod.COMPLETE)
-            )
+
+        # Native skfolio implementations for core profiles
+        if request.profile == "equal_weight":
+            from skfolio.optimization import EqualWeighted
+
+            model = EqualWeighted()
+        elif request.profile == "hrp":
+            model = HierarchicalRiskParity(risk_measure=RiskMeasure.VARIANCE)
         elif request.profile == "risk_parity":
-            # Risk Parity via equal risk budgeting in skfolio
             model = RiskBudgeting(risk_measure=RiskMeasure.VARIANCE)
+        elif request.profile == "max_sharpe":
+            model = MeanRisk(objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_measure=RiskMeasure.VARIANCE, l2_coef=0.05)
         else:
-            if request.profile == "max_sharpe":
-                model = MeanRisk(objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_measure=RiskMeasure.VARIANCE, l2_coef=0.05)
-            else:
-                model = MeanRisk(objective_function=ObjectiveFunction.MINIMIZE_RISK, risk_measure=RiskMeasure.VARIANCE)
+            model = MeanRisk(objective_function=ObjectiveFunction.MINIMIZE_RISK, risk_measure=RiskMeasure.VARIANCE)
+
+        cap = _effective_cap(request.cluster_cap, n)
         try:
             sig = inspect.signature(model.__class__)
             if "max_weights" in sig.parameters:
                 model.set_params(max_weights=cap)
         except Exception:
             pass
+
         model.fit(X)
         raw = cast(Dict[Any, Any], model.weights_)
         if isinstance(raw, dict):
@@ -492,9 +488,6 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
-        # Only fallback for profiles that pypfopt doesn't handle natively/better
-        if request.profile in ["benchmark", "equal_weight"]:
-            return super()._optimize_cluster_weights(universe=universe, request=request)
 
         cap = _effective_cap(request.cluster_cap, n)
         if request.profile == "hrp":
@@ -502,9 +495,8 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
             weights = hrp.optimize()
             w = np.array([float(cast(Dict[Any, Any], weights).get(str(k), 0.0)) for k in X.columns])
             s = _safe_series(w, X.columns)
-        elif request.profile == "risk_parity":
-            # Risk Parity is not directly in pypfopt, but we can solve the same logarithmic barrier problem
-            return super()._optimize_cluster_weights(universe=universe, request=request)
+        elif request.profile == "equal_weight":
+            return pd.Series(1.0 / n if n > 0 else 0.0, index=X.columns)
         else:
             ef = EfficientFrontier(X.mean() * 252, pd.DataFrame(_cov_shrunk(X), index=X.columns, columns=X.columns), weight_bounds=(0.0, cap))
             ef.add_objective(objective_functions.L2_reg, gamma=0.05)
@@ -532,22 +524,20 @@ class RiskfolioEngine(CustomClusteredEngine):
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
-        if request.profile in ["benchmark", "equal_weight"]:
-            return super()._optimize_cluster_weights(universe=universe, request=request)
-
         cap = _effective_cap(request.cluster_cap, n)
+
         if request.profile == "hrp":
             port = rp.HCPortfolio(returns=X)
             w = port.optimization(model="HRP", codependence="pearson", rm="MV")
         elif request.profile == "risk_parity":
             port = rp.Portfolio(returns=X)
             port.assets_stats(method_mu="hist", method_cov="ledoit")
-            # Native Risk Parity optimization
             w = port.rp_optimization(model="Classic", rm="MV", rf=0.0, b=None)
+        elif request.profile == "equal_weight":
+            return pd.Series(1.0 / n if n > 0 else 0.0, index=X.columns)
         else:
             port = rp.Portfolio(returns=X)
             port.assets_stats(method_mu="hist", method_cov="ledoit")
-            # L2 Regularization (Ridge) synchronized with institutional standard (gamma=0.05)
             w = port.optimization(model="Classic", rm="MV", obj="Sharpe" if request.profile == "max_sharpe" else "MinRisk", rf=cast(Any, float(request.risk_free_rate)), l=cast(Any, 0.05))
 
         w_series = w.iloc[:, 0] if isinstance(w, pd.DataFrame) else pd.Series(w)
@@ -568,20 +558,14 @@ class CVXPortfolioEngine(CustomClusteredEngine):
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
-        if request.profile in ["benchmark", "equal_weight"]:
-            return super()._optimize_cluster_weights(universe=universe, request=request)
-
         cap = _effective_cap(request.cluster_cap, n)
 
-        # Native CVXPortfolio logic for different profiles
         if request.profile == "min_variance":
             obj = -100.0 * cvx.FullCovariance()
         elif request.profile == "max_sharpe":
             obj = cvx.ReturnsForecast() - 1.0 * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
-        elif request.profile == "hrp" or request.profile == "risk_parity":
-            # Risk Parity in CVXPortfolio can be approximated or implemented via custom policy
-            # For now, let's use a variant that targets low-vol clusters
-            obj = cvx.ReturnsForecast() * 0.0 - 10.0 * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
+        elif request.profile == "equal_weight":
+            return pd.Series(1.0 / n if n > 0 else 0.0, index=X.columns)
         else:
             obj = cvx.ReturnsForecast() - 5.0 * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
 
@@ -594,8 +578,7 @@ class CVXPortfolioEngine(CustomClusteredEngine):
                 t=X.index[-1], current_weights=pd.Series(1.0 / n, index=X.columns), current_portfolio_value=1.0, past_returns=X, past_volumes=None, current_prices=pd.Series(1.0, index=X.columns)
             )
         except Exception:
-            # High-robustness fallback
-            return super()._optimize_cluster_weights(universe=universe, request=request)
+            return pd.Series(1.0 / n, index=X.columns)
 
         s = weights.reindex(X.columns).fillna(0.0).astype(float) if isinstance(weights, pd.Series) else pd.Series(weights, index=X.columns).fillna(0.0).astype(float)
         return _enforce_cap_series(s, cap)
@@ -635,7 +618,6 @@ class AdaptiveMetaEngine(BaseRiskEngine):
 
 _ENGINE_CLASSES = {
     "custom": CustomClusteredEngine,
-    "market": CustomClusteredEngine,
     "skfolio": SkfolioEngine,
     "riskfolio": RiskfolioEngine,
     "pyportfolioopt": PyPortfolioOptEngine,
