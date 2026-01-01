@@ -9,11 +9,11 @@
     - [ ] Sub-task: Ensure strict sorting by `symbol` and `updated_at`.
     - [ ] Sub-task: Apply `valid_until` to historical records based on the next record's timestamp.
     - [ ] Sub-task: Verify only one active record per symbol.
-- [ ] Task: Run `scripts/cleanup_metadata_catalog.py` to apply changes.
+- [x] Task: Run `scripts/cleanup_metadata_catalog.py` to apply changes. 152f628
     - [ ] Sub-task: Verify output logs for "Duplicates removed" vs "Duplicates archived".
 
 ## Phase 2: Coverage Analysis & Verification
-- [ ] Task: Run `scripts/comprehensive_audit.py` to verify remediation.
+- [x] Task: Run `scripts/comprehensive_audit.py` to verify remediation. 7fde571
     - [ ] Sub-task: Confirm `FOREX` exchange is no longer missing.
     - [ ] Sub-task: Confirm "Symbols with duplicates" metric (should be 0 active duplicates, or audit script updated to count only active duplicates).
 - [ ] Task: Analyze Coverage Score.
