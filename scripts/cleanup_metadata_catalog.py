@@ -7,7 +7,7 @@ import logging
 
 import pandas as pd
 
-from tradingview_scraper.symbols.stream.metadata import DEFAULT_EXCHANGE_METADATA, MetadataCatalog
+from tradingview_scraper.symbols.stream.metadata import DEFAULT_EXCHANGE_METADATA, ExchangeCatalog, MetadataCatalog
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cleanup_catalog")
@@ -25,6 +25,14 @@ def cleanup_metadata_catalog():
 
     catalog = MetadataCatalog()
     df = catalog._df
+
+    # Bootstrap ExchangeCatalog
+    ex_catalog = ExchangeCatalog()
+
+    # 0. Inject missing FOREX metadata (Requirement from 2026-01-01 audit)
+    if not ex_catalog.get_exchange("FOREX"):
+        logger.info("Injecting missing FOREX exchange metadata...")
+        ex_catalog.upsert_exchange({"exchange": "FOREX", "timezone": "America/New_York", "is_crypto": False, "country": "Global", "description": "Global Forex Markets"})
 
     if df.empty:
         logger.info("Catalog is empty, nothing to clean")
