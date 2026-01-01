@@ -30,6 +30,18 @@ class MarketRegimeDetector:
         self.crisis_threshold = crisis_threshold
         self.quiet_threshold = quiet_threshold
 
+    def _hurst_exponent(self, x: np.ndarray) -> float:
+        return calculate_hurst_exponent(x)
+
+    def _stationarity_score(self, x: np.ndarray) -> float:
+        return calculate_stationarity_score(x)
+
+    def _permutation_entropy(self, x: np.ndarray, order: int = 3, delay: int = 1) -> float:
+        return calculate_permutation_entropy(x, order, delay)
+
+    def _dwt_turbulence(self, returns: np.ndarray) -> float:
+        return calculate_dwt_turbulence(returns)
+
     def _serial_correlation(self, returns: np.ndarray, lags: int = 1) -> float:
         """Measures serial correlation of returns."""
         if len(returns) < lags + 1:

@@ -49,10 +49,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Metadata Service & Lakehouse Catalog Research
+## [x] Track: Metadata Service & Lakehouse Catalog Research
 *Link: [./conductor/tracks/metadata_service_research_20251220/](./conductor/tracks/metadata_service_research_20251220/)*
-
-
 
 ---
 
@@ -71,7 +69,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: update and verify the base universe selected are using top market cap filter, review and improve the base universe selector
+## [x] Track: update and verify the base universe selected are using top market cap filter, review and improve the base universe selector
 *Link: [./conductor/tracks/universe_selector_guards_20251220/](./conductor/tracks/universe_selector_guards_20251220/)*
 --- 
 
@@ -94,22 +92,27 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Hierarchical Risk Parity (HRP) Implementation
+## [-] Track: Hierarchical Risk Parity (HRP) Implementation (Superseded)
 *Link: [./conductor/tracks/hierarchical_risk_parity_20251221/](./conductor/tracks/hierarchical_risk_parity_20251221/)*
 
 ---
 
-## [ ] Track: Entropy & Predictability Research
+## [-] Track: Entropy & Predictability Research (Superseded)
 *Link: [./conductor/tracks/entropy_predictability_research_20251221/](./conductor/tracks/entropy_predictability_research_20251221/)*
 
 ---
 
-## [ ] Track: Signal/Noise Based Filtering Research
+## [-] Track: Signal/Noise Based Filtering Research (Superseded)
 *Link: [./conductor/tracks/signal_noise_filtering_20251221/](./conductor/tracks/signal_noise_filtering_20251221/)*
 
 ---
 
-## [ ] Track: Unified Screener Infrastructure
+## [~] Track: Spectral & Entropy Alpha Integration 2026-01-01
+*Link: [./conductor/tracks/spectral_entropy_alpha_integration_20260101/](./conductor/tracks/spectral_entropy_alpha_integration_20260101/)*
+
+---
+
+## [-] Track: Unified Screener Infrastructure (Superseded)
 *Link: [./conductor/tracks/unified_screener_infrastructure_20251221/](./conductor/tracks/unified_screener_infrastructure_20251221/)*
 
 ---
@@ -198,5 +201,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: Audit Remediation 2026-01-01
+## [x] Track: Audit Remediation 2026-01-01
 *Link: [./conductor/tracks/audit_remediation_20260101/](./conductor/tracks/audit_remediation_20260101/)*
