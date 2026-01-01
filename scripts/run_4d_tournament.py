@@ -13,16 +13,16 @@ def run_4d_tournament():
     """
     Executes a 4D Tournament Matrix:
     D1: Selection Mode (v2, v3)
-    D2: Engines (All available)
+    D2: Engines (skfolio, riskfolio, pyportfolioopt, cvxportfolio, custom)
     D3: Profiles (hrp, risk_parity, barbell, benchmark, market)
     D4: Simulators (cvxportfolio, nautilus)
     """
     settings = get_settings()
 
     selection_modes = ["v2", "v3"]
-    engines = ["skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio", "custom", "market"]
+    engines = ["skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio", "custom"]
     profiles = ["hrp", "risk_parity", "barbell", "benchmark", "market"]
-    simulators = ["cvxportfolio", "nautilus"]
+    simulators = ["cvxportfolio", "vectorbt", "custom", "nautilus"]
 
     # Tournament parameters - optimized for high-fidelity coverage
     train_window = 126  # Half year training

@@ -37,7 +37,7 @@
       },
       "tournament": {
         "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio,adaptive",
-        "profiles": "market,benchmark,equal_weight,hrp,risk_parity,max_sharpe,barbell,adaptive"
+        "profiles": "benchmark,equal_weight,hrp,risk_parity,max_sharpe,barbell,adaptive"
       },
       "discovery": {
         "enabled_markets": ["futures", "crypto", "cfd", "forex", "bonds", "etf"]
@@ -63,7 +63,7 @@
     },
     "production": {
       "tournament": {
-        "engines": "market,custom",
+        "engines": "custom",
         "profiles": "min_variance,hrp,max_sharpe,barbell,equal_weight"
       },
       "discovery": {
@@ -154,7 +154,7 @@
         "dynamic_universe": true
       },
       "tournament": {
-        "engines": "market,custom",
+        "engines": "custom",
         "profiles": "min_variance,hrp,max_sharpe,barbell,equal_weight"
       },
       "discovery": {
