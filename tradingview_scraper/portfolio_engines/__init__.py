@@ -1,6 +1,6 @@
 from .backtest_simulators import (
     BaseSimulator,
-    CvxPortfolioSimulator,
+    CVXPortfolioSimulator,
     ReturnsSimulator,
     VectorBTSimulator,
     build_simulator,
@@ -17,7 +17,7 @@ from .cluster_adapter import ClusteredUniverse, build_clustered_universe
 __all__ = [
     "BaseSimulator",
     "ReturnsSimulator",
-    "CvxPortfolioSimulator",
+    "CVXPortfolioSimulator",
     "VectorBTSimulator",
     "build_simulator",
     "BaseRiskEngine",

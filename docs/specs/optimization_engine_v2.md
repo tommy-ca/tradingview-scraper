@@ -33,6 +33,10 @@ The Barbell profile splits the portfolio into two distinct risk sleeves:
 Standard convex profiles with additional constraints:
 - **Min Variance**: Pure risk minimization with cluster-level fragility penalties.
 - **Max Sharpe**: Risk-adjusted return maximization using training window mean returns ($\mu$).
+    - **Safety & Regularization**: To prevent "Ghost Alpha" (in-sample Sharpe > 10) and excessive churn:
+        - **Turnover Penalty**: Mandatory L1-norm penalty on weight changes.
+        - **Covariance Regularization**: L2 shrinkage applied to the covariance matrix to dampen noise.
+        - **Objective Limit**: Optimization fails if the projected Sharpe exceeds realistic bounds (e.g., > 5.0), triggering a fallback to MinVariance.
 
 #### 4. Equal Weight (Dynamic Baseline)
 Used for isolated alpha attribution:

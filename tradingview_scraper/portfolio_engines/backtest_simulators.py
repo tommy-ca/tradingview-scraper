@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 import logging
+import re
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -14,106 +13,48 @@ logger = logging.getLogger("backtest_simulators")
 
 
 class BaseSimulator(ABC):
-    """Abstract interface for market simulation backends."""
+    """Abstract base class for all backtest simulators."""
 
     @abstractmethod
     def simulate(
         self,
-        test_data: pd.DataFrame,
+        returns: pd.DataFrame,
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
         """
-        Simulate portfolio performance over a test window.
-        Returns a dictionary with 'daily_returns' and other metrics.
+        Runs a simulation over the test_data period.
         """
         pass
 
 
 class ReturnsSimulator(BaseSimulator):
-    """
-    Internal baseline simulator.
-    Models Daily Rebalancing to target weights (fair comparison to CVX).
-    """
+    """Frictionless lower-bound simulator using direct returns summation."""
 
     def simulate(
         self,
-        test_data: pd.DataFrame,
+        returns: pd.DataFrame,
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
-        settings = get_settings()
-        weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
-        weights_series = weights_df.set_index("Symbol")[weight_col].astype(float)
-        symbols = [s for s in weights_series.index if s in test_data.columns]
+        w_series = weights_df.set_index("Symbol")["Weight"].astype(float)
+        available_symbols = [s for s in w_series.index if s in returns.columns]
+        p_returns = returns[available_symbols].mul(w_series[available_symbols]).sum(axis=1)
+        res = calculate_performance_metrics(p_returns)
+        res["daily_returns"] = p_returns
 
-        if not symbols:
-            return calculate_performance_metrics(pd.Series(dtype=float))
-
-        # Re-normalize weights for available symbols
-        w = cast(pd.Series, weights_series[symbols].astype(float))
-        normalizer = float(w.abs().sum()) if weight_col == "Net_Weight" else float(w.sum())
-        if normalizer <= 0:
-            return calculate_performance_metrics(pd.Series(dtype=float))
-
-        w_target = cast(pd.Series, w / normalizer)
-
-        # Borrow costs application
-        returns_mtx = test_data[symbols].copy()
-        total_borrow_cost = 0.0
-        num_days = len(returns_mtx)
-        if settings.features.feat_short_costs:
-            borrow_daily = settings.features.short_borrow_cost / 252.0
-            for sym in symbols:
-                if w_target[sym] < 0:
-                    returns_mtx[sym] = returns_mtx[sym] - borrow_daily
-                    total_borrow_cost += abs(float(w_target[sym])) * borrow_daily * num_days
-
-        # Simulation Mode: Daily Reset vs. Window Drift
-        if settings.features.feat_rebalance_mode == "window":
-            # Set weights on Day 1, let them drift
-            daily_returns_list = []
-            curr_w = w_target.values
-            for i in range(len(returns_mtx)):
-                r_day = returns_mtx.iloc[i].values
-                # Portfolio return for the day
-                port_ret = np.sum(curr_w * r_day)
-                daily_returns_list.append(port_ret)
-                # Update weights for next day (Drift)
-                # w_next = w_prev * (1 + r_asset) / (1 + r_port)
-                # Note: we handle the case where port_ret is -1.0 (bankruptcy)
-                denom = 1.0 + port_ret
-                if abs(denom) < 1e-9:
-                    curr_w = np.zeros_like(curr_w)
-                else:
-                    curr_w = curr_w * (1.0 + r_day) / denom
-            daily_returns = pd.Series(daily_returns_list, index=test_data.index)
-        else:
-            # Daily Rebalancing Logic (Legacy/Reset)
-            daily_np = (np.asarray(returns_mtx, dtype=float) * w_target.values).sum(axis=1)
-            daily_returns = pd.Series(daily_np, index=test_data.index).dropna()
-
-        res = calculate_performance_metrics(daily_returns)
-        res["daily_returns"] = daily_returns
-        res["borrow_costs"] = total_borrow_cost
-
-        # Idealized Turnover
+        # Estimate turnover if initial_holdings provided
         if initial_holdings is not None:
-            combined_index = initial_holdings.index.union(w_target.index)
-            h_start = initial_holdings.reindex(combined_index, fill_value=0.0)
-            h_target = w_target.reindex(combined_index, fill_value=0.0)
-            res["turnover"] = float(np.abs(h_target.to_numpy() - h_start.to_numpy()).sum()) / 2.0
+            h_init = initial_holdings.reindex(w_series.index, fill_value=0.0)
+            res["turnover"] = float((w_series - h_init).abs().sum()) / 2.0
         else:
-            res["turnover"] = 1.0
+            res["turnover"] = 0.0
 
         return res
 
 
-class CvxPortfolioSimulator(BaseSimulator):
-    """
-    High-fidelity simulator using cvxportfolio.
-    Models slippage, commissions, and market impact.
-    """
+class CVXPortfolioSimulator(BaseSimulator):
+    """High-fidelity friction simulator using CVXPortfolio."""
 
     def __init__(self):
         try:
@@ -121,205 +62,111 @@ class CvxPortfolioSimulator(BaseSimulator):
 
             self.cvp = cvp
         except ImportError:
-            self.cvp = None
-            logger.warning("cvxportfolio not installed.")
+            raise ImportError("cvxportfolio not installed.")
 
     def simulate(
         self,
-        test_data: pd.DataFrame,
+        returns: pd.DataFrame,
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
-        if self.cvp is None:
-            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
         settings = get_settings()
-        returns = test_data.copy()
-
-        # Consistent Timezone Handling
-        if not isinstance(returns.index, pd.DatetimeIndex):
-            returns.index = pd.to_datetime(returns.index)
-        if returns.index.tz is None:
-            returns.index = returns.index.tz_localize("UTC")
-        else:
-            returns.index = returns.index.tz_convert("UTC")
-
-        # Start and end times must match the (possibly localized) index
+        cash_key = "cash"
         start_t = returns.index[0]
         end_t = returns.index[-1]
-
-        cash_key = settings.backtest_cash_asset
-        returns[cash_key] = 0.0
-        returns = returns.fillna(0.0)
-
-        weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
-        available = [s for s in weights_df["Symbol"] if s in test_data.columns]
-        w_sub = weights_df[weights_df["Symbol"].isin(available)].copy()
-        w_series = w_sub.set_index("Symbol")[weight_col].astype(float)
-
-        abs_sum = float(w_series.abs().sum())
-        if abs_sum > 1.0:
-            w_series = w_series / abs_sum
-
-        w_series = w_series.reindex(returns.columns, fill_value=0.0)
-        w_series[cash_key] = 1.0 - w_series.drop(cash_key).abs().sum()
+        universe = list(returns.columns)
+        if cash_key not in universe:
+            universe.append(cash_key)
+        w_series = weights_df.set_index("Symbol")["Weight"].astype(float).reindex(universe, fill_value=0.0)
+        non_cash_sum = float(w_series.drop(index=[cash_key]).abs().sum())
+        w_series[cash_key] = max(0.0, 1.0 - non_cash_sum)
         w_series = w_series.fillna(0.0)
-
-        # Policy Selection: Daily Reset vs. Window Drift
-        # For CVX, we use FixedWeights(Series) which is robust.
-        # Window drift is better modeled by PeriodicRebalance, but it's currently unstable in 1.5.1.
         policy = self.cvp.FixedWeights(w_series)
-
-        # Costs
         cost_list: List[Any] = [self.cvp.TransactionCost(a=settings.backtest_slippage + settings.backtest_commission)]
         if settings.features.feat_short_costs:
             cost_list.append(self.cvp.HoldingCost(short_fees=settings.features.short_borrow_cost))
-
-        # Initial weights for the very first trade (transition from previous window)
-        h_init = None
+        h_init = pd.Series(0.0, index=universe, dtype=np.float64)
         if initial_holdings is not None:
-            h_init = initial_holdings.reindex(returns.columns, fill_value=0.0)
-            h_sum = h_init.abs().sum()
+            h_init = initial_holdings.reindex(universe, fill_value=0.0).astype(np.float64)
+            h_sum = float(h_init.abs().sum())
             if h_sum > 0:
                 h_init = h_init / h_sum
-
+            else:
+                h_init[cash_key] = 1.0
+        else:
+            h_init[cash_key] = 1.0
         try:
-            simulator = self.cvp.MarketSimulator(returns=returns, costs=cost_list, cash_key=cash_key, min_history=pd.Timedelta(days=0))
+            # Dampening: Clip extreme returns to prevent solver failures
+            returns_cvx = returns.astype(np.float64).clip(-0.5, 2.0)
+            simulator = self.cvp.MarketSimulator(returns=returns_cvx, costs=cost_list, cash_key=cash_key, min_history=pd.Timedelta(days=0))
             result = simulator.backtest(policy, start_time=start_t, end_time=end_t, h=h_init)
-
             realized_returns = result.v.pct_change().dropna()
-
             res = calculate_performance_metrics(realized_returns)
-            res["daily_returns"] = realized_returns
-            # Return final weights for next window
-            res["final_weights"] = result.w.iloc[-1]
-            res["turnover"] = float(result.turnover.sum())  # Total turnover for the period
-
-            # Extract borrow costs if present
-            # cvxportfolio costs are Series indexed by time
-            # result.costs is a list of costs series if multiple costs
-            b_cost = 0.0
-            if settings.features.feat_short_costs and len(cost_list) > 1:
-                # Assuming HoldingCost is the second one
-                # Actually it's safer to look at result.costs
-                # result.costs is a DataFrame in newer versions or list
-                try:
-                    # Sum the specific cost series
-                    # If it's a DataFrame, it might have columns
-                    if isinstance(result.costs, pd.DataFrame):
-                        # Filter columns that look like holding costs
-                        h_cols = [c for c in result.costs.columns if "HoldingCost" in str(c)]
-                        if h_cols:
-                            b_cost = float(result.costs[h_cols].sum().sum())
-                except:
-                    pass
-            res["borrow_costs"] = b_cost
+            res.update({"daily_returns": realized_returns, "final_weights": result.w.iloc[-1], "turnover": float(result.turnover.sum()) / 2.0})
             return res
         except Exception as e:
             logger.error(f"cvxportfolio failed: {e}")
-            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
+            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
 
 
 class VectorBTSimulator(BaseSimulator):
-    """
-    High-performance simulator using vectorbt.
-    """
-
-    def __init__(self):
-        try:
-            import vectorbt as vbt
-
-            self.vbt = vbt
-        except ImportError:
-            self.vbt = None
+    """High-performance vectorized simulator using VectorBT."""
 
     def simulate(
         self,
-        test_data: pd.DataFrame,
+        returns: pd.DataFrame,
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
-        if self.vbt is None:
-            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
-
-        settings = get_settings()
-        weight_col = "Net_Weight" if "Net_Weight" in weights_df.columns else "Weight"
-        available = [s for s in weights_df["Symbol"] if s in test_data.columns]
-        if not available:
-            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
-
-        w_series = weights_df.set_index("Symbol")[weight_col].reindex(available).fillna(0.0)
-        abs_sum = float(w_series.abs().sum())
-        if abs_sum > 1.0:
-            w_series = w_series / abs_sum
-
         try:
-            vbt_any = cast(Any, self.vbt)
-            # Convert returns to cumulative prices
-            returns_data = test_data[available].fillna(0.0)
-            prices = (1.0 + returns_data).cumprod()
+            import vectorbt as vbt
+        except ImportError:
+            raise ImportError("vectorbt not installed.")
+        settings = get_settings()
+        w_series = weights_df.set_index("Symbol")["Weight"].astype(float)
+        returns_vbt = returns.copy()
+        for m in [s for s in w_series.index if s not in returns_vbt.columns]:
+            returns_vbt[m] = 0.0
+        portfolio = vbt.Portfolio.from_orders(
+            close=returns_vbt[w_series.index] + 1.0,
+            size=w_series,
+            size_type="target_percent",
+            fees=settings.backtest_slippage + settings.backtest_commission,
+            freq="D",
+        )
+        p_returns = portfolio.returns()
+        res = calculate_performance_metrics(p_returns)
+        res["daily_returns"] = p_returns
 
-            # Align weights: create a DataFrame where every row is the target weights
-            # Ensure columns match prices columns exactly
-            w_values = w_series.values.reshape(1, -1) # Shape (1, n_assets)
-            full_weights = pd.DataFrame(
-                np.tile(w_values, (len(prices), 1)),
-                index=prices.index,
-                columns=prices.columns
-            )
+        # Estimate turnover if initial_holdings provided
+        if initial_holdings is not None:
+            h_init = initial_holdings.reindex(w_series.index, fill_value=0.0)
+            res["turnover"] = float((w_series - h_init).abs().sum()) / 2.0
+        else:
+            res["turnover"] = 0.0
 
-            pf = vbt_any.Portfolio.from_orders(
-                prices,
-                size=full_weights,
-                size_type="targetpercent",
-                fees=settings.backtest_commission,
-                slippage=settings.backtest_slippage,
-                # freq="D", # Removed to rely on index
-                init_cash=100.0,
-                cash_sharing=True,
-                group_by=True,
-            )
-            
-            # pf.returns() may return a DataFrame if not grouped; we want the aggregate portfolio returns
-            # For a portfolio with cash sharing (default), returns() is the daily portfolio return series.
-            realized_returns = pf.returns()
-            if isinstance(realized_returns, pd.DataFrame):
-                realized_returns = realized_returns.iloc[:, 0]
-
-            res = calculate_performance_metrics(realized_returns)
-            res["daily_returns"] = realized_returns
-            
-            # Extract Turnover (Average Daily Turnover)
-            try:
-                # Robust way: Use Orders (Executions)
-                # Value Traded = Size * Price for all orders
-                if hasattr(pf, 'orders') and hasattr(pf.orders, 'records_readable'):
-                    orders_rec = pf.orders.records_readable
-                    if not orders_rec.empty and 'Size' in orders_rec.columns and 'Price' in orders_rec.columns:
-                        total_traded = (orders_rec['Size'] * orders_rec['Price']).sum()
-                        avg_val = pf.value().mean()
-                        res["turnover"] = float(total_traded / avg_val) if avg_val > 0 else 0.0
-                    else:
-                        res["turnover"] = 0.0
-                else:
-                    # Fallback to stats if orders not available
-                    stats = pf.stats(metrics=["Turnover"])
-                    if "Turnover" in stats:
-                        res["turnover"] = float(stats["Turnover"])
-                    else:
-                        res["turnover"] = 0.0
-            except Exception:
-                res["turnover"] = 0.0
-
-            return res
-        except Exception as e:
-            logger.error(f"vectorbt failed: {e}")
-            return ReturnsSimulator().simulate(test_data, weights_df, initial_holdings)
+        return res
 
 
-def build_simulator(name: str = "custom") -> BaseSimulator:
-    n = name.lower()
-    if n == "cvxportfolio":
-        return CvxPortfolioSimulator()
-    if n == "vectorbt":
+def _sanitize_nt(symbol: str) -> str:
+    """Sanitizes symbol for NautilusTrader (replaces non-alphanumeric with underscores)."""
+    return re.sub(r"[^a-zA-Z0-9]", "_", symbol)
+
+
+class NautilusSimulator(BaseSimulator):
+    """Event-driven high-fidelity simulator using NautilusTrader (Placeholder)."""
+
+    def simulate(self, returns: pd.DataFrame, weights_df: pd.DataFrame, initial_holdings: Optional[pd.Series] = None) -> Dict[str, Any]:
+        return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+
+
+def build_simulator(name: str) -> BaseSimulator:
+    if name == "custom":
+        return ReturnsSimulator()
+    elif name == "cvxportfolio":
+        return CVXPortfolioSimulator()
+    elif name == "vectorbt":
         return VectorBTSimulator()
-    return ReturnsSimulator()
+    elif name == "nautilus":
+        return NautilusSimulator()
+    raise ValueError(f"Unknown simulator: {name}")
