@@ -28,7 +28,13 @@ def perform_subclustering(symbols: List[str], returns: pd.DataFrame, threshold: 
         return {1: symbols}
 
     sub_rets = cast(pd.DataFrame, returns[symbols])
-    corr = sub_rets.corr()
+
+    # Filter for non-constant returns to avoid divide by zero in correlation
+    non_constant = sub_rets.columns[sub_rets.std() > 1e-12].tolist()
+    if len(non_constant) < 2:
+        return {1: symbols}
+
+    corr = sub_rets[non_constant].corr()
 
     # Hierarchical Linkage
     dist_matrix = np.sqrt(0.5 * (1 - corr.values.clip(-1, 1)))
@@ -42,11 +48,16 @@ def perform_subclustering(symbols: List[str], returns: pd.DataFrame, threshold: 
     sub_cluster_assignments = sch.fcluster(link, t=threshold, criterion="distance")
 
     sub_clusters: Dict[int, List[str]] = {}
-    for sym, sc_id in zip(symbols, sub_cluster_assignments):
+    for sym, sc_id in zip(non_constant, sub_cluster_assignments):
         sc_id_int = int(sc_id)
         if sc_id_int not in sub_clusters:
             sub_clusters[sc_id_int] = []
         sub_clusters[sc_id_int].append(sym)
+
+    # Add constant symbols to a fallback cluster
+    if len(non_constant) < len(symbols):
+        fallback_id = max(sub_clusters.keys()) + 1 if sub_clusters else 1
+        sub_clusters[fallback_id] = [s for s in symbols if s not in non_constant]
 
     return sub_clusters
 
@@ -66,7 +77,12 @@ def visualize_volatility_clusters(returns: pd.DataFrame, output_path: str) -> An
     if log_vol.empty:
         return None
 
-    vol_corr = log_vol.corr().fillna(0.0)
+    # Filter for non-constant volatility to avoid division by zero
+    non_constant = log_vol.columns[log_vol.std() > 1e-12].tolist()
+    if len(non_constant) < 2:
+        return None
+
+    vol_corr = log_vol[non_constant].corr().fillna(0.0)
 
     # Emerald-to-Purple palette for volatility (risk-focused)
     cmap = sns.color_palette("viridis", as_cmap=True)
@@ -78,7 +94,6 @@ def visualize_volatility_clusters(returns: pd.DataFrame, output_path: str) -> An
         vmin=0,
         vmax=1,
         center=0.5,
-        square=True,
         linewidths=0.5,
         figsize=(20, 20),
         cbar_kws={"label": "Log-Volatility Correlation"},
@@ -94,8 +109,7 @@ def visualize_volatility_clusters(returns: pd.DataFrame, output_path: str) -> An
     plt.close()
     logger.info(f"✅ Volatility clustermap saved to: {output_path}")
 
-    # Explicitly cast to Any to bypass linter checks on the Grid object
-    return cast(Any, g).dendrogram_col.linkage
+    return getattr(g, "dendrogram_col", None).linkage if hasattr(g, "dendrogram_col") and g.dendrogram_col else None
 
 
 def visualize_clusters(returns: pd.DataFrame, output_path: str):
@@ -106,7 +120,14 @@ def visualize_clusters(returns: pd.DataFrame, output_path: str):
         return
 
     logger.info(f"Generating clustermap for {len(returns.columns)} assets...")
-    corr = returns.corr()
+
+    # Filter for non-constant returns
+    non_constant = returns.columns[returns.std() > 1e-12].tolist()
+    if len(non_constant) < 2:
+        logger.warning("Insufficient non-constant assets for clustermap.")
+        return
+
+    corr = returns[non_constant].corr()
 
     # Professional Diverging Palette
     cmap = sns.diverging_palette(230, 20, as_cmap=True)
@@ -120,7 +141,6 @@ def visualize_clusters(returns: pd.DataFrame, output_path: str):
         vmin=-1,
         vmax=1,
         center=0,
-        square=True,
         linewidths=0.5,
         figsize=(20, 20),
         cbar_kws={"shrink": 0.5},
@@ -145,7 +165,6 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     with open(clusters_path, "r") as f:
         clusters = cast(Dict[str, List[str]], json.load(f))
 
-    # meta_path might be candidates json
     meta = {}
     if os.path.exists(meta_path):
         with open(meta_path, "r") as f:
@@ -159,14 +178,15 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     if os.path.exists(stats_path):
         stats_df = pd.read_json(stats_path)
 
-    # Use a safer way to read pickle
-    with open(returns_path, "rb") as f_in:
-        returns_raw = pd.read_pickle(f_in)
+    returns = pd.read_pickle(returns_path)
+    if not isinstance(returns, pd.DataFrame):
+        returns = pd.DataFrame(returns)
 
-    if not isinstance(returns_raw, pd.DataFrame):
-        returns = pd.DataFrame(returns_raw)
-    else:
-        returns = returns_raw
+    # Force naive index
+    try:
+        returns.index = pd.to_datetime(returns.index).tz_localize(None)
+    except Exception:
+        pass
 
     # Generate Visualizations
     visualize_clusters(returns, image_path)
@@ -185,18 +205,16 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     report.append("\n---")
 
     report.append("## ⚡ Volatility Risk Analysis")
-    report.append("Identifies systemic risk units based on volatility co-movement (Log-Vol Correlation). Assets that spike together are grouped.")
-    report.append("### 🔍 Strategic Insight")
-    report.append("- **Hidden Risk:** Assets that trend together but occupy different Volatility Units provide superior diversification.")
-    report.append("- **Systemic Contagion:** Assets in the same Volatility Unit but different Return Clusters represent dangerous 'hidden' dependencies during market stress.")
+    report.append("Identifies systemic risk units based on volatility co-movement (Log-Vol Correlation).")
     report.append(f"![Volatility Clustermap](./{os.path.basename(vol_image_path)})")
 
     # Extract Volatility Clusters
     if vol_linkage is not None:
-        # Use a distance threshold to extract flat clusters
         vol_cluster_ids = sch.fcluster(vol_linkage, t=0.5, criterion="distance")
         vol_clusters: Dict[int, List[str]] = {}
-        for sym, vc_id in zip(returns.columns, vol_cluster_ids):
+        # Filter symbols used in vol_linkage (non-constant ones)
+        vol_symbols = returns.columns[returns.std() > 1e-12].tolist()
+        for sym, vc_id in zip(vol_symbols, vol_cluster_ids):
             vc_id_int = int(vc_id)
             if vc_id_int not in vol_clusters:
                 vol_clusters[vc_id_int] = []
@@ -225,8 +243,9 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
         sub_rets = cast(pd.DataFrame, returns[valid_symbols])
 
         # Calculate cluster stats
-        cluster_corr = sub_rets.corr()
-        if len(valid_symbols) > 1:
+        non_constant_sub = sub_rets.columns[sub_rets.std() > 1e-12].tolist()
+        if len(non_constant_sub) > 1:
+            cluster_corr = sub_rets[non_constant_sub].corr()
             corr_values = cluster_corr.values[np.triu_indices_from(cluster_corr.values, k=1)]
             avg_corr = float(np.mean(corr_values))
         else:
@@ -236,18 +255,16 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
         std_val = float(mean_rets.std())
         cluster_vol = std_val * np.sqrt(252) if not np.isnan(std_val) else 0.0
 
-        # Calculate Cluster Fragility (Mean of member fragility)
-        cluster_fragility = 0.0
         cluster_af = 0.0
+        cluster_fragility = 0.0
         if stats_df is not None:
             c_stats = stats_df[stats_df["Symbol"].isin(valid_symbols)]
             if not c_stats.empty:
-                if "Fragility_Score" in c_stats.columns:
-                    cluster_fragility = float(c_stats["Fragility_Score"].mean())
                 if "Antifragility_Score" in c_stats.columns:
                     cluster_af = float(c_stats["Antifragility_Score"].mean())
+                if "Fragility_Score" in c_stats.columns:
+                    cluster_fragility = float(c_stats["Fragility_Score"].mean())
 
-        # Sector distribution
         sectors = [meta.get(s, {}).get("sector", "N/A") for s in valid_symbols]
         sector_series = pd.Series(sectors)
         sector_counts = sector_series.value_counts()
@@ -266,7 +283,6 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
         c_detail.append(f"- **Sector Homogeneity:** {sector_homogeneity:.1%}")
         c_detail.append(f"- **Markets:** {', '.join(markets)}")
 
-        # Perform Nested Sub-clustering
         if len(valid_symbols) > 5:
             sub_clusters = perform_subclustering(valid_symbols, returns, threshold=0.2)
             if len(sub_clusters) > 1:
@@ -293,22 +309,14 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
         cluster_details.extend(c_detail)
         summary_data.append({"Cluster": c_id, "Sector": primary_sector, "Assets": len(valid_symbols), "Avg_Corr": avg_corr, "Vol": cluster_vol, "Homogeneity": sector_homogeneity})
 
-    # 4. Generate Summary Table
-    summary_table = []
-    summary_table.append("\n## 📊 Clusters Overview")
-    summary_table.append("| Cluster | Primary Sector | Assets | Avg Corr | Vol | Homogeneity |")
-    summary_table.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
-
+    summary_table = ["\n## 📊 Clusters Overview", "| Cluster | Primary Sector | Assets | Avg Corr | Vol | Homogeneity |", "| :--- | :--- | :--- | :--- | :--- | :--- |"]
     summary_data.sort(key=lambda x: x["Assets"], reverse=True)
     for s in summary_data:
         summary_table.append(f"| {s['Cluster']} | {s['Sector']} | {s['Assets']} | {s['Avg_Corr']:.3f} | {s['Vol']:.2%} | {s['Homogeneity']:.1%} |")
 
-    # Final assembly
     full_report = report + summary_table + ["\n---"] + cluster_details
-
     with open(output_path, "w") as f:
         f.write("\n".join(full_report))
-
     logger.info(f"✅ Integrated hierarchical cluster analysis report generated at: {output_path}")
 
 
@@ -318,22 +326,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["selected", "raw"], default="selected")
     args = parser.parse_args()
-
     output_dir = get_settings().prepare_summaries_run_dir()
-
-    c_path = "data/lakehouse/portfolio_clusters.json"
-    m_path = "data/lakehouse/portfolio_meta.json"
-    o_path = output_dir / "cluster_analysis.md"
-    i_path = output_dir / "portfolio_clustermap.png"
-    v_path = output_dir / "volatility_clustermap.png"
-
+    c_path, m_path = "data/lakehouse/portfolio_clusters.json", "data/lakehouse/portfolio_meta.json"
+    o_path, i_path, v_path = output_dir / "cluster_analysis.md", output_dir / "portfolio_clustermap.png", output_dir / "volatility_clustermap.png"
     if args.mode == "raw":
-        c_path = "data/lakehouse/portfolio_clusters_raw.json"
-        m_path = "data/lakehouse/portfolio_candidates_raw.json"
-        o_path = output_dir / "raw_factor_analysis.md"
-        i_path = output_dir / "raw_clustermap.png"
-        v_path = output_dir / "raw_volatility_clustermap.png"
-
+        c_path, m_path = "data/lakehouse/portfolio_clusters_raw.json", "data/lakehouse/portfolio_candidates_raw.json"
+        o_path, i_path, v_path = output_dir / "raw_factor_analysis.md", output_dir / "raw_clustermap.png", output_dir / "raw_volatility_clustermap.png"
     analyze_clusters(
         clusters_path=c_path,
         meta_path=m_path,
