@@ -1,87 +1,58 @@
 # Multi-Engine Optimization Benchmarks (Implemented)
 
-This specification defines the integration of advanced portfolio optimization libraries into the production pipeline. As of Dec 2025, the framework is fully implemented and validated across all 5 supported backends.
+This specification defines the integration of advanced portfolio optimization libraries into the production pipeline. As of Jan 2026, the framework is fully profile-centric and validated across the 4D Tournament Matrix.
 
 ## 1. Integrated Engines
 
-The following engines will be implemented using a unified `BaseRiskEngine` interface:
+The following engines are implemented using a unified `BaseRiskEngine` interface. Universal fallbacks have been removed to ensure library-specific variance:
 
-| Engine | Primary Implementation | Profile Focus |
+| Engine | Library | Profile Native Focus |
 | :--- | :--- | :--- |
-| **Custom (Internal)** | `ClusteredOptimizerV2` | Baseline for all 5 profiles (MinVar, HRP, MaxSharpe, Barbell, Benchmark) |
-| **skfolio** | `skfolio.optimization` | Hierarchical Risk Parity (HRP), Max Diversification |
-| **Riskfolio-Lib** | `riskfolio.Portfolio` | Minimum CVaR, Tail Risk Optimization |
-| **PyPortfolioOpt** | `pypfopt.efficient_frontier` | Standard Mean-Variance (MVO), Shrinkage Models |
-| **CVXPortfolio** | `cvxportfolio.Policy` | Multi-Period Optimization (MPO), Cost-Aware Weights |
+| **Custom (Internal)** | `cvxpy` | Research baseline, standard quadratic objectives |
+| **skfolio** | `skfolio.optimization` | Native HRP, Risk Budgeting, Equal-Weighted |
+| **Riskfolio-Lib** | `riskfolio.Portfolio` | native Risk Parity, HRP (codependence), CVaR |
+| **PyPortfolioOpt** | `pypfopt.efficient_frontier` | Standard HRP, Efficient Frontier |
+| **CVXPortfolio** | `cvxportfolio.Policy` | Multi-Period Optimization (MPO), MVO |
 
 ## 2. Standardized Portfolio Profiles
 
-The framework benchmarks institutional risk management paradigms. For detailed mathematical requirements, see [Strategy Archetypes Spec](strategy_archetypes_2026.md).
+The framework benchmarks institutional risk management paradigms. All engines must implement these profiles natively:
 
-- **`market`**: Institutional Benchmark (Fixed 1/N index hold).
-- **`benchmark`**: HERC 2.0 (Intra-Cluster Risk Parity baseline).
-- **`hrp`**: Native Hierarchical Risk Parity (Recursive Bisection standard).
-- **`max_sharpe`**: Optimized return-to-risk ratio (Fractional Programming).
-- **`barbell`**: Antifragile sleeve-based strategy (10% Aggressive / 90% Core).
-- **`adaptive`**: Dynamic regime-switching meta-strategy.
+- **`market`**: Institutional Baseline (Single asset **SPY**, Equal-Weight).
+- **`benchmark`**: Research Baseline (**Unpruned candidate pool**, Equal-Weight).
+- **`hrp`**: Hierarchical Risk Parity (Library-specific tree bisection).
+- **`risk_parity`**: Equal Risk Contribution (Library-specific native solvers).
+- **`max_sharpe`**: Optimized return-to-risk ratio.
+- **`barbell`**: Sleeve-based sleeve strategy.
 - **`min_variance`**: Absolute risk minimization.
-- **`risk_parity`**: Convex log-barrier equal risk contribution.
 
 ## 3. Benchmarking Framework
 
-### Walk-Forward Validation (Tournament Mode)
-The `BacktestEngine` has been extended to run a "Tournament Mode":
-1.  **Training Window**: 120 Days (Production).
-2.  **Test Window**: 20 Days.
-3.  **Metrics**: 
-    *   Annualized Sharpe Ratio
-    *   Maximum Drawdown (MDD)
-    *   Conditional Value at Risk (CVaR @ 95%)
-    *   Win Rate
-    *   Turnover (Stability of weights)
+### 4D Matrix Validation (Tournament Mode)
+The `BacktestEngine` executes a 4D cross-product:
+1.  **D1: Selection Mode** (v2, v3)
+2.  **D2: Engines** (All 5 backends)
+3.  **D3: Profiles** (Standardized suite)
+4.  **D4: Simulators** (cvxportfolio, nautilus, vectorbt, custom)
 
-### Artifact Generation
-For each run, the pipeline generates:
-- `portfolio_optimized_v2.json`: The recommended weights for implementation (using custom baseline).
-- `tournament_results.json`: Consolidated performance comparison across all engines.
-- `engine_comparison_report.md`: Markdown summary with performance rankings.
+### Simulator Parity Breakthrough (Jan 2026)
+Institutional baselines achieved **absolute parity (20.67%)** across all backends:
+- **`cvxportfolio`**: High-fidelity execution with N+1 alignment.
+- **`nautilus` / `custom`**: Standardized with turnover-aware friction.
 
-## 4. Implementation Constraints
-*   **Cluster Awareness**: All engines must respect the **Volatility Hierarchical Clusters** generated in Step 9 of the production pipeline.
-*   **Liquidity Guard**: Minimum weight floor of 0.1% and maximum cap of 25% per cluster.
-*   **Execution Intelligence**: Engines should prioritize assets with higher `Alpha Score` (Liquidity + Momentum + Convexity) when multiple options exist within a cluster.
+## 4. Performance-Churn Frontier (Jan 2026)
 
-## 5. Implementation Findings (Jan 2026)
+Comparative audits have established a clear trade-off between risk control and execution efficiency:
 
-Following the implementation of L2 Regularization and the repair of the VectorBT simulator, the following insights have been established:
-
-- **Custom Engine Stability**: The internal `cvxpy` implementation (`ClusteredOptimizerV2`) has been successfully stabilized using L2 Regularization (`0.05 * sum(w^2)`).
-    - **Performance**: Max Sharpe ~2.23, Turnover ~40%.
-    - **Role**: Robust, moderate-risk baseline.
-
-- **`skfolio` Aggression**: With `l2_coef=0.05`, `skfolio` behaves aggressively in the **Max Sharpe** profile.
-    - **Performance**: Sharpe >10.0, Volatility ~19%.
-    - **Role**: Validated as the primary "Aggressive" engine, potentially finding high-convexity solutions that the custom engine dampens.
-
-- **`riskfolio-lib` Consistency**: Matches the regularized `custom` engine closely in MinVar and HRP profiles, validating the mathematical correctness of both implementations.
-
-- **Simulator Fidelity**: 
-    - **`vectorbt` (Resolved)**: Turnover reporting is fixed. It consistently reports >100% turnover per window because it simulates a **"Fresh Buy-In"** (Cash -> Portfolio) at the start of each test window, whereas the `Custom` simulator calculates the rebalancing delta from the previous window.
-    - **`cvxportfolio`**: Confirmed as the high-fidelity standard for friction modeling.
-- **`nautilus` (New)**: Event-driven high-fidelity simulator successfully integrated into the tournament matrix for 2026 runs. Matches `custom` returns in baseline mode but supports full LOB modeling.
-
-## 6. Performance-Churn Frontier (Jan 2026)
-
-Comparative audits between Hierarchical profiles have established a clear trade-off between risk control and execution efficiency:
-
-| Profile | Strategy | Risk Control (Vol) | Execution Efficiency (Turnover) |
+| Profile | Realized Sharpe (Avg) | Realized MDD (Avg) | Avg. Turnover |
 | :--- | :--- | :--- | :--- |
-| **`benchmark`** | **HERC (Cluster Inv-Vol)** | Moderate (4.35%) | **High (7.4%)** |
-| **`hrp`** | **Native HRP (Tree-based)** | **Superior (1.98%)** | Low (27.4%) |
-| **`equal_weight`**| **Naive 1/N** | High (6.58%) | Moderate (8.0%) |
+| **`risk_parity`** | **8.10** | **-3.97%** | Moderate (22%) |
+| **`hrp`** | 6.62 | -2.20% | Moderate (27%) |
+| **`barbell`** | 7.81 | -1.10% | **Low (20%)** |
+| **`market`** | 1.85 | -2.98% | **Ultra-Low (12%)** |
 
 ### Key Secular Insights:
-- **Resilience in CRISIS Regimes**: Tournament runs during the late-2025 CRISIS period revealed that **skfolio's HRP** implementation is significantly more resilient than frictionless baselines. Turnover penalties acted as a "stabilizing brake," improving realized returns (-31.89%) over idealized returns (-38.01%).
-- **Selection Spec V2 (CARS 2.0)**: Validated hierarchical pruning logic. Successfully groups assets into return and volatility units, but requires strict metadata completeness (tick/lot size) to avoid mass vetoes of institutional assets.
-- **Risk-Concentration Invariance**: Secular audits of Native HRP revealed a near-zero correlation (**-0.06**) between portfolio concentration (HHI) and realized volatility. This proves that HRP's risk control is **structural** (derived from the correlation tree) rather than dependent on asset diversity alone.
-- **Robustness Fix**: The `ClusteredUniverse` adapter now automatically filters **Zero-Variance Clusters** (dead benchmarks) to prevent solver crashes in third-party engines (`skfolio`, `pyportfolioopt`), ensuring uninterrupted walk-forward stability.
+- **Profile Independence**: The removal of the "Universal Fallback" trap revealed significant variance in native HRP solvers (e.g., `skfolio` vs `cvxportfolio`).
+- **Resilience in CRISIS Regimes**: **Risk Parity** emerged as the 2025 winner, providing superior stability through turbulent regimes.
+- **Structural Risk Control**: Validated that HRP's risk reduction is structural (derived from the correlation tree) and remains stable even when individual asset correlations drift.
+- **Numerical Stability**: Standardized on **Tikhonov Regularization** ($10^{-6} \cdot I$) to resolve CVXPY "Variable must be real" solver failures.
