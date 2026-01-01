@@ -4,7 +4,7 @@
 - [x] Task: Update `scripts/cleanup_metadata_catalog.py` to inject `FOREX` metadata. 152f628
     - [ ] Sub-task: Define `FOREX` metadata constants.
     - [ ] Sub-task: Add logic to check for `FOREX` in `ExchangeCatalog` and upsert if missing.
-- [ ] Task: Refine SCD Type 2 logic in `scripts/cleanup_metadata_catalog.py`.
+- [x] Task: Refine SCD Type 2 logic in `scripts/cleanup_metadata_catalog.py`. 44f8479
     - [ ] Sub-task: Implement `resolve_scd_duplicates(df)` function.
     - [ ] Sub-task: Ensure strict sorting by `symbol` and `updated_at`.
     - [ ] Sub-task: Apply `valid_until` to historical records based on the next record's timestamp.
