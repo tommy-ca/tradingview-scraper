@@ -45,6 +45,7 @@ The catalog MUST implement a Slowly Changing Dimension (SCD Type 2) model:
 - Updates MUST NOT overwrite the active record.
 - Old records MUST be retired by setting `valid_until = NOW`.
 - New records MUST be inserted with `valid_from = NOW`.
+- **Contiguity Guarantee**: The `valid_until` of a retired record MUST match the `valid_from` (or `updated_at`) of the succeeding record to ensure a seamless historical chain without gaps or overlaps.
 - Backtests MUST query metadata with `as_of=candle_timestamp`.
 
 Deletion of catalog files is prohibited for production/backtesting workflows because it destroys PIT history and can introduce survivorship/look-ahead bias.
