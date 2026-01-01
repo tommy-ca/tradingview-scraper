@@ -55,6 +55,9 @@ def get_hierarchical_clusters(returns: pd.DataFrame, threshold: float = 0.5, max
     avg_dist = (avg_dist + avg_dist.T) / 2
     np.fill_diagonal(avg_dist, 0)
 
+    if len(returns.columns) < 2:
+        return np.array([1]), np.array([])
+
     link = sch.linkage(squareform(avg_dist, checks=False), method="ward")
     cluster_ids = sch.fcluster(link, t=threshold, criterion="distance") if threshold > 0 else sch.fcluster(link, t=max_clusters, criterion="maxclust")
 

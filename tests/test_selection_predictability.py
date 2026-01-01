@@ -42,7 +42,13 @@ def test_selection_v3_predictability_vetoes():
 
     request = SelectionRequest(top_n=1, threshold=0.5, max_clusters=5, min_momentum_score=-1.0)
 
-    response = engine.select(returns, raw_candidates, stats_df=None, request=request)
+    from unittest.mock import patch
+
+    from tradingview_scraper.settings import FeatureFlags
+
+    with patch("tradingview_scraper.selection_engines.engines.get_settings") as mock_get:
+        mock_get.return_value.features = FeatureFlags(feat_predictability_vetoes=True)
+        response = engine.select(returns, raw_candidates, stats_df=None, request=request)
 
     # Check vetoes
     vetoes = response.vetoes
@@ -64,3 +70,74 @@ def test_selection_v3_predictability_vetoes():
             break
 
     assert predictability_vetoes, "No predictability vetoes were triggered"
+
+
+def test_selection_v3_feature_flags():
+    """Verify that predictability vetoes are only applied when the feature flag is enabled."""
+    engine = SelectionEngineV3()
+
+    np.random.seed(42)
+    n_days = 100
+    # Create a noisy series that WOULD be vetoed if flag is on
+    noisy_rets = np.random.randn(n_days) * 0.01 + 0.1  # High positive mean to pass alpha gate
+    clean_rets = np.linspace(0.001, 0.005, n_days) + 0.1
+
+    returns = pd.DataFrame({"NOISY": noisy_rets, "CLEAN": clean_rets})
+    raw_candidates = [
+        {"symbol": "NOISY", "direction": "LONG", "Value.Traded": 1e15, "tick_size": 0.01, "lot_size": 1, "price_precision": 2},
+        {"symbol": "CLEAN", "direction": "LONG", "Value.Traded": 1e15, "tick_size": 0.01, "lot_size": 1, "price_precision": 2},
+    ]
+    request = SelectionRequest(top_n=1, threshold=0.5, max_clusters=5, min_momentum_score=-1.0)
+
+    from unittest.mock import patch
+
+    from tradingview_scraper.settings import FeatureFlags
+
+    # 1. Flag OFF (Default)
+    with patch("tradingview_scraper.selection_engines.engines.get_settings") as mock_get:
+        mock_get.return_value.features = FeatureFlags(feat_predictability_vetoes=False)
+        response = engine.select(returns, raw_candidates, stats_df=None, request=request)
+        # Should NOT be vetoed for entropy
+        assert "NOISY" not in response.vetoes or not any("Entropy" in r for r in response.vetoes["NOISY"])
+        # We expect 2 winners (or 1 depending on clustering and top_n, but specifically NOISY should not be vetoed)
+        winners = [w["symbol"] for w in response.winners]
+        assert "NOISY" in winners or "NOISY" not in response.vetoes
+
+    # 2. Flag ON
+    with patch("tradingview_scraper.selection_engines.engines.get_settings") as mock_get:
+        # Lower threshold to ensure veto
+        mock_get.return_value.features = FeatureFlags(feat_predictability_vetoes=True, entropy_max_threshold=0.5)
+        response = engine.select(returns, raw_candidates, stats_df=None, request=request)
+        # SHOULD be vetoed
+        assert "NOISY" in response.vetoes
+        assert any("Entropy" in r for r in response.vetoes["NOISY"])
+
+
+def test_selection_v3_1_feature_flags():
+    """Verify that V3.1 also respects the predictability feature flags."""
+    from tradingview_scraper.selection_engines.engines import SelectionEngineV3_1
+
+    engine = SelectionEngineV3_1()
+
+    np.random.seed(42)
+    n_days = 100
+    noisy_rets = np.random.randn(n_days) * 0.01 + 0.1
+    clean_rets = np.linspace(0.001, 0.005, n_days) + 0.1
+
+    returns = pd.DataFrame({"NOISY": noisy_rets, "CLEAN": clean_rets})
+    raw_candidates = [
+        {"symbol": "NOISY", "direction": "LONG", "Value.Traded": 1e15, "tick_size": 0.01, "lot_size": 1, "price_precision": 2},
+        {"symbol": "CLEAN", "direction": "LONG", "Value.Traded": 1e15, "tick_size": 0.01, "lot_size": 1, "price_precision": 2},
+    ]
+    request = SelectionRequest(top_n=1, threshold=0.5, max_clusters=5, min_momentum_score=-1.0)
+
+    from unittest.mock import patch
+
+    from tradingview_scraper.settings import FeatureFlags
+
+    # Flag ON
+    with patch("tradingview_scraper.selection_engines.engines.get_settings") as mock_get:
+        mock_get.return_value.features = FeatureFlags(feat_predictability_vetoes=True, entropy_max_threshold=0.5)
+        response = engine.select(returns, raw_candidates, stats_df=None, request=request)
+        assert "NOISY" in response.vetoes
+        assert any("Entropy" in r for r in response.vetoes["NOISY"])
