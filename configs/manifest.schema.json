@@ -106,6 +106,8 @@
             "feat_audit_ledger": { "type": "boolean" },
             "feat_pit_fidelity": { "type": "boolean" },
             "feat_rebalance_mode": { "type": "string", "enum": ["daily", "window"] },
+            "feat_rebalance_tolerance": { "type": "boolean" },
+            "rebalance_drift_limit": { "type": "number", "minimum": 0, "maximum": 1 },
             "feat_short_costs": { "type": "boolean" },
             "short_borrow_cost": { "type": "number" },
             "feat_dynamic_selection": { "type": "boolean" }

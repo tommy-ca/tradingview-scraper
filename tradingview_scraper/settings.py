@@ -29,7 +29,9 @@ class FeatureFlags(BaseModel):
     feat_decay_audit: bool = False
     feat_audit_ledger: bool = False
     feat_pit_fidelity: bool = False
-    feat_rebalance_mode: str = "daily"  # "daily" or "window"
+    feat_rebalance_mode: str = "window"  # "daily" or "window"
+    feat_rebalance_tolerance: bool = False
+    rebalance_drift_limit: float = 0.05
     feat_short_costs: bool = False
     short_borrow_cost: float = 0.02  # 2% p.a.
     feat_dynamic_selection: bool = False
@@ -297,6 +299,9 @@ if __name__ == "__main__":
             "profile": "PROFILE",
             "run_id": "TV_RUN_ID",
             "features.selection_mode": "TV_FEATURES_SELECTION_MODE",
+            "features.feat_rebalance_mode": "TV_FEATURES_FEAT_REBALANCE_MODE",
+            "features.feat_rebalance_tolerance": "TV_FEATURES_FEAT_REBALANCE_TOLERANCE",
+            "features.rebalance_drift_limit": "TV_FEATURES_REBALANCE_DRIFT_LIMIT",
         }
         for field, env_name in mapping.items():
             if "." in field:
