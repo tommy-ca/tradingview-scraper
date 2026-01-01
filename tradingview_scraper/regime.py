@@ -1,14 +1,16 @@
 import logging
-import math
 from typing import Dict, Tuple, cast
 
 import numpy as np
 import pandas as pd
-import pywt  # type: ignore
-from scipy.stats import entropy
-from statsmodels.tsa.stattools import adfuller
 
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.utils.predictability import (
+    calculate_dwt_turbulence,
+    calculate_hurst_exponent,
+    calculate_permutation_entropy,
+    calculate_stationarity_score,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,52 +30,6 @@ class MarketRegimeDetector:
         self.crisis_threshold = crisis_threshold
         self.quiet_threshold = quiet_threshold
 
-    def _hurst_exponent(self, x: np.ndarray) -> float:
-        """
-        Calculates the Hurst Exponent using Rescaled Range (R/S) analysis.
-        Simplified version for short-to-medium windows.
-        """
-        if len(x) < 30:
-            return 0.5
-
-        try:
-            # Create a range of lags
-            lags = [5, 10, 15, 20, 25, 30]
-            lags = [l for l in lags if l < len(x) // 2]
-
-            # Calculate the variance of the difference for each lag
-            # Var(x(t+k) - x(t)) ~ k^(2H)
-            tau = []
-            for lag in lags:
-                diff = x[lag:] - x[:-lag]
-                tau.append(np.std(diff))
-
-            # Linear regression on log-log scale
-            poly = np.polyfit(np.log(lags), np.log(tau), 1)
-            # Slope is H
-            h_val = float(poly[0])
-
-            # Clamp to [0, 1]
-            return float(np.clip(h_val, 0.0, 1.0))
-        except Exception:
-            return 0.5
-
-    def _stationarity_score(self, x: np.ndarray) -> float:
-        """
-        Uses Augmented Dickey-Fuller (ADF) test to measure stationarity.
-        Returns a score in [0, 1] where 1.0 is highly non-stationary/trending.
-        """
-        if len(x) < 20:
-            return 0.5
-
-        try:
-            # p-value: probability that the process has a unit root (non-stationary)
-            result = adfuller(x)
-            p_value = float(result[1])
-            return p_value  # High p-value = non-stationary
-        except Exception:
-            return 0.5
-
     def _serial_correlation(self, returns: np.ndarray, lags: int = 1) -> float:
         """Measures serial correlation of returns."""
         if len(returns) < lags + 1:
@@ -82,26 +38,6 @@ class MarketRegimeDetector:
         s = pd.Series(returns)
         autocorr = s.autocorr(lag=lags)
         return float(abs(autocorr)) if not np.isnan(autocorr) else 0.0
-
-    def _permutation_entropy(self, x: np.ndarray, order: int = 3, delay: int = 1) -> float:
-        """
-        Calculates Permutation Entropy as a measure of structural randomness.
-        Low values = ordered/trending, High values = noisy/random.
-        """
-        if len(x) < order:
-            return 1.0
-
-        n = len(x) - (order - 1) * delay
-        permutations = []
-        for i in range(n):
-            segment = x[i : i + order * delay : delay]
-            perm = tuple(np.argsort(segment))
-            permutations.append(perm)
-
-        _, counts = np.unique(permutations, axis=0, return_counts=True)
-        probs = counts / len(permutations)
-        pe_val = float(entropy(probs))
-        return float(pe_val / math.log(math.factorial(order)))
 
     def _volatility_clustering(self, returns: np.ndarray, lags: int = 5) -> float:
         """
@@ -114,27 +50,6 @@ class MarketRegimeDetector:
         abs_rets = pd.Series(np.abs(returns))
         autocorr = abs_rets.autocorr(lag=1)
         return float(autocorr) if not np.isnan(autocorr) else 0.0
-
-    def _dwt_turbulence(self, returns: np.ndarray) -> float:
-        """
-        Uses Discrete Wavelet Transform to measure high-frequency 'turbulence'.
-        Returns a value in [0, 1] representing the fraction of energy in noise.
-        """
-        if len(returns) < 8:
-            return 0.5
-
-        coeffs = pywt.wavedec(returns, "haar", level=min(3, pywt.dwt_max_level(len(returns), "haar")))
-        cA = coeffs[0]
-        cD = np.concatenate(coeffs[1:])
-
-        energy_approx = np.sum(np.square(cA))
-        energy_detail = np.sum(np.square(cD))
-        total_energy = energy_approx + energy_detail
-
-        if total_energy == 0:
-            return 0.5
-
-        return float(energy_detail / total_energy)
 
     def _hmm_classify(self, x: np.ndarray) -> str:
         """
@@ -194,7 +109,7 @@ class MarketRegimeDetector:
         # Axis 2: Stress Axis (Volatility & Noise)
         # > 1.0: Rising Stress, < 1.0: Falling Stress
         vol_ratio = float(mean_rets.tail(10).std() / (mean_rets.std() + 1e-12))
-        turbulence = self._dwt_turbulence(market_rets[-64:])
+        turbulence = calculate_dwt_turbulence(market_rets[-64:])
         # 1.0 is the neutral stress point
         stress_axis = (vol_ratio * 0.7) + (turbulence * 0.6)
 
@@ -243,19 +158,19 @@ class MarketRegimeDetector:
         # 2. Entropy (Complexity)
         lookback = min(len(market_rets), 64)
         recent_rets = cast(np.ndarray, market_rets[-lookback:])
-        ent = self._permutation_entropy(recent_rets)
+        ent = calculate_permutation_entropy(recent_rets)
 
         # 3. Vol Clustering (Persistence)
         vc = max(0.0, self._volatility_clustering(market_rets))
 
         # 4. DWT Turbulence (Noise)
-        turbulence = self._dwt_turbulence(recent_rets)
+        turbulence = calculate_dwt_turbulence(recent_rets)
 
         # 5. Hurst Exponent (Memory)
-        hurst = self._hurst_exponent(market_rets)
+        hurst = calculate_hurst_exponent(market_rets)
 
         # 6. ADF Stationarity (Trendiness)
-        stationarity = self._stationarity_score(market_rets)
+        stationarity = calculate_stationarity_score(market_rets)
 
         # 7. Serial Correlation
         sc = self._serial_correlation(market_rets)
