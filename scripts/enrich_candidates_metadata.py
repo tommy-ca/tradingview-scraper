@@ -1,209 +1,126 @@
 import json
+import logging
 import os
-from pathlib import Path
-from typing import Optional
+from typing import Any, Dict
+
+import numpy as np
+import pandas as pd
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger("metadata_enrichment")
 
 
-def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
-    export_root = Path("export")
-    run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
-
-    if run_id:
-        candidate = export_root / run_id
-        if candidate.exists():
-            return candidate
-
-    if export_root.exists():
-        best_dir: Optional[Path] = None
-        best_mtime = -1.0
-        for subdir in export_root.iterdir():
-            if not subdir.is_dir():
-                continue
-            matches = list(subdir.glob("universe_selector_*.json"))
-            if not matches:
-                continue
-            newest = max(p.stat().st_mtime for p in matches)
-            if newest > best_mtime:
-                best_mtime = newest
-                best_dir = subdir
-        if best_dir is not None:
-            return best_dir
-
-    return export_root
+def get_asset_class(symbol: str) -> str:
+    """Heuristic to determine asset class from symbol."""
+    if ":" not in symbol:
+        return "UNKNOWN"
+    exchange = symbol.split(":")[0].upper()
+    if exchange in ["BINANCE", "OKX", "BYBIT", "BITGET"]:
+        return "CRYPTO"
+    if exchange in ["NYSE", "NASDAQ", "AMEX"]:
+        return "EQUITY"
+    if exchange in ["OANDA", "THINKMARKETS", "FOREXCOM"]:
+        return "FOREX"
+    if exchange in ["CME", "CBOT", "NYMEX", "COMEX"]:
+        return "FUTURES"
+    return "CFD"
 
 
-def enrich_candidates():
-    candidates_path = "data/lakehouse/portfolio_candidates.json"
+def get_defaults(asset_class: str, symbol: str) -> Dict[str, Any]:
+    """Returns institutional defaults based on asset class."""
+    if asset_class == "CRYPTO":
+        is_perp = symbol.endswith(".P")
+        return {
+            "tick_size": 0.00000001 if not is_perp else 0.01,
+            "lot_size": 0.001,
+            "price_precision": 8 if not is_perp else 2,
+            "min_qty": 0.001,
+            "value_traded": 1e8,
+        }
+    if asset_class == "FOREX":
+        is_jpy = "JPY" in symbol
+        return {
+            "tick_size": 0.001 if is_jpy else 0.00001,
+            "lot_size": 1000.0,
+            "price_precision": 3 if is_jpy else 5,
+            "min_qty": 1000.0,
+            "value_traded": 1e9,
+        }
+    if asset_class == "EQUITY":
+        return {
+            "tick_size": 0.01,
+            "lot_size": 1.0,
+            "price_precision": 2,
+            "min_qty": 1.0,
+            "value_traded": 5e8,
+        }
+    # Default for FUTURES/CFD
+    return {
+        "tick_size": 0.01,
+        "lot_size": 1.0,
+        "price_precision": 2,
+        "min_qty": 1.0,
+        "value_traded": 1e8,
+    }
+
+
+def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_raw.json", returns_path: str = "data/lakehouse/portfolio_returns.pkl"):
     if not os.path.exists(candidates_path):
-        print("No candidates file found.")
+        logger.error(f"Candidates file not found: {candidates_path}")
         return
 
     with open(candidates_path, "r") as f:
         candidates = json.load(f)
 
-    # Load all export data
-    export_dir = _resolve_export_dir()
-    export_files = [str(p) for p in export_dir.glob("universe_selector_*.json")]
-    symbol_meta = {}
+    candidate_map = {c["symbol"]: c for c in candidates}
 
-    for f in export_files:
-        try:
-            with open(f, "r") as j:
-                data = json.load(j)
-                items = data.get("data", []) if isinstance(data, dict) else data
-                for item in items:
-                    if isinstance(item, dict) and "symbol" in item:
-                        desc = item.get("description") or item.get("name") or "N/A"
-                        symbol_meta[item["symbol"]] = {"description": desc, "sector": item.get("sector") or item.get("industry") or "N/A"}
-        except Exception:
-            continue
+    # 1. Synchronize with Returns Universe
+    if os.path.exists(returns_path):
+        returns = pd.read_pickle(returns_path)
+        active_symbols = returns.columns.tolist()
 
-    # Load metadata catalog (symbols.parquet) for robust fallbacks.
-    catalog_meta = {}
-    catalog_path = "data/lakehouse/symbols.parquet"
-    if os.path.exists(catalog_path):
-        try:
-            import pandas as pd  # type: ignore
+        added_count = 0
+        for symbol in active_symbols:
+            if symbol not in candidate_map:
+                asset_class = get_asset_class(symbol)
+                new_cand = {
+                    "symbol": symbol,
+                    "identity": symbol.split(":")[-1] if ":" in symbol else symbol,
+                    "direction": "LONG",
+                    "value_traded": 1e9,
+                    "sector": "Crypto" if asset_class == "CRYPTO" else "Financial",
+                    "asset_class": asset_class,
+                }
+                candidates.append(new_cand)
+                candidate_map[symbol] = new_cand
+                added_count += 1
+        if added_count > 0:
+            logger.info(f"➕ Added {added_count} missing symbols from returns matrix.")
 
-            df = pd.read_parquet(catalog_path)
-            if "symbol" in df.columns:
-                keep_cols = [c for c in ["symbol", "description", "sector", "industry", "type", "subtype"] if c in df.columns]
-                df = df[keep_cols].drop_duplicates(subset="symbol", keep="last").set_index("symbol")  # type: ignore
-                catalog_meta = df.to_dict(orient="index")
-        except Exception:
-            catalog_meta = {}
-
-    # Custom Overrides for N/A sectors
-    custom_sectors = {
-        "NYSE:SPG": "Real Estate (Retail)",
-        "NYSE:PLD": "Real Estate (Logistics)",
-        "NASDAQ:HST": "Real Estate (Hospitality)",
-        "NYSE:CPT": "Real Estate (Residential)",
-        "NYSE:FRT": "Real Estate (Retail)",
-        "NYSE:ARE": "Real Estate (Life Science)",
-        "NYSE:AVB": "Real Estate (Residential)",
-        "NYSE:BXP": "Real Estate (Office)",
-        "NYSE:DLR": "Real Estate (Data Centers)",
-        "NYSE:EQR": "Real Estate (Residential)",
-        "NYSE:EXR": "Real Estate (Self Storage)",
-        "NYSE:MAA": "Real Estate (Residential)",
-        "NYSE:PSA": "Real Estate (Self Storage)",
-        "NYSE:REG": "Real Estate (Retail)",
-        "NYSE:WELL": "Real Estate (Healthcare)",
-        "NYSE:WY": "Real Estate (Timber)",
-        "NYSE:VTR": "Real Estate (Healthcare)",
-        "NYSE:DHI": "Consumer Durables (Homebuilding)",
-        "NASDAQ:EQIX": "Real Estate (Data Centers)",
-        "BYBIT:CCUSDT": "Crypto Alpha",
-        "OKX:TRUMPUSDT.P": "PolitiFi",
-        "OKX:XRPUSDT.P": "Crypto L1",
-        "OKX:FILUSDT.P": "Crypto Storage",
-        "BINANCE:FILUSDT.P": "Crypto Storage",
-        "BINANCE:AVAXUSDT.P": "Crypto L1",
-        "CBOT:ZC1!": "Commodities (Grains)",
-        "OANDA:CORNUSD": "Commodities (Grains)",
-        "OANDA:SOYBNUSD": "Commodities (Grains)",
-        "OANDA:WHEATUSD": "Commodities (Grains)",
-        "COMEX:SI1!": "Metals (Silver)",
-        "COMEX:SIH2026": "Metals (Silver)",
-        "COMEX:HG1!": "Metals (Copper)",
-        "COMEX:HGH2026": "Metals (Copper)",
-        "COMEX:HRCH2026": "Metals (Gold)",
-        "OANDA:XAUUSD": "Metals (Gold)",
-        "OANDA:XCUUSD": "Metals (Copper)",
-        "OANDA:US30USD": "Indices (US30)",
-        "CME:MBTZ2025": "Crypto (BTC)",
-        "THINKMARKETS:EURJPY": "Forex (JPY)",
-        "THINKMARKETS:GBPJPY": "Forex (JPY)",
-        "THINKMARKETS:CHFJPY": "Forex (JPY)",
-        "THINKMARKETS:CADJPY": "Forex (JPY)",
-        "THINKMARKETS:AUDJPY": "Forex (JPY)",
-        "THINKMARKETS:AUDUSD": "Forex (USD)",
-        "AMEX:HYG": "Fixed Income (High Yield)",
-        "NASDAQ:TLT": "Fixed Income (Treasury)",
-        "AMEX:AGG": "Fixed Income (Aggregate)",
-        "NASDAQ:IEF": "Fixed Income (Treasury)",
-        "AMEX:LQD": "Fixed Income (Corporate)",
-        "NASDAQ:BND": "Fixed Income (Aggregate)",
-        "AMEX:GLD": "Metals (Gold)",
-        "AMEX:IWM": "Equities (Russell 2000)",
-        "AMEX:SPY": "Equities (S&P 500)",
-        "NASDAQ:QQQ": "Equities (Nasdaq 100)",
-        "AMEX:VTI": "Equities (Total Market)",
-        "AMEX:VEA": "Equities (Developed Mkts)",
-        "AMEX:VWO": "Equities (Emerging Mkts)",
-        "AMEX:DUST": "Metals (Gold Inverse)",
-        "AMEX:SH": "Equities (S&P 500 Inverse)",
-        "AMEX:SDS": "Equities (S&P 500 Inverse)",
-        "NASDAQ:VXUS": "Equities (International)",
-    }
-
-    # Enrich
+    # 2. Apply Institutional Defaults
     enriched_count = 0
     for c in candidates:
-        sym = c["symbol"]
-        updated = False
+        symbol = c.get("symbol", "UNKNOWN")
+        asset_class = c.get("asset_class") or get_asset_class(symbol)
+        c["asset_class"] = asset_class
 
-        meta = symbol_meta.get(sym)
-        if meta:
-            if (not c.get("description") or c.get("description") == "N/A") and meta.get("description") and meta.get("description") != "N/A":
-                c["description"] = meta["description"]
-                updated = True
-            if (not c.get("sector") or c.get("sector") == "N/A") and meta.get("sector") and meta.get("sector") != "N/A":
-                c["sector"] = meta["sector"]
-                updated = True
+        defaults = get_defaults(asset_class, symbol)
+        is_enriched = False
 
-        # Apply custom overrides if sector is still N/A or empty
-        if sym in custom_sectors and (not c.get("sector") or c.get("sector") == "N/A"):
-            c["sector"] = custom_sectors[sym]
-            updated = True
+        for key, val in defaults.items():
+            if key not in c or c[key] is None or (isinstance(c[key], float) and np.isnan(c[key])):
+                c[key] = val
+                is_enriched = True
 
-        # Metadata catalog fallback (symbols.parquet)
-        if ((not c.get("sector") or c.get("sector") == "N/A") or (not c.get("description") or c.get("description") == "N/A")) and catalog_meta:
-            cat = catalog_meta.get(sym, {})
-
-            if not c.get("sector") or c.get("sector") == "N/A":
-                industry = str(cat.get("industry") or "").strip()
-                subtype = str(cat.get("subtype") or "").strip()
-                sector = str(cat.get("sector") or "").strip()
-
-                if subtype == "reit" or "Real Estate Investment Trust" in industry:
-                    c["sector"] = "Real Estate (REIT)"
-                    updated = True
-                elif sector:
-                    c["sector"] = sector
-                    updated = True
-                elif industry:
-                    c["sector"] = industry
-                    updated = True
-
-            if not c.get("description") or c.get("description") == "N/A":
-                desc = str(cat.get("description") or "").strip()
-                if desc:
-                    c["description"] = desc
-                    updated = True
-
-        # Global fallback for crypto / unclassified
-        if not c.get("sector") or c.get("sector") == "N/A":
-            m = c.get("market", "").upper()
-            if any(x in m for x in ["BINANCE", "BITGET", "BYBIT", "OKX", "CRYPTO"]):
-                c["sector"] = "Crypto"
-                updated = True
-            elif "FOREX" in m:
-                c["sector"] = "Forex"
-                updated = True
-            elif "FUTURES" in m:
-                c["sector"] = "Futures"
-                updated = True
-
-        if updated:
+        if is_enriched:
             enriched_count += 1
 
+    # 3. Save Enriched Pool
     with open(candidates_path, "w") as f:
         json.dump(candidates, f, indent=2)
 
-    print(f"Enriched {enriched_count}/{len(candidates)} candidates with metadata.")
+    logger.info(f"✅ Total candidates: {len(candidates)}. Enriched {enriched_count} with institutional defaults.")
 
 
 if __name__ == "__main__":
-    enrich_candidates()
+    enrich_metadata()

@@ -34,11 +34,8 @@ class FeatureFlags(BaseModel):
     short_borrow_cost: float = 0.02  # 2% p.a.
     feat_dynamic_selection: bool = False
 
-    # Universe Selection 3.0 (Operation Darwin)
-    feat_universe_v3: bool = False
-    feat_mps_scoring: bool = False
-    feat_regime_survival: bool = False
-    feat_engine_parity: bool = False
+    # Selection Specification Mode: 'v2', 'v3', 'legacy'
+    selection_mode: str = "v3"
 
 
 class ManifestSettingsSource(PydanticBaseSettingsSource):
@@ -298,9 +295,18 @@ if __name__ == "__main__":
             "meta_audit": "META_AUDIT",
             "profile": "PROFILE",
             "run_id": "TV_RUN_ID",
+            "features.selection_mode": "TV_FEATURES_SELECTION_MODE",
         }
         for field, env_name in mapping.items():
-            val = getattr(settings, field)
+            if "." in field:
+                parts = field.split(".")
+                obj = settings
+                for p in parts:
+                    obj = getattr(obj, p)
+                val = obj
+            else:
+                val = getattr(settings, field)
+
             if isinstance(val, bool):
                 val = "1" if val else "0"
             elif isinstance(val, list):

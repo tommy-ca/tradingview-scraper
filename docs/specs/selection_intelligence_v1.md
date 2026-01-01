@@ -1,36 +1,50 @@
-# Specification: Selection Intelligence (V1)
+# Specification: Selection Intelligence (V2)
 **Status**: Formalized
-**Date**: 2025-12-31
+**Date**: 2026-01-01
 
 ## 1. Overview
-Selection Intelligence defines the logic for "Pruning" the raw discovered candidate pool into a high-quality implementation universe. It uses hierarchical clustering to ensure diversification and multi-lookback alpha scoring to select leaders.
+Selection Intelligence defines the logic for "Pruning" the raw discovered candidate pool into a high-quality implementation universe. It supports multiple logic versions to adapt to different market regimes and risk appetites, now benchmarked via the 4D Tournament Matrix.
 
-## 2. Hierarchical Pruning
+## 2. Selection Strategy Versions
 
-### 2.1 Cluster Discovery
-- **Linkage**: Ward Linkage on a distance matrix derived from robust correlations.
-- **Multi-Lookback**: Correlations are averaged over 60d, 120d, and 200d windows to ensure statistical stability.
-- **Adaptive Threshold**: Uses a distance threshold (default 0.5) to determine the number of clusters, ensuring that assets in different clusters are sufficiently uncorrelated.
+### 2.1 Legacy (V1.0)
+- **Logic**: Local normalization within clusters.
+- **Goal**: Breadth and cluster-local leadership.
 
-### 2.2 Execution Alpha Scoring
-Assets within each cluster are ranked using a composite score:
-- **Momentum (30%)**: Global Cross-Sectional Percentile Rank of annualized returns.
-- **Stability (20%)**: Inverse volatility rank.
-- **Antifragility (20%)**: Convexity/Tail-risk rank (PIT Audit).
-- **Liquidity (30%)**: Relative volume and spread proxies.
+### 2.2 Composite Alpha-Risk Scoring (CARS 2.0 / V2)
+- **Model**: Additive Weighted Ranks.
+- **Formula**: $0.4 \times Mom + 0.2 \times Stab + 0.2 \times AF + 0.2 \times Liq - 0.1 \times Frag$.
+- **Behavior**: Compensatory logic where high momentum can offset moderate risk.
 
-### 2.3 Intra-Cluster Selection (Top N)
-- **Identity Deduplication**: Canonical identities (e.g., Binance BTC and Bybit BTC) are merged; only the most liquid/stable venue is selected.
-- **Leader Selection**: Selects the **Top N** (default 2) assets per cluster.
-- **Dynamic Capacity**: (Future) Scale N based on cluster internal variance.
+### 2.3 Multiplicative Probability Scoring (MPS 3.0 / V3)
+- **Model**: Multiplicative Probabilities ($P_1 \times P_2 \times ...$).
+- **Vetoes**: Hard gates for Survival (< 0.1), ECI (Cost), and Numerical Stability ($\kappa$).
+- **Behavior**: Non-compensatory "Darwinian" survival. Structural failure in any category results in immediate disqualification.
 
-## 3. Integration with Risk Profiles
+### 2.4 Quantified V3 Profiles (Feature Flag Controlled)
 
-| Profile | Selection Strategy | Rationale |
-| :--- | :--- | :--- |
-| **HRP** | Diversified Top N | HRP benefits from having diverse cluster leaders to distribute risk. |
-| **Barbell** | Convexity Leaders | Selection prioritizes assets with high Antifragility scores for the Aggressor sleeve. |
-| **MinVar** | Stability Leaders | Selection favors low-volatility leaders within clusters. |
+The system supports two distinct high-fidelity selection profiles under the V3 engine, controlled by institutional feature flags.
 
-## 4. Pipeline implementation
-Selection is performed in Step 5 of the production pipeline via `scripts/natural_selection.py`. It produces the `portfolio_candidates.json` artifact which serves as the "Ground Truth" for all optimization engines.
+| Profile | Feature Flag | Logic | Kappa Threshold | ECI Gate | Rationale |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Darwinian** | `feat_selection_darwinian` | MPS | $10^6$ | **Enabled** | Maximum survival/quality; strictly prunes for numerical stability. |
+| **Robust** | `feat_selection_robust` | MPS | $10^7$ | **Disabled** | Balanced risk/reward; allows more breadth in high-friction environments. |
+
+- **MPS (Multiplicative Probability Scoring)**: Both profiles utilize V3 multiplicative logic to ensure no single point of failure.
+- **Hard Survival**: Both profiles enforce the `P(Survival) >= 0.1` gate.
+
+## 3. Integration with Risk Profiles (Tournament Dimensions)
+
+| Spec Profile | Selection Engine | Target Profile | Rationale |
+| :--- | :--- | :--- | :--- |
+| **Darwinian** | `v3` | `hrp`, `min_variance` | Focuses on high-quality, numerically stable clusters for risk-parity engines. |
+| **Aggressive** | `v3` | `max_sharpe` | Selects single leaders with the highest combined MPS for alpha-seeking profiles. |
+| **Robust** | `v3` | `barbell`, `equal_weight` | Balanced V3 logic; allows more breadth while maintaining non-compensatory health gates. |
+
+## 4. Selection Alpha Isolation
+
+To quantify the value of the selection logic, the platform measures **Selection Alpha ($A_s$):**
+
+$$ A_s = \text{Return}(\text{Filtered EW}) - \text{Return}(\text{Raw Discovery EW}) $$
+
+This metric is archived in the **Immutable Audit Ledger** at each walk-forward step of the backtest.

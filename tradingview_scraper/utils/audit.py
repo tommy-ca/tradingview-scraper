@@ -3,38 +3,80 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 
-def get_df_hash(df: pd.DataFrame) -> str:
+def get_df_hash(df: pd.DataFrame | pd.Series) -> str:
     """
-    Computes a stable, deterministic SHA-256 hash of a DataFrame.
+    Computes a stable, deterministic SHA-256 hash of a DataFrame or Series.
     Ignores memory addresses and non-essential metadata.
+    Forces indices to naive UTC string representations for cross-environment parity.
     """
     if df.empty:
         return hashlib.sha256(b"empty").hexdigest()
 
-    # Convert to values-only representation for hashing
-    # Using JSON for stability and ease of inspection for small DFs,
-    # but for large return matrices, we use the underlying values.
     try:
-        # Standardize index and columns
-        df_stable = df.sort_index(axis=0).sort_index(axis=1)
-        # Use values + index + columns to ensure structure is preserved
-        combined = str(df_stable.values.tobytes()) + str(np.asarray(df_stable.index).tobytes()) + str(np.asarray(df_stable.columns).tobytes())
-        return hashlib.sha256(combined.encode()).hexdigest()
+        # 1. Standardize Index
+        # Force all DatetimeIndices to naive UTC
+        idx = df.index
+        if isinstance(idx, pd.DatetimeIndex):
+            if idx.tz is not None:
+                idx = idx.tz_convert(None)
+            # Use ISO format for maximum string stability
+            idx_list = idx.strftime("%Y-%m-%dT%H:%M:%S").tolist()
+        else:
+            idx_list = [str(x) for x in idx]
+
+        idx_str = "|".join(idx_list)
+
+        # 2. Standardize Columns (if DataFrame)
+        cols_str = ""
+        if isinstance(df, pd.DataFrame):
+            cols_str = "|".join([str(c) for c in df.columns])
+
+        # 3. Standardize Data
+        # We use a high-precision rounded string representation for floats to avoid
+        # float64 byte variations across different architectures/OS.
+        # 8 decimals is enough for financial returns.
+        data_flat = df.to_numpy().flatten()
+        data_list = []
+        for x in data_flat:
+            try:
+                # If it looks like a number, format it specifically
+                if pd.api.types.is_number(x) and not isinstance(x, bool):
+                    data_list.append(f"{float(x):.8f}")
+                else:
+                    data_list.append(str(x))
+            except Exception:
+                data_list.append(str(x))
+        data_str = "|".join(data_list)
+
+        # 4. Final Fingerprint
+        combined = f"idx:{idx_str};cols:{cols_str};data:{data_str}"
+        return hashlib.sha256(combined.encode("utf-8")).hexdigest()
     except Exception as e:
-        logger.warning(f"Fallback hashing for DataFrame: {e}")
+        logger.warning(f"Fallback hashing for object type {type(df)}: {e}")
         return hashlib.sha256(str(df.shape).encode()).hexdigest()
+
+
+def get_env_hash() -> str:
+    """Generates a hash of the current environment state (uv.lock, pyproject.toml)."""
+    env_str = ""
+    for filename in ["uv.lock", "pyproject.toml"]:
+        p = Path(filename)
+        if p.exists():
+            env_str += p.read_text()
+
+    # Add python version
+    env_str += sys.version
+    return hashlib.sha256(env_str.encode()).hexdigest()
 
 
 class AuditLedger:
@@ -84,6 +126,14 @@ class AuditLedger:
 
     def record_genesis(self, run_id: str, profile: str, manifest_hash: str):
         """Creates the Genesis Block for a new run."""
+        git_hash = "unknown"
+        try:
+            import subprocess
+
+            git_hash = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
+        except Exception:
+            pass
+
         record = {
             "type": "genesis",
             "run_id": run_id,
@@ -91,11 +141,13 @@ class AuditLedger:
             "env": {
                 "python": sys.version,
                 "manifest_hash": manifest_hash,
+                "env_hash": get_env_hash(),
+                "git_hash": git_hash,
             },
         }
         self._append(record)
 
-    def record_intent(self, step: str, params: Dict[str, Any], input_hashes: Dict[str, str]):
+    def record_intent(self, step: str, params: Dict[str, Any], input_hashes: Dict[str, str], data: Optional[Dict[str, Any]] = None):
         """Logs an intent to perform a pipeline action."""
         record = {
             "type": "action",
@@ -106,9 +158,11 @@ class AuditLedger:
                 "input_hashes": input_hashes,
             },
         }
+        if data:
+            record["data"] = data
         self._append(record)
 
-    def record_outcome(self, step: str, status: str, output_hashes: Dict[str, str], metrics: Dict[str, Any]):
+    def record_outcome(self, step: str, status: str, output_hashes: Dict[str, str], metrics: Dict[str, Any], data: Optional[Dict[str, Any]] = None):
         """Logs the outcome of a pipeline action."""
         record = {
             "type": "action",
@@ -119,4 +173,6 @@ class AuditLedger:
                 "metrics": metrics,
             },
         }
+        if data:
+            record["data"] = data
         self._append(record)

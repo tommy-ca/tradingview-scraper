@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 import pandas as pd
 
@@ -11,19 +13,23 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("selection_report")
 
 
-def generate_selection_report(audit_path: str, output_path: str):
+def generate_selection_report(audit_path: str, output_path: str, audit_data: Optional[Dict[str, Any]] = None):
     """
     Generates a high-quality Markdown report for the universe selection process.
     """
-    if not os.path.exists(audit_path):
-        logger.warning(f"Audit file missing: {audit_path}")
-        return
+    full_audit = {}
 
-    try:
-        with open(audit_path, "r") as f:
-            full_audit = json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to read audit file: {e}")
+    if audit_data:
+        full_audit = audit_data
+    elif os.path.exists(audit_path):
+        try:
+            with open(audit_path, "r") as f:
+                full_audit = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to read audit file: {e}")
+            return
+    else:
+        logger.warning(f"Audit data missing (Path: {audit_path})")
         return
 
     selection = full_audit.get("selection")
@@ -84,8 +90,15 @@ def generate_selection_report(audit_path: str, output_path: str):
 
 
 if __name__ == "__main__":
-    output_dir = get_settings().prepare_summaries_run_dir()
+    settings = get_settings()
+    output_dir = settings.prepare_summaries_run_dir()
+
+    # Try to find audit file in run dir first, then fallback to shared lakehouse
+    audit_file = output_dir / "selection_audit.json"
+    if not audit_file.exists():
+        audit_file = Path("data/lakehouse/selection_audit.json")
+
     generate_selection_report(
-        audit_path="data/lakehouse/selection_audit.json",
+        audit_path=str(audit_file),
         output_path=str(output_dir / "selection_audit.md"),
     )

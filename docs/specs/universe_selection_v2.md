@@ -1,25 +1,19 @@
-# Specification: Universe Selection 2.0 (Jan 2026)
+# Specification: Universe Selection 2.0 (CARS)
 
-This document defines the institutional standard for building the portfolio candidate universe, ensuring survivability and alpha integrity.
+This document defines the selection standard implemented by **SelectionEngineV2**.
 
-## 1. The Triple-Gate Architecture
+## 1. Scoring Model: Composite Alpha-Risk Scoring (CARS 2.0)
 
-The pipeline is structured into three mandatory "Hard Gates":
+Unlike the multiplicative model in 3.0, Selection 2.0 uses an **additive** scoring model based on cross-sectional ranks:
 
-| Gate | Name | Standard | Rationale |
-| :--- | :--- | :--- | :--- |
-| **Gate 1** | **Forensic Health** | < 5% Gaps, > 320 Days History | Prevents "stale" or "listing-jump" assets from biasing alpha estimates. |
-| **Gate 2** | **Composite Selection** | $\text{Score} = \sum (\text{Alpha}, \text{Risk}, \text{Liq})$ | Balanced view of potential return vs. structural fragility. |
-| **Gate 3** | **Secular Alignment** | 100% Alignment across 500 days | Ensures covariance matrices are positive-definite and stable. |
+$$ \text{Score} = 0.4 \times \text{MomentumRank} + 0.2 \times \text{StabilityRank} + 0.2 \times \text{AntifragilityRank} + 0.2 \times \text{LiquidityRank} - 0.1 \times \text{FragilityRank} $$
 
-## 2. Composite Alpha-Risk Scoring (CARS)
+### Key Properties:
+- **Rank-Based**: Scores are normalized to [0, 1] percentiles before weighting.
+- **Compensation**: High performance in one category (e.g., Alpha) can offset weaknesses in another (e.g., higher risk), provided it doesn't fail hard health gates.
+- **Gate Integration**: Respects forensic health gates but lacks the advanced numerical stability and execution vetoes of version 3.0.
 
-Assets are ranked cross-sectionally using the CARS model:
-
-- **Momentum (40%)**: Unified XS Ranks (60d/120d).
-- **Liquidity (20%)**: Standardized Value Traded score.
-- **Antifragility (20%)**: Skewness and Tail-Gain score.
-- **Defensiveness (20%)**: Inverse CVaR (95%) and Volatility Stability.
+## 2. Triple-Gate Architecture (Legacy Implementation)
 
 ## 3. Dynamic Cluster Sizing
 
