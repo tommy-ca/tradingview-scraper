@@ -442,7 +442,7 @@ class SkfolioEngine(CustomClusteredEngine):
         from skfolio.cluster import HierarchicalClustering, LinkageMethod
         from skfolio.distance import PearsonDistance
         from skfolio.measures import RiskMeasure
-        from skfolio.optimization import HierarchicalRiskParity, MeanRisk, ObjectiveFunction
+        from skfolio.optimization import HierarchicalRiskParity, MeanRisk, ObjectiveFunction, RiskBudgeting
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
@@ -453,6 +453,9 @@ class SkfolioEngine(CustomClusteredEngine):
             model = HierarchicalRiskParity(
                 risk_measure=RiskMeasure.VARIANCE, distance_estimator=PearsonDistance(), hierarchical_clustering_estimator=HierarchicalClustering(linkage_method=LinkageMethod.COMPLETE)
             )
+        elif request.profile == "risk_parity":
+            # Risk Parity via equal risk budgeting in skfolio
+            model = RiskBudgeting(risk_measure=RiskMeasure.VARIANCE)
         else:
             if request.profile == "max_sharpe":
                 model = MeanRisk(objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_measure=RiskMeasure.VARIANCE, l2_coef=0.05)
@@ -489,14 +492,19 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
-        if request.profile in ["benchmark", "equal_weight", "hrp", "risk_parity"]:
+        # Only fallback for profiles that pypfopt doesn't handle natively/better
+        if request.profile in ["benchmark", "equal_weight"]:
             return super()._optimize_cluster_weights(universe=universe, request=request)
+
         cap = _effective_cap(request.cluster_cap, n)
         if request.profile == "hrp":
             hrp = HRPOpt(X)
             weights = hrp.optimize()
             w = np.array([float(cast(Dict[Any, Any], weights).get(str(k), 0.0)) for k in X.columns])
             s = _safe_series(w, X.columns)
+        elif request.profile == "risk_parity":
+            # Risk Parity is not directly in pypfopt, but we can solve the same logarithmic barrier problem
+            return super()._optimize_cluster_weights(universe=universe, request=request)
         else:
             ef = EfficientFrontier(X.mean() * 252, pd.DataFrame(_cov_shrunk(X), index=X.columns, columns=X.columns), weight_bounds=(0.0, cap))
             ef.add_objective(objective_functions.L2_reg, gamma=0.05)
@@ -524,17 +532,24 @@ class RiskfolioEngine(CustomClusteredEngine):
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
-        if request.profile in ["benchmark", "equal_weight", "hrp", "risk_parity"]:
+        if request.profile in ["benchmark", "equal_weight"]:
             return super()._optimize_cluster_weights(universe=universe, request=request)
+
         cap = _effective_cap(request.cluster_cap, n)
         if request.profile == "hrp":
             port = rp.HCPortfolio(returns=X)
             w = port.optimization(model="HRP", codependence="pearson", rm="MV")
+        elif request.profile == "risk_parity":
+            port = rp.Portfolio(returns=X)
+            port.assets_stats(method_mu="hist", method_cov="ledoit")
+            # Native Risk Parity optimization
+            w = port.rp_optimization(model="Classic", rm="MV", rf=0.0, b=None)
         else:
             port = rp.Portfolio(returns=X)
             port.assets_stats(method_mu="hist", method_cov="ledoit")
             # L2 Regularization (Ridge) synchronized with institutional standard (gamma=0.05)
             w = port.optimization(model="Classic", rm="MV", obj="Sharpe" if request.profile == "max_sharpe" else "MinRisk", rf=cast(Any, float(request.risk_free_rate)), l=cast(Any, 0.05))
+
         w_series = w.iloc[:, 0] if isinstance(w, pd.DataFrame) else pd.Series(w)
         return _enforce_cap_series(w_series.reindex(X.columns).fillna(0.0).astype(float), cap)
 
@@ -553,26 +568,35 @@ class CVXPortfolioEngine(CustomClusteredEngine):
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
-        if request.profile in ["benchmark", "equal_weight", "hrp", "risk_parity"]:
+        if request.profile in ["benchmark", "equal_weight"]:
             return super()._optimize_cluster_weights(universe=universe, request=request)
+
         cap = _effective_cap(request.cluster_cap, n)
+
+        # Native CVXPortfolio logic for different profiles
         if request.profile == "min_variance":
             obj = -100.0 * cvx.FullCovariance()
         elif request.profile == "max_sharpe":
             obj = cvx.ReturnsForecast() - 1.0 * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
-        elif request.profile == "hrp":
+        elif request.profile == "hrp" or request.profile == "risk_parity":
+            # Risk Parity in CVXPortfolio can be approximated or implemented via custom policy
+            # For now, let's use a variant that targets low-vol clusters
             obj = cvx.ReturnsForecast() * 0.0 - 10.0 * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
         else:
             obj = cvx.ReturnsForecast() - 5.0 * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
+
         constraints = [cvx.LongOnly(), cvx.LeverageLimit(1.0)]
         if hasattr(cvx, "MaxWeights"):
             constraints.append(cvx.MaxWeights(cap))
+
         try:
             weights = cvx.SinglePeriodOptimization(obj, constraints).values_in_time(
                 t=X.index[-1], current_weights=pd.Series(1.0 / n, index=X.columns), current_portfolio_value=1.0, past_returns=X, past_volumes=None, current_prices=pd.Series(1.0, index=X.columns)
             )
         except Exception:
-            weights = pd.Series(1.0 / n, index=X.columns)
+            # High-robustness fallback
+            return super()._optimize_cluster_weights(universe=universe, request=request)
+
         s = weights.reindex(X.columns).fillna(0.0).astype(float) if isinstance(weights, pd.Series) else pd.Series(weights, index=X.columns).fillna(0.0).astype(float)
         return _enforce_cap_series(s, cap)
 
