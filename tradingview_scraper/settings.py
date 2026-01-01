@@ -36,6 +36,14 @@ class FeatureFlags(BaseModel):
     short_borrow_cost: float = 0.02  # 2% p.a.
     feat_dynamic_selection: bool = False
     feat_regime_survival: bool = False
+    feat_predictability_vetoes: bool = False
+    feat_efficiency_scoring: bool = False
+
+    # Predictability Thresholds
+    entropy_max_threshold: float = 0.9
+    efficiency_min_threshold: float = 0.1
+    hurst_random_walk_min: float = 0.45
+    hurst_random_walk_max: float = 0.55
 
     # Selection Specification Mode: 'v2', 'v3', 'legacy'
     selection_mode: str = "v3"
@@ -302,6 +310,10 @@ if __name__ == "__main__":
             "features.feat_rebalance_mode": "TV_FEATURES_FEAT_REBALANCE_MODE",
             "features.feat_rebalance_tolerance": "TV_FEATURES_FEAT_REBALANCE_TOLERANCE",
             "features.rebalance_drift_limit": "TV_FEATURES_REBALANCE_DRIFT_LIMIT",
+            "features.entropy_max_threshold": "TV_FEATURES_ENTROPY_MAX",
+            "features.efficiency_min_threshold": "TV_FEATURES_EFFICIENCY_MIN",
+            "features.hurst_random_walk_min": "TV_FEATURES_HURST_RW_MIN",
+            "features.hurst_random_walk_max": "TV_FEATURES_HURST_RW_MAX",
         }
         for field, env_name in mapping.items():
             if "." in field:
