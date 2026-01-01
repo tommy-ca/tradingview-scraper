@@ -8,6 +8,9 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 import cvxpy as cp
 import numpy as np
 import pandas as pd
+import scipy.cluster.hierarchy as sch
+from scipy.cluster.hierarchy import linkage
+from scipy.spatial.distance import squareform
 from sklearn.covariance import ledoit_wolf
 
 from tradingview_scraper.portfolio_engines.base import BaseRiskEngine, EngineRequest, EngineResponse, ProfileName
@@ -76,6 +79,31 @@ def _project_capped_simplex(values: np.ndarray, cap: float) -> np.ndarray:
 def _enforce_cap_series(weights: pd.Series, cap: float) -> pd.Series:
     w = _project_capped_simplex(np.asarray(weights, dtype=float), cap)
     return pd.Series(w, index=weights.index)
+
+
+def _get_recursive_bisection_weights(cov: np.ndarray, sort_ix: List[int]) -> np.ndarray:
+    """
+    Standard Lopez de Prado Recursive Bisection for HRP.
+    """
+    weights = np.ones(len(sort_ix))
+    items = [sort_ix]
+    while len(items) > 0:
+        items = [i[j:k] for i in items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
+        for i in range(0, len(items), 2):
+            ix_left = items[i]
+            ix_right = items[i + 1]
+
+            cov_left = cov[ix_left][:, ix_left]
+            cov_right = cov[ix_right][:, ix_right]
+
+            # Inverse-variance weighting at the node
+            vol_left = np.trace(cov_left)
+            vol_right = np.trace(cov_right)
+
+            alpha = 1 - vol_left / (vol_left + vol_right)
+            weights[ix_left] *= alpha
+            weights[ix_right] *= 1 - alpha
+    return weights
 
 
 def _weights_df_from_cluster_weights(
@@ -332,26 +360,29 @@ class CustomClusteredEngine(BaseRiskEngine):
         return EngineResponse(engine=self.name, request=request, weights=weights_df, meta={"backend": "custom"}, warnings=[])
 
     def _optimize_cluster_weights(self, *, universe: ClusteredUniverse, request: EngineRequest) -> pd.Series:
-        n = universe.cluster_benchmarks.shape[1]
+        X = universe.cluster_benchmarks
+        n = X.shape[1]
         cap = _effective_cap(request.cluster_cap, n)
-        cov = _cov_shrunk(universe.cluster_benchmarks)
-        mu_eq = cast(Any, np.asarray(universe.cluster_benchmarks.mean(), dtype=float)) * 252
+        cov = _cov_shrunk(X)
+        mu_eq = cast(Any, np.asarray(X.mean(), dtype=float)) * 252
         penalties = _cluster_penalties(universe)
         mu = mu_eq
 
         if request.profile == "equal_weight":
-            return pd.Series(1.0 / n if n > 0 else 0.0, index=universe.cluster_benchmarks.columns)
+            return pd.Series(1.0 / n if n > 0 else 0.0, index=X.columns)
 
         if request.profile == "hrp":
-            try:
-                import riskfolio as rp
+            # PURE CUSTOM HRP: Implementation of Lopez de Prado Recursive Bisection
+            corr = X.corr().values
+            dist = np.sqrt(0.5 * (1 - corr.clip(-1, 1)))
+            link = linkage(squareform(dist, checks=False), method="single")
 
-                port = rp.HCPortfolio(returns=universe.cluster_benchmarks)
-                w = port.optimization(model="HRP", codependence="pearson", rm="MV")
-                w_series = w.iloc[:, 0] if isinstance(w, pd.DataFrame) else pd.Series(w)
-                return _enforce_cap_series(w_series.reindex(universe.cluster_benchmarks.columns).fillna(0.0).astype(float), cap)
-            except ImportError:
-                return pd.Series(1.0 / n if n > 0 else 0.0, index=universe.cluster_benchmarks.columns)
+            # Quasi-diagonalization
+            sort_ix = cast(List[int], pd.Series(sch.leaves_list(link)).tolist())
+
+            # Recursive Bisection
+            weights_np = _get_recursive_bisection_weights(cov, sort_ix)
+            return _enforce_cap_series(pd.Series(weights_np, index=X.columns), cap)
 
         req_any = cast(Any, request)
         l2_gamma = {"EXPANSION": 0.05, "INFLATIONARY_TREND": 0.10, "STAGNATION": 0.10, "CRISIS": 0.20}.get(req_any.market_environment, 0.05)
@@ -363,8 +394,8 @@ class CustomClusteredEngine(BaseRiskEngine):
                 if c_id is not None:
                     try:
                         c_col = f"Cluster_{c_id}"
-                        if c_col in universe.cluster_benchmarks.columns:
-                            p_weights_np[universe.cluster_benchmarks.columns.get_loc(c_col)] += float(weight)
+                        if c_col in X.columns:
+                            p_weights_np[X.columns.get_loc(c_col)] += float(weight)
                     except Exception:
                         pass
             s = float(p_weights_np.sum())
@@ -374,7 +405,7 @@ class CustomClusteredEngine(BaseRiskEngine):
             w = _solve_sharpe_fractional(n=n, cap=cap, cov=cov, mu=mu, risk_free_rate=request.risk_free_rate)
         else:
             w = _solve_cvxpy(n=n, cap=cap, cov=cov, mu=mu, penalties=penalties, profile=request.profile, risk_free_rate=request.risk_free_rate, prev_weights=p_weights_np, l2_gamma=l2_gamma)
-        return _safe_series(w, universe.cluster_benchmarks.columns)
+        return _safe_series(w, X.columns)
 
     def _barbell(self, *, universe: ClusteredUniverse, meta: Optional[Dict[str, Any]], stats: Optional[pd.DataFrame], request: EngineRequest) -> Tuple[pd.DataFrame, Dict[str, Any], List[str]]:
         if stats is None or stats.empty or "Symbol" not in stats.columns or "Antifragility_Score" not in stats.columns:
@@ -435,6 +466,8 @@ class SkfolioEngine(CustomClusteredEngine):
         return bool(importlib.util.find_spec("skfolio"))
 
     def _optimize_cluster_weights(self, *, universe: ClusteredUniverse, request: EngineRequest) -> pd.Series:
+        from skfolio.cluster import HierarchicalClustering, LinkageMethod
+        from skfolio.distance import PearsonDistance
         from skfolio.measures import RiskMeasure
         from skfolio.optimization import HierarchicalRiskParity, MeanRisk, ObjectiveFunction, RiskBudgeting
 
@@ -447,8 +480,13 @@ class SkfolioEngine(CustomClusteredEngine):
 
             model = EqualWeighted()
         elif request.profile == "hrp":
-            model = HierarchicalRiskParity(risk_measure=RiskMeasure.VARIANCE)
+            # Optimized skfolio HRP parameters found via Optuna (Jan 2026)
+            # Best: linkage='complete', risk_measure='standard_deviation', distance='pearson'
+            model = HierarchicalRiskParity(
+                risk_measure=RiskMeasure.STANDARD_DEVIATION, distance_estimator=PearsonDistance(), hierarchical_clustering_estimator=HierarchicalClustering(linkage_method=LinkageMethod.COMPLETE)
+            )
         elif request.profile == "risk_parity":
+            # Risk Parity via equal risk budgeting in skfolio
             model = RiskBudgeting(risk_measure=RiskMeasure.VARIANCE)
         elif request.profile == "max_sharpe":
             model = MeanRisk(objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_measure=RiskMeasure.VARIANCE, l2_coef=0.05)
@@ -532,7 +570,7 @@ class RiskfolioEngine(CustomClusteredEngine):
         elif request.profile == "risk_parity":
             port = rp.Portfolio(returns=X)
             port.assets_stats(method_mu="hist", method_cov="ledoit")
-            w = port.rp_optimization(model="Classic", rm="MV", rf=0.0, b=None)
+            w = port.rp_optimization(model="Classic", rm="MV", rf=cast(Any, 0.0), b=None)
         elif request.profile == "equal_weight":
             return pd.Series(1.0 / n if n > 0 else 0.0, index=X.columns)
         else:
@@ -578,7 +616,8 @@ class CVXPortfolioEngine(CustomClusteredEngine):
                 t=X.index[-1], current_weights=pd.Series(1.0 / n, index=X.columns), current_portfolio_value=1.0, past_returns=X, past_volumes=None, current_prices=pd.Series(1.0, index=X.columns)
             )
         except Exception:
-            return pd.Series(1.0 / n, index=X.columns)
+            # Native HRP/RP fallback to custom logic if single-period optimization fails
+            return super()._optimize_cluster_weights(universe=universe, request=request)
 
         s = weights.reindex(X.columns).fillna(0.0).astype(float) if isinstance(weights, pd.Series) else pd.Series(weights, index=X.columns).fillna(0.0).astype(float)
         return _enforce_cap_series(s, cap)
