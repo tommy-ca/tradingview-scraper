@@ -207,7 +207,7 @@ def calculate_coverage_score(df):
     type_score = min(50, type_count * 10)
 
     # Overall coverage
-    coverage_score = (exchange_score + type_score) / 2
+    coverage_score = exchange_score + type_score
 
     return coverage_score
 
