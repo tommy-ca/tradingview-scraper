@@ -8,6 +8,11 @@ from scipy.spatial.distance import squareform
 
 from tradingview_scraper.selection_engines.base import BaseSelectionEngine, SelectionRequest, SelectionResponse
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.utils.predictability import (
+    calculate_efficiency_ratio,
+    calculate_hurst_exponent,
+    calculate_permutation_entropy,
+)
 from tradingview_scraper.utils.scoring import (
     calculate_liquidity_score,
     calculate_mps_score,
@@ -154,13 +159,29 @@ class SelectionEngineV2(BaseSelectionEngine):
 class SelectionEngineV3(BaseSelectionEngine):
     """
     Multiplicative Probability Scoring (MPS 3.0) + Operation Darwin Vetoes.
+    Now enhanced with Spectral Predictability Filters (PE, Hurst, ER).
     """
+
+    def __init__(self):
+        super().__init__()
+        self.kappa_threshold = 1e6
+        self.eci_hurdle = 0.02
+        self.spec_version = "3.0"
 
     @property
     def name(self) -> str:
         return "v3"
 
     def select(
+        self,
+        returns: pd.DataFrame,
+        raw_candidates: List[Dict[str, Any]],
+        stats_df: Optional[pd.DataFrame],
+        request: SelectionRequest,
+    ) -> SelectionResponse:
+        return self._select_v3_core(returns, raw_candidates, stats_df, request)
+
+    def _select_v3_core(
         self,
         returns: pd.DataFrame,
         raw_candidates: List[Dict[str, Any]],
@@ -190,6 +211,12 @@ class SelectionEngineV3(BaseSelectionEngine):
         frag_all = pd.Series(0.0, index=returns.columns)
         regime_all = pd.Series(1.0, index=returns.columns)
 
+        # Asset Predictability Metrics
+        lookback = min(len(returns), 64)
+        pe_all = pd.Series({s: calculate_permutation_entropy(returns[s].values[-lookback:]) for s in returns.columns})
+        er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].values[-lookback:]) for s in returns.columns})
+        hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].values) for s in returns.columns})
+
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
             if common:
@@ -200,8 +227,22 @@ class SelectionEngineV3(BaseSelectionEngine):
                     regime_all.loc[common] = stats_df.loc[common, "Regime_Survival_Score"]
 
         # V3 Multiplicative Selection (Operation Darwin)
-        mps_metrics = {"momentum": mom_all, "stability": stab_all, "liquidity": liq_all, "antifragility": af_all, "survival": regime_all}
-        methods = {"survival": "cdf", "liquidity": "cdf", "momentum": "rank", "stability": "rank", "antifragility": "rank"}
+        mps_metrics = {
+            "momentum": mom_all,
+            "stability": stab_all,
+            "liquidity": liq_all,
+            "antifragility": af_all,
+            "survival": regime_all,
+            "efficiency": er_all,  # Integrated ER scoring
+        }
+        methods = {
+            "survival": "cdf",
+            "liquidity": "cdf",
+            "efficiency": "cdf",
+            "momentum": "rank",
+            "stability": "rank",
+            "antifragility": "rank",
+        }
         mps = calculate_mps_score(mps_metrics, methods=methods)
 
         max_frag = float(frag_all.max())
@@ -216,7 +257,7 @@ class SelectionEngineV3(BaseSelectionEngine):
             eigenvalues = np.linalg.eigvalsh(corr.values)
             min_ev = np.abs(eigenvalues).min()
             kappa = float(eigenvalues.max() / (min_ev + 1e-15))
-            if kappa > 1e6:
+            if kappa > self.kappa_threshold:
                 msg = f"High Condition Number (kappa={kappa:.2e}). Forcing aggressive pruning."
                 logger.warning(msg)
                 warnings.append(msg)
@@ -239,6 +280,27 @@ class SelectionEngineV3(BaseSelectionEngine):
             if s_score < 0.1:
                 _record_veto(str(s), f"Failed Darwinian Health Gate (Regime Survival={s_score:.4f})")
 
+        # Spectral Predictability Vetoes (New in 2026-01-01)
+        for s in returns.columns:
+            if str(s) in disqualified:
+                continue
+
+            pe = float(pe_all[s])
+            if pe > 0.9:
+                _record_veto(str(s), f"High Entropy ({pe:.4f})")
+                continue
+
+            er = float(er_all[s])
+            if er < 0.1:
+                _record_veto(str(s), f"Low Efficiency ({er:.4f})")
+                continue
+
+            h = float(hurst_all[s])
+            if 0.45 < h < 0.55:
+                # Discard random walk zone
+                _record_veto(str(s), f"Random Walk zone (Hurst={h:.4f})")
+                continue
+
         # Metadata Completeness
         required_meta = ["tick_size", "lot_size", "price_precision"]
         for s in returns.columns:
@@ -257,12 +319,11 @@ class SelectionEngineV3(BaseSelectionEngine):
             meta = candidate_map.get(str(s), {})
             adv = float(meta.get("value_traded") or meta.get("Value.Traded") or 1e-9)
 
-            # SAFE ACCESS: fix diagnostics
             vol_val = float(vol_all[s]) if s in vol_all.index else 0.5
             eci = float(vol_val * np.sqrt(order_size / adv))
 
             annual_alpha = float(mom_all[s]) if s in mom_all.index else 0.0
-            if annual_alpha - eci < 0.02:
+            if annual_alpha - eci < self.eci_hurdle:
                 _record_veto(str(s), f"High ECI ({eci:.4f}) relative to Alpha ({annual_alpha:.4f})")
 
         for s in disqualified:
@@ -272,6 +333,11 @@ class SelectionEngineV3(BaseSelectionEngine):
         metrics["kappa"] = kappa
         metrics["n_disqualified"] = len(disqualified)
         metrics["alpha_scores"] = alpha_scores.to_dict()
+        metrics["predictability"] = {
+            "avg_pe": float(pe_all.mean()),
+            "avg_er": float(er_all.mean()),
+            "avg_hurst": float(hurst_all.mean()),
+        }
 
         # Calculate avg_eci safely
         valid_advs = [float(candidate_map.get(str(s), {}).get("value_traded") or 1e-9) for s in returns.columns]
@@ -333,7 +399,25 @@ class SelectionEngineV3(BaseSelectionEngine):
         # Ensure JSON serializable audit_clusters
         serializable_clusters = {int(k): v for k, v in audit_clusters.items()}
 
-        return SelectionResponse(winners=winners, audit_clusters=serializable_clusters, spec_version="3.0", warnings=warnings, vetoes=vetoes, metrics=metrics)
+        return SelectionResponse(winners=winners, audit_clusters=serializable_clusters, spec_version=self.spec_version, warnings=warnings, vetoes=vetoes, metrics=metrics)
+
+
+class SelectionEngineV3_1(SelectionEngineV3):
+    """
+    v3.1: Relaxed V3 logic.
+    - Kappa threshold raised to 1e18 (prevent permanent panic).
+    - ECI Hurdle lowered to 0.5% (allow lower-alpha defensive assets).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.kappa_threshold = 1e18
+        self.eci_hurdle = 0.005
+        self.spec_version = "3.1"
+
+    @property
+    def name(self) -> str:
+        return "v3.1"
 
 
 class LegacySelectionEngine(BaseSelectionEngine):
