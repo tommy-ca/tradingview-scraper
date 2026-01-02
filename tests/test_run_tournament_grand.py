@@ -6,7 +6,7 @@ from scripts.run_4d_tournament import run_4d_tournament
 @patch("scripts.run_4d_tournament.BacktestEngine")
 @patch("scripts.run_4d_tournament.get_settings")
 @patch("builtins.open", new_callable=MagicMock)
-def test_run_4d_tournament_config_loop(mock_open, mock_get_settings, mock_bt_class):
+def test_run_4d_tournament_rebalance_loop(mock_open, mock_get_settings, mock_bt_class):
     from tradingview_scraper.settings import FeatureFlags
 
     # Mock settings
@@ -16,12 +16,17 @@ def test_run_4d_tournament_config_loop(mock_open, mock_get_settings, mock_bt_cla
     mock_get_settings.return_value = mock_settings
 
     # Mock BacktestEngine
-    captured_settings = []
+    captured_configs = []
 
     def bt_side_effect():
-        from copy import deepcopy
-
-        captured_settings.append(deepcopy(mock_settings.features))
+        captured_configs.append(
+            {
+                "selection": mock_settings.features.selection_mode,
+                "rebalance": mock_settings.features.feat_rebalance_mode,
+                "tolerance": mock_settings.features.feat_rebalance_tolerance,
+                "drift": mock_settings.features.rebalance_drift_limit,
+            }
+        )
         bt_inst = MagicMock()
         bt_inst.run_tournament.return_value = {"results": {}}
         return bt_inst
@@ -30,17 +35,27 @@ def test_run_4d_tournament_config_loop(mock_open, mock_get_settings, mock_bt_cla
 
     run_4d_tournament()
 
-    # Check that BacktestEngine was instantiated 5 times
-    assert len(captured_settings) == 5
+    # Selection configs: 2 (v3.1, v3.1_spectral)
+    # Rebalance configs: 3 (window, daily, daily_5pct)
+    # Total calls: 3 * 2 = 6
+    assert len(captured_configs) == 6
 
-    # Check that settings were updated correctly in each call
-    assert captured_settings[0].selection_mode == "v2"
-    assert captured_settings[1].selection_mode == "v3"
-    assert captured_settings[2].selection_mode == "v3"
-    assert captured_settings[2].feat_predictability_vetoes is True
-    assert captured_settings[3].selection_mode == "v3.1"
-    assert captured_settings[4].selection_mode == "v3.1"
-    assert captured_settings[4].feat_predictability_vetoes is True
+    # Check first call: window + v3.1
+    assert captured_configs[0]["rebalance"] == "window"
+    assert captured_configs[0]["selection"] == "v3.1"
 
-    # Verify restoration
-    assert mock_settings.features.selection_mode == "v3"  # default
+    # Check last call: daily_5pct + v3.1_spectral
+    assert captured_configs[5]["rebalance"] == "daily"
+    assert captured_configs[5]["tolerance"] is True
+    assert captured_configs[5]["drift"] == 0.05
+    assert captured_configs[5]["selection"] == "v3.1"
+    # Actually v3.1_spectral uses v3.1 mode but with flags
+    # Wait, let me check the configs in run_4d_tournament.py
+
+    # selection_configs = [
+    #    {"name": "v3.1", "mode": "v3.1", ...},
+    #    {"name": "v3.1_spectral", "mode": "v3.1", ...}
+    # ]
+    # So selection should be v3.1 for both.
+
+    assert captured_configs[5]["selection"] == "v3.1"

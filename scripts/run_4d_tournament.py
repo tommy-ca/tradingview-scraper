@@ -13,16 +13,21 @@ logger = logging.getLogger("4d_tournament")
 def run_4d_tournament():
     settings = get_settings()
 
-    # Grand Matrix Axis
+    # Grand Matrix Axis - Selection
     selection_configs: List[Dict[str, Any]] = [
-        {"name": "v2", "mode": "v2", "vetoes": False, "efficiency": False},
-        {"name": "v3", "mode": "v3", "vetoes": False, "efficiency": False},
-        {"name": "v3_spectral", "mode": "v3", "vetoes": True, "efficiency": True},
         {"name": "v3.1", "mode": "v3.1", "vetoes": False, "efficiency": False},
         {"name": "v3.1_spectral", "mode": "v3.1", "vetoes": True, "efficiency": True},
     ]
+
+    # Rebalance Axis (New for Window Rebalance Audit)
+    rebalance_configs: List[Dict[str, Any]] = [
+        {"name": "window", "mode": "window", "tolerance": False, "drift": 0.0},
+        {"name": "daily", "mode": "daily", "tolerance": False, "drift": 0.0},
+        {"name": "daily_5pct", "mode": "daily", "tolerance": True, "drift": 0.05},
+    ]
+
     engines = ["skfolio", "cvxportfolio", "custom"]
-    profiles = ["risk_parity", "hrp", "min_variance", "max_sharpe", "benchmark", "equal_weight", "raw_pool_ew"]
+    profiles = ["risk_parity", "hrp", "max_sharpe", "benchmark", "equal_weight", "raw_pool_ew", "benchmark_baseline", "market_baseline"]
     simulators = ["cvxportfolio", "nautilus", "custom"]
 
     # Audited Execution Parameters
@@ -32,74 +37,80 @@ def run_4d_tournament():
     start_date = "2025-01-01"
     end_date = "2025-12-31"
 
-    all_4d_results = {}
+    all_results = {}
 
     # Save original state to restore later
     orig_mode = settings.features.selection_mode
     orig_vetoes = settings.features.feat_predictability_vetoes
     orig_eff = settings.features.feat_efficiency_scoring
-    orig_reb = settings.features.feat_rebalance_mode
+    orig_reb_mode = settings.features.feat_rebalance_mode
+    orig_reb_tol = settings.features.feat_rebalance_tolerance
+    orig_drift = settings.features.rebalance_drift_limit
 
     try:
         run_dir = settings.prepare_summaries_run_dir()
-        for cfg in selection_configs:
-            name = str(cfg["name"])
-            logger.info(f"\n🚀 GRAND TOURNAMENT: Selection = {name}")
 
-            # Apply Config to Settings
-            settings.features.selection_mode = str(cfg["mode"])
-            settings.features.feat_predictability_vetoes = bool(cfg["vetoes"])
-            settings.features.feat_efficiency_scoring = bool(cfg["efficiency"])
-            settings.features.feat_rebalance_mode = "window"  # Enforce window mode
+        for r_cfg in rebalance_configs:
+            reb_name = r_cfg["name"]
+            all_results[reb_name] = {}
 
-            # Export to ENV for sub-processes if any
-            os.environ["TV_FEATURES_SELECTION_MODE"] = str(cfg["mode"])
-            os.environ["TV_FEATURES_FEAT_PREDICTABILITY_VETOES"] = "1" if cfg["vetoes"] else "0"
-            os.environ["TV_FEATURES_FEAT_EFFICIENCY_SCORING"] = "1" if cfg["efficiency"] else "0"
-            os.environ["TV_FEATURES_FEAT_REBALANCE_MODE"] = "window"
+            # Apply Rebalance Config to Settings
+            settings.features.feat_rebalance_mode = r_cfg["mode"]
+            settings.features.feat_rebalance_tolerance = r_cfg["tolerance"]
+            settings.features.rebalance_drift_limit = r_cfg["drift"]
 
-            bt = BacktestEngine()
-            res = bt.run_tournament(
-                train_window=train_window,
-                test_window=test_window,
-                step_size=step_size,
-                engines=engines,
-                profiles=profiles,
-                simulators=simulators,
-                start_date=start_date,
-                end_date=end_date,
-            )
+            # Export to ENV
+            os.environ["TV_FEATURES_FEAT_REBALANCE_MODE"] = r_cfg["mode"]
+            os.environ["TV_FEATURES_FEAT_REBALANCE_TOLERANCE"] = "1" if r_cfg["tolerance"] else "0"
+            os.environ["TV_FEATURES_REBALANCE_DRIFT_LIMIT"] = str(r_cfg["drift"])
 
-            all_4d_results[name] = res["results"]
+            for s_cfg in selection_configs:
+                sel_name = s_cfg["name"]
+                logger.info(f"\n🚀 REBALANCE AUDIT: Mode={reb_name} | Selection={sel_name}")
+
+                # Apply Selection Config to Settings
+                settings.features.selection_mode = s_cfg["mode"]
+                settings.features.feat_predictability_vetoes = s_cfg["vetoes"]
+                settings.features.feat_efficiency_scoring = s_cfg["efficiency"]
+
+                # Export to ENV
+                os.environ["TV_FEATURES_SELECTION_MODE"] = s_cfg["mode"]
+                os.environ["TV_FEATURES_FEAT_PREDICTABILITY_VETOES"] = "1" if s_cfg["vetoes"] else "0"
+                os.environ["TV_FEATURES_FEAT_EFFICIENCY_SCORING"] = "1" if s_cfg["efficiency"] else "0"
+
+                bt = BacktestEngine()
+                res = bt.run_tournament(
+                    train_window=train_window, test_window=test_window, step_size=step_size, engines=engines, profiles=profiles, simulators=simulators, start_date=start_date, end_date=end_date
+                )
+
+                all_results[reb_name][sel_name] = res["results"]
 
         final_output = {
-            "results_4d": all_4d_results,
+            "rebalance_audit_results": all_results,
             "meta": {
                 "period": f"{start_date} to {end_date}",
-                "dimensions": ["mode", "simulator", "engine", "profile"],
+                "dimensions": ["rebalance_mode", "selection_mode", "simulator", "engine", "profile"],
                 "protocol": "Continuous Walk-Forward (100% Coverage)",
-                "rebalance_mode": "window",
+                "train_test_step": [train_window, test_window, step_size],
             },
         }
-        output_path = run_dir / "grand_validation_results.json"
-        # Also save as the standard name for generic tools
-        tournament_json = run_dir / "tournament_4d_results.json"
 
+        output_path = run_dir / "rebalance_audit_results.json"
         with open(output_path, "w") as f:
-            json.dump(final_output, f, indent=2)
-        with open(tournament_json, "w") as f:
             json.dump(final_output, f, indent=2)
 
         # Promote to latest
         settings.promote_summaries_latest()
-        logger.info(f"✅ Grand Tournament finalized: {output_path}")
+        logger.info(f"✅ Rebalance Audit Tournament finalized: {output_path}")
 
     finally:
         # Restore settings
         settings.features.selection_mode = orig_mode
         settings.features.feat_predictability_vetoes = orig_vetoes
         settings.features.feat_efficiency_scoring = orig_eff
-        settings.features.feat_rebalance_mode = orig_reb
+        settings.features.feat_rebalance_mode = orig_reb_mode
+        settings.features.feat_rebalance_tolerance = orig_reb_tol
+        settings.features.rebalance_drift_limit = orig_drift
 
 
 if __name__ == "__main__":

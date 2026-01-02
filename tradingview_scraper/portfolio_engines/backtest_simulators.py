@@ -94,13 +94,13 @@ class ReturnsSimulator(BaseSimulator):
             friction_t = 0.0
 
             if rebalance_mode == "daily":
-                turnover_t = _calculate_standard_turnover(w_target, drift_weights)
-                friction_t = turnover_t * 2.0 * total_rate
-                current_weights = w_target.copy()
-                total_turnover += turnover_t
-            elif tolerance_enabled:
-                drift_dist = (drift_weights - w_target).abs().sum() / 2.0
-                if drift_dist > drift_limit:
+                do_rebalance = True
+                if tolerance_enabled:
+                    drift_dist = (drift_weights - w_target).abs().sum() / 2.0
+                    if drift_dist <= drift_limit:
+                        do_rebalance = False
+
+                if do_rebalance:
                     turnover_t = _calculate_standard_turnover(w_target, drift_weights)
                     friction_t = turnover_t * 2.0 * total_rate
                     current_weights = w_target.copy()
