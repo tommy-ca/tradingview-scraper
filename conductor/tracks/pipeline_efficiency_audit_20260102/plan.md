@@ -15,3 +15,4 @@
 
 ## Phase 4: Verification
 - [x] **Task**: Rerun `make run-daily` up to `Step 5` and verify `selection_audit.json` shows correctly consolidated venues.
+- [x] **Task**: Fix `Makefile` bug where `SELECTION_MODE` defaulted to `1`.
