@@ -1,16 +1,6 @@
-# Base universe: Binance/OKX/Bybit/Bitget spot (exclude perps), top 100 by market cap then volume
-markets: ["crypto"]
-exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
-include_perps_only: false
-exclude_perps: true
-columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
-volume:
-  min: 0
-  value_traded_min: 50000000
-volatility:
-  max: 6.0
-  atr_pct_max: 0.08
-  fallback_use_atr_pct: true
+# Layer 2: Crypto Trend Momentum Strategy
+base_preset: presets/base_binance_spot.yaml
+
 trend:
   direction: "long"
   timeframe: "daily"
@@ -23,21 +13,14 @@ trend:
     min: 10
   momentum:
     enabled: true
-    horizons: {change: -0.2, Perf.W: -0.5, Perf.1M: 0.0, Perf.3M: 0.5}
+    # Aligned with 21d test windows (Perf.1M) while preserving secular 3M trend
+    horizons: {Perf.W: 0.0, Perf.1M: 0.5, Perf.3M: 1.0}
   confirmation_momentum:
     enabled: true
-    horizons: {Perf.1M: 0.5, Perf.3M: 1.0}
-sort_by: market_cap_calc
-sort_order: desc
-final_sort_by: Value.Traded
-final_sort_order: desc
-prefilter_limit: 50
+    horizons: {Perf.1M: 1.0, Perf.3M: 2.0}
+
 limit: 50
-pagination_size: 50
-retries: 2
-timeout: 10
-export:
-  enabled: false
-  type: json
-base_universe_limit: 50
-exclude_dated_futures: true
+prefilter_limit: 50
+export_metadata:
+  symbol: crypto_trend_momentum
+  data_category: strategy_selector

@@ -1,0 +1,16 @@
+# Layer 1.1: Bitget Spot Base
+base_preset: base_crypto_spot.yaml
+exchanges: ["BITGET"]
+allowed_spot_quotes: ["USDT", "USDC", "USD", "DAI", "BUSD", "FDUSD"]
+
+ensure_symbols:
+- BITGET:BTCUSDT
+- BITGET:ETHUSDT
+- BITGET:SOLUSDT
+- BITGET:ADAUSDT
+- BITGET:DOGEUSDT
+- BITGET:LINKUSDT
+- BITGET:LTCUSDT
+- BITGET:DOTUSDT
+- BITGET:AVAXUSDT
+- BITGET:TRXUSDT

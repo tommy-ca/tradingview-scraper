@@ -1,29 +1,23 @@
-# Crypto CEX spot trend (daily) – OKX only, Short direction
-# Uses base_preset for universe filters, applies trend filters on top
-base_preset: presets/crypto_cex_preset_okx_top50_spot.yaml
+# Layer 2: OKX Spot Trend Short
+base_preset: presets/base_okx_spot.yaml
 
-# Trend filters (short direction)
 trend:
   direction: "short"
   timeframe: "daily"
   logic: "AND"
   recommendation:
     enabled: true
-    min: -0.2
+    min: 0.0
   adx:
     enabled: true
     min: 10
   momentum:
     enabled: true
-    horizons: {change: 0.2, Perf.W: 0.5, Perf.1M: -0.5, Perf.3M: -1.0}
+    horizons: {Perf.W: 0.0, Perf.1M: -0.5, Perf.3M: -1.0}
   confirmation_momentum:
     enabled: true
-    horizons: {Perf.1M: -0.5, Perf.3M: -1.0}
+    horizons: {Perf.1M: -1.0, Perf.3M: -2.0}
 
-# Export metadata
 export_metadata:
   symbol: okx_spot_short
-  data_category: universe_selector
-limit: 50
-base_universe_limit: 50
-exclude_dated_futures: true
+  data_category: strategy_selector

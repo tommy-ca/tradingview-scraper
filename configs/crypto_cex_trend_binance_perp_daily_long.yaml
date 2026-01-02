@@ -1,8 +1,6 @@
-# Crypto CEX perp trend (daily) – BINANCE only, Long direction
-# Uses base_preset for universe filters, applies trend filters on top
-base_preset: presets/crypto_cex_preset_binance_top50_perp.yaml
+# Layer 2: Binance Perp Trend Long
+base_preset: presets/base_binance_perp.yaml
 
-# Trend filters (long direction)
 trend:
   direction: "long"
   timeframe: "daily"
@@ -15,15 +13,11 @@ trend:
     min: 10
   momentum:
     enabled: true
-    horizons: {change: -0.2, Perf.W: -0.5, Perf.1M: 0.0, Perf.3M: 0.5}
+    horizons: {Perf.W: 0.0, Perf.1M: 0.5, Perf.3M: 1.0}
   confirmation_momentum:
     enabled: true
-    horizons: {Perf.1M: 0.5, Perf.3M: 1.0}
+    horizons: {Perf.1M: 1.0, Perf.3M: 2.0}
 
-# Export metadata
 export_metadata:
   symbol: binance_perp_long
-  data_category: universe_selector
-limit: 50
-base_universe_limit: 50
-exclude_dated_futures: true
+  data_category: strategy_selector

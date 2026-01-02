@@ -1,0 +1,16 @@
+# Layer 1.1: Binance Spot Base
+base_preset: base_crypto_spot.yaml
+exchanges: ["BINANCE"]
+allowed_spot_quotes: ["USDT", "USDC", "USD", "DAI", "BUSD", "FDUSD"]
+
+ensure_symbols:
+- BINANCE:BTCUSDT
+- BINANCE:ETHUSDT
+- BINANCE:SOLUSDT
+- BINANCE:ADAUSDT
+- BINANCE:DOGEUSDT
+- BINANCE:LINKUSDT
+- BINANCE:LTCUSDT
+- BINANCE:DOTUSDT
+- BINANCE:AVAXUSDT
+- BINANCE:TRXUSDT
