@@ -596,6 +596,11 @@ class CVXPortfolioEngine(CustomClusteredEngine):
     def _optimize_cluster_weights(self, *, universe: ClusteredUniverse, request: EngineRequest) -> pd.Series:
         import cvxportfolio as cvx
 
+        # CVXPortfolio doesn't have native HRP or ERC (Risk Parity).
+        # Delegate these to the Custom engine (which uses scipy/cvxpy correct implementations).
+        if request.profile in ["hrp", "risk_parity"]:
+            return super()._optimize_cluster_weights(universe=universe, request=request)
+
         X = universe.cluster_benchmarks
         n = X.shape[1]
         cap = _effective_cap(request.cluster_cap, n)
@@ -607,6 +612,7 @@ class CVXPortfolioEngine(CustomClusteredEngine):
         elif request.profile == "equal_weight":
             return pd.Series(1.0 / n if n > 0 else 0.0, index=X.columns)
         else:
+            # Fallback MVO (Risk Averse) for unknown profiles
             obj = cvx.ReturnsForecast() - 5.0 * cvx.FullCovariance() - 0.01 * cvx.StocksTransactionCost()
 
         constraints = [cvx.LongOnly(), cvx.LeverageLimit(1.0)]
@@ -618,7 +624,6 @@ class CVXPortfolioEngine(CustomClusteredEngine):
                 t=X.index[-1], current_weights=pd.Series(1.0 / n, index=X.columns), current_portfolio_value=1.0, past_returns=X, past_volumes=None, current_prices=pd.Series(1.0, index=X.columns)
             )
         except Exception:
-            # Native HRP/RP fallback to custom logic if single-period optimization fails
             return super()._optimize_cluster_weights(universe=universe, request=request)
 
         s = weights.reindex(X.columns).fillna(0.0).astype(float) if isinstance(weights, pd.Series) else pd.Series(weights, index=X.columns).fillna(0.0).astype(float)

@@ -198,6 +198,14 @@ class BacktestEngine:
                     w_bench = self._compute_weights(train_data_raw, {}, pd.DataFrame(), "benchmark", "custom", 1.0, {}, None, regime)
                     if not w_bench.empty:
                         cached_weights[("custom", "benchmark_baseline")] = w_bench
+
+                    # NEW: Raw Pool Equal Weight (Selection Alpha Baseline)
+                    # We use train_data_raw which contains ALL valid symbols before selection pruning
+                    valid_raw_symbols = [s for s in train_data_raw.columns if s not in settings.benchmark_symbols]
+                    if valid_raw_symbols:
+                        raw_w_df = pd.DataFrame([{"Symbol": s, "Weight": 1.0 / len(valid_raw_symbols)} for s in valid_raw_symbols])
+                        cached_weights[("custom", "raw_pool_ew")] = raw_w_df
+
                 except Exception as e:
                     logger.error(f"Failed baselines: {e}")
 
@@ -357,6 +365,9 @@ if __name__ == "__main__":
         out = get_settings().prepare_summaries_run_dir()
         with open(out / "tournament_results.json", "w") as f:
             json.dump({"meta": res["meta"], "results": res["results"]}, f, indent=2)
+
+        get_settings().promote_summaries_latest()
+
         if "returns" in res:
             ret_dir = out / "returns"
             ret_dir.mkdir(exist_ok=True)
