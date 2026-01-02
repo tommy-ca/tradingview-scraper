@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Type
 
-from tradingview_scraper.selection_engines.base import BaseSelectionEngine
+from tradingview_scraper.selection_engines.base import BaseSelectionEngine, SelectionRequest, SelectionResponse
 from tradingview_scraper.selection_engines.engines import (
     LegacySelectionEngine,
     SelectionEngineV2,

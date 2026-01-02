@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 import numpy as np
 import pandas as pd
 
-from tradingview_scraper.selection_engines import SelectionRequest, get_selection_engine
+from tradingview_scraper.selection_engines import SelectionRequest, build_selection_engine
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import AuditLedger, get_df_hash  # type: ignore
 
@@ -35,7 +35,7 @@ def run_selection(
     """
     settings = get_settings()
     engine_name = mode or settings.features.selection_mode
-    engine = get_selection_engine(engine_name)
+    engine = build_selection_engine(engine_name)
     request = SelectionRequest(
         top_n=top_n,
         threshold=threshold,

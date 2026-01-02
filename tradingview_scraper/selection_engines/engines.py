@@ -356,6 +356,19 @@ class SelectionEngineV3(BaseSelectionEngine):
             "avg_hurst": float(hurst_all.mean()),
         }
 
+        # HPO Support: Record raw component probabilities P_i
+        from tradingview_scraper.utils.scoring import map_to_probability
+
+        component_probs = {}
+        for name, series in mps_metrics.items():
+            method = methods.get(name, "rank")
+            component_probs[name] = map_to_probability(series, method=method).to_dict()
+
+        # Add PE, Hurst too
+        component_probs["entropy"] = (1.0 - pe_all).clip(0, 1).to_dict()
+        component_probs["hurst_clean"] = (1.0 - abs(hurst_all - 0.5) * 2.0).clip(0, 1).to_dict()
+        metrics["component_probs"] = component_probs
+
         # Calculate avg_eci safely
         valid_advs = [float(candidate_map.get(str(s), {}).get("value_traded") or 1e-9) for s in returns.columns]
 
