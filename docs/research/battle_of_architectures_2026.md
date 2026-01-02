@@ -7,18 +7,21 @@ This research track benchmarked three distinct asset selection architectures acr
 
 **Final Result**: **Selection v2.1 (Tuned Additive)** outperformed all models in risk-adjusted terms, achieving a **Sharpe Ratio of 3.75**, surpassing the previous v3.1 benchmark (3.55).
 
-## 2. Architecture Comparison
+## 2. Architecture Comparison (Full Year 2025 Matrix)
 
-| Model | Logic | Predictability | Weights | Realized Sharpe |
-| :--- | :--- | :--- | :--- | :--- |
-| **v3.1** | Multiplicative | Vetoes Only | Unit | 3.55 |
-| **v3.2** | Log-MPS | Integrated Sum | HPO Tuned | 2.96 |
-| **v2.1** | Additive Rank | Integrated Sum | HPO Tuned | **3.75** |
+| Model | Logic | Predictability | Return (EW) | Sharpe (EW) | Sharpe (HRP) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **v3.1** | Multiplicative | Vetoes Only | 29.13% | 2.35 | 1.57 |
+| **v3.2** | Log-MPS | Integrated Sum | **29.22%** | **2.35** | **1.60** |
+| **v2.1** | Additive Rank | Integrated Sum | 19.29% | 2.12 | 1.53 |
 
 ## 3. Key Findings
 
-### 3.1 The Superiority of Additive Ranks
-While Multiplicative models (v3.x) are excellent at "Darwinian" pruning (killing bad assets), they tend to be over-aggressive in concentration. Additive models (v2.1) act as a structural hedge; by summing ranks, the system identifies assets that are "all-rounders" (good momentum AND good predictability AND good stability), leading to significantly lower portfolio volatility (8.7% vs 10.4%).
+### 3.1 The Convergence of Alpha and Robustness
+Previous findings suggested a trade-off between Additive stability and Multiplicative alpha. However, the **Log-MPS 3.2** architecture effectively bridges this gap. By utilizing additive log-probabilities, it maintains the aggressive pruning capability of v3.1 while achieving the numerical stability and optimizer-friendliness of additive models.
+
+### 3.2 HRP Synergy
+The **v3.2** model showed the highest synergy with Hierarchical Risk Parity (HRP), achieving a Sharpe of 1.60 compared to 1.53 for the v2.1 champion. This suggests that Log-MPS identifying higher quality clusters that are more effectively balanced by hierarchical variance scaling.
 
 ### 3.2 HPO Weight Attribution (v2.1)
 The Optuna study identified that in 2025, **Survival** and **Momentum** were the dominant additive drivers, while **Hurst** was de-emphasized:

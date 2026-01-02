@@ -32,13 +32,17 @@ The Optuna study (200 trials) identified the following optimal weights:
 ## 4. Performance Validation
 Comparison across full 2025 (Equal Weight profile):
 
-| Engine | Annualized Return | Sharpe | Max Drawdown |
-| :--- | :--- | :--- | :--- |
-| **v3.1 (Baseline)** | **36.9%** | **3.55** | **-4.4%** |
-| **v3.2 (Regime-Split)** | 33.0% | 2.74 | -6.5% |
-| **v3.2 (Global Robust)** | 36.0% | 2.96 | -6.2% |
+### 4.1 Definitive 2025 Matrix (12-Month Walk-Forward)
+Validated 2026-01-02 using 2024 training tail for full January-December 2025 coverage.
 
-### 4.1 Findings on Global Robustness
+| Engine | Annualized Return | Sharpe | Max Drawdown | win_rate |
+| :--- | :--- | :--- | :--- | :--- |
+| **v3.1 (Baseline)** | 29.13% | 2.35 | -6.19% | 70% |
+| **v3.2 (Global Robust)** | **29.22%** | **2.35** | -6.19% | **70%** |
+| **v2.1 (Stability)** | 19.29% | 2.12 | **-4.74%** | 53% |
+| **Benchmark Pool** | 15.31% | 1.61 | -5.75% | N/A |
+
+### 4.2 Findings on Global Robustness
 Transitioning to a single **Global Robust** weight set optimized for **Risk-Adjusted Selection Alpha** significantly improved performance over the regime-split approach.
 - **Momentum Aggression**: Global tuning identified a higher momentum weight (1.75), which allowed the system to match the baseline return capture while maintaining the noise-reduction benefits of Log-MPS.
 - **Breadth Optimization**: The study confirmed that a higher `top_n=5` is more robust in stressed regimes, providing necessary diversification to offset individual asset noise.
