@@ -39,4 +39,4 @@ prefilter_limit: 1000
 retries: 2
 timeout: 10
 
-columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
+columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M", "Perf.Y", "Perf.YTD", "ATR"]
