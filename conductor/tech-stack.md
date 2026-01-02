@@ -10,6 +10,7 @@
 
 ## Data Processing & Validation
 * **pandas:** Used for data manipulation and as an export format for structured data.
+* **scipy (stats/optimize):** Utilized for higher-order moment calculations (skewness, kurtosis) and constrained convex optimization.
 * **pywt (PyWavelets):** Employed for Discrete Wavelet Transform (DWT) spectral analysis in regime detection and predictability filtering.
 * **pydantic:** Employed for data validation and settings management.
 * **optuna:** Framework used for automated hyperparameter optimization of the selection engine and risk parameters.

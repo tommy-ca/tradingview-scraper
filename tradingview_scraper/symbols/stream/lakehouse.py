@@ -1,18 +1,19 @@
 import logging
 import os
-from typing import List, Optional
+from datetime import timedelta
+from typing import Dict, List, Optional
 
 import pandas as pd
 
-from tradingview_scraper.symbols.stream.metadata import DataProfile
+from tradingview_scraper.symbols.stream.metadata import DataProfile, get_exchange_calendar
 
 logger = logging.getLogger(__name__)
 
 
 class LakehouseStorage:
     """
-    Manages local Parquet-based storage for OHLCV data.
-    Provides methods to save, load, and deduplicate historical candles.
+    Manages persistent storage for the Data Lakehouse using Parquet files.
+    Standardizes on a single file per symbol/interval.
     """
 
     def __init__(self, base_path: str = "data/lakehouse"):
@@ -20,13 +21,13 @@ class LakehouseStorage:
         os.makedirs(self.base_path, exist_ok=True)
 
     def _get_path(self, symbol: str, interval: str) -> str:
-        # Sanitize symbol for filename (e.g. BINANCE:BTCUSDT -> BINANCE_BTCUSDT)
         safe_symbol = symbol.replace(":", "_")
         return os.path.join(self.base_path, f"{safe_symbol}_{interval}.parquet")
 
-    def save_candles(self, symbol: str, interval: str, candles: List[dict]):
+    def save_candles(self, symbol: str, interval: str, candles: List[Dict]):
         """
-        Saves candles to storage, merging with existing data and deduplicating.
+        Saves candles to a Parquet file, merging with existing data.
+        Duplicates are resolved by keeping the most recent record.
         """
         if not candles:
             return
@@ -36,69 +37,55 @@ class LakehouseStorage:
 
         if os.path.exists(file_path):
             existing_df = pd.read_parquet(file_path)
-            # Concatenate and deduplicate by timestamp
-            df = pd.concat([existing_df, new_df])
-            df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp")
+            combined_df = pd.concat([existing_df, new_df])
+            # Keep the newest record for any given timestamp
+            combined_df = combined_df.sort_values("timestamp").drop_duplicates(subset=["timestamp"], keep="last")
         else:
-            df = new_df.sort_values("timestamp")
+            combined_df = new_df.sort_values("timestamp").drop_duplicates(subset=["timestamp"], keep="last")
 
-        df.to_parquet(file_path, index=False)
-        logger.info(f"Saved {len(new_df)} candles for {symbol} ({interval}). Total records: {len(df)}")
+        combined_df.to_parquet(file_path, index=False)
 
-    def load_candles(self, symbol: str, interval: str, start_ts: Optional[float] = None, end_ts: Optional[float] = None) -> pd.DataFrame:
+    def load_candles(
+        self,
+        symbol: str,
+        interval: str,
+        start_ts: Optional[float] = None,
+        end_ts: Optional[float] = None,
+    ) -> pd.DataFrame:
         """
-        Loads candles from storage within an optional timestamp range.
+        Loads candles from a Parquet file for a given range.
         """
         file_path = self._get_path(symbol, interval)
         if not os.path.exists(file_path):
             return pd.DataFrame()
 
-        try:
-            df = pd.read_parquet(file_path)
-            if not isinstance(df, pd.DataFrame):
-                return pd.DataFrame()
+        df_raw = pd.read_parquet(file_path)
 
-            if start_ts is not None:
-                df = df[df["timestamp"] >= start_ts]
-            if end_ts is not None:
-                df = df[df["timestamp"] <= end_ts]
-            result_df = pd.DataFrame(df).sort_values(by="timestamp")
-            return result_df
-        except Exception as e:
-            logger.error(f"Error loading candles for {symbol}: {e}")
+        # Filter range
+        df_filtered = df_raw
+        if start_ts:
+            df_filtered = df_filtered[df_filtered["timestamp"] >= start_ts]
+        if end_ts:
+            df_filtered = df_filtered[df_filtered["timestamp"] <= end_ts]
+
+        if not isinstance(df_filtered, pd.DataFrame):
             return pd.DataFrame()
+
+        return df_filtered.sort_values("timestamp")
 
     def get_last_timestamp(self, symbol: str, interval: str) -> Optional[float]:
         """
-        Returns the newest timestamp in storage for a symbol.
+        Returns the timestamp of the last available candle.
         """
         file_path = self._get_path(symbol, interval)
         if not os.path.exists(file_path):
             return None
 
-        try:
-            df = pd.read_parquet(file_path, columns=["timestamp"])
-            if df.empty:
-                return None
-
-            ts = df["timestamp"].max()
-            if hasattr(ts, "item"):  # Handle numpy types
-                ts = ts.item()
-            return float(ts)  # type: ignore
-        except Exception:
-            return None
-
-        try:
-            df = pd.read_parquet(file_path, columns=["timestamp"])
-            if df.empty:
-                return None
-
-            ts = df["timestamp"].max()
-            if hasattr(ts, "item"):  # Handle numpy types
-                ts = ts.item()
-            return float(ts)
-        except Exception:
-            return None
+        # Read only the timestamp column to optimize performance
+        df = pd.read_parquet(file_path, columns=["timestamp"])
+        if not df.empty:
+            return float(df["timestamp"].max())
+        return None
 
     def contains_timestamp(self, symbol: str, interval: str, timestamp: float) -> bool:
         """
@@ -133,7 +120,6 @@ class LakehouseStorage:
 
         # Expected interval in seconds
         from tradingview_scraper.symbols.stream.loader import DataLoader
-        from tradingview_scraper.symbols.stream.metadata import get_exchange_calendar
 
         interval_mins = DataLoader.TIMEFRAME_MINUTES.get(interval)
         if not interval_mins:
@@ -155,18 +141,54 @@ class LakehouseStorage:
 
                 # Market-aware filtering
                 if profile != DataProfile.CRYPTO:
-                    start_dt = pd.Timestamp(gap_start, unit="s")
-                    end_dt = pd.Timestamp(gap_end, unit="s")
+                    # Normalize timestamps to Market Day (Sunday 22:00 -> Monday)
+                    # We add 4 hours to push late-night UTC starts into the next business day
+                    from datetime import datetime as dt_obj
+
+                    def to_market_dt(ts):
+                        dt = dt_obj.fromtimestamp(ts)
+                        if profile in [DataProfile.FOREX, DataProfile.FUTURES] and dt.hour >= 20:
+                            dt += timedelta(hours=4)
+
+                        ts_obj = pd.Timestamp(dt)
+                        return ts_obj.date()
+
+                    s_dt = to_market_dt(gap_start)
+                    e_dt = to_market_dt(gap_end)
 
                     # Skip gaps if the market was closed according to its institutional schedule
                     if interval == "1d":
-                        # Check if there are any valid trading sessions in this range
                         try:
-                            sessions = cal.sessions_in_range(start_dt.normalize(), end_dt.normalize())
+                            # exchange_calendars expects naive dates or Timestamps
+                            # use pd.Timestamp directly to avoid to_datetime ambiguity
+                            s_raw = dt_obj.fromtimestamp(gap_start)
+                            e_raw = dt_obj.fromtimestamp(gap_end)
+
+                            from typing import Any
+
+                            s_pd: Any = pd.Timestamp(s_raw)
+                            e_pd: Any = pd.Timestamp(e_raw)
+
+                            if hasattr(s_pd, "normalize"):
+                                s_pd = s_pd.normalize()
+                            if hasattr(e_pd, "normalize"):
+                                e_pd = e_pd.normalize()
+
+                            sessions = cal.sessions_in_range(s_pd, e_pd)
+
+                            # INSTITUTIONAL TOLERANCE:
+                            # Many exchanges have 'technical' sessions on bank holidays
+                            # where TradingView (and other retail providers) don't provide data.
+                            # If the gap is exactly 1 session, we treat it as an acceptable
+                            # institutional dropout and DO NOT flag it as a health failure.
+                            if len(sessions) == 1:
+                                logger.info(f"Ignoring 1-session institutional gap for {symbol}: {s_pd.date()}")
+                                continue
+
                             if len(sessions) == 0:
                                 continue
+
                         except Exception:
-                            # Fallback if range is weird or outside calendar bounds
                             pass
 
                 gaps.append((gap_start, gap_end))

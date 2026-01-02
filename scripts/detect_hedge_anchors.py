@@ -47,13 +47,15 @@ def detect_hedge_anchors():
         if valid:
             cluster_benchmarks[f"Cluster_{c_id}"] = returns[valid].mean(axis=1)
 
-    # 4. Identify Hedge Anchors (Negative correlation with Market or Clusters)
+    # Identify Hedge Anchors (Negative correlation with Market or Clusters)
     results = []
 
-    # Heuristic for the big crypto hub
+    # General crypto hub detection based on asset class metadata
     crypto_cluster_key: Optional[str] = None
     for c_id, symbols in clusters.items():
-        if any("BCH" in s for s in symbols):
+        # Check if the cluster is predominantly crypto
+        crypto_count = sum(1 for s in symbols if meta.get(s, {}).get("asset_class") == "CRYPTO")
+        if crypto_count > 0 and (crypto_count / len(symbols)) > 0.5:
             crypto_cluster_key = f"Cluster_{c_id}"
             break
 

@@ -26,13 +26,14 @@ The `MarketRegimeDetector` identifies the prevailing market state to dynamically
 
 ## 2. Regime Classification
 
-The weighted `Regime_Score` is used to classify the market into three states:
+The weighted `Regime_Score` is used to classify the market into states:
 
 | Regime | Score Range | Strategy Impact (Barbell) |
 | :--- | :--- | :--- |
 | **QUIET** | < 0.7 | Increases Aggressors to **15%** (Optionality is cheap). |
 | **NORMAL** | 0.7 - 1.8 | Standard **10%** Aggressor allocation. |
-| **CRISIS** | >= 1.8 | Shrinks Aggressors to **5%** (Survival mode; focus on Core). |
+| **TURBULENT**| 1.8 - 2.5 | Shrinks Aggressors to **5%** (Focus on high-conviction). |
+| **CRISIS** | >= 2.5 | Shrinks Aggressors to **3%** (Survival mode; focus on Core). |
 
 ## 3. Resilience Features
 

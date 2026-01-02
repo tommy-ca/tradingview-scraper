@@ -1,0 +1,8 @@
+# L2: Crypto Perp Template
+base_preset: ../hygiene/institutional.yaml
+markets: ["crypto"]
+include_perps_only: true
+exclude_stable_bases: true
+quote_priority: ["USDT", "USDC", "USD"]
+export_metadata:
+  data_category: crypto_perp

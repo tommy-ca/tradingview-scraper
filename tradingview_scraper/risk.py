@@ -101,8 +101,8 @@ class BarbellOptimizer:
     REGIME_SPLITS = {
         "QUIET": {"core": 0.85, "aggressor": 0.15},
         "NORMAL": {"core": 0.90, "aggressor": 0.10},
-        "CRISIS": {"core": 0.95, "aggressor": 0.05},
-        "TURBULENT": {"core": 0.97, "aggressor": 0.03},
+        "TURBULENT": {"core": 0.95, "aggressor": 0.05},
+        "CRISIS": {"core": 0.97, "aggressor": 0.03},
     }
 
     def _calculate_diversification_ratio(self, weights, volatilities, cov_matrix):

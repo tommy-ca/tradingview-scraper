@@ -21,7 +21,7 @@ class MarketRegimeDetector:
     long-term memory (Hurst), and stationarity (ADF).
     """
 
-    def __init__(self, crisis_threshold: float = 1.7, quiet_threshold: float = 1.3):
+    def __init__(self, crisis_threshold: float = 1.8, quiet_threshold: float = 0.7):
         """
         Args:
             crisis_threshold: Weighted score above which regime is CRISIS.
@@ -29,6 +29,39 @@ class MarketRegimeDetector:
         """
         self.crisis_threshold = crisis_threshold
         self.quiet_threshold = quiet_threshold
+
+    def _save_audit_log(
+        self,
+        regime: str,
+        score: float,
+        metrics: Dict[str, float | int | str],
+        quadrant: str = "UNKNOWN",
+    ):
+        """Saves detection metadata to the central audit ledger."""
+        import datetime
+        import json
+        import os
+
+        audit_path = "data/lakehouse/regime_audit.jsonl"
+
+        def _format_metric(value: float | int | str) -> float | int | str:
+            if isinstance(value, (int, float, np.number)):
+                return round(float(value), 4)
+            return value
+
+        entry = {
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "regime": regime,
+            "score": round(score, 4),
+            "quadrant": quadrant,
+            "metrics": {k: _format_metric(v) for k, v in metrics.items()},
+        }
+        try:
+            os.makedirs(os.path.dirname(audit_path), exist_ok=True)
+            with open(audit_path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            logger.error(f"Failed to write regime audit log: {e}")
 
     def _hurst_exponent(self, x: np.ndarray) -> float:
         return calculate_hurst_exponent(x)
@@ -82,7 +115,6 @@ class MarketRegimeDetector:
             obs = (obs - np.mean(obs)) / (np.std(obs) + 1e-12)
 
             # Initialize and fit HMM (2 states: High Vol vs Low Vol)
-            # Use diagonal covariance for better stability
             model = GaussianHMM(n_components=2, covariance_type="diag", n_iter=50, random_state=42)
             model.fit(obs)
 
@@ -95,7 +127,7 @@ class MarketRegimeDetector:
             if means[latest_state] == np.max(means):
                 return "CRISIS"  # High Volatility State
             else:
-                return "NORMAL"
+                return "QUIET"
         except Exception as e:
             logger.debug(f"HMM classification failed: {e}")
             return "NORMAL"
@@ -104,8 +136,8 @@ class MarketRegimeDetector:
         """
         Classifies the market into 4 quadrants inspired by Ray Dalio's All Weather model.
         Axes:
-        1. Growth Proxy (Return): Annualized Mean Return
-        2. Stress Proxy (Inflation/Risk): Volatility Ratio + DWT Turbulence
+        1. Growth Axis: Annualized Mean Return
+        2. Stress Axis: Volatility Ratio (70%) + DWT Turbulence (60%)
         """
         if returns.empty or len(returns) < 20:
             return "STAGNATION", {"growth": 0.0, "stress": 0.0}
@@ -114,34 +146,36 @@ class MarketRegimeDetector:
         market_rets = mean_rets.values
 
         # Axis 1: Growth Axis (Annualized Return)
-        # > 0: Growth, < 0: Contraction
         ann_return = float(mean_rets.mean() * 252)
         growth_axis = ann_return
 
         # Axis 2: Stress Axis (Volatility & Noise)
-        # > 1.0: Rising Stress, < 1.0: Falling Stress
         vol_ratio = float(mean_rets.tail(10).std() / (mean_rets.std() + 1e-12))
         turbulence = calculate_dwt_turbulence(market_rets[-64:])
-        # 1.0 is the neutral stress point
         stress_axis = (vol_ratio * 0.7) + (turbulence * 0.6)
 
         # Classification Logic
         if growth_axis > 0.05:  # > 5% annualized
             if stress_axis > 1.1:
-                regime = "INFLATIONARY_TREND"  # High Growth, High Stress
+                regime = "INFLATIONARY_TREND"
             else:
-                regime = "EXPANSION"  # High Growth, Low Stress (Bull)
-        elif growth_axis < -0.05:  # < -5% annualized
+                regime = "EXPANSION"
+        elif growth_axis < -0.05:
             if stress_axis > 1.1:
-                regime = "CRISIS"  # Low Growth, High Stress (Crash)
+                regime = "CRISIS"
             else:
-                regime = "STAGNATION"  # Low Growth, Low Stress (Bear/Quiet)
+                regime = "STAGNATION"
         else:
-            regime = "NORMAL"  # Neutral zone
+            regime = "NORMAL"
 
-        metrics = {"growth_axis": growth_axis, "stress_axis": stress_axis, "ann_return": ann_return, "vol_ratio": vol_ratio, "turbulence": turbulence}
+        metrics = {
+            "growth_axis": growth_axis,
+            "stress_axis": stress_axis,
+            "ann_return": ann_return,
+            "vol_ratio": vol_ratio,
+            "turbulence": turbulence,
+        }
 
-        logger.info(f"Quadrant Analysis: {regime} | Growth: {growth_axis:.2%}, Stress: {stress_axis:.2f}")
         return regime, metrics
 
     def detect_regime(self, returns: pd.DataFrame) -> Tuple[str, float]:
@@ -184,23 +218,18 @@ class MarketRegimeDetector:
         # 6. ADF Stationarity (Trendiness)
         stationarity = calculate_stationarity_score(market_rets)
 
-        # 7. Serial Correlation
-        sc = self._serial_correlation(market_rets)
-
-        # 8. Weighted Regime Score
-        # Now incorporating Hurst and Stationarity for better trend/noise detection
+        # 7. Weighted Regime Score (Sum of weights = 1.0)
         regime_score = (
-            0.4 * vol_ratio  # Shock factor
-            + 0.3 * turbulence  # Noise factor
-            + 0.2 * vc  # Clustering factor
-            + 0.1 * ent  # Entropy factor
-            + 0.1 * stationarity  # Trend factor
-            + 0.1 * abs(hurst - 0.5) * 2.0  # Deviation from random walk
+            0.35 * vol_ratio  # Shock factor
+            + 0.25 * turbulence  # Noise factor
+            + 0.15 * vc  # Clustering factor
+            + 0.10 * ent  # Entropy factor
+            + 0.10 * abs(hurst - 0.5) * 2.0  # Deviation from random walk
+            + 0.05 * stationarity  # Trend factor
         )
 
-        logger.info(f"Regime Analysis - Score: {regime_score:.2f} | VolRatio: {vol_ratio:.2f}, Turbulence: {turbulence:.2f}, Clustering: {vc:.2f}, Hurst: {hurst:.2f}, ADF: {stationarity:.2f}")
-
-        # 9. HMM Classification (Secondary Vote)
+        # 8. Quadrant & HMM
+        quadrant, quad_metrics = self.detect_quadrant_regime(returns)
         hmm_regime = self._hmm_classify(market_rets)
 
         if regime_score >= self.crisis_threshold:
@@ -213,19 +242,26 @@ class MarketRegimeDetector:
         # Refined labeling for structural anomalies
         settings = get_settings()
         if settings.features.feat_spectral_regimes:
-            # Transition to TURBULENT if Hurst is very high (trending) or Turbulence is high
-            if (turbulence > 0.7 or hurst > 0.65) and regime != "CRISIS":
+            # Upgrade to TURBULENT if Hurst/Turbulence signals strong structural shift
+            if (turbulence > 0.7 or hurst > 0.65) and regime not in ["CRISIS", "QUIET"]:
                 regime = "TURBULENT"
-                logger.info(f"Regime upgraded to TURBULENT (Hurst={hurst:.2f}, Turb={turbulence:.2f})")
 
-            # HMM override for strong trends
-            if hmm_regime == "TURBULENT" and regime == "NORMAL" and hurst > 0.55:
-                regime = "TURBULENT"
-                logger.info("HMM confirmed Bullish/Trend regime.")
-
-            # HMM confirmation for CRISIS
-            if hmm_regime == "CRISIS" and regime == "TURBULENT":
+            # HMM and Quadrant confirmation for CRISIS
+            if (hmm_regime == "CRISIS" or quadrant == "CRISIS") and regime_score > 1.5:
                 regime = "CRISIS"
-                logger.info("HMM upgraded TURBULENT to CRISIS.")
 
+        # 9. Audit Logging
+        full_metrics = {
+            "vol_ratio": vol_ratio,
+            "turbulence": turbulence,
+            "clustering": vc,
+            "entropy": ent,
+            "hurst": hurst,
+            "stationarity": stationarity,
+            "hmm_state": hmm_regime,
+        }
+        full_metrics.update(quad_metrics)
+        self._save_audit_log(regime, regime_score, full_metrics, quadrant)
+
+        logger.info(f"Regime: {regime} (Score: {regime_score:.2f}) | Quadrant: {quadrant} | HMM: {hmm_regime}")
         return regime, float(regime_score)

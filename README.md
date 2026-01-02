@@ -49,7 +49,7 @@ The entire production lifecycle is controlled via the `Makefile` and `configs/ma
 make daily-run
 
 # Run a lightweight development test (fast validation)
-make daily-run PROFILE=repro_dev
+make daily-run PROFILE=development
 
 # Run the 3D benchmarking tournament matrix only
 make tournament

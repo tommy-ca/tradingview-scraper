@@ -1,25 +1,58 @@
 import argparse
+import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
-from tradingview_scraper.symbols.overview import Overview
+import pandas as pd
 
-logging.basicConfig(level=logging.INFO)
+from tradingview_scraper.symbols.overview import Overview
+from tradingview_scraper.symbols.stream.metadata import DEFAULT_EXCHANGE_METADATA, ExchangeCatalog, MetadataCatalog, get_symbol_profile
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger("build_metadata_catalog")
 
 
-def fetch_tv_metadata(symbols: List[str]) -> List[dict]:
-    """
-    Fetches structural metadata from TradingView for a list of symbols.
-    Enhanced with validation and type consistency.
-    """
-    from tradingview_scraper.symbols.stream.metadata import DEFAULT_EXCHANGE_METADATA, get_symbol_profile
+def _validate_numeric_field(value, field_name: str, default: int) -> int:
+    """Validates and normalizes numeric fields to ensure type consistency."""
+    if value is None or value == "":
+        return default
+    try:
+        normalized = int(float(value))
+        if normalized <= 0:
+            return default
+        return normalized
+    except (ValueError, TypeError):
+        return default
 
+
+def _validate_symbol_record(symbol: str, data: dict, exchange: str, pricescale: int, minmov: int, tick_size: Optional[float]) -> List[str]:
+    """Validates a symbol record and returns a list of validation errors."""
+    errors = []
+    if not exchange:
+        errors.append("CRITICAL: Missing exchange")
+    if not data.get("type"):
+        errors.append("CRITICAL: Missing type")
+    if pricescale is None or pricescale <= 0:
+        errors.append("CRITICAL: Invalid pricescale")
+    if minmov is None or minmov <= 0:
+        errors.append("CRITICAL: Invalid minmov")
+    return errors
+
+
+def _validate_symbol_record_for_upsert(record: dict) -> bool:
+    """Validates a symbol record before upserting to catalog."""
+    required_fields = ["symbol", "type"]
+    for field in required_fields:
+        if not record.get(field):
+            return False
+    return True
+
+
+def fetch_tv_metadata_single(symbol: str) -> Optional[dict]:
+    """Fetches structural metadata from TradingView for a single symbol."""
     ov = Overview()
-    results = []
-
-    # Fields we care about for catalog
     fields = [
         "pricescale",
         "minmov",
@@ -40,279 +73,114 @@ def fetch_tv_metadata(symbols: List[str]) -> List[dict]:
         "session",
     ]
 
-    total = len(symbols)
-    for i, symbol in enumerate(symbols):
-        if i % 10 == 0:
-            logger.info(f"Processing {i}/{total}: {symbol}...")
-
-        try:
-            res = ov.get_symbol_overview(symbol, fields=fields)
-            if res["status"] == "success":
-                data = res["data"]
-
-                # Validate and normalize critical fields
-                pricescale = _validate_numeric_field(data.get("pricescale"), "pricescale", 1)
-                minmov = _validate_numeric_field(data.get("minmov"), "minmov", 1)
-                tick_size = minmov / pricescale if pricescale and pricescale > 0 else None
-
-                exchange = data.get("exchange")
-                if not exchange:
-                    logger.warning(f"Missing exchange for {symbol}, skipping")
-                    continue
-
-                ex_defaults = DEFAULT_EXCHANGE_METADATA.get(exchange, {})
-
-                # Timezone Resolution: API > Exchange Default > UTC
-                timezone = data.get("timezone") or ex_defaults.get("timezone", "UTC")
-
-                # Session Resolution: API > Crypto Default > Unknown
-                session = data.get("session")
-                if not session:
-                    session = "24x7" if data.get("type") in ["spot", "swap"] else "Unknown"
-
-                # Validate required fields
-                validation_errors = _validate_symbol_record(symbol, data, exchange, pricescale, minmov, tick_size)
-                if validation_errors:
-                    for error in validation_errors:
-                        logger.warning(f"Validation error for {symbol}: {error}")
-                    # Only skip if critical errors, otherwise log and continue
-                    critical_errors = [e for e in validation_errors if "critical" in e.lower()]
-                    if critical_errors:
-                        continue
-
-                profile = get_symbol_profile(symbol, {"type": data.get("type"), "is_crypto": ex_defaults.get("is_crypto")})
-
-                record = {
-                    "symbol": symbol,
-                    "exchange": exchange,
-                    "base": data.get("base_currency"),
-                    "quote": data.get("currency"),
-                    "type": data.get("type"),
-                    "subtype": data.get("subtype"),
-                    "profile": profile.value,
-                    "description": data.get("description"),
-                    "sector": data.get("sector"),
-                    "industry": data.get("industry"),
-                    "country": data.get("country") or ex_defaults.get("country"),
-                    "pricescale": pricescale,
-                    "minmov": minmov,
-                    "tick_size": tick_size,
-                    "active": True,
-                    "lot_size": None,
-                    "contract_size": None,
-                    "timezone": timezone,
-                    "session": session,
-                }
-                results.append(record)
-            else:
-                logger.warning(f"Failed to fetch {symbol}: {res.get('error')}")
-
-        except Exception as e:
-            logger.error(f"Error processing {symbol}: {e}")
-
-    logger.info(f"Successfully processed {len(results)}/{len(symbols)} symbols")
-    return results
-
-
-def _validate_numeric_field(value, field_name: str, default: int) -> int:
-    """
-    Validates and normalizes numeric fields to ensure type consistency.
-    """
-    if value is None or value == "":
-        return default
-
     try:
-        # Convert to int for type consistency
-        normalized = int(float(value))
-        if normalized <= 0:
-            logger.warning(f"Invalid {field_name} value: {value}, using default: {default}")
-            return default
-        return normalized
-    except (ValueError, TypeError):
-        logger.warning(f"Could not parse {field_name} value: {value}, using default: {default}")
-        return default
+        res = ov.get_symbol_overview(symbol, fields=fields)
+        if res["status"] == "success":
+            data = res["data"]
+            pricescale = _validate_numeric_field(data.get("pricescale"), "pricescale", 1)
+            minmov = _validate_numeric_field(data.get("minmov"), "minmov", 1)
+            tick_size = minmov / pricescale if pricescale and pricescale > 0 else None
+            exchange = data.get("exchange")
+            if not exchange:
+                return None
+
+            ex_defaults = DEFAULT_EXCHANGE_METADATA.get(exchange, {})
+            timezone = data.get("timezone") or ex_defaults.get("timezone", "UTC")
+            session = data.get("session")
+            if not session:
+                session = "24x7" if data.get("type") in ["spot", "swap"] else "Unknown"
+
+            profile = get_symbol_profile(symbol, {"type": data.get("type"), "is_crypto": ex_defaults.get("is_crypto")})
+
+            return {
+                "symbol": symbol,
+                "exchange": exchange,
+                "base": data.get("base_currency"),
+                "quote": data.get("currency"),
+                "type": data.get("type"),
+                "subtype": data.get("subtype"),
+                "profile": profile.value,
+                "description": data.get("description"),
+                "sector": data.get("sector"),
+                "industry": data.get("industry"),
+                "country": data.get("country") or ex_defaults.get("country"),
+                "pricescale": pricescale,
+                "minmov": minmov,
+                "tick_size": tick_size,
+                "active": True,
+                "lot_size": None,
+                "contract_size": None,
+                "timezone": timezone,
+                "session": session,
+            }
+    except Exception as e:
+        logger.error(f"Error processing {symbol}: {e}")
+    return None
 
 
-def _validate_symbol_record_for_upsert(record: dict) -> bool:
-    """
-    Validates a symbol record before upserting to catalog.
-    """
-    required_fields = ["symbol", "type"]
+def fetch_tv_metadata(symbols: List[str], max_workers: int = 10) -> List[dict]:
+    """Fetches structural metadata from TradingView concurrently."""
+    results = []
+    total = len(symbols)
+    logger.info(f"Fetching metadata for {total} symbols using {max_workers} workers...")
 
-    for field in required_fields:
-        if not record.get(field):
-            logger.warning(f"Missing required field '{field}' for symbol {record.get('symbol', 'UNKNOWN')}")
-            return False
-
-    # Validate numeric fields
-    numeric_fields = ["pricescale", "minmov"]
-    for field in numeric_fields:
-        value = record.get(field)
-        if value is not None and (not isinstance(value, (int, float)) or value <= 0):
-            logger.warning(f"Invalid {field} value for symbol {record['symbol']}: {value}")
-            return False
-
-    return True
-
-
-def _validate_symbol_record(symbol: str, data: dict, exchange: str, pricescale: int, minmov: int, tick_size: Optional[float]) -> List[str]:
-    """
-    Validates a symbol record and returns a list of validation errors.
-    """
-    errors = []
-
-    # Critical validations
-    if not exchange:
-        errors.append("CRITICAL: Missing exchange")
-    if not data.get("type"):
-        errors.append("CRITICAL: Missing type")
-    if pricescale is None or pricescale <= 0:
-        errors.append("CRITICAL: Invalid pricescale")
-    if minmov is None or minmov <= 0:
-        errors.append("CRITICAL: Invalid minmov")
-
-    # Warning validations
-    if tick_size is None or tick_size <= 0:
-        errors.append("WARNING: Invalid tick_size calculation")
-
-    if not data.get("description"):
-        errors.append("WARNING: Missing description")
-
-    return errors
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for i, result in enumerate(executor.map(fetch_tv_metadata_single, symbols)):
+            if (i + 1) % 5 == 0 or i + 1 == total:
+                logger.info(f"Processing [{i + 1}/{total}]: {symbols[i]}")
+            if result:
+                results.append(result)
+    return results
 
 
 def main():
     parser = argparse.ArgumentParser(description="Build/Update Metadata Catalog")
     parser.add_argument("--symbols", nargs="+", help="List of symbols to process")
     parser.add_argument("--from-catalog", action="store_true", help="Refresh all active symbols from existing symbols.parquet")
-    parser.add_argument("--catalog-path", type=str, default="data/lakehouse/symbols.parquet", help="Path to symbols.parquet for --from-catalog")
-    parser.add_argument("--config", type=str, help="Path to universe config yaml")
-    parser.add_argument("--limit", type=int, help="Override symbol limit")
-    parser.add_argument("--liquidity-floor", type=float, help="Override liquidity floor (Value.Traded)")
-    parser.add_argument("--universe", type=str, default="binance_top50", help="Fallback preset universe")
+    parser.add_argument("--candidates-file", type=str, help="Refresh specific symbols from a JSON candidates file")
+    parser.add_argument("--catalog-path", type=str, default="data/lakehouse/symbols.parquet")
+    parser.add_argument("--workers", type=int, default=10)
     args = parser.parse_args()
 
     target_symbols = []
-
-    # 1. Resolve Symbols
     if args.symbols:
         target_symbols = args.symbols
-
+    elif args.candidates_file:
+        if os.path.exists(args.candidates_file):
+            with open(args.candidates_file, "r") as f:
+                cands = json.load(f)
+            target_symbols = sorted({c["symbol"] for c in cands if "symbol" in c})
+            logger.info(f"Loaded {len(target_symbols)} symbols from {args.candidates_file}")
     elif args.from_catalog:
-        try:
-            import pandas as pd
-
-            if not os.path.exists(args.catalog_path):
-                logger.error(f"Catalog not found: {args.catalog_path}")
-                return
-
+        if os.path.exists(args.catalog_path):
             df = pd.read_parquet(args.catalog_path)
-            if "valid_until" in df.columns:
-                df = df[df["valid_until"].isna()]
             if "active" in df.columns:
                 df = df[df["active"] == True]
-
-            if "symbol" not in df.columns:
-                logger.error("Catalog missing required 'symbol' column")
-                return
-
-            syms = df["symbol"].dropna().astype(str)
-            target_symbols = sorted({s.strip() for s in syms if s.strip()})
+            # Use explicit cast to Series to satisfy type checker
+            symbol_series = pd.Series(df["symbol"])
+            target_symbols = sorted(symbol_series.dropna().unique().tolist())
             logger.info(f"Loaded {len(target_symbols)} symbols from catalog")
-        except Exception as e:
-            logger.error(f"Failed to load symbols from catalog: {e}")
-            return
-
-    elif args.config:
-        try:
-            from tradingview_scraper.futures_universe_selector import FuturesUniverseSelector, load_config
-
-            logger.info(f"Loading universe from {args.config}...")
-            if not os.path.exists(args.config):
-                logger.error(f"Config file not found: {args.config}")
-                return
-
-            cfg = load_config(args.config)
-            # Use a slightly higher limit for catalog building to capture candidates
-            if args.limit:
-                cfg.limit = args.limit
-                cfg.base_universe_limit = args.limit
-            else:
-                cfg.limit = 100
-
-            if args.liquidity_floor is not None:
-                cfg.volume.value_traded_min = args.liquidity_floor
-                logger.info(f"Liquidity floor overridden to: {args.liquidity_floor}")
-
-            selector = FuturesUniverseSelector(cfg)
-            resp = selector.run()
-
-            if resp.get("status") in ["success", "partial_success"]:
-                data = resp.get("data", [])
-                target_symbols = [r["symbol"] for r in data]
-                logger.info(f"Resolved {len(target_symbols)} symbols from config.")
-
-                if resp.get("status") == "partial_success":
-                    logger.warning(f"Universe selection had errors: {resp.get('errors')}")
-            else:
-                err = resp.get("error") or resp.get("errors")
-                logger.error(f"Universe selection failed: {err}")
-                return
-        except ImportError:
-            logger.error("Could not import FuturesUniverseSelector. Ensure PYTHONPATH is set.")
-            return
-
-    elif args.universe == "binance_top50":
-        # Fallback hardcoded
-        target_symbols = ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "BINANCE:SOLUSDT", "BINANCE:BNBUSDT", "BINANCE:XRPUSDT", "BINANCE:ADAUSDT", "BINANCE:DOGEUSDT", "BINANCE:AVAXUSDT"]
 
     if not target_symbols:
-        logger.error("No symbols provided or resolved.")
+        logger.error("No target symbols resolved.")
         return
 
-    # 2. Fetch Metadata
-    logger.info(f"Starting metadata build for {len(target_symbols)} symbols...")
-    catalog_data = fetch_tv_metadata(target_symbols)
+    catalog_data = fetch_tv_metadata(target_symbols, max_workers=args.workers)
 
-    # 3. Upsert to Catalog
     if catalog_data:
-        from tradingview_scraper.symbols.stream.metadata import DEFAULT_EXCHANGE_METADATA, ExchangeCatalog, MetadataCatalog
-
-        # Symbol Catalog
-        catalog = MetadataCatalog()  # Defaults to data/lakehouse
-
-        # Pre-validate data before upserting
-        validated_data = []
-        for record in catalog_data:
-            if _validate_symbol_record_for_upsert(record):
-                validated_data.append(record)
-            else:
-                logger.warning(f"Skipping invalid record: {record.get('symbol', 'UNKNOWN')}")
+        catalog = MetadataCatalog()
+        validated_data = [r for r in catalog_data if _validate_symbol_record_for_upsert(r)]
 
         if validated_data:
             catalog.upsert_symbols(validated_data)
-        else:
-            logger.warning("No valid data to upsert")
+            logger.info(f"Upserted {len(validated_data)} symbols to catalog.")
 
-        # Exchange Catalog Bootstrap
         ex_catalog = ExchangeCatalog()
         exchanges = {r["exchange"] for r in catalog_data if r.get("exchange")}
         for ex in exchanges:
-            logger.info(f"Bootstrapping exchange info for {ex}...")
             defaults = DEFAULT_EXCHANGE_METADATA.get(ex, {})
-            ex_catalog.upsert_exchange(
-                {
-                    "exchange": ex,
-                    "timezone": defaults.get("timezone", "UTC"),
-                    "is_crypto": defaults.get("is_crypto", False),
-                    "country": defaults.get("country", "Global"),
-                    "description": defaults.get("description", f"{ex} Exchange"),
-                }
-            )
-
-        logger.info(f"Catalog update complete. {len(catalog_data)} symbols and {len(exchanges)} exchanges processed.")
-    else:
-        logger.warning("No data collected.")
+            ex_catalog.upsert_exchange({"exchange": ex, "timezone": defaults.get("timezone", "UTC"), "is_crypto": defaults.get("is_crypto", False), "country": defaults.get("country", "Global")})
+        logger.info("Catalog update complete.")
 
 
 if __name__ == "__main__":

@@ -18,10 +18,10 @@ The detector utilizes a combination of spectral, statistical, and Markovian fact
 
 ## 2. Regime Classifications
 
-- **`QUIET`**: Low volatility ratio, low turbulence, high stationarity.
-- **`NORMAL`**: Standard market conditions.
-- **`TURBULENT`**: High spectral noise (DWT > 0.7) or strong trending behavior (Hurst > 0.65).
-- **`CRISIS`**: High weighted score (Shock + Noise + Persistence) confirmed by HMM 'Volatile' state.
+- **`QUIET`** (Score < 0.7): Low volatility ratio, low turbulence, high stationarity. Aggressor allocation: **15%**.
+- **`NORMAL`** (Score 0.7 - 1.8): Standard market conditions. Aggressor allocation: **10%**.
+- **`TURBULENT`** (Score 1.8 - 2.5 or HMM Upgraded): High spectral noise (DWT > 0.7) or strong trending behavior (Hurst > 0.65). Aggressor allocation: **5%**.
+- **`CRISIS`** (Score > 2.5 or HMM/Quadrant Confirmed): High weighted score (Shock + Noise + Persistence). Aggressor allocation: **3%**.
 
 3. **Quadrant-Based (All Weather) Methodology**
 
@@ -30,7 +30,7 @@ Inspired by Ray Dalio's All Weather model, the system maps the multi-factor metr
 | Axis | Proxy | Component Metrics |
 | :--- | :--- | :--- |
 | **Growth Axis** | **Realized Momentum** | Annualized Mean Return |
-| **Stress Axis** | **Inflation/Risk** | Volatility Ratio (70%) + DWT Turbulence (60%) |
+| **Stress Axis** | **Inflation/Risk** | Volatility Ratio (35%) + Turbulence (25%) + Persistence (15%) |
 
 ### Market Environments (Quadrants):
 

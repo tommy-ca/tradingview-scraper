@@ -232,6 +232,17 @@ class BacktestEngine:
                             d_returns = d_returns.iloc[:test_window]
 
                         prev_weights[(s_name, eng, prof)] = perf.get("final_weights", w_df.set_index("Symbol")["Weight"].fillna(0.0))
+                        # Calculate Condition Number (kappa) for Audit
+                        kappa = 1.0
+                        try:
+                            # Use Train Data for kappa (input to optimizer)
+                            corr = train_data.corr().fillna(0.0)
+                            if not corr.empty:
+                                eigenvalues = np.linalg.eigvalsh(corr.values)
+                                kappa = float(eigenvalues.max() / (np.abs(eigenvalues).min() + 1e-15))
+                        except Exception:
+                            pass
+
                         results[s_name][eng][prof]["windows"].append(
                             {
                                 "engine": eng,
@@ -241,6 +252,7 @@ class BacktestEngine:
                                 "start_date": str(test_data.index[0]),
                                 "end_date": str(test_data.index[-1]),
                                 "regime": regime,
+                                "kappa": kappa,
                                 "returns": perf["total_return"],
                                 "vol": perf["realized_vol"],
                                 "sharpe": perf["sharpe"],

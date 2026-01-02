@@ -60,7 +60,7 @@ class Streamer:
         initial_delay: float = 1.0,
         max_delay: float = 60.0,
         backoff_factor: float = 2.0,
-        idle_packet_limit: int = 10,
+        idle_packet_limit: int = 5,
         max_packet_limit: int = 60,
         idle_timeout_seconds: float = 15.0,
     ):
@@ -124,10 +124,13 @@ class Streamer:
         self._current_subscription = (exchange_symbol, timeframe, numb_candles)
         timeframe_map = {"1m": "1", "3m": "3", "5m": "5", "15m": "15", "30m": "30", "45m": "45", "1h": "60", "2h": "120", "3h": "180", "4h": "240", "1d": "1D", "1w": "1W", "1M": "1M"}
         resolve_symbol = json.dumps({"adjustment": "splits", "symbol": exchange_symbol})
-        self.stream_obj.send_message("quote_add_symbols", [quote_session, f"={resolve_symbol}"])
-        self.stream_obj.send_message("resolve_symbol", [chart_session, "sds_sym_1", f"={resolve_symbol}"])
-        self.stream_obj.send_message("create_series", [chart_session, "sds_1", "s1", "sds_sym_1", timeframe_map.get(timeframe, "1"), numb_candles, ""])
-        self.stream_obj.send_message("quote_fast_symbols", [quote_session, exchange_symbol])
+
+        obj = self.stream_obj
+        if obj and hasattr(obj, "send_message"):
+            obj.send_message("quote_add_symbols", [quote_session, f"={resolve_symbol}"])
+            obj.send_message("resolve_symbol", [chart_session, "sds_sym_1", f"={resolve_symbol}"])
+            obj.send_message("create_series", [chart_session, "sds_1", "s1", "sds_sym_1", timeframe_map.get(timeframe, "1"), numb_candles, ""])
+            obj.send_message("quote_fast_symbols", [quote_session, exchange_symbol])
 
     def _add_indicator_study(self, indicator_study: dict):
         """
@@ -136,8 +139,10 @@ class Streamer:
         Args:
             indicator_study (dict): The indicator study metadata.
         """
-        self.stream_obj.send_message("create_study", indicator_study["p"])
-        self.stream_obj.send_message("quote_hibernate_all", [self.stream_obj.quote_session])
+        obj = self.stream_obj
+        if obj and hasattr(obj, "send_message"):
+            obj.send_message("create_study", indicator_study["p"])
+            obj.send_message("quote_hibernate_all", [getattr(obj, "quote_session", "")])
 
     def _add_indicators(self, indicators: List[Tuple[str, str]]):
         """
@@ -148,10 +153,15 @@ class Streamer:
                               Example: [("STD;RSI", "37.0"), ("STD;MACD", "31.0")]
         """
         self._current_indicators = indicators
+        obj = self.stream_obj
+        if not obj:
+            return
+
         for idx, (indicator_id, indicator_version) in enumerate(indicators):
             logging.info(f"Processing indicator {idx + 1}/{len(indicators)}: {indicator_id} v{indicator_version}")
 
-            ind_study = fetch_indicator_metadata(script_id=indicator_id, script_version=indicator_version, chart_session=self.stream_obj.chart_session)
+            chart_session = getattr(obj, "chart_session", "")
+            ind_study = fetch_indicator_metadata(script_id=indicator_id, script_version=indicator_version, chart_session=chart_session)
 
             # Check if indicator metadata was successfully fetched
             if not ind_study or "p" not in ind_study:
@@ -217,7 +227,9 @@ class Streamer:
             logging.debug("Resetting stream connection before subscribing to %s", exchange_symbol)
             self._reset_stream_handler()
 
-        self._add_symbol_to_sessions(self.stream_obj.quote_session, self.stream_obj.chart_session, exchange_symbol, timeframe, numb_price_candles)
+        obj = self.stream_obj
+        if obj:
+            self._add_symbol_to_sessions(obj.quote_session, obj.chart_session, exchange_symbol, timeframe, numb_price_candles)
 
         if ind_flag and indicators:
             self._add_indicators(indicators)
@@ -303,11 +315,11 @@ class Streamer:
         return self.get_data()
 
     def close(self):
-        """
-        Closes the underlying WebSocket connection.
-        """
-        if hasattr(self, "stream_obj") and self.stream_obj:
-            self.stream_obj.close()
+        """Closes the WebSocket connection."""
+        obj = self.stream_obj
+        if obj:
+            obj.close()
+
         self._current_subscription = None
         self._current_indicators = None
 
@@ -340,25 +352,44 @@ class Streamer:
                 while True:
                     try:
                         sleep(0.1)
-                        result = self.stream_obj.ws.recv()
+                        obj = self.stream_obj
+                        if not (obj and hasattr(obj, "ws") and obj.ws):
+                            break
+                        result = obj.ws.recv()
                         result_str = result.decode() if isinstance(result, (bytes, bytearray)) else str(result)
-                        # Check if the result is a heartbeat or actual data
-                        if re.match(r"~m~\d+~m~~h~\d+$", result_str):
-                            # Echo back the message (The result_str already contains the full heartbeat message)
-                            logging.debug("Received heartbeat: %s", result_str)
-                            if self.stream_obj and self.stream_obj.ws:
-                                self.stream_obj.ws.send(result_str)
-                            idle_packets += 1
+                        # Split messages (TradingView sometimes batches them)
+                        # Messages look like ~m~<length>~m~<content>
+                        # Content can be a heartbeat (~h~<id>) or a JSON object
+                        split_result = [x for x in re.split(r"~m~\d+~m~", result_str) if x]
 
+                        if not split_result:
+                            idle_packets += 1
                         else:
-                            split_result = [x for x in re.split(r"~m~\d+~m~", result_str) if x]
-                            if not split_result:
-                                idle_packets += 1
                             for item in split_result:
-                                if item:
-                                    idle_packets = 0
-                                    last_data_time = datetime.now().timestamp()
-                                    yield json.loads(item)  # Yield parsed JSON data
+                                if not item:
+                                    continue
+
+                                if item.startswith("~h~"):
+                                    # Handle heartbeat inside split
+                                    idle_packets += 1
+                                    logging.debug("Received heartbeat: %s (idle_packets=%s/%s)", item, idle_packets, self.idle_packet_limit)
+                                    # We need to wrap it in the header to echo back correctly
+                                    # But TradingView expects the EXACT same packet for echo
+                                    # If it was part of a batch, we'd have to reconstruct it.
+                                    # Most heartbeats are single packets matched by re.match above.
+                                    # For safety, we just echo the item if it's a heartbeat.
+                                    if obj and hasattr(obj, "ws") and obj.ws and hasattr(obj, "prepend_header"):
+                                        obj.ws.send(obj.prepend_header(item))
+                                    idle_packets += 1
+                                else:
+                                    try:
+                                        parsed = json.loads(item)
+                                        idle_packets = 0
+                                        last_data_time = datetime.now().timestamp()
+                                        yield parsed
+                                    except json.JSONDecodeError:
+                                        logging.error("Failed to decode JSON packet: %s", item)
+                                        idle_packets += 1
                         # Reset attempt counter on successful receive
                         attempt = 0
 
@@ -372,7 +403,8 @@ class Streamer:
                             raise DataNotFoundError("Idle timeout: no data packets received within time limit.")
                         if idle_packets >= self.idle_packet_limit and last_data_time is not None and now_ts - last_data_time >= 1:
                             # Only trigger packet-based idle if we have waited at least 1s since last data
-                            raise DataNotFoundError("Idle timeout: no data packets received (packet limit).")
+                            logging.debug("Idle limit reached (%s packets, mostly heartbeats). Triggering reconnection.", idle_packets)
+                            break
 
                     except WebSocketConnectionClosedException:
                         logging.error("WebSocket connection closed. Attempting to reconnect...")
@@ -400,7 +432,9 @@ class Streamer:
 
                 # Re-subscribe
                 if self._current_subscription:
-                    self._add_symbol_to_sessions(self.stream_obj.quote_session, self.stream_obj.chart_session, *self._current_subscription)
+                    quote_sess = getattr(self.stream_obj, "quote_session", "")
+                    chart_sess = getattr(self.stream_obj, "chart_session", "")
+                    self._add_symbol_to_sessions(quote_sess, chart_sess, *self._current_subscription)
                 if self._current_indicators:
                     self._add_indicators(self._current_indicators)
 

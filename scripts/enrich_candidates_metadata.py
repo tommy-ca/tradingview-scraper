@@ -108,7 +108,13 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
         is_enriched = False
 
         for key, val in defaults.items():
-            if key not in c or c[key] is None or (isinstance(c[key], float) and np.isnan(c[key])):
+            current_val = c.get(key)
+            # Treat 0.0 or None or NaN as "missing" for liquidity fields
+            if key == "value_traded":
+                if current_val is None or (isinstance(current_val, float) and (np.isnan(current_val) or current_val <= 0.0)):
+                    c[key] = val
+                    is_enriched = True
+            elif current_val is None or (isinstance(current_val, float) and np.isnan(current_val)):
                 c[key] = val
                 is_enriched = True
 

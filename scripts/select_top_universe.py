@@ -117,7 +117,12 @@ def select_top_universe(mode: str = "raw"):
     and passes a broad "Raw Pool" to the Selection Engine.
     """
     export_dir = _resolve_export_dir()
-    files = [str(p) for p in export_dir.glob("universe_selector_*.json") if "_base_universe" not in p.name]
+
+    # Support both legacy and new scanner naming conventions
+    patterns = ["universe_selector_*.json", "strategy_selector_*.json", "strategy_alpha_*.json", "universe_foundation_*.json"]
+    files = []
+    for p in patterns:
+        files.extend([str(f) for f in export_dir.glob(p) if "_base_universe" not in f.name])
 
     # Type-hinted audit structure to satisfy linter
     audit_discovery: Dict[str, Any] = {"total_scanned_files": len(files), "categories": {}, "total_symbols_found": 0}
@@ -151,9 +156,17 @@ def select_top_universe(mode: str = "raw"):
 
         category = "UNKNOWN"
         meta_exchange = meta.get("primary_exchange")
-        meta_product = meta.get("product")
+        if not meta_exchange:
+            exchanges = meta.get("exchanges", [])
+            if isinstance(exchanges, list) and len(exchanges) > 0:
+                meta_exchange = exchanges[0]
+
+        meta_product = meta.get("product") or meta.get("data_category")
         if isinstance(meta_exchange, str) and isinstance(meta_product, str) and meta_exchange and meta_product:
             category = f"{meta_exchange.upper()}_{meta_product.upper()}"
+        elif isinstance(meta_product, str) and meta_product:
+            # If we only have product/category, use it as the main category
+            category = meta_product.upper()
         else:
             parts = os.path.basename(f).split("_")
             try:

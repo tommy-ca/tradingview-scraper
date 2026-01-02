@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import logging
 import math
@@ -22,9 +23,11 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Uni
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.overview import Overview
 from tradingview_scraper.symbols.screener import Screener
 from tradingview_scraper.symbols.utils import save_csv_file, save_json_file
+from tradingview_scraper.utils.audit import AuditLedger
 
 try:
     import yaml
@@ -1532,6 +1535,10 @@ class FuturesUniverseSelector:
 
     def run(self, dry_run: bool = False) -> Dict[str, Any]:
         """Execute the selector pipeline."""
+        settings = get_settings()
+        run_dir = settings.prepare_summaries_run_dir()
+        ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
+
         columns = self._build_columns()
         payloads = self.build_payloads(columns=columns)
 
@@ -1541,6 +1548,16 @@ class FuturesUniverseSelector:
                 "payloads": payloads,
                 "config": self.config.model_dump(),
             }
+
+        if ledger:
+            # Record scanner intent
+            config_json = json.dumps(self.config.model_dump(), sort_keys=True)
+            config_hash = hashlib.sha256(config_json.encode()).hexdigest()
+            ledger.record_intent(
+                step="discovery_scan",
+                params={"scanner_type": self.config.export_metadata.symbol, "limit": self.config.limit},
+                input_hashes={"scanner_config": config_hash},
+            )
 
         aggregated: List[Dict[str, Any]] = []
         errors: List[str] = []
@@ -1557,6 +1574,18 @@ class FuturesUniverseSelector:
             errors.extend(market_errors)
 
         result = self.process_data(aggregated)
+
+        if ledger:
+            # Record scanner outcome
+            data_json = json.dumps(result.get("data", []), sort_keys=True)
+            data_hash = hashlib.sha256(data_json.encode()).hexdigest()
+            ledger.record_outcome(
+                step="discovery_scan",
+                status="success" if not errors else "partial_success",
+                output_hashes={"scanned_symbols": data_hash},
+                metrics={"total_selected": result.get("total_selected", 0), "errors": len(errors)},
+            )
+
         if errors:
             result["status"] = "partial_success"
             result["errors"] = errors

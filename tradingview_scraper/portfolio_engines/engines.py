@@ -643,9 +643,10 @@ class AdaptiveMetaEngine(BaseRiskEngine):
         mapping: Dict[str, ProfileName] = {
             "EXPANSION": cast(ProfileName, "max_sharpe"),
             "INFLATIONARY_TREND": cast(ProfileName, "barbell"),
+            "NORMAL": cast(ProfileName, "max_sharpe"),
             "STAGNATION": cast(ProfileName, "min_variance"),
+            "TURBULENT": cast(ProfileName, "hrp"),
             "CRISIS": cast(ProfileName, "hrp"),
-            "NORMAL": cast(ProfileName, "benchmark"),
         }
         req_any = cast(Any, request)
         prof = mapping.get(req_any.market_environment, "benchmark")

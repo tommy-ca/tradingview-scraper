@@ -4,23 +4,24 @@ This document provides a comprehensive guide for AI agents working on the Tradin
 
 ## 1. Core Pipeline Workflow
 
-The entire production lifecycle is unified under the `make clean-run` target. Agents should adhere to this sequence to ensure data integrity and de-risked allocation.
+The entire production lifecycle is unified under the `make flow-production` target. Agents should adhere to this sequence to ensure data integrity and de-risked allocation.
 
-### The 14-Step Production Sequence
-1.  **Cleanup**: Wipe previous artifacts (`data/lakehouse/portfolio_*`).
-2.  **Discovery**: Run multi-asset scanners. **Audit Gate**: Verifies scanner success.
-3.  **Aggregation**: Consolidate scans into a **Raw Pool** with rich metadata.
-4.  **Lightweight Prep**: Fetch **60-day** history for the raw pool.
-5.  **Natural Selection (Pruning)**: Hierarchical clustering + Global XS Ranking. **Audit Gate**: Verifies leader survival.
-6.  **Enrichment**: Propagate sectors, industries, and descriptions.
-7.  **High-Integrity Prep**: Fetch **500-day** secular history for winners.
-8.  **Health Audit**: Validate 100% gap-free alignment. **Self-Healing**: Automated recovery loop if gaps found.
-9.  **Factor Analysis**: Build hierarchical risk buckets (Ward Linkage).
-10. **Regime Detection**: Multi-factor analysis (Entropy + DWT).
-11. **Optimization**: Cluster-Aware allocation with Turnover Control. **Audit Gate**: Verifies profile integrity.
-12. **Validation**: Walk-Forward "Tournament" benchmarking (High-Fidelity).
-13. **Reporting**: QuantStats Tear-sheets + Alpha Isolation Audit.
-14. **Audit Verification**: Final cryptographic signature check of the run's decision ledger.
+### The 15-Step Production Sequence
+1.  **Cleanup**: Wipe incremental artifacts (`make clean-run`).
+2.  **Composition & Discovery**: Execute layered scanners (`make scan-run`).
+3.  **Aggregation**: Consolidate scans into Raw Pool (`make data-prep-raw`).
+4.  **Lightweight Prep**: Fetch 60-day history for analysis (`make data-fetch LOOKBACK=60`).
+5.  **Natural Selection**: Hierarchical clustering & XS Ranking (`make port-select`).
+6.  **Enrichment**: Propagate metadata and descriptions.
+7.  **High-Integrity Prep**: Fetch 500-day secular history (`make data-fetch LOOKBACK=500`).
+8.  **Health Audit**: Validate 100% gap-free alignment using Market-Day normalization (+4h shift). **Policy**: 1-session institutional gaps are ignored.
+9.  **Self-Healing**: Automated recovery loop if gaps found (`make data-repair`).
+10. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
+11. **Regime Detection**: Multi-factor state analysis.
+12. **Optimization**: Cluster-Aware allocation (`make port-optimize`).
+13. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`).
+14. **Reporting**: QuantStats Tear-sheets & Alpha Audit (`make port-report`).
+15. **Audit Verification**: Final cryptographic signature check.
 
 ---
 
@@ -30,57 +31,48 @@ The platform uses a schema-validated JSON manifest system to ensure every run is
 
 ### Workflow Profiles (configs/manifest.json)
 - **`production`**: Institutional high-integrity settings (500d history, 252d train, 25% global caps, all optimizers enabled).
-- **`production_v2_canary`**: Early-access profile with **Feature Flags** enabled (Turnover Penalty, XS Momentum, Spectral Regimes).
-- **`repro_dev`**: Lightweight development profile for fast end-to-end testing (60d history, 50 symbol limit).
+- **`canary`**: Early-access profile with **Feature Flags** enabled (Spectral Regimes, Decay Audit).
+- **`development`**: Lightweight profile for fast iteration (60d history, 50 symbol limit).
+
+### Feature Toggles (CLI Overrides)
+For tactical runs, use environment variables or Makefile shortcuts instead of editing the manifest.
+
+| Shortcut | Environment Variable | Purpose |
+| :--- | :--- | :--- |
+| `VETOES=1` | `TV_FEATURES__FEAT_PREDICTABILITY_VETOES=1` | Enable strict alpha-predictability filters. |
+| `STRICT=1` | `TV_STRICT_HEALTH=1` | Veto any asset with even 1 missing bar. |
+| `LOOKBACK=N` | `TV_LOOKBACK_DAYS=N` | Override secular history depth. |
 
 ### Execution
-Agents should prioritize profile-based execution via the CLI:
+Agents should prioritize namespace-prefixed targets:
 ```bash
-make daily-run PROFILE=production
+make flow-production PROFILE=production
 ```
 
----
-
-## 3. Decision Logic & Specifications
-
-### A. Immutable Market Baseline
-The platform enforces an immutable **Market Baseline Engine**. This baseline loads raw data directly and forces LONG direction, providing an absolute yardstick regardless of scanner sentiment.
-
-### B. Tiered Natural Selection
-Pruning happens statistically *before* deep backfilling to optimize rate limits.
-- **Pass 1 (60d)**: Captures tactical correlation and momentum.
-- **Pass 2 (500d)**: Captures secular tail-risk and stable risk-parity weights over a full trading year (252d training window).
-
-### C. Advanced Risk Engine
-The system moves beyond simple MPT by treating clusters as single units of risk.
-- **Cluster Caps**: Strictly enforced **25% gross weight** per hierarchical bucket.
-- **Fragility Penalty**: Mathematically penalizes weights in sectors with high **Expected Shortfall (CVaR)**.
-- **Adaptive Bucketing**: Clustering distance threshold tightens during `CRISIS` regimes (0.3) and loosens during `QUIET` regimes (0.5).
-
----
-
-## 4. Reporting & Implementation Tools
-
-### Institutional Dashboards
-- **Strategy Resume (`backtest_comparison.md`)**: Unified dashboard derived from the 3D Tournament Matrix.
-- **Selection Audit (`selection_audit.md`)**: Full trace of every merging and selection decision.
-- **QuantStats Tear-sheets**: Automated Markdown teardowns for all tournament winners and the market baseline.
-
-### Rebalancing & Health
-- **Data Quality Gate**: `strict_health: true` ensures no portfolio is generated if data gaps persist.
-- **Self-Healing**: Step 8 automatically triggers `make recover` for automated gap repair and matrix alignment.
+### Logging & Visibility
+Every step of the production sequence persists its full execution trace in the run directory:
+- **Log Path**: `artifacts/summaries/runs/<RUN_ID>/logs/`
+- **Real-time Progress**: The orchestrator parses log output to provide dynamic progress bars for long-running tasks.
+- **Traceability**: All log paths are recorded in the `audit.jsonl` ledger for each step.
 
 ---
 
 ## 5. Key Developer Commands
 
-| Command | Purpose |
-| :--- | :--- |
-| `make daily-run` | Master entry point for production lifecycle. |
-| `make reports` | Generate unified quantitative and analysis reports. |
-| `make tournament` | Run 3D benchmarking matrix (Engine x Simulator x Profile). |
-| `make recover` | High-intensity repair for degraded assets. |
-| `make gist` | Synchronize essential artifacts to private implementation Gist. |
+| Command | Namespace | Purpose |
+| :--- | :--- | :--- |
+| `make flow-production` | **Flow** | Full institutional production lifecycle. |
+| `make flow-dev` | **Flow** | Fast-path development execution. |
+| `make scan-run` | **Scan** | Execute composed discovery scanners. |
+| `make data-fetch` | **Data** | Ingest historical market data. |
+| `make data-repair` | **Data** | High-intensity gap repair for degraded assets. |
+| `make data-audit` | **Data** | Session-Aware health check. |
+| `make port-optimize` | **Port** | Strategic asset allocation (Convex). |
+| `make port-test` | **Port** | Execute 3D benchmarking tournament. |
+| `make port-report` | **Port** | Generate unified quant reports. |
+| `make report-sync` | **Report** | Synchronize artifacts to Gist. |
+| `make clean-all` | **Clean** | Wipe all data, exports, and summaries. |
+
 
 ---
 

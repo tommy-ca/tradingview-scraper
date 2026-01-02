@@ -109,39 +109,60 @@ class ManifestSettingsSource(PydanticBaseSettingsSource):
         try:
             with open(self.manifest_path, "r") as f:
                 data = json.load(f)
-        except FileNotFoundError:
-            logger.debug(f"Manifest not found: {self.manifest_path}")
-            return {}
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse manifest {self.manifest_path}: {e}")
-            return {}
-        except Exception as e:
-            logger.error(f"Unexpected error loading manifest: {e}")
+        except (FileNotFoundError, json.JSONDecodeError, Exception) as e:
+            logger.error(f"Error loading manifest {self.manifest_path}: {e}")
             return {}
 
-        profiles = data.get("profiles", {})
-        # If profile_name is not provided or not in manifest, use default_profile
-        active_profile = self.profile_name or data.get("default_profile", "production")
+        def _merge_blocks(target: Dict, source: Dict):
+            """Deep merge specific manifest blocks into flattened settings."""
+            for section in ["data", "selection", "risk", "backtest", "tournament", "discovery", "features"]:
+                if section in source:
+                    if section in {"discovery", "features"} and isinstance(source[section], dict):
+                        # Nested models or complex dicts
+                        if section not in target:
+                            target[section] = {}
+                        target[section].update(source[section])
+                    elif isinstance(source[section], dict):
+                        # Flatten standard sections
+                        for k, v in source[section].items():
+                            target[k] = v
 
-        profile_data = profiles.get(active_profile)
-        if not profile_data:
-            return {}
+            # Merge Integrations
+            if "integrations" in source:
+                for k, v in source["integrations"].items():
+                    target[k.lower()] = v
 
-        # Flatten nested JSON into flat keys for BaseSettings
+            # Merge Execution Env
+            if "execution_env" in source:
+                for k, v in source["execution_env"].items():
+                    target[k.lower()] = v
+
         flattened = {}
-        for section in ["data", "selection", "risk", "backtest", "tournament", "discovery", "features"]:
-            if section in profile_data:
-                if section in {"discovery", "features"}:
-                    # Keep structured for specialized consumption or nested models
-                    flattened[section] = profile_data[section]
-                else:
-                    for k, v in profile_data[section].items():
-                        flattened[k] = v
 
-        # Merge env block
-        if "env" in profile_data:
-            for k, v in profile_data["env"].items():
-                flattened[k.lower()] = v
+        # 1. Load Global Defaults (Lowest Priority in manifest)
+        defaults = data.get("defaults", {})
+        _merge_blocks(flattened, defaults)
+
+        # Add root-level integrations/execution_env if they exist outside defaults
+        _merge_blocks(flattened, data)
+
+        # 2. Resolve Active Profile
+        profiles = data.get("profiles", {})
+        active_profile = self.profile_name or data.get("default_profile", "production")
+        profile_data = profiles.get(active_profile)
+
+        visited = {active_profile}
+        while isinstance(profile_data, str):
+            if profile_data in visited:
+                logger.error(f"Circular alias: {' -> '.join(visited)} -> {profile_data}")
+                break
+            visited.add(profile_data)
+            active_profile = profile_data
+            profile_data = profiles.get(active_profile)
+
+        # 3. Merge Profile Overrides (Higher Priority)
+        if isinstance(profile_data, dict):
+            _merge_blocks(flattened, profile_data)
 
         return flattened
 
@@ -154,6 +175,7 @@ class TradingViewScraperSettings(BaseSettings):
         env_file=(".env",),
         extra="ignore",
         case_sensitive=False,
+        env_nested_delimiter="__",
     )
 
     # Infrastructure
@@ -203,10 +225,12 @@ class TradingViewScraperSettings(BaseSettings):
     # Feature Flags
     features: FeatureFlags = Field(default_factory=FeatureFlags)
 
-    # Environment overrides (GIST_ID, etc.)
+    # Integrations (New)
     gist_id: str = "e888e1eab0b86447c90c26e92ec4dc36"
-    meta_refresh: str = "0"
-    meta_audit: str = "0"
+
+    # Execution Env (New)
+    mandatory_vars: List[str] = Field(default_factory=list)
+    optional_vars: List[str] = Field(default_factory=list)
 
     # Runtime run_id logic
     run_id: str = Field(default_factory=lambda: os.getenv("TV_RUN_ID") or os.getenv("RUN_ID") or os.getenv("TV_EXPORT_RUN_ID") or datetime.now().strftime("%Y%m%d-%H%M%S"))
@@ -343,18 +367,18 @@ if __name__ == "__main__":
             "engines": "TOURNAMENT_ENGINES",
             "profiles": "TOURNAMENT_PROFILES",
             "gist_id": "GIST_ID",
-            "meta_refresh": "META_REFRESH",
-            "meta_audit": "META_AUDIT",
             "profile": "PROFILE",
             "run_id": "TV_RUN_ID",
-            "features.selection_mode": "TV_FEATURES_SELECTION_MODE",
-            "features.feat_rebalance_mode": "TV_FEATURES_FEAT_REBALANCE_MODE",
-            "features.feat_rebalance_tolerance": "TV_FEATURES_FEAT_REBALANCE_TOLERANCE",
-            "features.rebalance_drift_limit": "TV_FEATURES_REBALANCE_DRIFT_LIMIT",
-            "features.entropy_max_threshold": "TV_FEATURES_ENTROPY_MAX",
-            "features.efficiency_min_threshold": "TV_FEATURES_EFFICIENCY_MIN",
-            "features.hurst_random_walk_min": "TV_FEATURES_HURST_RW_MIN",
-            "features.hurst_random_walk_max": "TV_FEATURES_HURST_RW_MAX",
+            "mandatory_vars": "MANDATORY_VARS",
+            "optional_vars": "OPTIONAL_VARS",
+            "features.selection_mode": "TV_FEATURES__SELECTION_MODE",
+            "features.feat_rebalance_mode": "TV_FEATURES__FEAT_REBALANCE_MODE",
+            "features.feat_rebalance_tolerance": "TV_FEATURES__FEAT_REBALANCE_TOLERANCE",
+            "features.rebalance_drift_limit": "TV_FEATURES__REBALANCE_DRIFT_LIMIT",
+            "features.entropy_max_threshold": "TV_FEATURES__ENTROPY_MAX",
+            "features.efficiency_min_threshold": "TV_FEATURES__EFFICIENCY_MIN",
+            "features.hurst_random_walk_min": "TV_FEATURES__HURST_RW_MIN",
+            "features.hurst_random_walk_max": "TV_FEATURES__HURST_RW_MAX",
         }
         for field, env_name in mapping.items():
             if "." in field:
@@ -372,7 +396,8 @@ if __name__ == "__main__":
                 val = ",".join(val)
             print(f"export {env_name}={val}")
 
-        # Export Feature Flags
-        for feat_name, enabled in settings.features.model_dump().items():
-            val = "1" if enabled else "0"
-            print(f"export {feat_name.upper()}={val}")
+        # Export Feature Flags (Only boolean 'feat_' toggles)
+        for feat_name, val in settings.features.model_dump().items():
+            if feat_name.startswith("feat_"):
+                env_val = "1" if val else "0"
+                print(f"export TV_FEATURES__{feat_name.upper()}={env_val}")

@@ -34,17 +34,24 @@ class ProductionPipeline:
         self.profile = profile
         self.manifest_path = Path(manifest)
         self.run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.settings = get_settings()
         self.console = Console()
 
-        # Initialize environment
+        # Initialize environment BEFORE loading settings
         os.environ["TV_PROFILE"] = profile
         os.environ["TV_MANIFEST_PATH"] = str(self.manifest_path)
         os.environ["TV_RUN_ID"] = self.run_id
         os.environ["TV_EXPORT_RUN_ID"] = self.run_id
 
+        # Clear settings cache to ensure it picks up the new env vars
+
+        get_settings.cache_clear()
+        self.settings = get_settings()
+
         # Setup Audit Ledger
         self.run_dir = self.settings.prepare_summaries_run_dir()
+        self.log_dir = self.run_dir / "logs"
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+
         self.ledger = None
         if self.settings.features.feat_audit_ledger:
             self.ledger = AuditLedger(self.run_dir)
@@ -63,19 +70,24 @@ class ProductionPipeline:
         self,
         name: str,
         command: List[str],
+        step_num: int = 0,
         env: Optional[Dict[str, str]] = None,
         validate_fn: Optional[Callable[[], Any]] = None,
         progress: Optional[Progress] = None,
         task_id: Optional[Any] = None,
     ):
         if progress:
-            progress.console.print(f"[bold blue]>>> Step: {name}[/]")
+            progress.console.print(f"[bold blue]>>> Step {step_num if step_num else ''}: {name}[/]")
         else:
-            logger.info(f">>> Step: {name}")
+            logger.info(f">>> Step {step_num if step_num else ''}: {name}")
+
+        # Setup step-specific log file
+        safe_name = name.lower().replace(" ", "_").replace("&", "and")
+        log_file_path = self.log_dir / f"{step_num:02d}_{safe_name}.log" if step_num else self.log_dir / f"{safe_name}.log"
 
         # Log Intent
         if self.ledger:
-            self.ledger.record_intent(step=name.lower(), params={"cmd": " ".join(command)}, input_hashes={})
+            self.ledger.record_intent(step=name.lower(), params={"cmd": " ".join(command), "log_file": str(log_file_path)}, input_hashes={})
 
         full_env = os.environ.copy()
         if env:
@@ -83,32 +95,52 @@ class ProductionPipeline:
 
         try:
             # Use Popen to capture output incrementally
-            process = subprocess.Popen(command, env=full_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            process = subprocess.Popen(
+                command,
+                env=full_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Merge stderr into stdout for simple logging
+                text=True,
+                bufsize=1,  # Line buffered
+            )
 
             stdout_lines = []
-            stderr_lines = []
 
-            # Read stdout incrementally
-            if process.stdout:
-                for line in iter(process.stdout.readline, ""):
-                    line = line.strip()
-                    if line:
-                        stdout_lines.append(line)
-                        if progress and task_id is not None:
-                            # Truncate long lines for the status display
-                            display_line = line[:60] + "..." if len(line) > 60 else line
-                            progress.update(task_id, description=f"[cyan]{name}[/] [dim]({display_line})[/]")
+            with open(log_file_path, "w", encoding="utf-8") as log_file:
+                # Read stdout incrementally
+                if process.stdout:
+                    for line in iter(process.stdout.readline, ""):
+                        # Write to log file
+                        log_file.write(line)
+                        log_file.flush()
 
-            # Wait for completion and get stderr
-            _, stderr = process.communicate()
-            if stderr:
-                stderr_lines.append(stderr)
+                        clean_line = line.strip()
+                        if clean_line:
+                            stdout_lines.append(clean_line)
+                            if progress and task_id is not None:
+                                # Update progress bar with current activity
+                                display_line = clean_line[:80] + "..." if len(clean_line) > 80 else clean_line
+                                progress.update(task_id, description=f"[cyan]{name}[/] [dim]({display_line})[/]")
+
+                                # Optional: Parse progress markers like [5/100] or 5% or Processing 5/100
+                                import re
+
+                                match = re.search(r"(\d+)/(\d+)", clean_line)
+                                if match:
+                                    current, total = map(int, match.groups())
+                                    progress.update(task_id, completed=current, total=total)
+                                elif "%" in clean_line:
+                                    pct_match = re.search(r"(\d+)%", clean_line)
+                                    if pct_match:
+                                        progress.update(task_id, completed=int(pct_match.group(1)), total=100)
+
+            process.wait()
 
             if process.returncode != 0:
-                raise subprocess.CalledProcessError(process.returncode, command, output="\n".join(stdout_lines), stderr="\n".join(stderr_lines))
+                raise subprocess.CalledProcessError(process.returncode, command, output="\n".join(stdout_lines))
 
             # Post-run validation and metric extraction
-            metrics: Dict[str, Any] = {"stdout_len": len("\n".join(stdout_lines))}
+            metrics: Dict[str, Any] = {"stdout_len": len("\n".join(stdout_lines)), "log_file": str(log_file_path)}
             output_hashes: Dict[str, str] = {}
             if validate_fn:
                 try:
@@ -202,26 +234,57 @@ class ProductionPipeline:
         except Exception:
             return {}
 
+    def snapshot_resolved_manifest(self):
+        """Generates a fully resolved manifest snapshot for replayability."""
+        import hashlib
+        import subprocess
+
+        settings = get_settings()
+        resolved = settings.model_dump(exclude={"summaries_dir"})
+
+        # Add Replay Context
+        resolved["replay_context"] = {"run_id": self.run_id, "timestamp": datetime.now().isoformat(), "git_commit": "unknown", "manifest_source": str(self.manifest_path), "foundation_hashes": {}}
+
+        # Hash Foundation Files (Index lists)
+        foundation_files = ["data/index/sp500_symbols.txt", "data/index/nasdaq100_symbols.txt", "data/index/dw30_symbols.txt"]
+        for f_path in foundation_files:
+            p = Path(f_path)
+            if p.exists():
+                sha = hashlib.sha256(p.read_bytes()).hexdigest()
+                resolved["replay_context"]["foundation_hashes"][f_path] = sha
+
+        try:
+            resolved["replay_context"]["git_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.STDOUT).decode().strip()
+        except Exception:
+            pass
+
+        snapshot_path = self.run_dir / "resolved_manifest.json"
+        with open(snapshot_path, "w") as f:
+            json.dump(resolved, f, indent=2, default=str)
+
+        self.console.print(f"[dim]Snapshot:[/] [green]✓[/] {snapshot_path.name}")
+
     def execute(self, start_step: int = 1):
         self.console.print("\n[bold cyan]🚀 Starting Production Pipeline[/]")
         self.console.print(f"[dim]Profile:[/] {self.profile} | [dim]Run ID:[/] {self.run_id} | [dim]Start Step:[/] {start_step}\n")
 
+        make_base = ["make", f"PROFILE={self.profile}", f"MANIFEST={self.manifest_path}"]
+
         all_steps: List[Tuple[str, List[str], Optional[Callable[[], Any]]]] = [
-            ("Cleanup", ["make", "clean-daily"], None),
-            ("Discovery", ["make", "scan-all"], self.validate_discovery),
-            ("Aggregation", ["make", "portfolio-prep-raw"], None),
-            ("Lightweight Prep", ["make", "prep", "LOOKBACK=60", "BATCH=5"], None),
-            ("Forensic Risk Audit", ["python", "scripts/audit_antifragility.py"], None),
-            ("Natural Selection", ["make", "select"], self.validate_selection),
-            ("Enrichment", ["make", "enrich-candidates"], None),
-            ("High-Integrity Alignment", ["make", "portfolio-align"], None),
-            ("Health Audit", ["make", "audit-health"], self.validate_health),
-            ("Factor Analysis", ["make", "corr-report"], None),
-            ("Regime Detection", ["make", "regime-check"], None),
-            ("Optimization", ["make", "optimize-v2"], self.validate_optimization),
-            ("Validation", ["make", "backtest-tournament"], None),
-            ("Reporting", ["make", "reports"], None),
-            ("Audit Integrity Check", ["python", "-m", "scripts.verify_ledger", str(self.run_dir / "audit.jsonl")], None),
+            ("Cleanup", [*make_base, "clean-run"], None),
+            ("Environment Check", [*make_base, "env-check"], None),
+            ("Discovery", [*make_base, "scan-run"], self.validate_discovery),
+            ("Aggregation", [*make_base, "data-prep-raw"], None),
+            ("Lightweight Prep", [*make_base, "data-fetch", "LOOKBACK=60", "BATCH=5"], None),
+            ("Natural Selection", [*make_base, "port-select"], self.validate_selection),
+            ("Enrichment", [*make_base, "meta-refresh"], None),
+            ("High-Integrity Preparation", [*make_base, "data-fetch"], None),
+            ("Health Audit", [*make_base, "data-audit", "STRICT_HEALTH=1"], self.validate_health),
+            ("Factor Analysis", [*make_base, "port-analyze"], None),
+            ("Optimization", [*make_base, "port-optimize"], self.validate_optimization),
+            ("Validation", [*make_base, "port-test"], None),
+            ("Reporting", [*make_base, "port-report"], None),
+            ("Gist Sync", [*make_base, "report-sync"], None),
         ]
 
         steps_to_run = all_steps[start_step - 1 :]
@@ -238,9 +301,16 @@ class ProductionPipeline:
             pipeline_task = progress.add_task("[bold green]Pipeline Progress", total=len(all_steps))
             progress.advance(pipeline_task, start_step - 1)
 
-            for name, cmd, val_fn in steps_to_run:
-                step_task = progress.add_task(f"[cyan]{name}", total=1)
-                success = self.run_step(name, cmd, validate_fn=val_fn, progress=progress, task_id=step_task)
+            for idx, (name, cmd, val_fn) in enumerate(steps_to_run):
+                # Calculate the absolute step index (start_step + current relative index)
+                absolute_step = start_step + idx
+
+                step_task = progress.add_task(f"[cyan]{name}", total=None)  # indeterminate by default
+                success = self.run_step(name, cmd, step_num=absolute_step, validate_fn=val_fn, progress=progress, task_id=step_task)
+
+                # Snapshot the manifest after Cleanup (Step 1)
+                if absolute_step == 1 and success:
+                    self.snapshot_resolved_manifest()
 
                 # Integrated Recovery for Step 8 (Health Audit)
                 if name == "Health Audit" and not success:
@@ -249,14 +319,17 @@ class ProductionPipeline:
                         self.ledger.record_intent(step="recovery", params={"trigger": "health_audit_fail"}, input_hashes={})
 
                     # Execute Recovery
-                    recovery_task = progress.add_task("[yellow]Self-Healing Recovery", total=1)
-                    if self.run_step("Recovery", ["make", "recover"], progress=progress, task_id=recovery_task):
+                    recovery_task = progress.add_task("[yellow]Self-Healing Recovery", total=None)
+                    if self.run_step("Recovery", [*make_base, "data-repair"], step_num=absolute_step, progress=progress, task_id=recovery_task):
                         progress.console.print("[bold green]>>> Recovery complete. Re-auditing health...[/]")
                         # Re-run Health Audit (Hard Gate)
-                        audit_retry_task = progress.add_task("[cyan]Health Audit (Post-Recovery)", total=1)
-                        if not self.run_step("Health Audit (Post-Recovery)", ["make", "audit-health"], validate_fn=self.validate_health, progress=progress, task_id=audit_retry_task):
+                        audit_retry_task = progress.add_task("[cyan]Health Audit (Post-Recovery)", total=None)
+                        if not self.run_step(
+                            "Health Audit (Post-Recovery)", [*make_base, "data-audit"], step_num=absolute_step, validate_fn=self.validate_health, progress=progress, task_id=audit_retry_task
+                        ):
                             progress.console.print("[bold red]FATAL: Health Audit failed even after recovery. Aborting.[/]")
                             sys.exit(1)
+
                     else:
                         progress.console.print("[bold red]FATAL: Recovery failed. Aborting.[/]")
                         sys.exit(1)

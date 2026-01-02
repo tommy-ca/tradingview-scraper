@@ -1,0 +1,12 @@
+# L4: Binance Alpha Trend (Composed)
+base_preset: ../../base/universes/binance_top50.yaml
+trend:
+  direction: "long"
+  logic: "AND"
+  adx: {enabled: false}
+  recommendation: {enabled: false}
+  momentum: {enabled: false}
+limit: 50
+export_metadata:
+  symbol: binance_alpha_trend
+  data_category: strategy_alpha

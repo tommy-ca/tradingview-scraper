@@ -1,7 +1,7 @@
 import logging
 import os
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, cast
 
 import exchange_calendars as xcals
 import pandas as pd
@@ -24,7 +24,7 @@ DEFAULT_EXCHANGE_METADATA = {
     "OKX": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO, "calendar": "XCRY"},
     "BYBIT": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO, "calendar": "XCRY"},
     "BITGET": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO, "calendar": "XCRY"},
-    "THINKMARKETS": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX, "calendar": "FX"},
+    "THINKMARKETS": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX, "calendar": "24/5"},
     "NASDAQ": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY, "calendar": "XNYS"},
     "NYSE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY, "calendar": "XNYS"},
     "AMEX": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY, "calendar": "XNYS"},
@@ -34,9 +34,11 @@ DEFAULT_EXCHANGE_METADATA = {
     "COMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "CMES"},
     "NYMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "CMES"},
     "ICE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "ICEUS"},
-    "OANDA": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FOREX, "calendar": "FX"},
-    "FX_IDC": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX, "calendar": "FX"},
-    "FOREX": {"timezone": "America/New_York", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX, "calendar": "FX"},
+    "ICEUS": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "ICEUS"},
+    "EUREX": {"timezone": "Europe/Berlin", "is_crypto": False, "country": "Germany", "profile": DataProfile.FUTURES, "calendar": "XFRA"},
+    "OANDA": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FOREX, "calendar": "24/5"},
+    "FX_IDC": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX, "calendar": "24/5"},
+    "FOREX": {"timezone": "America/New_York", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX, "calendar": "24/5"},
 }
 
 
@@ -53,7 +55,7 @@ def get_exchange_calendar(symbol: str, profile: DataProfile = DataProfile.UNKNOW
     elif profile == DataProfile.CRYPTO:
         cal_name = "XCRY"
     elif profile == DataProfile.FOREX:
-        cal_name = "FX"
+        cal_name = "24/5"
 
     try:
         return xcals.get_calendar(cal_name)
@@ -70,7 +72,9 @@ def get_us_holidays(year: int) -> Set[str]:
 
     # xcals defines 'holidays' as actual closure days
     all_days = pd.date_range(start, end)
-    business_days = cal.sessions_in_range(start, end)
+
+    # Cast to ensure these are valid Timestamps for exchange_calendars
+    business_days = cal.sessions_in_range(cast(pd.Timestamp, start), cast(pd.Timestamp, end))
     holidays = all_days[~all_days.isin(business_days)]
 
     # Filter for weekdays only to get literal holidays (not weekends)

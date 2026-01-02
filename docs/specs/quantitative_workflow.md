@@ -5,100 +5,42 @@
 ## 1. Overview
 This document defines the standardized pipeline for transforming raw market data into an optimized, multi-asset portfolio. The workflow is unified under a 13-step production sequence.
 
-## 2. The 14-Step Production Sequence
+## 2. The 15-Step Production Sequence
 
 The entire production lifecycle is managed via the **Python Orchestrator** (`scripts/run_production_pipeline.py`) and follows this rigorous sequence:
 
-1.  **Cleanup**: Wipe previous artifacts and intermediate files (`data/lakehouse/portfolio_*`) to ensure a clean state.
-2. **Discovery**: Run multi-asset scanners (Equities, Crypto, Bonds, MTF Forex) in parallel. **Validation Gate**: Verifies non-empty results in `export/` and logs `n_discovery_files`.
-3. **Aggregation**: Consolidate scans into a **Raw Pool** with canonical identity merging. Produces `portfolio_candidates_raw.json` with rich metadata.
-4. **Lightweight Prep**: Fetch **60-day** history for the raw pool.
-5. **Natural Selection (Pruning)**: Hierarchical clustering + Global XS Ranking. **Validation Gate**: Verifies survival count and logs `n_selected_symbols`.
-...
-8. **Health Audit**: Validate 100% gap-free alignment. **Self-Healing Loop**: If the audit fails, the orchestrator automatically triggers `make recover` and re-validates. Logs detailed `n_missing`, `n_stale`, and `n_degraded` metrics.
-...
-11. **Optimization**: Cluster-Aware V2 allocation with Turnover Control. **Validation Gate**: Verifies successful generation of all requested profiles (`optimized_profiles`).
-
-12. **Validation**: Run `make tournament` to benchmark multiple optimization backends across idealized and high-fidelity simulators (200d realized target). Must include **Cumulative Transition Friction** analysis to quantify rotation costs.
-13. **Reporting**: Generate QuantStats Markdown Tear-sheets, Strategy Resume, Alpha Isolation Audit, and sync essential artifacts to private Gist via `make finalize`.
-14. **Audit Integrity Check**: Final cryptographic signature check of the run's decision ledger (`audit.jsonl`).
-
-## 3. Resumability & Orchestration
-
-The orchestrator supports **Stateful Resumability** to minimize compute waste during pipeline failures.
-```bash
-# Resume from Step 11 (Optimization) using a specific Run ID
-uv run python -m scripts.run_production_pipeline --profile production --start-step 11 --run-id 20251231-150000
-```
-
-## 4. Audit & Reproducibility (Requirement)
-Every stage of the pipeline must contribute to the **Immutable Audit Ledger** (`audit.jsonl`).
-- **Intent Logging**: Scripts must log their expected inputs and parameters before starting.
-- **Outcome Verification**: Scripts must log the SHA-256 hashes of all generated DataFrames and JSON artifacts.
-- **Lineage**: The ledger must maintain a cryptographic chain from the Genesis manifest to the final portfolio reports.
-
-### Stage 1: Discovery & Scans
-*   **Tools**: `tradingview_scraper.futures_universe_selector`, `tradingview_scraper.cfd_universe_selector`, `tradingview_scraper.bond_universe_selector`
-*   **Entry point**: `make scan-all` (alias: `make scans`) (local + crypto scans, plus bonds + Forex MTF)
-*   **Forex base universe audit (optional)**: `make forex-analyze` (runs `scan-forex-base`, filters to majors-only pairs, dedupes venues, excludes IG-only singleton pairs, and writes a tradable-pairs report + data health + hierarchical clusters under `artifacts/summaries/runs/<RUN_ID>/`).
-*   **Config preflight**: `make scan-lint` (or `uv run scripts/lint_universe_configs.py --strict`) before running scans/CI.
-*   **Input**: `configs/*.yaml` strategy configs (trend, mean reversion, MTF)
-*   **Output**: `export/<run_id>/universe_selector_*.json` scan results (`{meta,data}` envelope; set `TV_EXPORT_RUN_ID` to scope a run)
-*   **US equities note**: Avoid the TradingView screener field `index` (can return HTTP 400 "Unknown field"); constrain with `include_symbol_files` (e.g. `data/index/sp500_symbols.txt`).
-
-### Stage 2: Strategy Filtering (Signal Generation)
-*   **Process**: Applies technical strategy rules (Trend Momentum, Mean Reversion) to the Base Universe.
-*   **Base universe principle**: keep strategy-neutral filters (liquidity, volatility, data completeness) separate from directional filters, so strategies can be layered on top of a stable tradable set.
-*   **Parameters**: ADX thresholds, RSI levels, Performance horizons (1W, 1M, 3M).
-*   *Note*: Short signals are identified for trend-reversal or defensive positioning.
-
-### Stage 3: Natural Selection (Pruning)
-*   **Tool**: `scripts/natural_selection.py`
-*   **Process**: Performs hierarchical clustering on Pass 1 (60d) data. Selects the Top N assets per cluster based on **Execution Intelligence** (Liquidity + Momentum + Convexity).
-*   **Health gate**: `make prune` runs `scripts/validate_portfolio_artifacts.py --mode raw --only-health` after the Pass 1 backfill; this is the first hard stop for STALE/MISSING assets.
-*   **Identity Merging**: Canonical venue merging happens here to avoid redundant exchange risk (e.g., BTC across 5 exchanges).
-
-### Stage 4: Risk Optimization (Clustered V2)
-*   **Tool**: `scripts/optimize_clustered_v2.py`
-*   **Process**: Optimizes weights across clusters using hierarchical risk buckets. Supports **Min Variance, Risk Parity, Max Sharpe, and Barbell** profiles.
-*   **Insulation**: Strictly enforced 25% systemic cap per cluster.
-
-### Stage 5: Validation & Backtesting
-*   **Tool**: `scripts/backtest_engine.py`
-*   **Process**: 13th Step of the production lifecycle. Performs a Walk-Forward validation to verify realized volatility and returns against the optimizer's goals.
-*   **Target Achievement**: Automatically audits if `MIN_VARIANCE` actually delivered lower volatility than other profiles during the test period.
-
-### Stage 6: Implementation & Reporting
-*   **Output**: Implementation Dashboard (`make display`), Strategy Resume (`artifacts/summaries/latest/backtest_comparison.md`), and Audit Log (`artifacts/summaries/latest/selection_audit.md`).
-*   **Publishing**: `make gist` syncs `artifacts/summaries/latest/` (a symlink to the last successful finalized run) to a private GitHub Gist (skips sync if missing/empty unless `GIST_ALLOW_EMPTY=1`).
+1.  **Cleanup**: Wipe incremental artifacts (`make clean-run`).
+2.  **Environment Check**: Validate manifest and configuration integrity (`make env-check`).
+3.  **Discovery**: Execute composable discovery scanners (`make scan-run`).
+4.  **Aggregation**: Consolidate scans into a Raw Pool (`make data-prep-raw`).
+5.  **Lightweight Prep**: Fetch 60-day history for analysis (`make data-fetch LOOKBACK=60`).
+6.  **Natural Selection**: Hierarchical clustering & XS Ranking (`make port-select`).
+7.  **Enrichment**: Propagate metadata and descriptions (`make meta-refresh`).
+8.  **High-Integrity Prep**: Fetch 500-day secular history for winners (`make data-fetch LOOKBACK=500`).
+9.  **Health Audit**: Validate 100% gap-free alignment (`make data-audit`).
+10. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
+11. **Optimization**: Cluster-Aware allocation with Turnover Control (`make port-optimize`).
+12. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`).
+13. **Reporting**: QuantStats Tear-sheets & Alpha Audit (`make port-report`).
+14. **Gist Sync**: Synchronize essential artifacts to private Gist (`make report-sync`).
+15. **Audit Verification**: Final cryptographic signature check of the decision ledger.
 
 ## 3. Automation Commands
 ```bash
-# Daily incremental run (recommended; preserves cache/state; includes gist preflight)
-make run-daily   # alias: make daily-run
+# Full institutional production lifecycle
+make flow-production
 
-# Optional metadata gates (build + audit catalogs before portfolio run)
-make run-daily META_REFRESH=1 META_AUDIT=1   # refresh + offline audits (PIT + timezone)
-make run-daily META_REFRESH=1 META_AUDIT=2   # includes online TradingView parity sample
+# Rapid iteration development execution
+make flow-dev
 
-# Full reset run (blank slate)
-make run-clean   # alias: make clean-run
-
-# After implementing new target weights
-make portfolio-accept-state   # alias: make accept-state
-
-# Metadata-only workflows
-make meta-validate            # refresh + offline audits
-make meta-audit               # offline + online parity sample
-
-# Or step-by-step (tiered selection + analysis + finalize)
-make scan-lint                # validate configs first
-make scan-all                 # alias: make scans
-make prep-raw  # best-effort raw health check (may be stale before backfill)
-make prune TOP_N=3 THRESHOLD=0.4
-make align LOOKBACK=200
-make analyze
-make finalize
+# Individual Namespace Commands:
+make env-sync       # Sync dependencies
+make scan-run       # Run discovery scanners
+make data-fetch     # Ingest market data
+make data-repair    # High-intensity gap repair
+make port-select    # Prune and select candidates
+make port-optimize  # Convex risk allocation
+make port-test      # Run benchmarking tournament
 ```
 
 ### Forex Base Universe Audit (Debugging)

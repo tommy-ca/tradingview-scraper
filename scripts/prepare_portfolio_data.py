@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import math
@@ -9,7 +10,9 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
+from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("portfolio_data_prep")
@@ -21,13 +24,22 @@ def prepare_portfolio_universe():
     Loads historical data for candidates sanctioned by the Discovery Consolidator.
     Strictly follows the portfolio_candidates_raw.json manifest.
     """
+
+    active_settings = get_settings()
+    run_dir = active_settings.prepare_summaries_run_dir()
+    ledger = AuditLedger(run_dir) if active_settings.features.feat_audit_ledger else None
+
     # 1. Load sanctioned candidates
-    preselected_file = os.getenv("CANDIDATES_FILE", "data/lakehouse/portfolio_candidates_raw.json")
+    preselected_file = os.getenv("CANDIDATES_FILE", "data/lakehouse/portfolio_candidates.json")
     if not os.path.exists(preselected_file):
-        logger.error(f"Sanctioned candidate manifest missing: {preselected_file}")
+        logger.warning(f"Sanctioned candidate manifest missing: {preselected_file}. Falling back to raw manifest.")
+        preselected_file = "data/lakehouse/portfolio_candidates_raw.json"
+
+    if not os.path.exists(preselected_file):
+        logger.error("No candidate manifest found.")
         return
 
-    logger.info(f"Loading sanctioned candidates from {preselected_file}")
+    logger.info(f"Loading candidates from {preselected_file}")
     with open(preselected_file, "r") as f:
         universe = json.load(f)
 
@@ -35,36 +47,26 @@ def prepare_portfolio_universe():
         logger.error("No candidates found in manifest.")
         return
 
+    if ledger:
+        u_hash = hashlib.sha256(json.dumps(universe, sort_keys=True).encode()).hexdigest()
+        ledger.record_intent(
+            step="data_prep",
+            params={"lookback_days": int(os.getenv("PORTFOLIO_LOOKBACK_DAYS", "120"))},
+            input_hashes={"candidates_manifest": u_hash},
+        )
+
     # 2. Benchmark Enforcement
-    # Always ensure benchmarks are in candidates and LONG
-    from tradingview_scraper.settings import get_settings
-
-    settings = get_settings()
-
     universe_symbols = {c["symbol"] for c in universe}
-    for b_sym in settings.benchmark_symbols:
+    for b_sym in active_settings.benchmark_symbols:
         if b_sym not in universe_symbols:
-            logger.info("Ensuring benchmark symbol %s is LONG.", b_sym)
-            universe.append(
-                {
-                    "symbol": b_sym,
-                    "description": f"Benchmark ({b_sym})",
-                    "sector": "INDEX",
-                    "market": "BENCHMARK",
-                    "asset_class": "BENCHMARK",
-                    "identity": b_sym,
-                    "direction": "LONG",
-                    "is_baseline": True,
-                    "value_traded": 1e12,
-                }
-            )
+            universe.append({"symbol": b_sym, "direction": "LONG", "is_benchmark": True})
 
     logger.info(f"Portfolio Universe: {len(universe)} symbols.")
 
     # 3. Fetch Historical Data
     loader = PersistentDataLoader()
     end_date = datetime.now()
-    lookback_days = int(os.getenv("PORTFOLIO_LOOKBACK_DAYS", "120"))
+    lookback_days = int(os.getenv("PORTFOLIO_LOOKBACK_DAYS", "365"))
     start_date = end_date - timedelta(days=lookback_days)
 
     price_data = {}
@@ -107,16 +109,17 @@ def prepare_portfolio_universe():
 
         if (os.getenv("PORTFOLIO_BACKFILL", "0") == "1") and (is_stale or force_sync):
             try:
-                bf_depth = min(lookback_days + 20, 500)
+                # Deep Sync: request up to 1000 candles to ensure full coverage of 2025 and beyond
+                bf_depth = max(lookback_days + 50, 1000)
                 logger.info(f"Backfilling {symbol} (depth={bf_depth})...")
-                run_with_retry(lambda: local_loader.sync(symbol, interval="1d", depth=bf_depth, total_timeout=180), f"Backfill {symbol}")
+                run_with_retry(lambda: local_loader.sync(symbol, interval="1d", depth=bf_depth, total_timeout=300), f"Backfill {symbol}")
             except Exception as e:
                 logger.error(f"Backfill failed for {symbol}: {e}")
 
         if (os.getenv("PORTFOLIO_GAPFILL", "0") == "1") and (is_stale or force_sync):
             try:
-                logger.info(f"Gap filling {symbol} (max_depth=500)...")
-                run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=500, max_fills=20, max_time=120, total_timeout=120), f"Gap fill {symbol}")
+                logger.info(f"Gap filling {symbol} (max_depth=1000)...")
+                run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=1000, max_fills=20, max_time=180, total_timeout=180), f"Gap fill {symbol}")
             except Exception as e:
                 logger.error(f"Gap fill failed for {symbol}: {e}")
 
@@ -182,7 +185,11 @@ def prepare_portfolio_universe():
     returns_df = returns_df.fillna(0.0)
 
     # Drop zero-variance noise
-    zero_vars = [str(c) for c, v in returns_df.var().items() if v == 0]
+    variances = returns_df.var()
+    zero_vars = []
+    if not isinstance(variances, (float, int)):
+        zero_vars = [str(c) for c, v in variances.items() if v == 0]
+
     if zero_vars:
         returns_df = returns_df.drop(columns=zero_vars)
         logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
@@ -207,6 +214,14 @@ def prepare_portfolio_universe():
     returns_df.to_pickle("data/lakehouse/portfolio_returns.pkl")
     with open("data/lakehouse/portfolio_meta.json", "w") as f:
         json.dump(alpha_meta, f, indent=2)
+
+    if ledger:
+        ledger.record_outcome(
+            step="data_prep",
+            status="success",
+            output_hashes={"returns_matrix": get_df_hash(returns_df)},
+            metrics={"shape": returns_df.shape, "n_symbols": len(returns_df.columns)},
+        )
 
     print("\n" + "=" * 50)
     print("PORTFOLIO UNIVERSE PREPARED")

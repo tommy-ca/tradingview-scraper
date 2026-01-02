@@ -127,19 +127,31 @@ class PortfolioAuditor:
 
             is_fresh = False
             if last_ts:
-                last_dt = datetime.fromtimestamp(last_ts)
-                age_hours = (now - last_dt).total_seconds() / 3600
+                last_dt = pd.Timestamp(last_ts, unit="s", tz="UTC")
+                age_hours = (now.astimezone(last_dt.tz) - last_dt).total_seconds() / 3600
                 if profile == DataProfile.CRYPTO:
                     is_fresh = age_hours <= FRESHNESS_THRESHOLD_HOURS
                 else:
                     # TradFi: Be more lenient during known holidays/weekends
-                    # Use a date-based diff instead of pure hours
-                    last_date = last_dt.date()
+                    # Use Market-Day normalization: 22:00 UTC belongs to NEXT day
+                    def to_market_date(dt):
+                        if profile in [DataProfile.FOREX, DataProfile.FUTURES] and dt.hour >= 20:
+                            return (dt + timedelta(hours=4)).date()
+                        return dt.date()
+
+                    last_market_date = to_market_date(last_dt)
                     today = now.date()
 
-                    # If today is Monday or Tuesday after a long weekend, Friday data is fine (diff <= 4)
-                    # Increased to 5 days to be safe for long institutional holiday breaks
-                    is_fresh = (today - last_date).days <= FRESHNESS_THRESHOLD_DAYS_TRADFI
+                    if last_market_date:
+                        try:
+                            from typing import Any
+
+                            d1: Any = today
+                            d2: Any = last_market_date
+                            diff_days = (d1 - d2).days
+                            is_fresh = diff_days <= FRESHNESS_THRESHOLD_DAYS_TRADFI
+                        except Exception:
+                            is_fresh = False
 
             if not is_fresh:
                 self._record(profile, symbol, "STALE", last_ts)
@@ -155,12 +167,23 @@ class PortfolioAuditor:
                 status = "OK (MARKET CLOSED)"
 
             if symbol not in returns_symbols:
-                status = "DROPPED"
+                if mode == "selected":
+                    status = "DROPPED"
+                else:
+                    # In raw mode, symbols might not be in returns yet because returns are built AFTER validation usually
+                    # But if we are validating strictly, we might care.
+                    # For now, "DROPPED" is confusing for raw mode if it just means "not yet processed"
+                    # But the logic below says if mode == "raw", critical_health ignores "DROPPED".
+                    # Let's keep it but clarify for raw mode.
+                    pass
 
             self._record(profile, symbol, status, last_ts, len(recent_gaps))
 
         if self.summary["total"] == 0:
             logger.error("❌ No candidates found to validate. Check scanner outputs.")
+            # In development/raw mode, if scanners returned 0 results, this is a valid failure state
+            # but we shouldn't crash the script if we want to debug.
+            # However, for the pipeline, 0 candidates means we can't proceed.
             return False
 
         self._print_health_dashboard()

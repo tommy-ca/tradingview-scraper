@@ -309,6 +309,15 @@ class SelectionEngineV3(BaseSelectionEngine):
         er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].values[-lookback:]) for s in returns.columns})
         hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].values) for s in returns.columns})
 
+        from tradingview_scraper.utils.predictability import calculate_dwt_turbulence, calculate_stationarity_score
+
+        dwt_all = pd.Series({s: calculate_dwt_turbulence(returns[s].values[-lookback:]) for s in returns.columns})
+        adf_all = pd.Series({s: calculate_stationarity_score(returns[s].values[-lookback:]) for s in returns.columns})
+
+        # Higher-Order Moments
+        skew_all = returns.skew()
+        kurt_all = returns.kurtosis()
+
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
             if common:
@@ -416,10 +425,14 @@ class SelectionEngineV3(BaseSelectionEngine):
             if str(s) in disqualified:
                 continue
             meta = candidate_map.get(str(s), {})
-            adv = float(meta.get("value_traded") or meta.get("Value.Traded") or 1e-9)
+            # Use institutional floor if ADV is missing or near-zero
+            adv = float(meta.get("value_traded") or meta.get("Value.Traded") or 1e8)
+            if adv <= 0:
+                adv = 1e8
 
             vol_val = float(vol_all[s]) if s in vol_all.index else 0.5
-            eci = float(vol_val * np.sqrt(order_size / adv))
+            # Cap ECI impact at 10% to prevent numerical blowups in illiquid data
+            eci = min(0.10, float(vol_val * np.sqrt(order_size / adv)))
 
             annual_alpha = float(mom_all[s]) if s in mom_all.index else 0.0
             if annual_alpha - eci < self.eci_hurdle:
@@ -449,6 +462,10 @@ class SelectionEngineV3(BaseSelectionEngine):
             "entropy": pe_all.to_dict(),
             "hurst": hurst_all.to_dict(),
             "fragility": frag_all.to_dict(),
+            "skew": skew_all.to_dict(),
+            "kurtosis": kurt_all.to_dict(),
+            "dwt": dwt_all.to_dict(),
+            "adf": adf_all.to_dict(),
         }
 
         # HPO Support: Record raw component probabilities P_i

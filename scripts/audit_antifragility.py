@@ -10,6 +10,7 @@ import yaml
 from tradingview_scraper.risk import AntifragilityAuditor, TailRiskAuditor
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.stream.metadata import DataProfile, get_exchange_calendar, get_symbol_profile
+from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("antifragility_audit")
@@ -123,18 +124,36 @@ def calculate_regime_survival(returns: pd.DataFrame) -> pd.DataFrame:
 
 def audit_portfolio_fragility():
     # 1. Load Returns
+
     returns_path = "data/lakehouse/portfolio_returns.pkl"
+
     meta_path = "data/lakehouse/portfolio_meta.json"
+
+    settings = get_settings()
+
+    run_dir = settings.prepare_summaries_run_dir()
+
+    ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
 
     if not os.path.exists(returns_path):
         logger.error("Returns matrix missing.")
+
         return
 
     returns = pd.read_pickle(returns_path)
+
     with open(meta_path, "r") as f:
         meta = json.load(f)
 
+    if ledger:
+        ledger.record_intent(
+            step="forensic_audit",
+            params={"audit_type": "antifragility_tail_risk"},
+            input_hashes={"returns_matrix": get_df_hash(returns)},
+        )
+
     # Filter valid columns
+
     returns = returns.loc[:, (returns != 0).any(axis=0)]
 
     # --- GATE 1: CALENDAR-AWARE HEALTH CHECK ---
@@ -204,9 +223,17 @@ def audit_portfolio_fragility():
     print("\n[Bottom 10 Most Fragile Assets (Composite Fragility Score)]")
     print(df.sort_values("Fragility_Score", ascending=False).head(10)[["Symbol", "Direction", "Fragility_Score", "Regime_Survival_Score", "Skew"]].to_string(index=False))
 
-    # Save for MPS Selection
+    # Save for Barbell Optimizer and Reporting
     df.to_json("data/lakehouse/antifragility_stats.json")
     print("\nSaved comprehensive risk stats to data/lakehouse/antifragility_stats.json")
+
+    if ledger:
+        ledger.record_outcome(
+            step="forensic_audit",
+            status="success",
+            output_hashes={"antifragility_stats": get_df_hash(df)},
+            metrics={"n_assets": len(df), "avg_fragility": float(df["Fragility_Score"].mean())},
+        )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import secrets
 import string
 
@@ -33,12 +34,15 @@ async def test_async_ws():
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         raw_data = msg.data
-                        if "~h~" in raw_data:
-                            logger.info(f"Received Heartbeat: {raw_data}")
-                            await ws.send_str(raw_data)
-                            logger.info("Echoed Heartbeat")
-                        else:
-                            logger.info(f"Received Data: {raw_data[:100]}...")
+                        parts = [x for x in re.split(r"~m~\d+~m~", raw_data) if x]
+                        for p in parts:
+                            if p.startswith("~h~"):
+                                logger.info(f"Received Heartbeat: {p}")
+                                echo_msg = f"~m~{len(p)}~m~{p}"
+                                await ws.send_str(echo_msg)
+                                logger.info("Echoed Heartbeat")
+                            else:
+                                logger.info(f"Received Data: {p[:100]}...")
                     elif msg.type == aiohttp.WSMsgType.CLOSED:
                         break
                     elif msg.type == aiohttp.WSMsgType.ERROR:

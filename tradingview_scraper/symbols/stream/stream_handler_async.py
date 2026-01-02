@@ -120,29 +120,50 @@ class AsyncStreamHandler:
         self._listen_task = asyncio.create_task(self._listen_loop())
 
     async def _listen_loop(self):
+        heartbeat_count = 0
         while True:
             if not self.ws or self.ws.closed:
                 break
 
-            msg = await self.ws.receive()
+            try:
+                msg = await self.ws.receive()
 
-            if msg.type == aiohttp.WSMsgType.TEXT:
-                raw_data = msg.data
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    raw_data = msg.data
 
-                # Heartbeat handling: ~m~<length>~m~~h~<id>
-                if "~h~" in raw_data:
-                    logger.debug(f"Received heartbeat: {raw_data}, echoing back")
-                    await self.ws.send_str(raw_data)
-                    continue
+                    # Split messages (TradingView sometimes batches them)
+                    # Messages look like ~m~<length>~m~<content>
+                    parts = [x for x in re.split(r"~m~\d+~m~", raw_data) if x]
 
-                # Split messages (TradingView sometimes batches them)
-                messages = [x for x in re.split(r"~m~\d+~m~", raw_data) if x]
-                for m in messages:
-                    try:
-                        await self.data_queue.put(json.loads(m))
-                    except json.JSONDecodeError:
-                        logger.error(f"Failed to decode message: {m}")
-            elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSING):
+                    if not parts:
+                        continue
+
+                    has_data = False
+                    for p in parts:
+                        if p.startswith("~h~"):
+                            logger.debug(f"Received heartbeat: {p}, echoing back")
+                            # Construct full packet for echo
+                            echo_msg = f"~m~{len(p)}~m~{p}"
+                            await self.ws.send_str(echo_msg)
+                            heartbeat_count += 1
+                        else:
+                            try:
+                                await self.data_queue.put(json.loads(p))
+                                has_data = True
+                            except json.JSONDecodeError:
+                                logger.error(f"Failed to decode message: {p}")
+
+                    if has_data:
+                        heartbeat_count = 0
+
+                    if heartbeat_count >= 5:
+                        logger.warning("Received 5 consecutive heartbeats without data. Triggering reconnection.")
+                        break
+
+                elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR, aiohttp.WSMsgType.CLOSING):
+                    break
+            except Exception as e:
+                logger.error(f"Error in async listen loop: {e}")
                 break
 
         await self.data_queue.put(None)  # Signal end of stream/connection lost

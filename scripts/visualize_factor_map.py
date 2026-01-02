@@ -67,7 +67,16 @@ def generate_factor_map():
     dist = np.sqrt(0.5 * (1 - corr.clip(-1, 1)))
 
     # 3. MDS Projection to 2D
-    mds = MDS(n_components=2, dissimilarity="precomputed", random_state=42, normalized_stress="auto")
+    # Explicitly set n_init and init to suppress FutureWarnings from newer sklearn versions.
+    # 'dissimilarity' is deprecated in favor of 'metric' in sklearn 1.4+.
+    mds = MDS(
+        n_components=2,
+        metric="precomputed",
+        n_init=4,
+        init="random",
+        random_state=42,
+        normalized_stress="auto",
+    )
     coords = mds.fit_transform(dist.values)
 
     # 4. Plotting

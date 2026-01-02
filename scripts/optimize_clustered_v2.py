@@ -166,14 +166,8 @@ class ClusteredOptimizerV2:
         # Dynamic Regime Scaling
         settings = get_settings()
         if settings.features.feat_spectral_regimes:
-            if regime == "QUIET":
-                agg_weight = 0.15
-            elif regime == "TURBULENT":
-                agg_weight = 0.08
-            elif regime == "CRISIS":
-                agg_weight = 0.05
-            else:  # NORMAL
-                agg_weight = 0.10
+            # Map standard Barbell REGIME_SPLITS
+            agg_weight = {"QUIET": 0.15, "NORMAL": 0.10, "TURBULENT": 0.05, "CRISIS": 0.03}.get(regime, 0.10)
         else:
             agg_weight = 0.30
 
@@ -181,23 +175,97 @@ class ClusteredOptimizerV2:
 
         core_c_ids = [c for c in self.clusters.keys() if c not in aggressor_ids]
         core_cols = [f"Cluster_{c}" for c in core_c_ids if f"Cluster_{c}" in self.cluster_benchmarks.columns]
+        agg_cols = [f"Cluster_{c}" for c in aggressor_ids if f"Cluster_{c}" in self.cluster_benchmarks.columns]
 
         if not core_cols:
             # Fallback to simple optimization if core is empty
             return self.run_profile("risk_parity", "risk_parity", cluster_cap)
 
+        # 1. Optimize Core Sleeve (Risk Parity)
         w_core = self._solve_cvxpy_direct(cast(pd.DataFrame, self.cluster_benchmarks[core_cols]), "risk_parity", cluster_cap)
         w_core_series = pd.Series(w_core * core_weight, index=core_cols)
 
-        w_agg_series = pd.Series(agg_weight / len(aggressor_ids), index=[f"Cluster_{c}" for c in aggressor_ids])
+        # 2. Optimize Aggressor Sleeve (Max Sharpe or high-alpha objective)
+        # Note: Aggressor sleeve has no cluster_cap constraint to allow concentration in the 'best' buckets
+        w_agg = self._solve_cvxpy_direct(cast(pd.DataFrame, self.cluster_benchmarks[agg_cols]), "max_sharpe", 1.0)
+        w_agg_series = pd.Series(w_agg * agg_weight, index=agg_cols)
+
+        # Combined Cluster Weights
+        cluster_weights = pd.concat([w_core_series, w_agg_series])
+
+        # Force unique symbol per aggressor cluster for the Aggressor sleeve
+        # but allow Core to remain diversified.
+        aggressor_symbols = []
+        for c_id in aggressor_ids:
+            symbols = self.clusters[c_id]
+            valid = [s for s in symbols if s in self.returns.columns]
+            if not valid:
+                continue
+            common = [s for s in valid if s in self.stats["Symbol"].values]
+            if common:
+                lead = self.stats.set_index("Symbol").loc[common, "Antifragility_Score"].idxmax()
+                aggressor_symbols.append(lead)
+
+        # Build final rows
+        rows = []
+        # Add Core assets (Normal intra-cluster weighting)
+        for c_col, c_w in w_core_series.items():
+            if float(c_w) < 1e-6:
+                continue
+            c_id = str(c_col).replace("Cluster_", "")
+            intra_w = self.intra_cluster_weights[c_id]
+            for sym, s_w in intra_w.items():
+                final_w = c_w * s_w
+                if final_w < 1e-6:
+                    continue
+                m = self.meta.get(sym, {})
+                direction = m.get("direction", "LONG")
+                rows.append(
+                    {
+                        "Symbol": sym,
+                        "Weight": final_w,
+                        "Net_Weight": final_w * (1.0 if direction == "LONG" else -1.0),
+                        "Direction": direction,
+                        "Cluster_ID": c_id,
+                        "Type": "CORE",
+                        "Description": m.get("description", "N/A"),
+                        "Sector": m.get("sector", "N/A"),
+                        "Market": m.get("market", "UNKNOWN"),
+                    }
+                )
+
+        # Add Aggressor assets (Lead only, using its sleeve optimization weight)
+        for c_col, c_w in w_agg_series.items():
+            if float(c_w) < 1e-6:
+                continue
+            c_id = str(c_col).replace("Cluster_", "")
+            # Find lead asset for this cluster
+            symbols = self.clusters[c_id]
+            valid = [s for s in symbols if s in self.returns.columns]
+            common = [s for s in valid if s in self.stats["Symbol"].values]
+            if common:
+                lead = self.stats.set_index("Symbol").loc[common, "Antifragility_Score"].idxmax()
+                m = self.meta.get(lead, {})
+                direction = m.get("direction", "LONG")
+                rows.append(
+                    {
+                        "Symbol": lead,
+                        "Weight": float(c_w),
+                        "Net_Weight": float(c_w) * (1.0 if direction == "LONG" else -1.0),
+                        "Direction": direction,
+                        "Cluster_ID": c_id,
+                        "Type": "AGGRESSOR",
+                        "Description": m.get("description", "N/A"),
+                        "Sector": m.get("sector", "N/A"),
+                        "Market": m.get("market", "UNKNOWN"),
+                    }
+                )
 
         self.last_aggressor_ids = [str(c) for c in aggressor_ids]
-        cluster_weights = pd.concat([w_core_series, w_agg_series])
-        weights_df = self._build_final_weights(cluster_weights)
+        return pd.DataFrame(rows).sort_values("Weight", ascending=False)
 
-        # Add Type to assets for audit
-        weights_df["Type"] = weights_df["Cluster_ID"].apply(lambda x: "AGGRESSOR" if str(x) in self.last_aggressor_ids else "CORE")
-        return weights_df
+        self.last_aggressor_ids = [str(c) for c in aggressor_ids]
+        return pd.DataFrame(rows).sort_values("Weight", ascending=False)
 
     def optimize_across_clusters(self, method: str, cluster_cap: float = 0.25, prev_weights: Optional[pd.Series] = None) -> pd.Series:
         if self.cluster_benchmarks.empty:
@@ -214,7 +282,14 @@ class ClusteredOptimizerV2:
         n = benchmarks.shape[1]
         cov = self._get_cov(benchmarks)
         mu = np.asarray(benchmarks.mean(), dtype=float) * 252
-        penalties = np.array([self.cluster_stats[str(c_col).replace("Cluster_", "")]["fragility"] for c_col in benchmarks.columns])
+
+        # Safe lookup for penalties
+        penalty_list = []
+        for c_col in benchmarks.columns:
+            c_id = str(c_col).replace("Cluster_", "")
+            frag = self.cluster_stats.get(c_id, {}).get("fragility", 1.0)
+            penalty_list.append(frag)
+        penalties = np.array(penalty_list)
 
         w = cp.Variable(n)
         risk = cp.quad_form(w, cov)
@@ -348,7 +423,7 @@ if __name__ == "__main__":
                     "Net_Weight": float(net),
                     "Lead_Asset": sub.iloc[0]["Symbol"],
                     "Asset_Count": len(sub),
-                    "Type": "AGGRESSOR" if str(c_id) in optimizer.last_aggressor_ids else "CORE",
+                    "Type": sub.iloc[0]["Type"],
                     "Sectors": list(sub["Sector"].unique()),
                 }
             )

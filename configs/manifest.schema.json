@@ -77,7 +77,19 @@
           "properties": {
             "enabled_markets": {
               "type": "array",
-              "items": { "type": "string", "enum": ["futures", "crypto", "cfd", "forex", "bonds", "etf"] }
+              "items": { "type": "string", "enum": ["futures", "crypto", "cfd", "forex", "bonds", "etf", "america"] }
+            },
+            "pipelines": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "scanners": { "type": "array", "items": { "type": "string" } },
+                  "interval": { "type": "string", "enum": ["1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"] },
+                  "ingestion_depth": { "type": "integer", "minimum": 1 },
+                  "strict_health": { "type": "boolean" }
+                }
+              }
             }
           },
           "additionalProperties": {

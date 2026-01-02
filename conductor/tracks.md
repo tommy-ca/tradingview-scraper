@@ -9,7 +9,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Arbitrage and Multi-Quote Pair Exploration
+## [x] Track: Arbitrage and Multi-Quote Pair Exploration
 *Link: [./conductor/tracks/arbitrage_exploration_20251220/](./conductor/tracks/arbitrage_exploration_20251220/)*
 
 ---
@@ -73,17 +73,17 @@ This file tracks all major tracks for the project. Each track has its own detail
 *Link: [./conductor/tracks/universe_selector_guards_20251220/](./conductor/tracks/universe_selector_guards_20251220/)*
 --- 
 
-## [ ] Track: Alternative Technical Indicators & Detailed Analysis Research
+## [x] Track: Alternative Technical Indicators & Detailed Analysis Research
 *Link: [./conductor/tracks/alternative_technicals_research_20251220/](./conductor/tracks/alternative_technicals_research_20251220/)*
 
 --- 
 
-## [ ] Track: Historical Candle Resolution & Depth Mapping
+## [x] Track: Historical Candle Resolution & Depth Mapping
 *Link: [./conductor/tracks/resolution_research_20251220/](./conductor/tracks/resolution_research_20251220/)*
 
 ---
 
-## [ ] Track: Consolidation of Research Learnings into Library & Tests
+## [x] Track: Consolidation of Research Learnings into Library & Tests
 *Link: [./conductor/tracks/research_consolidation_20251220/](./conductor/tracks/research_consolidation_20251220/)*
 ---
 
@@ -216,7 +216,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Quantitative Improvement Plan 2026
+## [x] Track: Quantitative Improvement Plan 2026
 *Link: [./conductor/tracks/quant_improvement_plan_20260101/](./conductor/tracks/quant_improvement_plan_20260101/)*
 
 ---
@@ -251,7 +251,32 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Calendar-Aware Data Health Audit
+## [ ] Track: Pipeline Refactor: Upstream/Downstream Split
+*Link: [./conductor/tracks/pipeline_refactor_upstream_downstream_20260102/](./conductor/tracks/pipeline_refactor_upstream_downstream_20260102/)*
+
+---
+
+## [x] Track: Barbell Sleeve Diversification & Optimization
+*Link: [./conductor/tracks/barbell_sleeve_optimization_20260102/](./conductor/tracks/barbell_sleeve_optimization_20260102/)*
+
+---
+
+## [x] Track: Barbell Optimizer Logic Audit
+*Link: [./conductor/tracks/barbell_logic_audit_20260102/](./conductor/tracks/barbell_logic_audit_20260102/)*
+
+---
+
+## [x] Track: Natural Selection Veto & ECI Scaling Audit
+*Link: [./conductor/tracks/natural_selection_veto_audit_20260102/](./conductor/tracks/natural_selection_veto_audit_20260102/)*
+
+---
+
+## [ ] Track: E2E Workflow & Audit Ledger Integration
+*Link: [./conductor/tracks/workflow_audit_ledger_20260102/](./conductor/tracks/workflow_audit_ledger_20260102/)*
+
+---
+
+## [x] Track: Calendar-Aware Data Health Audit
 *Link: [./conductor/tracks/calendar_aware_health_audit_20260102/](./conductor/tracks/calendar_aware_health_audit_20260102/)*
 
 ---
@@ -261,5 +286,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Grand 2026 Validation Tournament (Selection x Risk x Regime)
-*Link: [./conductor/tracks/grand_validation_tournament_20260102/](./conductor/tracks/grand_validation_tournament_20260102/)*
+## [ ] Track: Upstream Regime Detection Audit & Refinement
+*Link: [./conductor/tracks/upstream_regime_audit_20260102/](./conductor/tracks/upstream_regime_audit_20260102/)*
