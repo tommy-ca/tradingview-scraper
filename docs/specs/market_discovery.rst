@@ -1,19 +1,24 @@
 Trend Presets for US Stocks and ETFs
 ====================================
 
-US stocks (daily trend)
------------------------
-- Config: ``configs/us_stocks_trend_momentum.yaml``
-- Columns: ``name, close, volume, change, Recommend.All, ADX, Volatility.D, Perf.W, Perf.1M, Perf.3M, ATR, market_cap_basic``
-- Filters: Rec >= 0.2, ADX >= 15, change >= 0, Perf.W >= 0, Perf.1M >= 1%, Perf.3M >= 3%, volume >= 10M, Vol.D <= 6% (ATR/close <= 8% fallback)
-- Sorting: market_cap_basic desc, then volume desc; limit 100
+US equities (daily discovery)
+-----------------------------
+- Scanners:
+  - ``configs/scanners/tradfi/sp500_trend.yaml`` (S&P 500 foundation)
+  - ``configs/scanners/tradfi/nasdaq100_trend.yaml``
+  - ``configs/scanners/tradfi/dw30_trend.yaml``
+- Base universes: ``configs/base/universes/sp500.yaml``, ``configs/base/universes/nasdaq100.yaml``, ``configs/base/universes/dw30.yaml``
+- Current scanners emphasize broad discovery; trend gates are intentionally relaxed/disabled in L4 configs and rely on institutional hygiene for basic filtering.
 
-US ETFs (daily trend)
----------------------
-- Config: ``configs/us_etf_trend_momentum.yaml``
-- Columns: same as stocks
-- Filters: Rec >= 0.2, ADX >= 15, change >= 0, Perf.W >= 0, Perf.1M >= 1%, Perf.3M >= 3%, volume >= 5M, Vol.D <= 6% (ATR/close <= 8% fallback)
-- Sorting: market_cap_basic desc, then volume desc; limit 100
+US ETF discovery (daily)
+------------------------
+- Scanner: ``configs/scanners/tradfi/bond_trend.yaml`` (bond ETF momentum)
+- Base universe: ``configs/base/universes/bond_etfs.yaml``
+
+Legacy presets (archived)
+-------------------------
+- ``configs/legacy/us_stocks_trend_momentum.yaml``
+- ``configs/legacy/us_etf_trend_momentum.yaml``
 
 Notes
 -----

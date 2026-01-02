@@ -1,7 +1,7 @@
 # Implementation Plan: Universe Selection 3.0
 
 ## Phase 1: The Darwinian Audit (Week 1)
-1.  **Config**: Create `configs/stress_calendar.yaml` with the defined extinction events.
+1.  **Config**: Create `configs/legacy/stress_calendar.yaml` with the defined extinction events.
 2.  **Logic**: Update `audit_antifragility.py` to calculate the `Regime_Survival_Score`.
 3.  **Verification**: Ensure that assets launched AFTER 2024-08 are flagged as "Untested/High Risk".
 

@@ -10,8 +10,16 @@ Overview
 - Sorting: volume desc (base and final).
 - Currency filtering: ``base_currencies`` and ``allowed_spot_quotes`` restrict pairs to major/minor crosses (G8: USD, EUR, JPY, GBP, CHF, CAD, AUD, NZD), excluding exotics.
 
-Preset (configs/forex_trend_momentum.yaml)
------------------------------------------
+Current Scanner (configs/scanners/tradfi/forex_trend.yaml)
+---------------------------------------------------------
+- L4 scanner composed from:
+  - L2 template: ``configs/base/templates/forex_base.yaml`` (inherits institutional hygiene).
+  - L1 hygiene: ``configs/base/hygiene/institutional.yaml`` (ADX + Rec floors and column set).
+- Trend gates: ADX >= 20, momentum ``Perf.W >= 0.5`` and ``Perf.1M >= 1.0``.
+- Limit: 50; export symbol ``global_forex_trend``.
+
+Legacy Preset (configs/legacy/forex_trend_momentum.yaml)
+--------------------------------------------------------
 - Trend (daily, long): Rec >= 0.2, ADX >= 15, change >= 0, Perf.W >= 0.0%, Perf.1M >= 0.5%, Perf.3M >= 1.5%.
 - Volume floor: 1,000,000,000; exchanges limited to FX_IDC/THINKMARKETS/OANDA/VANTAGE/FUSIONMARKETS.
 - No export by default.
@@ -21,7 +29,11 @@ Usage
 -----
 .. code-block:: bash
 
-   python -m tradingview_scraper.futures_universe_selector --config configs/forex_trend_momentum.yaml --verbose
+   # Current scanner (layered presets)
+   python -m tradingview_scraper.futures_universe_selector --config configs/scanners/tradfi/forex_trend.yaml --verbose
+
+   # Legacy preset (archived)
+   python -m tradingview_scraper.futures_universe_selector --config configs/legacy/forex_trend_momentum.yaml --verbose
 
 Notes
 -----

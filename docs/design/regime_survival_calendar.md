@@ -17,5 +17,5 @@ For each window $W_i$:
 3.  **Survival Result**: `Binary_Gate = (Success_Count / Total_Windows) >= 0.66`
 
 ## 4. Implementation
-- Store windows in `configs/stress_calendar.yaml`.
+- Store windows in `configs/legacy/stress_calendar.yaml` (legacy preset location).
 - Update `audit_antifragility.py` to calculate `Regime_Survival_Score`.

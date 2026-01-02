@@ -9,8 +9,15 @@ Overview
 - Columns: ``name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D/W/M, Perf.W/1M/3M, ATR``.
 - Liquidity/volatility guard (current presets): ``Value.Traded >= 50M``; ``Volatility.D <= 8%`` or ``ATR/close <= 12%``. Adjust per instrument if needed.
 
-Presets (config paths under configs/)
--------------------------------------
+Current layered scanners (configs/scanners/crypto/)
+---------------------------------------------------
+- ``configs/scanners/crypto/binance_trend.yaml``: Binance-only trend discovery (L4).
+- ``configs/scanners/crypto/vol_breakout.yaml``: Volatility breakout discovery (L4).
+- ``configs/scanners/crypto/global_mtf_trend.yaml``: Global MTF trend discovery (L4).
+- These scanners are composed from layered presets under ``configs/base/`` and orchestrated via manifest pipelines.
+
+Legacy presets (paths under configs/legacy/)
+--------------------------------------------
 Spot trend (daily/weekly)
 - ``crypto_cex_trend_momentum_spot_daily_long.yaml`` / ``..._short.yaml`` plus per-exchange spot trend variants: ``crypto_cex_trend_<exchange>_spot_daily_long.yaml`` / ``..._short.yaml`` (BINANCE/OKX/BYBIT/BITGET)
   - Liquidity: Value.Traded >= 50M (20M for per-exchange), Vol.D <= 8–15% or ATR/close <= 12%; quote whitelist USDT/USD/USDC/FDUSD/BUSD; exclude perps and dated futures.
@@ -33,15 +40,15 @@ Dated futures trend (daily)
 Legacy/other presets
 - Cross-sectional, mean-reversion, and TS momentum presets remain as-is (xs_momentum/mean_reversion, ts_momentum/mean_reversion, MTF variants). Volume/vol thresholds there may differ; adjust per strategy.
 
-Base universes
---------------
+Base universes (legacy paths under configs/legacy/)
+---------------------------------------------------
 - Spot: ``crypto_cex_base_top50.yaml`` – excludes perps and dated futures, quote whitelist USDT/USD/USDC/FDUSD/BUSD, Value.Traded >= 1.5M, volume >= 2M, Vol.D <= 20% or ATR/close <= 15%, dedupe by base, limit 50, sorted by market_cap_calc then Value.Traded. Majors ensured.
 - Perps: ``crypto_cex_base_top50_perp.yaml`` – `include_perps_only: true`, excludes dated, Value.Traded >= 7.5M, volume >= 2M, Vol.D <= 20% or ATR/close <= 15%, dedupe by base, prefer perps, limit 50, sorted by Value.Traded; majors ensured via `.P` symbols.
 - Dated futures: ``crypto_cex_base_top50_dated.yaml`` – `include_dated_futures_only: true`, excludes perps, quote whitelist, Value.Traded >= 5M, Vol.D <= 25% or ATR/close <= 20%, dedupe by base, limit 50, sorted by Value.Traded (currently yields 0 under these floors).
 - Per-exchange splits for spot/perps/dated: ``crypto_cex_base_top50_<exchange>.yaml``, ``..._<exchange>_perp.yaml``, ``..._<exchange>_dated.yaml`` (BINANCE/OKX/BYBIT/BITGET). Spot floors per exchange: BINANCE/OKX/BYBIT Value.Traded >= 1.5M; BITGET >= 1.0M (volume >= 2M, same vol caps as multi-spot). Perps use Value.Traded >= 7.5M (volume >= 2M). Dated use Value.Traded >= 5M.
-- **Binance Top 50**:
-    - **Spot (`binance_top50_spot_base`)**: Strictly limits to Top 50 by **Market Cap** (`market_cap_calc`). Value.Traded >= 5M, Vol.D <= 15%.
-    - **Perps (`binance_top50_perp_base`)**: Strictly limits to Top 50 by **Value Traded** (liquidity). Value.Traded >= 15M, Vol.D <= 15%.
+- **Binance Top 50 (layered presets)**:
+    - **Spot**: ``configs/presets/crypto_cex_preset_binance_top50_spot.yaml`` (export symbol `binance_top50_spot_base`).
+    - **Perps**: ``configs/presets/crypto_cex_preset_binance_top50_perp.yaml`` (export symbol `binance_top50_perp_base`).
 - Merged views: ``outputs/crypto_trend_runs/merged_base_universe_spot.json`` and ``..._perp.json`` aggregate per-exchange spot/perp bases into normalized symbols with their tradable exchange symbols; dated is empty at current floors.
 
 Usage
@@ -50,7 +57,11 @@ Run any preset via CLI (example):
 
 .. code-block:: bash
 
-   python -m tradingview_scraper.futures_universe_selector --config configs/crypto_cex_trend_momentum.yaml --verbose
+   # Current layered scanner
+   python -m tradingview_scraper.futures_universe_selector --config configs/scanners/crypto/binance_trend.yaml --verbose
+
+   # Legacy preset (archived)
+   python -m tradingview_scraper.futures_universe_selector --config configs/legacy/crypto_cex_trend_momentum.yaml --verbose
 
 Indicator Field Categories (crypto overview availability)
 -------------------------------------------------------
@@ -70,10 +81,10 @@ Multi-Timeframe (MTF) crypto notes
 - Intraday fields (e.g., ``change|1h``, ``Perf.4H``) are not available via Screener/Overview; MTF must use daily/weekly/monthly fields.
 - Recommended MTF sets given constraints: (A) monthly → weekly → daily, (B) weekly → daily → daily. Trend: Perf.1M/3M/6M (or Perf.W/Perf.1M); Confirm: Perf.W/Perf.1M; Execute: daily change/Perf.W plus oscillators (RSI/Stoch.K) and volatility guard.
 - Sample configs:
-  - Spot long: ``configs/crypto_cex_mtf_monthly_weekly_daily.yaml``, ``configs/crypto_cex_mtf_weekly_daily_daily.yaml``.
-  - Spot short: ``configs/crypto_cex_mtf_monthly_weekly_daily_short.yaml``, ``configs/crypto_cex_mtf_weekly_daily_daily_short.yaml``.
-  - Perps short: ``configs/crypto_cex_mtf_weekly_daily_daily_perps_short.yaml``.
-  - Mixed trend/MR: ``configs/crypto_cex_mtf_trend_mr_trend.yaml`` (monthly trend → weekly MR → daily trend) and ``configs/crypto_cex_mtf_mr_trend_trend.yaml`` (monthly MR → weekly trend → daily trend).
+  - Spot long: ``configs/legacy/crypto_cex_mtf_monthly_weekly_daily.yaml``, ``configs/legacy/crypto_cex_mtf_weekly_daily_daily.yaml``.
+  - Spot short: ``configs/legacy/crypto_cex_mtf_monthly_weekly_daily_short.yaml``, ``configs/legacy/crypto_cex_mtf_weekly_daily_daily_short.yaml``.
+  - Perps short: ``configs/legacy/crypto_cex_mtf_weekly_daily_daily_perps_short.yaml``.
+  - Mixed trend/MR: ``configs/legacy/crypto_cex_mtf_trend_mr_trend.yaml`` (monthly trend → weekly MR → daily trend) and ``configs/legacy/crypto_cex_mtf_mr_trend_trend.yaml`` (monthly MR → weekly trend → daily trend).
 - All current runs returned 0 under bearish regime/thresholds; lower volume floors or relax Perf/RSI/Stoch gates to widen coverage.
 
 Notes
