@@ -208,3 +208,18 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: Predictability Feature Flags
 *Link: [./conductor/tracks/predictability_feature_flags_20260101/](./conductor/tracks/predictability_feature_flags_20260101/)*
+
+---
+
+## [~] Track: Grand Validation Tournament 2026 (Final Audit)
+*Link: [./conductor/tracks/grand_validation_spectral_20260101/](./conductor/tracks/grand_validation_spectral_20260101/)*
+
+---
+
+## [ ] Track: Quantitative Improvement Plan 2026
+*Link: [./conductor/tracks/quant_improvement_plan_20260101/](./conductor/tracks/quant_improvement_plan_20260101/)*
+
+---
+
+## [x] Track: Window Rebalance Mode Review 2026
+*Link: [./conductor/tracks/window_rebalance_audit_20260101/](./conductor/tracks/window_rebalance_audit_20260101/)*
