@@ -100,12 +100,14 @@ The system moves beyond simple MPT by treating clusters as single units of risk.
 The platform supports multiple selection architectures, evaluated via head-to-head tournaments.
 
 ### Current Standards
-- **Selection v2.1 (Champion)**: **Additive Rank-Sum (CARS 2.1)**. 
-    - Uses **Multi-Method Normalization**: Logistic mapping for Alpha factors (Momentum), Z-score for Institutional factors (Liquidity), and Ranks for Relative filters.
-    - Achieves higher Information Ratio (+0.07 vs -0.01 baseline) by preserving magnitude of extreme outperformers.
-- **Selection v3.1 (Baseline)**: **Multiplicative Probability Scoring (MPS)**.
-    - Aggressive concentration logic using factor probabilities.
-    - High potential alpha but suffers from 5x higher selection volatility compared to the Additive standard.
+- **Selection v3.2 (New Champion)**: **Log-Multiplicative Probability Scoring (Log-MPS)**.
+    - Uses additive log-probabilities for numerical stability and HPO optimization.
+    - **Global Robust**: Achieving the highest 2025 Annualized Return (29.2%) and Sharpe (2.35).
+    - Features integrated spectral predictability filters (Entropy, Hurst, Efficiency).
+- **Selection v2.1 (Stability Anchor)**: **Additive Rank-Sum (CARS 2.1)**. 
+    - Uses **Multi-Method Normalization** (Logistic/Z-score/Rank).
+    - Optimized for lower volatility and maximum drawdown protection.
+- **Selection v3.1 (Legacy Alpha)**: Original Multiplicative Standard.
 
 ### Guiding Rule
-Always prefer **Selection v2.1** for production stability. Use v3.1 only for speculative "Alpha Hunting" runs where high churn is acceptable.
+Always prefer **Selection v3.2** for maximum alpha and regime-aware robustness. Use **Selection v2.1** for conservative "Core" profiles where drawdown minimization is the primary objective.
