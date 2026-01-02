@@ -7,16 +7,22 @@ Selection Intelligence defines the logic for "Pruning" the raw discovered candid
 
 ## 2. Selection Strategy Versions
 
-### 2.1 Legacy (V1.0)
+### 2.1 Additive Local (V2.0)
 - **Logic**: Local normalization within clusters.
+- **Renamed**: Formerly "legacy" (V1.0).
 - **Goal**: Breadth and cluster-local leadership.
 
-### 2.2 Composite Alpha-Risk Scoring (CARS 2.0 / V2)
-- **Model**: Additive Weighted Ranks.
+### 2.2 Additive Global (V2)
+- **Model**: Composite Alpha-Risk Scoring (CARS 2.0).
 - **Formula**: $0.4 \times Mom + 0.2 \times Stab + 0.2 \times AF + 0.2 \times Liq - 0.1 \times Frag$.
 - **Behavior**: Compensatory logic where high momentum can offset moderate risk.
 
-### 2.3 Multiplicative Probability Scoring (MPS 3.0 / V3)
+### 2.3 Additive Global (V2.1)
+- **Model**: Tuned CARS (v2.1).
+- **Refinement**: Optimized weights via Global Robust HPO and Multi-Method Normalization (Logistic/Z-score/Rank).
+- **Status**: Champion (2026-01-02).
+
+### 2.4 Multiplicative Probability Scoring (MPS 3.0 / V3)
 - **Model**: Multiplicative Probabilities ($P_1 \times P_2 \times ...$).
 - **Vetoes**: Hard gates for Survival (< 0.1), ECI (Cost), and Numerical Stability ($\kappa$).
 - **Behavior**: Non-compensatory "Darwinian" survival. Structural failure in any category results in immediate disqualification.
@@ -29,8 +35,12 @@ Selection Intelligence defines the logic for "Pruning" the raw discovered candid
     - **Efficiency Min**: $ER \ge 0.1$ (Discard excessive chop).
     - **Hurst Zone**: Avoid $0.45 < H < 0.55$ (Discard pure random walks).
 
-### 2.5 Future Evolution: Soft-Weighting
-Grand Tournament findings identified **Spectral Degeneracy** where hard vetoes on noisy assets occasionally discarded high-alpha opportunities. Future versions will transition from binary vetoes to a **Predictability Multiplier** ($MPS \times Efficiency \times (1-Entropy)$) to penalize rather than disqualify.
+### 2.5 Log-MPS (V3.2)
+- **Model**: Additive Log-Probabilities ($Score = \sum \omega_i \ln(P_i)$).
+- **Weights**: Optimized via Global Robust HPO (Optuna).
+- **Status**: **New Champion (2026-01-02)**.
+- **Goal**: Numerical stability for automated tuning without losing "Darwinian" pruning intensity.
+- **Breadth**: Optimized for `top_n=5` to leverage cluster-wide signals.
 
 ## 3. Integration with Risk Profiles (Tournament Dimensions)
 
