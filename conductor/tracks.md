@@ -223,3 +223,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: Window Rebalance Mode Review 2026
 *Link: [./conductor/tracks/window_rebalance_audit_20260101/](./conductor/tracks/window_rebalance_audit_20260101/)*
+
+---
+
+## [ ] Track: System Integrity, Replayability & Determinism (SIRD)
+*Link: [./conductor/tracks/system_integrity_determinism_20260101/](./conductor/tracks/system_integrity_determinism_20260101/)*
