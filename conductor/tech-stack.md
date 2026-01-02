@@ -18,6 +18,7 @@
 ## Real-time & WebSockets
 * **aiohttp:** Primary library for asynchronous WebSocket streaming (`AsyncStreamHandler`).
 * **websockets & websocket-client:** Legacy foundations for real-time data streaming.
+* **cvxportfolio:** Core library for high-fidelity backtest simulation and friction modeling.
 
 ## Configuration & Tooling
 * **python-dotenv:** For managing environment variables and secrets.

@@ -8,6 +8,7 @@ A Python library designed to scrape various data from TradingView.com, including
 
 ## Core Goals
 * **Unified Pipeline Orchestration:** Transition from raw data scraping to a high-performance, asynchronous quantitative pipeline that adapts to market volatility and risk regimes.
+* **Churn-Optimized Execution:** Implement highly efficient rebalancing protocols (Window, Tolerance-based) that maximize alpha capture while minimizing implementation shortfall and turnover costs.
 * **Reliability & Performance:** Provide a high-performance and robust interface for accessing TradingView data programmatically, ensuring data integrity and timely delivery.
 * **Selection Alpha Positive Expectancy:** Ensure that the "Natural Selection" (pruning) process consistently outperforms the raw discovery pool. The pruned universe must demonstrate higher risk-adjusted returns than the broader market, validating the value of the filter.
 
