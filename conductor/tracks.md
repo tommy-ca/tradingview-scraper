@@ -246,5 +246,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: Normalization Sensitivity Audit (v2.1)
-*Link: [./conductor/tracks/normalization_sensitivity_audit_20260102/](./conductor/tracks/normalization_sensitivity_audit_20260102/)*
+## [ ] Track: Selection v2 vs v2.1 Performance Benchmark
+*Link: [./conductor/tracks/v2_vs_v2_1_benchmark_20260102/](./conductor/tracks/v2_vs_v2_1_benchmark_20260102/)*

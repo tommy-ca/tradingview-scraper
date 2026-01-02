@@ -92,3 +92,20 @@ The system moves beyond simple MPT by treating clusters as single units of risk.
 4.  **Provenance First**: Always verify that the `manifest.json` has been archived in the run directory.
 5.  **Audit Integrity**: Every production decision must be backed by an entry in the `audit.jsonl` ledger. Never bypass the audit chain for manual weight overrides.
 6.  **No Padding**: Ensure the returns matrix preserves real trading calendars; never zero-fill weekends for TradFi assets.
+
+---
+
+## 7. Selection Standards (The Alpha Core)
+
+The platform supports multiple selection architectures, evaluated via head-to-head tournaments.
+
+### Current Standards
+- **Selection v2.1 (Champion)**: **Additive Rank-Sum (CARS 2.1)**. 
+    - Uses **Multi-Method Normalization**: Logistic mapping for Alpha factors (Momentum), Z-score for Institutional factors (Liquidity), and Ranks for Relative filters.
+    - Achieves higher Information Ratio (+0.07 vs -0.01 baseline) by preserving magnitude of extreme outperformers.
+- **Selection v3.1 (Baseline)**: **Multiplicative Probability Scoring (MPS)**.
+    - Aggressive concentration logic using factor probabilities.
+    - High potential alpha but suffers from 5x higher selection volatility compared to the Additive standard.
+
+### Guiding Rule
+Always prefer **Selection v2.1** for production stability. Use v3.1 only for speculative "Alpha Hunting" runs where high churn is acceptable.
