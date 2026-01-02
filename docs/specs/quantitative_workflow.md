@@ -62,14 +62,14 @@ BACKFILL=1 GAPFILL=1 FOREX_LOOKBACK_DAYS=365 make forex-analyze
 - **Export contract**: scan artifacts are written to `export/<run_id>/universe_selector_*.json` using a `{meta,data}` envelope; consumers should prefer `meta` (with filename parsing as a fallback).
 - **Forex dedup**: forex selectors dedupe by canonical pair identity (base+quote) across venues; aggregated `volume`/`Value.Traded` are preserved alongside representative `volume_rep`/`Value.Traded_rep` for execution-aware ranking.
 - **Operational risks**:
-  - configs are linted via `make scan-lint` (CI-safe), but TradingView fields can still change over time
-  - scan orchestration still uses duplicated bash config lists (to be replaced with a manifest runner)
+  - configs are linted via `make scan-audit` (CI-safe), but TradingView fields can still change over time
+  - scan orchestration is now manifest-driven via `make scan-run` (`scripts/compose_pipeline.py`), reducing drift from ad-hoc bash lists
 
 ## 5. Universe Selector Roadmap (Non-Breaking)
 
 1. **Inventory & dependency map**: document producer→consumer coupling for `export/<run_id>/universe_selector_*.json` (which scripts still parse filenames vs read embedded `meta`).
-2. **Config lint + deterministic tests**: validate all `configs/**/*.yaml` (lint implemented via `make scan-lint`) and gate network tests behind markers/env vars.
+2. **Config lint + deterministic tests**: validate all layered configs (`configs/base/`, `configs/scanners/`, `configs/presets/`, `configs/legacy/`) via `make scan-audit`, and gate network tests behind markers/env vars.
 3. **Stable export envelope + run scoping**: implemented (`{meta,data}` envelope + `export/<run_id>/...`) to prevent cross-run leakage; consumers fall back to legacy filename parsing when needed.
-4. **Standardized scan runner**: replace bash scan lists with a manifest-driven runner (`--group local|crypto|base`, `--run-id`, `--max-concurrent`, `--export-format`).
+4. **Standardized scan runner**: implemented via `scripts/compose_pipeline.py` and `make scan-run` (manifest-driven pipelines with interval + ingestion depth overrides).
 5. **Selector refactor**: `build_payloads()` now matches real execution; remaining work is splitting selector internals into modules (config loader, payload builder, post-filters, normalization, export).
 6. **Config DRY**: introduce layered presets and additive list merges (`filters_add`, `columns_add`, etc.) to reduce duplication without breaking existing configs.
