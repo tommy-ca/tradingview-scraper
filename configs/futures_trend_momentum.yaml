@@ -1,5 +1,5 @@
-# Futures Trend Momentum (Long) - Refactored
-base_preset: presets/futures_us_liquid.yaml
+# Layer 2: Futures Trend Momentum Strategy
+base_preset: presets/base_futures.yaml
 
 trend:
   direction: "long"
@@ -7,17 +7,19 @@ trend:
   logic: "AND"
   recommendation:
     enabled: true
-    min: 0.4
+    min: 0.1
   adx:
     enabled: true
-    min: 25
+    min: 10
   momentum:
     enabled: true
-    horizons: {change: 0.0, Perf.W: 0.5, Perf.1M: 3.0}
+    # Aligned with 21d test windows (Perf.1M)
+    horizons: {Perf.W: 0.0, Perf.1M: 0.5, Perf.3M: 1.0}
   confirmation_momentum:
-    enabled: true
-    horizons: {Perf.3M: 5.0}
+    enabled: false
 
+limit: 50
+prefilter_limit: 2000
 export_metadata:
   symbol: "futures_trend_momentum"
-  data_category: "universe_selector"
+  data_category: "strategy_selector"

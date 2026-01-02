@@ -1,5 +1,5 @@
-# Forex Trend Momentum (Long) layered on base universe
-base_preset: forex_base_universe.yaml
+# Layer 2: Forex Trend Momentum Strategy
+base_preset: presets/base_forex.yaml
 
 trend:
   direction: "long"
@@ -13,16 +13,13 @@ trend:
     min: 15
   momentum:
     enabled: true
-    horizons: {change: 0.1, Perf.W: 0.2, Perf.1M: 0.5, Perf.3M: 1.0}
+    # Aligned with 21d test windows (Perf.1M)
+    horizons: {Perf.W: 0.2, Perf.1M: 0.5, Perf.3M: 1.0}
   confirmation_momentum:
     enabled: false
 
-limit: 100
+limit: 50
 prefilter_limit: 2000
-pagination_size: 200
-sort_by: volume
-final_sort_by: volume
-
 export_metadata:
   symbol: "forex_trend_momentum"
-  data_category: "universe_selector"
+  data_category: "strategy_selector"

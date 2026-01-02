@@ -1,35 +1,29 @@
-# US ETFs trend momentum (Long) - Institutional Proxies
-base_preset: us_etf_base_universe.yaml
+# Layer 2: US ETFs trend momentum (Long)
+base_preset: presets/base_us_etf.yaml
 
 limit: 50
 prefilter_limit: 3000
-pagination_size: 200
-sort_by: market_cap_basic
 final_sort_by: volume
 
-# Prioritize secular proxies (SPY, QQQ, GLD, TLT, etc.)
+# Prioritize secular proxies
 include_symbols: ["SPY", "QQQ", "DIA", "IWM", "GLD", "TLT", "IEF", "AGG", "BND", "HYG", "LQD", "VTI", "VXUS", "VWO", "VEA"]
-
-volume:
-  min: 1000000
-  value_traded_min: 20000000 # $20M floor
 
 trend:
   direction: "long"
   timeframe: "daily"
-  logic: "OR" # Use OR to capture strong secular trend even if short-term is weak
+  logic: "OR" # capture strong secular trend even if short-term is weak
   recommendation:
     enabled: false
   adx:
     enabled: true
-    min: 5 # Relaxed ADX for secular proxies
+    min: 5 
   momentum:
     enabled: true
-    # Focus on long-term performance
-    horizons: {Perf.3M: 1.0, Perf.6M: 2.0}
+    # Align with downstream 21d test windows
+    horizons: {Perf.1M: 0.0, Perf.3M: 1.0, Perf.6M: 2.0}
   confirmation_momentum:
     enabled: false
 
 export_metadata:
   symbol: "us_etf_trend_momentum"
-  data_category: "universe_selector"
+  data_category: "strategy_selector"
