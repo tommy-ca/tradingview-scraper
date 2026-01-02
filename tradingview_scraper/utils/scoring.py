@@ -24,8 +24,14 @@ def calculate_liquidity_score(symbol: str, candidate_map: Dict[str, Any]) -> flo
     """Extracts a normalized liquidity score from candidate metadata."""
     meta = candidate_map.get(symbol, {})
     vt = float(meta.get("value_traded") or meta.get("Value.Traded") or 0)
-    # Institutional baseline: $500M ADV = 1.0
-    return min(1.0, vt / 5e8)
+
+    # Market-Aware Institutional Baseline
+    # $500M ADV for Equities/ETFs, $10M ADV for Crypto
+    market = str(meta.get("market", "UNKNOWN")).upper()
+    is_crypto = market == "CRYPTO" or any(ex in symbol.upper() for ex in ["BINANCE", "OKX", "BYBIT", "BITGET"])
+    baseline = 1e7 if is_crypto else 5e8
+
+    return min(1.0, vt / baseline)
 
 
 def calculate_mps_score(metrics: Dict[str, pd.Series], weights: Optional[Dict[str, float]] = None, methods: Optional[Dict[str, str]] = None) -> pd.Series:

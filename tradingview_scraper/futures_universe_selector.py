@@ -384,39 +384,53 @@ def load_config(
     profile: Optional[str] = None,
     scanner_type: str = "futures",
 ) -> SelectorConfig:
-    """Load selector config from a file, mapping, or manifest profile."""
+    """Load selector config from a file, mapping, or manifest profile with recursive inheritance."""
     raw: Dict[str, Any] = {}
     base_dir: Optional[Path] = None
 
-    if profile:
-        from tradingview_scraper.settings import get_settings
-
-        # Load from manifest via settings
-        raw = get_settings().get_discovery_config(scanner_type)
-        if not raw:
-            logger.warning("No discovery config found for '%s' in profile", scanner_type)
-        base_dir = Path("configs")  # Default relative base for presets
-    elif isinstance(source, Mapping):
+    # 1. Load primary source (file or mapping)
+    if isinstance(source, Mapping):
         raw = dict(source)
         base_dir = Path("configs")
     elif isinstance(source, str):
         raw = _load_config_file(source)
         base_dir = Path(source).parent
-    elif source is not None:
-        raise TypeError("source must be a mapping, path string, profile name, or None")
 
-    # Handle base_preset inheritance for in-memory mappings
-    if "base_preset" in raw:
-        preset_path = raw.pop("base_preset")
-        if not Path(preset_path).is_absolute():
-            preset_path = (base_dir or Path("configs")) / preset_path
-        base = _load_config_file(str(preset_path))
-        raw = _merge(base, raw)
+    # 2. Merge with manifest profile discovery config if provided
+    if profile:
+        from tradingview_scraper.settings import get_settings
+
+        profile_discovery = get_settings().get_discovery_config(scanner_type)
+        if profile_discovery:
+            raw = _merge(raw, profile_discovery)
+        if not base_dir:
+            base_dir = Path("configs")
+
+    if not raw and not profile and source is None:
+        # Fallback to empty if nothing provided
+        raw = {}
+
+    # 3. Recursive Inheritance Resolution
+    def resolve_inheritance(current_raw: Dict[str, Any], current_base_dir: Path) -> Dict[str, Any]:
+        if "base_preset" in current_raw:
+            preset_path_str = current_raw.pop("base_preset")
+            preset_path = Path(preset_path_str)
+            if not preset_path.is_absolute():
+                preset_path = current_base_dir / preset_path
+
+            base_raw = _load_config_file(str(preset_path))
+            # Recurse first to resolve deeper layers
+            resolved_base = resolve_inheritance(base_raw, preset_path.parent)
+            # Merge current into resolved base
+            return _merge(resolved_base, current_raw)
+        return current_raw
+
+    final_raw = resolve_inheritance(raw, base_dir or Path("configs"))
 
     if overrides:
-        raw = _merge(raw, overrides)
+        final_raw = _merge(final_raw, overrides)
 
-    config = SelectorConfig.model_validate(raw)
+    config = SelectorConfig.model_validate(final_raw)
 
     if isinstance(source, str):
         config.config_source = str(Path(source).resolve())

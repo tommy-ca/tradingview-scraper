@@ -545,7 +545,7 @@ class SelectionEngineV3_1(SelectionEngineV3):
         return "v3.1"
 
 
-class SelectionEngineV3_2(SelectionEngineV3):
+class SelectionEngineV3_2(SelectionEngineV3_1):
     """
     v3.2: Log-MPS Standard.
     - Uses additive log-probabilities for numerical stability.
@@ -627,14 +627,15 @@ class SelectionEngineV3_2(SelectionEngineV3):
         return cast(pd.Series, result)
 
 
-class LegacySelectionEngine(BaseSelectionEngine):
+class SelectionEngineV2_0(BaseSelectionEngine):
     """
     Original local normalization within clusters.
+    Renamed from 'legacy' back to 'v2.0' for standard benchmarking.
     """
 
     @property
     def name(self) -> str:
-        return "legacy"
+        return "v2.0"
 
     def select(
         self,
@@ -678,7 +679,7 @@ class LegacySelectionEngine(BaseSelectionEngine):
             cum_rets = (1 + sub_tail).prod() - 1
             m_winners = cum_rets[cum_rets >= request.min_momentum_score].index.tolist()
 
-            # LEGACY: Local normalization within cluster
+            # V2.0: Local normalization within cluster
             mom_local = sub_rets.mean() * 252
             vol_local = sub_rets.std() * np.sqrt(252)
             stab_local = 1.0 / (vol_local + 1e-9)
@@ -714,4 +715,4 @@ class LegacySelectionEngine(BaseSelectionEngine):
             audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_selected}
 
         winners = [candidate_map[s] if s in candidate_map else {"symbol": s, "direction": "LONG"} for s in selected_symbols]
-        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version="1.0", warnings=warnings, vetoes={}, metrics={})
+        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version="2.0", warnings=warnings, vetoes={}, metrics={})
