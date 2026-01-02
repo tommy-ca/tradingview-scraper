@@ -49,9 +49,11 @@
 ## 5. Modular Architecture (Selection Engines)
 
 Selection logic is abstracted into versioned engines:
-- **SelectionEngineV3 (MPS 3.0)**: Current institutional standard. Implements all 3.0 vetoes and multiplicative scoring.
-- **SelectionEngineV2 (CARS 2.0)**: Composite Alpha-Risk Scoring. Uses additive weighted ranks.
-- **LegacySelectionEngine (V1.0)**: Original local normalization within clusters.
+- **SelectionEngineV3_2 (MPS 3.2)**: High-stability Log-Probability standard (2026 Champion).
+- **SelectionEngineV3.1 (MPS 3.1)**: Refined multiplicative standard.
+- **SelectionEngineV2.1 (CARS 2.1)**: Champion additive standard (Global Multi-Norm).
+- **SelectionEngineV2 (CARS 2.0)**: Baseline additive standard (Global Rank-Sum).
+- **SelectionEngineV2_0 (V2.0)**: Baseline additive standard (Local Normalization). Formerly "legacy".
 
 ## 7. Profile Differentiation (Darwinian vs. Robust)
 

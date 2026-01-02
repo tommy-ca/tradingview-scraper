@@ -246,5 +246,20 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Selection v2 vs v2.1 Performance Benchmark
-*Link: [./conductor/tracks/v2_vs_v2_1_benchmark_20260102/](./conductor/tracks/v2_vs_v2_1_benchmark_20260102/)*
+## [x] Track: Crypto Discovery-Selection Factor Alignment
+*Link: [./conductor/tracks/crypto_factor_alignment_20260102/](./conductor/tracks/crypto_factor_alignment_20260102/)*
+
+---
+
+## [ ] Track: Calendar-Aware Data Health Audit
+*Link: [./conductor/tracks/calendar_aware_health_audit_20260102/](./conductor/tracks/calendar_aware_health_audit_20260102/)*
+
+---
+
+## [ ] Track: Pipeline Efficiency & Scoring Consolidation
+*Link: [./conductor/tracks/pipeline_efficiency_audit_20260102/](./conductor/tracks/pipeline_efficiency_audit_20260102/)*
+
+---
+
+## [ ] Track: Grand 2026 Validation Tournament (Selection x Risk x Regime)
+*Link: [./conductor/tracks/grand_validation_tournament_20260102/](./conductor/tracks/grand_validation_tournament_20260102/)*
