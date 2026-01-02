@@ -490,6 +490,14 @@ class SelectionEngineV3_2(SelectionEngineV3):
             engine_v31 = SelectionEngineV3_1()
             return engine_v31.select(returns, raw_candidates, stats_df, request)
 
+        # Dynamic Weight Selection based on Regime
+        if request.regime in ["TURBULENT", "CRISIS"]:
+            self.weights = settings.features.weights_stressed
+            logger.info(f"Using HPO-Stressed weights for regime: {request.regime}")
+        else:
+            self.weights = settings.features.weights_expansion
+            logger.info(f"Using Expansion weights for regime: {request.regime}")
+
         return self._select_v3_core(returns, raw_candidates, stats_df, request)
 
     def _calculate_alpha_scores(self, mps_metrics: Dict[str, pd.Series], methods: Dict[str, str], frag_penalty: pd.Series) -> pd.Series:

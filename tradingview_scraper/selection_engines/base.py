@@ -13,6 +13,7 @@ class SelectionRequest:
     threshold: float = 0.5
     max_clusters: int = 25
     min_momentum_score: float = 0.0
+    regime: str = "NORMAL"
     # Optional parameters for specific versions
     params: Dict[str, Any] = field(default_factory=dict)
 

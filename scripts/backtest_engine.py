@@ -137,7 +137,15 @@ class BacktestEngine:
             stats_df = self._audit_training_stats(train_data_raw)
 
             if settings.dynamic_universe and self.raw_candidates:
-                winners, _, _, _, _ = run_selection(train_data_raw, self.raw_candidates, stats_df=stats_df, top_n=settings.top_n, threshold=settings.threshold, m_gate=settings.min_momentum_score)
+                winners, _, _, _, _ = run_selection(
+                    train_data_raw,
+                    self.raw_candidates,
+                    stats_df=stats_df,
+                    top_n=settings.top_n,
+                    threshold=settings.threshold,
+                    m_gate=settings.min_momentum_score,
+                    regime=regime,
+                )
                 current_symbols = [w["symbol"] for w in winners if w["symbol"] in train_data_raw.columns]
                 for b_sym in settings.benchmark_symbols:
                     if b_sym in train_data_raw.columns and b_sym not in current_symbols:

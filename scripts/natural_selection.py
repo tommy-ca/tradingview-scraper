@@ -29,6 +29,7 @@ def run_selection(
     max_clusters: int = 25,
     m_gate: float = 0.0,
     mode: Optional[str] = None,
+    regime: str = "NORMAL",
 ) -> Tuple[List[Dict[str, Any]], Dict[int, Any], str, Dict[str, List[str]], Dict[str, Any]]:
     """
     Orchestrates selection using the modular engine system.
@@ -41,6 +42,7 @@ def run_selection(
         threshold=threshold,
         max_clusters=max_clusters,
         min_momentum_score=m_gate,
+        regime=regime,
     )
     response = engine.select(returns, raw_candidates, stats_df, request)
     for warning in response.warnings:
