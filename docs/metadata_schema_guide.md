@@ -102,8 +102,11 @@ make meta-audit
 # Refresh all active symbols from the existing catalog (preserves PIT history)
 uv run scripts/build_metadata_catalog.py --from-catalog --catalog-path data/lakehouse/symbols.parquet
 
-# Or build from a config universe
-uv run scripts/build_metadata_catalog.py --config configs/crypto_cex_binance_top50.yaml --limit 100
+# Or build from a candidates file (expects a JSON list of objects with `symbol`)
+uv run scripts/build_metadata_catalog.py --candidates-file /tmp/candidates.json
+
+# If your export uses {meta,data}, extract the list first:
+# jq '.data' export/<run_id>/universe_selector_*.json > /tmp/candidates.json
 
 # Or specific symbols
 uv run scripts/build_metadata_catalog.py --symbols BINANCE:BTCUSDT BYBIT:ETHUSDT
