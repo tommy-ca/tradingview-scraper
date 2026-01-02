@@ -1,0 +1,15 @@
+{
+  "regime": "stressed",
+  "best_alpha": 0.046649096411397736,
+  "best_params": {
+    "w_momentum": 1.312620579353834,
+    "w_stability": 0.011205774896745655,
+    "w_liquidity": 0.19775527117553326,
+    "w_antifragility": 1.740568876836649,
+    "w_survival": 1.8052278450063146,
+    "w_efficiency": 0.5060773455195028,
+    "w_entropy": 0.09277311049329866,
+    "w_hurst": 0.17164868166784686
+  },
+  "n_trials": 200
+}
