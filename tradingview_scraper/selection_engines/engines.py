@@ -17,7 +17,6 @@ from tradingview_scraper.utils.scoring import (
     calculate_liquidity_score,
     calculate_mps_score,
     normalize_series,
-    rank_series,
 )
 
 logger = logging.getLogger("selection_engines")
@@ -81,6 +80,25 @@ class SelectionEngineV2(BaseSelectionEngine):
         stats_df: Optional[pd.DataFrame],
         request: SelectionRequest,
     ) -> SelectionResponse:
+        return self._select_additive_core(
+            returns,
+            raw_candidates,
+            stats_df,
+            request,
+            weights={"momentum": 0.4, "stability": 0.2, "antifragility": 0.2, "liquidity": 0.2, "fragility": -0.1},
+            methods={"momentum": "rank", "stability": "rank", "liquidity": "rank", "antifragility": "rank", "survival": "rank", "efficiency": "rank", "entropy": "rank", "hurst_clean": "rank"},
+        )
+
+    def _select_additive_core(
+        self,
+        returns: pd.DataFrame,
+        raw_candidates: List[Dict[str, Any]],
+        stats_df: Optional[pd.DataFrame],
+        request: SelectionRequest,
+        weights: Dict[str, float],
+        methods: Dict[str, str],
+        clipping_sigma: float = 3.0,
+    ) -> SelectionResponse:
         candidate_map = {c["symbol"]: c for c in raw_candidates}
         settings = get_settings()
 
@@ -99,6 +117,13 @@ class SelectionEngineV2(BaseSelectionEngine):
         liq_all = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
         af_all = pd.Series(0.5, index=returns.columns)
         frag_all = pd.Series(0.0, index=returns.columns)
+        regime_all = pd.Series(1.0, index=returns.columns)
+
+        # Predictability Metrics
+        lookback = min(len(returns), 64)
+        pe_all = pd.Series({s: calculate_permutation_entropy(returns[s].values[-lookback:]) for s in returns.columns})
+        er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].values[-lookback:]) for s in returns.columns})
+        hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].values) for s in returns.columns})
 
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
@@ -106,9 +131,34 @@ class SelectionEngineV2(BaseSelectionEngine):
                 af_all.loc[common] = stats_df.loc[common, "Antifragility_Score"]
                 if "Fragility_Score" in stats_df.columns:
                     frag_all.loc[common] = stats_df.loc[common, "Fragility_Score"]
+                if "Regime_Survival_Score" in stats_df.columns:
+                    regime_all.loc[common] = stats_df.loc[common, "Regime_Survival_Score"]
 
-        # Unified Composite Alpha-Risk Score (CARS 2.0)
-        alpha_scores = 0.4 * rank_series(mom_all) + 0.2 * rank_series(stab_all) + 0.2 * rank_series(af_all) + 0.2 * rank_series(liq_all) - 0.1 * rank_series(frag_all)
+        # 2. Additive Scoring
+        from tradingview_scraper.utils.scoring import map_to_probability
+
+        # Mapping to normalized space [0, 1] using factor-specific methods
+        metrics_raw = {
+            "momentum": mom_all,
+            "stability": stab_all,
+            "liquidity": liq_all,
+            "antifragility": af_all,
+            "survival": regime_all,
+            "efficiency": er_all,
+            "entropy": 1.0 - pe_all,  # High entropy = low score
+            "hurst_clean": 1.0 - abs(hurst_all - 0.5) * 2.0,  # 0.5 = low score
+            "fragility": -frag_all,  # High fragility = low score
+        }
+
+        metrics_norm = {}
+        for name, series in metrics_raw.items():
+            method = methods.get(name, "rank")
+            metrics_norm[name] = map_to_probability(series, method=method, sigma=clipping_sigma)
+
+        alpha_scores = pd.Series(0.0, index=returns.columns)
+        for name, w in weights.items():
+            if name in metrics_norm:
+                alpha_scores += w * metrics_norm[name]
 
         selected_symbols = []
         audit_clusters = {}
@@ -120,13 +170,7 @@ class SelectionEngineV2(BaseSelectionEngine):
                 sub_rets = sub_rets.to_frame()
 
             actual_top_n = request.top_n
-            if settings.features.feat_dynamic_selection and len(symbols) > 1:
-                c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
-                n_syms = len(symbols)
-                if n_syms > 1:
-                    upper_indices = np.triu_indices(n_syms, k=1)
-                    mean_c = float(np.mean(c_corr.values[upper_indices]))
-                    actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
+            # Dynamic selection logic omitted for pure V2/V2.1 comparison unless requested
 
             # MOMENTUM GATE (Local window)
             window = min(60, len(sub_rets))
@@ -156,7 +200,36 @@ class SelectionEngineV2(BaseSelectionEngine):
             audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_selected}
 
         winners = [candidate_map[s] if s in candidate_map else {"symbol": s, "direction": "LONG"} for s in selected_symbols]
-        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version="2.0", warnings=warnings, vetoes={}, metrics={})
+        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version=getattr(self, "spec_version", "2.0"), warnings=warnings, vetoes={}, metrics={})
+
+
+class SelectionEngineV2_1(SelectionEngineV2):
+    """
+    v2.1: Tuned CARS model.
+    - Additive Rank-Sum scoring with 8 metrics.
+    - Optimized weights from Global Robust HPO.
+    """
+
+    @property
+    def name(self) -> str:
+        return "v2.1"
+
+    def __init__(self):
+        super().__init__()
+        self.spec_version = "2.1"
+
+    def select(
+        self,
+        returns: pd.DataFrame,
+        raw_candidates: List[Dict[str, Any]],
+        stats_df: Optional[pd.DataFrame],
+        request: SelectionRequest,
+    ) -> SelectionResponse:
+        settings = get_settings()
+        weights = settings.features.weights_v2_1_global
+        methods = settings.features.normalization_methods_v2_1
+        sigma = settings.features.clipping_sigma_v2_1
+        return self._select_additive_core(returns, raw_candidates, stats_df, request, weights=weights, methods=methods, clipping_sigma=sigma)
 
 
 class SelectionEngineV3(BaseSelectionEngine):
@@ -363,6 +436,19 @@ class SelectionEngineV3(BaseSelectionEngine):
             "avg_pe": float(pe_all.mean()),
             "avg_er": float(er_all.mean()),
             "avg_hurst": float(hurst_all.mean()),
+        }
+
+        # Raw Metrics for HPO (Phase 4 Normalization Audit)
+        metrics["raw_metrics"] = {
+            "momentum": mom_all.to_dict(),
+            "stability": stab_all.to_dict(),
+            "liquidity": liq_all.to_dict(),
+            "antifragility": af_all.to_dict(),
+            "survival": regime_all.to_dict(),
+            "efficiency": er_all.to_dict(),
+            "entropy": pe_all.to_dict(),
+            "hurst": hurst_all.to_dict(),
+            "fragility": frag_all.to_dict(),
         }
 
         # HPO Support: Record raw component probabilities P_i

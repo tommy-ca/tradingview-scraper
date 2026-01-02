@@ -58,11 +58,13 @@ def calculate_mps_score(metrics: Dict[str, pd.Series], weights: Optional[Dict[st
     return mps
 
 
-def map_to_probability(series: pd.Series, method: str = "rank") -> pd.Series:
+def map_to_probability(series: pd.Series, method: str = "rank", sigma: float = 3.0) -> pd.Series:
     """
     Maps raw metrics to a [0, 1] probability space.
     - rank: [0.01, 1.0] relative percentile.
     - logistic: S-curve based on Z-score.
+    - zscore: Standardized distance clipped at sigma units.
+    - minmax: Linear scaling relative to window extrema.
     - cdf: Cumulative Distribution Function (Normal).
     """
     if series.empty:
@@ -76,8 +78,22 @@ def map_to_probability(series: pd.Series, method: str = "rank") -> pd.Series:
     elif method == "logistic":
         # S-curve mapping
         mu = series.mean()
-        sigma = series.std() + 1e-9
-        return 1 / (1 + np.exp(-(series - mu) / sigma))
+        s = series.std() + 1e-9
+        return 1 / (1 + np.exp(-(series - mu) / s))
+
+    elif method == "zscore":
+        mu = series.mean()
+        s = series.std() + 1e-9
+        z = (series - mu) / s
+        z_clipped = z.clip(-sigma, sigma)
+        return (z_clipped + sigma) / (2 * sigma)
+
+    elif method == "minmax":
+        s_min = series.min()
+        s_max = series.max()
+        if s_max == s_min:
+            return pd.Series(0.5, index=series.index)
+        return (series - s_min) / (s_max - s_min)
 
     elif method == "cdf":
         # Raw value mapping if already in [0, 1] - DO NOT normalize to maintain absolute probability space
@@ -87,8 +103,8 @@ def map_to_probability(series: pd.Series, method: str = "rank") -> pd.Series:
         from scipy.stats import norm
 
         mu = series.mean()
-        sigma = series.std() + 1e-9
-        z = (series - mu) / sigma
+        s = series.std() + 1e-9
+        z = (series - mu) / s
         return pd.Series(norm.cdf(z).clip(0.001, 1.0), index=series.index)
 
     return series

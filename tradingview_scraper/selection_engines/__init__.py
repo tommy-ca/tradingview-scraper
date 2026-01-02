@@ -6,6 +6,7 @@ from tradingview_scraper.selection_engines.base import BaseSelectionEngine, Sele
 from tradingview_scraper.selection_engines.engines import (
     LegacySelectionEngine,
     SelectionEngineV2,
+    SelectionEngineV2_1,
     SelectionEngineV3,
     SelectionEngineV3_1,
     SelectionEngineV3_2,
@@ -13,6 +14,7 @@ from tradingview_scraper.selection_engines.engines import (
 
 SELECTION_ENGINES: Dict[str, Type[BaseSelectionEngine]] = {
     "v2": SelectionEngineV2,
+    "v2.1": SelectionEngineV2_1,
     "v3": SelectionEngineV3,
     "v3.1": SelectionEngineV3_1,
     "v3.2": SelectionEngineV3_2,

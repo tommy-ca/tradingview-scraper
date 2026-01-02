@@ -56,6 +56,7 @@ def cache_features():
         )
 
         component_probs = metrics.get("component_probs", {})
+        raw_metrics = metrics.get("raw_metrics", {})
 
         for symbol in train_data.columns:
             if symbol not in forward_returns.index:
@@ -72,13 +73,17 @@ def cache_features():
             for comp_name, sym_probs in component_probs.items():
                 row[f"p_{comp_name}"] = sym_probs.get(symbol, 0.0)
 
+            # Add all raw metrics
+            for comp_name, sym_raw in raw_metrics.items():
+                row[f"raw_{comp_name}"] = sym_raw.get(symbol, 0.0)
+
             all_feature_rows.append(row)
 
     df_cache = pd.DataFrame(all_feature_rows)
-    output_path = Path("data/lakehouse/hpo_feature_cache.parquet")
+    output_path = Path("data/lakehouse/hpo_feature_cache_raw.parquet")
     os.makedirs(output_path.parent, exist_ok=True)
     df_cache.to_parquet(output_path, index=False)
-    logger.info(f"✅ Feature cache saved to {output_path} | Total rows: {len(df_cache)}")
+    logger.info(f"✅ Raw feature cache saved to {output_path} | Total rows: {len(df_cache)}")
 
 
 if __name__ == "__main__":

@@ -1,15 +1,17 @@
 {
   "regime": "stressed",
-  "best_alpha": 0.046649096411397736,
+  "best_risk_adj_alpha": 0.7371279897254613,
   "best_params": {
-    "w_momentum": 1.312620579353834,
-    "w_stability": 0.011205774896745655,
-    "w_liquidity": 0.19775527117553326,
-    "w_antifragility": 1.740568876836649,
-    "w_survival": 1.8052278450063146,
-    "w_efficiency": 0.5060773455195028,
-    "w_entropy": 0.09277311049329866,
-    "w_hurst": 0.17164868166784686
+    "w_momentum": 1.7468757689688428,
+    "w_stability": 0.04577026456894705,
+    "w_liquidity": 0.29460301935452743,
+    "w_antifragility": 0.6263427014607224,
+    "w_survival": 1.399983977426618,
+    "w_efficiency": 1.5348407862249287,
+    "w_entropy": 0.03221191124287824,
+    "w_hurst": 0.34851475223045303,
+    "top_n": 5
   },
-  "n_trials": 200
+  "n_trials": 500,
+  "timestamp": "2026-01-02T03:21:52.246745"
 }

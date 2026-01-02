@@ -228,3 +228,23 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [ ] Track: System Integrity, Replayability & Determinism (SIRD)
 *Link: [./conductor/tracks/system_integrity_determinism_20260101/](./conductor/tracks/system_integrity_determinism_20260101/)*
+
+---
+
+## [x] Track: Optuna Hyperparameter Tuning (Log-MPS 3.2)
+*Link: [./conductor/tracks/hpo_selection_logmps_20260101/](./conductor/tracks/hpo_selection_logmps_20260101/)*
+
+---
+
+## [x] Track: Global Robust Selection Tuning (Log-MPS 3.2)
+*Link: [./conductor/tracks/global_robust_selection_tuning_20260102/](./conductor/tracks/global_robust_selection_tuning_20260102/)*
+
+---
+
+## [x] Track: Selection v2.1 (Tuned CARS Optimization)
+*Link: [./conductor/tracks/v2_tuned_cars_optimization_20260102/](./conductor/tracks/v2_tuned_cars_optimization_20260102/)*
+
+---
+
+## [~] Track: Normalization Sensitivity Audit (v2.1)
+*Link: [./conductor/tracks/normalization_sensitivity_audit_20260102/](./conductor/tracks/normalization_sensitivity_audit_20260102/)*

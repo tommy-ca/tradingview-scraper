@@ -60,6 +60,32 @@ class FeatureFlags(BaseModel):
     }
     top_n_global: int = 5
 
+    # HPO Optimized Weights (Selection v2.1 - Additive Rank-Sum)
+    # Refined via Normalization Sensitivity Audit (2026-01-02)
+    weights_v2_1_global: Dict[str, float] = {
+        "momentum": 0.2055,
+        "stability": 0.0882,
+        "liquidity": 0.1697,
+        "antifragility": 0.0988,
+        "survival": 0.2273,
+        "efficiency": 0.1027,
+        "entropy": 0.0060,
+        "hurst_clean": 0.1018,
+    }
+    # Winner: Multi-Method Normalization Protocol
+    normalization_methods_v2_1: Dict[str, str] = {
+        "momentum": "logistic",
+        "stability": "logistic",
+        "liquidity": "zscore",
+        "antifragility": "rank",
+        "survival": "rank",
+        "efficiency": "rank",
+        "entropy": "zscore",
+        "hurst_clean": "zscore",
+    }
+    clipping_sigma_v2_1: float = 3.49
+    top_n_v2_1: int = 2
+
     # Selection Specification Mode: 'v2', 'v3', 'legacy'
     selection_mode: str = "v3"
 
