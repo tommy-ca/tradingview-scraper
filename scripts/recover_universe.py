@@ -28,12 +28,23 @@ def recover():
     # 1. Run targeted repair for all symbols using --type all
     logger.info("Executing comprehensive gap repair (multi-pass)...")
     # Pass 1: standard repair
-    subprocess.run(["uv", "run", "scripts/repair_portfolio_gaps.py", "--type", "all", "--max-fills", "15"])
+    subprocess.run(["uv", "run", "scripts/repair_portfolio_gaps.py", "--type", "all", "--max-fills", "15"], check=True)
 
     # Pass 2: high intensity repair for anything still degraded
     logger.info("Refreshing aligned returns matrix...")
-    lookback = os.getenv("LOOKBACK", "200")
-    subprocess.run(["make", "prep", "BACKFILL=1", "GAPFILL=1", f"LOOKBACK={lookback}", "BATCH=2"])
+    lookback = os.getenv("PORTFOLIO_LOOKBACK_DAYS") or os.getenv("LOOKBACK", "200")
+    batch = os.getenv("PORTFOLIO_BATCH_SIZE") or os.getenv("BATCH", "2")
+    refresh_env = os.environ.copy()
+    refresh_env.update(
+        {
+            "PORTFOLIO_LOOKBACK_DAYS": str(lookback),
+            "PORTFOLIO_BATCH_SIZE": str(batch),
+            "PORTFOLIO_BACKFILL": "1",
+            "PORTFOLIO_GAPFILL": "1",
+            "PORTFOLIO_FORCE_SYNC": refresh_env.get("PORTFOLIO_FORCE_SYNC", "1"),
+        }
+    )
+    subprocess.run(["make", "data-fetch", f"LOOKBACK={lookback}", f"BATCH={batch}", "GAPFILL=1"], env=refresh_env, check=True)
 
     if ledger:
         ledger.record_outcome(step="recovery_internals", status="success", output_hashes={}, metrics={"strategy": "intensive_repair"})
