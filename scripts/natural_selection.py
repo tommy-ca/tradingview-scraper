@@ -189,6 +189,6 @@ if __name__ == "__main__":
     parser.add_argument("--threshold", type=float)
     parser.add_argument("--max-clusters", type=int, default=25)
     parser.add_argument("--min-momentum", type=float)
-    parser.add_argument("--mode", type=str, choices=["v2", "v3", "legacy"], help="Selection spec version")
+    parser.add_argument("--mode", type=str, choices=["v2.0", "v2", "v2.1", "v3", "v3.1", "v3.2", "legacy"], help="Selection spec version")
     args = parser.parse_args()
     natural_selection(top_n_per_cluster=args.top_n, dist_threshold=args.threshold, max_clusters=args.max_clusters, min_momentum_score=args.min_momentum, mode=args.mode)

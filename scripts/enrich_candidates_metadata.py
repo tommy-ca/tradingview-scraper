@@ -112,6 +112,20 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
                 c[key] = val
                 is_enriched = True
 
+        # 3. Pre-Selection ECI Estimator (Step 5.5 Audit)
+        # Prevents high-cost assets from consuming rate limits in Step 7
+        adv = float(c.get("value_traded") or c.get("Value.Traded") or 1e-9)
+        # Use a conservative 0.5 (50% vol) for early estimation if real vol is missing
+        vol_est = float(c.get("Volatility.D") or 0.5) / 100.0 if "Volatility.D" in c else 0.5
+        eci_est = vol_est * np.sqrt(1e6 / adv)
+
+        # Capture Alpha Proxy from scanner (Perf.3M annualized)
+        p3m = float(c.get("Perf.3M") or 0.0)
+        annual_alpha_est = (1 + p3m / 100.0) ** 4 - 1
+
+        c["eci_estimate"] = float(eci_est)
+        c["eci_pre_veto"] = bool((annual_alpha_est - eci_est) < 0.005)
+
         if is_enriched:
             enriched_count += 1
 

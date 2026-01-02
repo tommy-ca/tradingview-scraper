@@ -3,14 +3,15 @@ import pandas as pd
 import pytest
 
 from tradingview_scraper.selection_engines import SelectionRequest, SelectionResponse, get_selection_engine
-from tradingview_scraper.selection_engines.engines import LegacySelectionEngine, SelectionEngineV2, SelectionEngineV3
+from tradingview_scraper.selection_engines.engines import SelectionEngineV2, SelectionEngineV2_0, SelectionEngineV3
 
 
 def test_get_selection_engine():
     """Verify engine factory retrieves the correct classes."""
+    assert isinstance(get_selection_engine("v2.0"), SelectionEngineV2_0)
     assert isinstance(get_selection_engine("v2"), SelectionEngineV2)
     assert isinstance(get_selection_engine("v3"), SelectionEngineV3)
-    assert isinstance(get_selection_engine("legacy"), LegacySelectionEngine)
+    assert isinstance(get_selection_engine("legacy"), SelectionEngineV2_0)
 
     with pytest.raises(ValueError):
         get_selection_engine("unknown_engine")
@@ -58,16 +59,16 @@ def test_engine_v3_direct(sample_data):
     assert response.winners[0]["symbol"] in ["S1", "S2"]
 
 
-def test_legacy_engine_direct(sample_data):
-    """Directly test LegacySelectionEngine."""
+def test_v2_0_engine_direct(sample_data):
+    """Directly test SelectionEngineV2_0 (formerly legacy)."""
     returns, raw_candidates = sample_data
-    engine = LegacySelectionEngine()
+    engine = SelectionEngineV2_0()
     request = SelectionRequest(top_n=1)
 
     response = engine.select(returns, raw_candidates, None, request)
 
     assert isinstance(response, SelectionResponse)
-    assert response.spec_version == "1.0"
+    assert response.spec_version == "2.0"
     assert len(response.winners) == 1
 
 
