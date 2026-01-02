@@ -1,104 +1,93 @@
 import json
-import logging
-import os
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 import pandas as pd
 
-from tradingview_scraper.settings import get_settings
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger("selection_report")
-
-
-def generate_selection_report(audit_path: str, output_path: str, audit_data: Optional[Dict[str, Any]] = None):
-    """
-    Generates a high-quality Markdown report for the universe selection process.
-    """
-    full_audit = {}
-
-    if audit_data:
-        full_audit = audit_data
-    elif os.path.exists(audit_path):
-        try:
-            with open(audit_path, "r") as f:
-                full_audit = json.load(f)
-        except Exception as e:
-            logger.error(f"Failed to read audit file: {e}")
-            return
-    else:
-        logger.warning(f"Audit data missing (Path: {audit_path})")
+def generate_report():
+    path = Path("artifacts/summaries/latest/tournament_4d_results.json")
+    if not path.exists():
+        print("Results not found.")
         return
 
-    selection = full_audit.get("selection")
-    if not selection:
-        logger.warning("No selection data found in audit.")
+    with open(path, "r") as f:
+        data = json.load(f)
+
+    results_4d = data.get("results_4d", {})
+
+    # We want to compare v2/v3 Equal Weight (or closest proxy) vs Raw Pool Equal Weight
+    # Proxy for Selected EW: 'skfolio' engine with 'equal_weight' profile (if exists), or 'custom' 'benchmark' (which is EW)
+    # Baseline: 'custom' 'raw_pool_ew'
+
+    rows = []
+
+    # We need to aggregate across windows or use the summary
+    # Let's use the summary 'total_return' and 'sharpe'
+
+    # 1. Get Baseline (Raw Pool EW) per Simulator
+    # Usually under 'custom' engine, 'raw_pool_ew' profile
+    baselines = {}  # (mode, simulator) -> {ret, sharpe}
+
+    for mode, sim_data in results_4d.items():
+        for sim, engines in sim_data.items():
+            # Check custom engine first
+            if "custom" in engines:
+                raw_data = engines["custom"].get("raw_pool_ew")
+                if raw_data and raw_data.get("summary"):
+                    baselines[(mode, sim)] = raw_data["summary"]
+
+    # 2. Compare Candidates (Selected EW)
+    # We'll use 'benchmark' profile as proxy for Selected EW (it EWs the selected universe)
+
+    for mode, sim_data in results_4d.items():
+        for sim, engines in sim_data.items():
+            baseline = baselines.get((mode, sim))  # Note: Baseline technically changes per mode if selection changes
+
+            if not baseline:
+                # Fallback: maybe raw_pool_ew wasn't run for this mode/sim?
+                continue
+
+            # Find Selected EW (Benchmark Profile)
+            # Use 'custom' engine for cleanest comparison (no optimizer noise)
+            if "custom" in engines:
+                sel_data = engines["custom"].get("benchmark")
+                if sel_data and sel_data.get("summary"):
+                    summ = sel_data["summary"]
+
+                    sel_ret = summ.get("total_return", 0)
+                    sel_sharpe = summ.get("sharpe", 0)
+
+                    raw_ret = baseline.get("total_return", 0)
+                    raw_sharpe = baseline.get("sharpe", 0)
+
+                    rows.append(
+                        {
+                            "Mode": mode,
+                            "Simulator": sim,
+                            "Selection Alpha (Ret)": f"{sel_ret - raw_ret:.2%}",
+                            "Sharpe Delta": f"{sel_sharpe - raw_sharpe:.2f}",
+                            "Selected Ret": f"{sel_ret:.2%}",
+                            "Raw Ret": f"{raw_ret:.2%}",
+                        }
+                    )
+
+    if not rows:
+        print("No comparison data found.")
         return
 
-    md = []
-    md.append("# 🧬 Natural Selection: Universe Pruning Report")
-    md.append(f"**Generated on:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    md.append(f"**Total Raw Symbols:** {selection.get('total_raw_symbols')}")
-    md.append(f"**Total Selected Assets:** {selection.get('total_selected')}")
-    md.append(f"**Multi-Lookbacks Used:** {selection.get('lookbacks_used')}")
-    md.append("\n---")
+    df = pd.DataFrame(rows)
+    df = df.sort_values(["Mode", "Simulator"])
 
-    # 1. Summary Statistics
-    md.append("## 📊 Selection Summary")
-    md.append("| Metric | Value |")
-    md.append("| :--- | :--- |")
-    md.append(f"| Raw Discovery Pool | {selection.get('total_raw_symbols')} |")
-    md.append(f"| Final Implementation Universe | {selection.get('total_selected')} |")
-    md.append(f"| Pruning Factor | {((1 - selection.get('total_selected', 0) / selection.get('total_raw_symbols', 1)) * 100):.1f}% |")
-    md.append("")
+    print(df.to_markdown(index=False))
 
-    # 2. Cluster Breakdown
-    md.append("## 📦 Cluster-Based Natural Selection")
-    md.append("Selection is performed within each risk cluster to ensure diversification while picking the best performers (Alpha Scoring).")
-    md.append("| Cluster | Raw Size | Selected | Diversity (%) | Lead Selected Assets |")
-    md.append("| :--- | :--- | :--- | :--- | :--- |")
+    out_path = Path("artifacts/summaries/latest/selection_alpha_report.md")
+    with open(out_path, "w") as f:
+        f.write("# Selection Alpha Benchmark\n\n")
+        f.write("**Metric**: Equal-Weight Selected Universe vs Equal-Weight Raw Discovery Universe.\n\n")
+        f.write(df.to_markdown(index=False))
 
-    clusters = selection.get("clusters", {})
-    sorted_clusters = sorted(clusters.items(), key=lambda x: int(x[0]))
-
-    for c_id, c_data in sorted_clusters:
-        size = c_data.get("size", 0)
-        selected = c_data.get("selected", [])
-        n_selected = len(selected)
-        diversity = (n_selected / size * 100) if size > 0 else 0
-        leads = ", ".join([f"`{s}`" for s in selected[:3]])
-        if len(selected) > 3:
-            leads += " ..."
-        md.append(f"| {c_id} | {size} | {n_selected} | {diversity:.1f}% | {leads} |")
-
-    md.append("\n---")
-
-    # 3. Strategy Logic
-    md.append("## ⚙️ Selection Strategy")
-    md.append("The 'Natural Selection' process utilizes **Execution Intelligence** to prioritize assets with superior:")
-    md.append("- **Momentum (30%)**: Positive trend direction and strength.")
-    md.append("- **Stability (20%)**: Inverse volatility to favor smooth price action.")
-    md.append("- **Convexity (20%)**: Antifragility scores from systemic tail audits.")
-    md.append("- **Liquidity (30%)**: Value traded and spread proxy to ensure low slippage.")
-
-    with open(output_path, "w") as f:
-        f.write("\n".join(md))
-
-    logger.info(f"✅ Universe Selection Report generated at: {output_path}")
+    print(f"\nReport saved to {out_path}")
 
 
 if __name__ == "__main__":
-    settings = get_settings()
-    output_dir = settings.prepare_summaries_run_dir()
-
-    # Try to find audit file in run dir first, then fallback to shared lakehouse
-    audit_file = output_dir / "selection_audit.json"
-    if not audit_file.exists():
-        audit_file = Path("data/lakehouse/selection_audit.json")
-
-    generate_selection_report(
-        audit_path=str(audit_file),
-        output_path=str(output_dir / "selection_audit.md"),
-    )
+    generate_report()
