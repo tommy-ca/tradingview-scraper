@@ -184,6 +184,13 @@ class SelectionEngineV3(BaseSelectionEngine):
     ) -> SelectionResponse:
         return self._select_v3_core(returns, raw_candidates, stats_df, request)
 
+    def _calculate_alpha_scores(self, mps_metrics: Dict[str, pd.Series], methods: Dict[str, str], frag_penalty: pd.Series) -> pd.Series:
+        """
+        Default V3 Multiplicative Scoring.
+        """
+        mps = calculate_mps_score(mps_metrics, methods=methods)
+        return mps * (1.0 - frag_penalty)
+
     def _select_v3_core(
         self,
         returns: pd.DataFrame,
@@ -250,11 +257,11 @@ class SelectionEngineV3(BaseSelectionEngine):
             mps_metrics["efficiency"] = er_all
             methods["efficiency"] = "cdf"
 
-        mps = calculate_mps_score(mps_metrics, methods=methods)
-
         max_frag = float(frag_all.max())
         frag_penalty = (frag_all / (max_frag if max_frag != 0 else 1.0)).fillna(0) * 0.5
-        alpha_scores = mps * (1.0 - frag_penalty)
+
+        # Scoring Standard (Overridable)
+        alpha_scores = self._calculate_alpha_scores(mps_metrics, methods, frag_penalty)
 
         # V3 Condition Number Check (Numerical Stability Gate)
         force_aggressive_pruning = False
@@ -428,6 +435,77 @@ class SelectionEngineV3_1(SelectionEngineV3):
     @property
     def name(self) -> str:
         return "v3.1"
+
+
+class SelectionEngineV3_2(SelectionEngineV3):
+    """
+    v3.2: Log-MPS Standard.
+    - Uses additive log-probabilities for numerical stability.
+    - Component weights omega are tunable via HPO (Optuna).
+    - Integrated predictability filters.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.spec_version = "3.2"
+        # Optimized weights (will be updated via Phase 3 HPO)
+        # Defaults to 1.0 for all components (parity with v3.1)
+        self.weights = {
+            "momentum": 1.0,
+            "stability": 1.0,
+            "liquidity": 1.0,
+            "antifragility": 1.0,
+            "survival": 1.0,
+            "efficiency": 1.0,
+        }
+
+    @property
+    def name(self) -> str:
+        return "v3.2"
+
+    def select(
+        self,
+        returns: pd.DataFrame,
+        raw_candidates: List[Dict[str, Any]],
+        stats_df: Optional[pd.DataFrame],
+        request: SelectionRequest,
+    ) -> SelectionResponse:
+        settings = get_settings()
+        if not settings.features.feat_selection_logmps:
+            # Fallback to v3.1 logic if flag is off
+            logger.debug("feat_selection_logmps disabled, falling back to v3.1 multiplicative logic")
+            engine_v31 = SelectionEngineV3_1()
+            return engine_v31.select(returns, raw_candidates, stats_df, request)
+
+        return self._select_v3_core(returns, raw_candidates, stats_df, request)
+
+    def _calculate_alpha_scores(self, mps_metrics: Dict[str, pd.Series], methods: Dict[str, str], frag_penalty: pd.Series) -> pd.Series:
+        """
+        Calculates scores using additive log-probabilities: Score = sum( omega_i * ln(P_i) ).
+        """
+        from tradingview_scraper.utils.scoring import map_to_probability
+
+        # 1. Compute individual probabilities P_i
+        probs: Dict[str, pd.Series] = {}
+        for name, series in mps_metrics.items():
+            method = methods.get(name, "rank")
+            probs[name] = map_to_probability(series, method=method)
+
+        # 2. Sum log-probabilities
+        floor = 1e-9
+        log_score = pd.Series(0.0, index=frag_penalty.index)
+
+        for name, p_series in probs.items():
+            omega = self.weights.get(name, 1.0)
+            log_score += omega * np.log(p_series.clip(lower=floor))
+
+        # Log-based penalty: log(1 - penalty)
+        penalty_factor = (1.0 - frag_penalty).clip(lower=floor)
+        log_score += np.log(penalty_factor)
+
+        # Return exponential to stay in probability-like space [0, 1] for ranking compatibility
+        result = np.exp(log_score)
+        return cast(pd.Series, result)
 
 
 class LegacySelectionEngine(BaseSelectionEngine):

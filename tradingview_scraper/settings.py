@@ -38,6 +38,7 @@ class FeatureFlags(BaseModel):
     feat_regime_survival: bool = False
     feat_predictability_vetoes: bool = False
     feat_efficiency_scoring: bool = False
+    feat_selection_logmps: bool = False
 
     # Predictability Thresholds
     entropy_max_threshold: float = 0.9
