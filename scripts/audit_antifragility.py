@@ -9,7 +9,7 @@ import yaml
 
 from tradingview_scraper.risk import AntifragilityAuditor, TailRiskAuditor
 from tradingview_scraper.settings import get_settings
-from tradingview_scraper.symbols.stream.metadata import DataProfile, get_symbol_profile, get_us_holidays
+from tradingview_scraper.symbols.stream.metadata import DataProfile, get_exchange_calendar, get_symbol_profile
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("antifragility_audit")
@@ -17,8 +17,7 @@ logger = logging.getLogger("antifragility_audit")
 
 def calculate_effective_gaps(symbol: str, returns_series: pd.Series, profile: DataProfile) -> Dict[str, Any]:
     """
-    Calculates gaps aware of the exchange calendar.
-    For non-crypto, weekends and US holidays are not gaps.
+    Calculates gaps aware of the exchange calendar using exchange_calendars library.
     """
     total_slots = len(returns_series)
     if total_slots == 0:
@@ -28,31 +27,39 @@ def calculate_effective_gaps(symbol: str, returns_series: pd.Series, profile: Da
     zero_mask = returns_series == 0
 
     if profile == DataProfile.CRYPTO:
-        # Crypto is 24/7, every zero is a potential gap (or flat price)
+        # Crypto is 24/7
         n_gaps = zero_mask.sum()
         gap_pct = n_gaps / total_slots
     else:
-        # TradFi: Filter out weekends and holidays from the gap count
+        # TradFi: Use institutional calendar
+        cal = get_exchange_calendar(symbol, profile)
         dates = pd.to_datetime(returns_series.index)
-        holidays = get_us_holidays(dates[-1].year)
 
-        # Weekend mask (Saturday=5, Sunday=6)
-        is_weekend = dates.to_series().dt.dayofweek >= 5
-        # Holiday mask
-        is_holiday = dates.strftime("%Y-%m-%d").isin(holidays)
+        # Determine valid trading sessions in this date range
+        try:
+            valid_sessions = cal.sessions_in_range(dates[0].normalize(), dates[-1].normalize())
+            # Convert to date set for fast lookup
+            valid_dates = set(valid_sessions.to_series().dt.date)
 
-        # Effective slots are those where the market is actually open
-        is_market_closed = is_weekend | is_holiday
-        effective_zeros = zero_mask & ~is_market_closed
-        effective_total_slots = (~is_market_closed).sum()
+            # Map returns_series dates to a mask of valid trading days
+            is_trading_day = pd.Series(returns_series.index).apply(lambda d: d in valid_dates).values
 
-        n_gaps = effective_zeros.sum()
-        gap_pct = n_gaps / effective_total_slots if effective_total_slots > 0 else 0.0
+            # Effective slots are those where the market was actually open
+            effective_zeros = zero_mask & is_trading_day
+            effective_total_slots = is_trading_day.sum()
+
+            n_gaps = effective_zeros.sum()
+            gap_pct = n_gaps / effective_total_slots if effective_total_slots > 0 else 0.0
+        except Exception as e:
+            logger.warning(f"Calendar error for {symbol}: {e}. Falling back to 5/7 heuristic.")
+            # Fallback to simple weekend filter if calendar fails
+            is_weekend = (dates.to_series().dt.dayofweek >= 5).values
+            effective_zeros = zero_mask & ~is_weekend
+            effective_total_slots = (~is_weekend).sum()
+            n_gaps = effective_zeros.sum()
+            gap_pct = n_gaps / effective_total_slots if effective_total_slots > 0 else 0.0
 
     n_bars = total_slots - zero_mask.sum()
-
-    # Gate criteria: > 250 bars (secular) or > 40 bars (window-local) and < 5% gaps
-    # We use a relaxed 10% for this daily-backfill check
     is_healthy = gap_pct <= 0.10
 
     return {"n_bars": n_bars, "gap_pct": gap_pct, "is_healthy": is_healthy, "profile": profile.value}

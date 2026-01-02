@@ -1,11 +1,10 @@
 import logging
 import os
-from datetime import datetime
 from typing import List, Optional
 
 import pandas as pd
 
-from tradingview_scraper.symbols.stream.metadata import DataProfile, get_us_holidays
+from tradingview_scraper.symbols.stream.metadata import DataProfile
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +133,7 @@ class LakehouseStorage:
 
         # Expected interval in seconds
         from tradingview_scraper.symbols.stream.loader import DataLoader
+        from tradingview_scraper.symbols.stream.metadata import get_exchange_calendar
 
         interval_mins = DataLoader.TIMEFRAME_MINUTES.get(interval)
         if not interval_mins:
@@ -143,9 +143,8 @@ class LakehouseStorage:
         expected_diff = interval_mins * 60
         gaps = []
 
-        # Pre-load holidays for recent years to avoid re-calculation
-        current_year = datetime.now().year
-        holidays = get_us_holidays(current_year) | get_us_holidays(current_year - 1)
+        # Pre-load calendar for the specific symbol
+        cal = get_exchange_calendar(symbol, profile)
 
         timestamps = df["timestamp"].tolist()
         for i in range(1, len(timestamps)):
@@ -156,23 +155,19 @@ class LakehouseStorage:
 
                 # Market-aware filtering
                 if profile != DataProfile.CRYPTO:
-                    start_dt = datetime.fromtimestamp(gap_start)
-                    end_dt = datetime.fromtimestamp(gap_end)
+                    start_dt = pd.Timestamp(gap_start, unit="s")
+                    end_dt = pd.Timestamp(gap_end, unit="s")
 
-                    # 1. Skip Weekends/Holidays for TradFi
+                    # Skip gaps if the market was closed according to its institutional schedule
                     if interval == "1d":
-                        # Sunday is 6, Saturday is 5
-                        # If today is Monday, Friday is previous valid day.
-                        # We use a date-range check to see if there are any TRADING days in the gap
-                        date_range = pd.date_range(start=start_dt, end=end_dt, freq="B")
-                        # Filter out US holidays from this range
-                        actual_trading_days = [d for d in date_range if d.strftime("%Y-%m-%d") not in holidays]
-
-                        logger.debug(f"Gap for {symbol}: {start_dt} to {end_dt}. Trading days: {actual_trading_days}")
-
-                        if not actual_trading_days:
-                            # The gap contains NO business days or ONLY holidays
-                            continue
+                        # Check if there are any valid trading sessions in this range
+                        try:
+                            sessions = cal.sessions_in_range(start_dt.normalize(), end_dt.normalize())
+                            if len(sessions) == 0:
+                                continue
+                        except Exception:
+                            # Fallback if range is weird or outside calendar bounds
+                            pass
 
                 gaps.append((gap_start, gap_end))
 

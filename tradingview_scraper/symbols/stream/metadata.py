@@ -3,6 +3,7 @@ import os
 from enum import Enum
 from typing import Dict, List, Optional, Set
 
+import exchange_calendars as xcals
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -17,59 +18,65 @@ class DataProfile(Enum):
 
 
 # Canonical metadata for common exchanges
+# Mapping TradingView exchange codes to exchange_calendars canonical names
 DEFAULT_EXCHANGE_METADATA = {
-    "BINANCE": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO},
-    "OKX": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO},
-    "BYBIT": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO},
-    "BITGET": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO},
-    "THINKMARKETS": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
-    "NASDAQ": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY},
-    "NYSE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY},
-    "AMEX": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY},
-    "CME": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
-    "CME_MINI": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
-    "CBOT": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
-    "COMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
-    "NYMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
-    "ICE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES},
-    "OANDA": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FOREX},
-    "FX_IDC": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
-    "FOREX": {"timezone": "America/New_York", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX},
+    "BINANCE": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO, "calendar": "XCRY"},
+    "OKX": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO, "calendar": "XCRY"},
+    "BYBIT": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO, "calendar": "XCRY"},
+    "BITGET": {"timezone": "UTC", "is_crypto": True, "country": "Global", "profile": DataProfile.CRYPTO, "calendar": "XCRY"},
+    "THINKMARKETS": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX, "calendar": "FX"},
+    "NASDAQ": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY, "calendar": "XNYS"},
+    "NYSE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY, "calendar": "XNYS"},
+    "AMEX": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.EQUITY, "calendar": "XNYS"},
+    "CME": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "CMES"},
+    "CME_MINI": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "CMES"},
+    "CBOT": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "CMES"},
+    "COMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "CMES"},
+    "NYMEX": {"timezone": "America/Chicago", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "CMES"},
+    "ICE": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FUTURES, "calendar": "ICEUS"},
+    "OANDA": {"timezone": "America/New_York", "is_crypto": False, "country": "United States", "profile": DataProfile.FOREX, "calendar": "FX"},
+    "FX_IDC": {"timezone": "UTC", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX, "calendar": "FX"},
+    "FOREX": {"timezone": "America/New_York", "is_crypto": False, "country": "Global", "profile": DataProfile.FOREX, "calendar": "FX"},
 }
+
+
+def get_exchange_calendar(symbol: str, profile: DataProfile = DataProfile.UNKNOWN) -> xcals.ExchangeCalendar:
+    """Returns an exchange_calendars instance for the given symbol/profile."""
+    exchange = symbol.split(":")[0].upper() if ":" in symbol else "UNKNOWN"
+
+    cal_name: str = "XNYS"  # Default
+    if exchange in DEFAULT_EXCHANGE_METADATA:
+        # Cast to str to satisfy type checker
+        val = DEFAULT_EXCHANGE_METADATA[exchange].get("calendar")
+        if isinstance(val, str):
+            cal_name = val
+    elif profile == DataProfile.CRYPTO:
+        cal_name = "XCRY"
+    elif profile == DataProfile.FOREX:
+        cal_name = "FX"
+
+    try:
+        return xcals.get_calendar(cal_name)
+    except Exception:
+        return xcals.get_calendar("XNYS")
 
 
 def get_us_holidays(year: int) -> Set[str]:
     """Returns a set of major US market holiday dates (YYYY-MM-DD)."""
-    holidays = set()
+    # Use XNYS as proxy for US holidays
+    cal = xcals.get_calendar("XNYS")
+    start = pd.Timestamp(f"{year}-01-01")
+    end = pd.Timestamp(f"{year}-12-31")
 
-    if year == 2025:
-        holidays = {
-            "2025-01-01",  # New Year's Day
-            "2025-01-20",  # MLK Day
-            "2025-02-17",  # Presidents Day
-            "2025-04-18",  # Good Friday
-            "2025-05-26",  # Memorial Day
-            "2025-06-19",  # Juneteenth
-            "2025-07-04",  # Independence Day
-            "2025-09-01",  # Labor Day
-            "2025-11-27",  # Thanksgiving
-            "2025-12-25",  # Christmas
-        }
-    elif year == 2026:
-        holidays = {
-            "2026-01-01",  # New Year's Day
-            "2026-01-19",  # MLK Day
-            "2026-02-16",  # Presidents Day
-            "2026-04-03",  # Good Friday
-            "2026-05-25",  # Memorial Day
-            "2026-06-19",  # Juneteenth
-            "2026-07-03",  # Independence Day (Observed)
-            "2026-09-07",  # Labor Day
-            "2026-11-26",  # Thanksgiving
-            "2026-12-25",  # Christmas
-        }
+    # xcals defines 'holidays' as actual closure days
+    all_days = pd.date_range(start, end)
+    business_days = cal.sessions_in_range(start, end)
+    holidays = all_days[~all_days.isin(business_days)]
 
-    return holidays
+    # Filter for weekdays only to get literal holidays (not weekends)
+    weekday_holidays = [d for d in holidays if d.dayofweek < 5]
+
+    return {d.strftime("%Y-%m-%d") for d in weekday_holidays}
 
 
 def get_symbol_profile(symbol: str, meta: Optional[Dict] = None) -> DataProfile:

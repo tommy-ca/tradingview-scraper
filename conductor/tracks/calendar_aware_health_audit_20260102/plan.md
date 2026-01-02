@@ -15,3 +15,10 @@
 
 ## Phase 4: Verification
 - [x] **Task**: Rerun `make audit-health` and verify non-crypto assets are no longer 30%+ "Gaps" during holiday weeks.
+
+## Phase 5: exchange_calendars Integration
+- [x] **Task**: Add `exchange_calendars` to project dependencies.
+- [x] **Task**: Map TradingView exchange codes to `exchange_calendars` names in `metadata.py`.
+- [x] **Task**: Implement `get_exchange_calendar(symbol, profile)` utility.
+- [x] **Task**: Refactor `LakehouseStorage.detect_gaps` to use library-backed trading schedules.
+- [x] **Task**: Refactor `audit_antifragility.py` to use library-backed trading schedules.

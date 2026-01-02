@@ -44,6 +44,7 @@ dependencies = [
     "matplotlib>=3.7.1",
     "hmmlearn>=0.3.0",
     "statsmodels>=0.14.0",
+    "exchange-calendars>=4.11.3",
 ]
 
 [project.urls]

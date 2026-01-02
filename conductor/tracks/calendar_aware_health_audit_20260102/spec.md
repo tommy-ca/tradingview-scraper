@@ -16,6 +16,6 @@ Ensure that data health checks (gaps, staleness) are aware of exchange calendars
 - **TradFi**: Adjusted for weekends/holidays. If today is Monday, data from Friday is "Fresh."
 
 ## 3. Implementation Logic
-- Integrate `DataProfile` lookup into all audit scripts.
-- Use `get_us_holidays()` to filter known closed days.
-- Update `audit_antifragility.py` to use a profile-aware gap counter.
+- Integrate `exchange_calendars` library for precise market closure detection.
+- Map exchange codes (e.g., NYSE, CME, OANDA) to `exchange_calendars` canonical names.
+- Update `DataProfile` logic to utilize library-backed calendars for non-crypto assets.
