@@ -107,7 +107,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: Spectral & Entropy Alpha Integration 2026-01-01
+## [x] Track: Spectral & Entropy Alpha Integration 2026-01-01
 *Link: [./conductor/tracks/spectral_entropy_alpha_integration_20260101/](./conductor/tracks/spectral_entropy_alpha_integration_20260101/)*
 
 ---
@@ -203,3 +203,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: Audit Remediation 2026-01-01
 *Link: [./conductor/tracks/audit_remediation_20260101/](./conductor/tracks/audit_remediation_20260101/)*
+
+---
+
+## [x] Track: Predictability Feature Flags
+*Link: [./conductor/tracks/predictability_feature_flags_20260101/](./conductor/tracks/predictability_feature_flags_20260101/)*
