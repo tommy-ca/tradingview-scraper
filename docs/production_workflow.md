@@ -19,7 +19,7 @@ The platform defaults to the **`skfolio` Barbell** strategy, which was selected 
 
 ### Self-Healing & Data Integrity
 The pipeline includes an automated **Integrated Recovery Loop (Step 8)** managed by the Python orchestrator.
-- **Auto-Recovery**: If the initial health audit fails, the orchestrator automatically triggers a `make recover` pass (intensive gap-repair + matrix alignment).
+- **Auto-Recovery**: If the initial health audit fails, the orchestrator automatically triggers a `make data-repair` pass (intensive gap-repair + matrix alignment).
 - **Audit Logging**: The recovery trigger and outcome are recorded in the `audit.jsonl` decision ledger.
 - **Hard Halt**: If data health issues persist after recovery, the pipeline halts immediately, preventing degraded data from reaching backtesting or implementation.
 
@@ -57,7 +57,7 @@ The platform uses **Feature Flags** to gradually roll out high-impact quantitati
 
 ### Data Quality Gates
 The pipeline includes an automated **Step 8: Health Audit & Automated Recovery**. 
-- If gaps are detected in the implementation universe, `make recover` is triggered automatically.
+- If gaps are detected in the implementation universe, `make data-repair` is triggered automatically.
 - Recovery includes intensive gap repair and a matrix alignment refresh.
 - If `strict_health: true` is set in the manifest, the run will fail if any gaps remain after recovery.
 

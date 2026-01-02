@@ -43,7 +43,7 @@ This roadmap outlines the strategic development goals for the TradingView Scrape
 - **Metadata Parity 2.0**: Implement real-time parity checking between the offline symbols catalog and TradingView's live data to prevent point-in-time mapping errors.
 
 ## Ongoing Maintenance
-- **Data Resilience**: Continuous improvement of the self-healing `make recover` loop.
+- **Data Resilience**: Continuous improvement of the self-healing `make data-repair` loop.
 - **Optimizer Benchmarking**: Monthly "Tournament" runs to evaluate if third-party engines (`skfolio`, `Riskfolio`) are outperforming the `Custom` convex engine in realized Sharpe stability.
 
 ## Phase 4: Engine Migration & Simulator Repair (COMPLETED - Jan 2026)
@@ -118,4 +118,3 @@ Now that the foundation is calibrated and synchronized, the focus shifts to extr
 ### 4. Transaction Cost Optimization (TCO)
 - **Goal**: Minimize implementation shortfall using calibrated simulator data.
 - **Action**: Implement "Execution Ranking" within clusters. Prioritize assets with higher `value_traded` and lower `realized_vol` to fill cluster allocations.
-

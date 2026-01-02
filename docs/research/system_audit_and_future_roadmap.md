@@ -60,7 +60,7 @@ The current system has successfully implemented a multi-asset, cluster-aware qua
 - [x] **CLI Heatmap**: Unicode-based correlation heatmap (`make heatmap`) is operational.
 
 ## 5. Operational Improvement Suggestions
-1. **Recovery Loops**: Implement a `make recover` target for high-intensity sequential retries.
+1. **Recovery Loops**: Implement a `make data-repair` target for high-intensity sequential retries.
 2. **Institutional Guardrails**: Integrate `make audit` into CI/CD.
 3. **Threshold Sensitivity Analysis**: Visualize cluster count vs. distance threshold.
 

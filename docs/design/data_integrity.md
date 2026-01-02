@@ -38,5 +38,5 @@ The WebSocket streamer must distinguish between a "Quiet Market" and a "Dead Con
 ## 5. Automated Recovery (Self-Healing)
 The pipeline enforces a `strict_health` policy.
 1.  **Step 8 Health Audit**: Scans all parquet files for gaps using the Market-Day normalization.
-2.  **Aggressive Repair**: Triggers `make recover` if gaps are found, attempting to backfill with increased retry depth.
+2.  **Aggressive Repair**: Triggers `make data-repair` if gaps are found, attempting to backfill with increased retry depth.
 3.  **Promotion**: Only assets with 100% integrity (post-normalization) are promoted to the final portfolio candidate pool.
