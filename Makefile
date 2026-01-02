@@ -18,6 +18,9 @@ SUMMARIES_ROOT ?= $(ARTIFACTS_DIR)/summaries
 SUMMARY_DIR ?= $(SUMMARIES_ROOT)/latest
 SUMMARY_RUN_DIR ?= $(SUMMARIES_ROOT)/runs/$(TV_RUN_ID)
 META_CATALOG_PATH ?= data/lakehouse/symbols.parquet
+TARGETED_CANDIDATES ?= data/lakehouse/portfolio_candidates_targeted.json
+TARGETED_LOOKBACK ?= 200
+TARGETED_BATCH ?= 2
 
 # Run ID Logic
 ifneq ($(origin TV_RUN_ID), undefined)
@@ -74,6 +77,11 @@ data-fetch: ## Ingest historical market data
 		echo "Running final aggressive repair pass..."; \
 		$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15; \
 	fi
+
+data-refresh-targeted: ## Force refresh for stale symbols listed in TARGETED_CANDIDATES
+	@echo ">>> Targeted refresh using $(TARGETED_CANDIDATES)"
+	CANDIDATES_FILE=$(TARGETED_CANDIDATES) PORTFOLIO_BACKFILL=1 PORTFOLIO_GAPFILL=1 PORTFOLIO_FORCE_SYNC=1 PORTFOLIO_LOOKBACK_DAYS=$(TARGETED_LOOKBACK) PORTFOLIO_BATCH_SIZE=$(TARGETED_BATCH) $(PY) scripts/prepare_portfolio_data.py
+	$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15
 
 data-repair: ## High-intensity gap repair for degraded assets
 	$(PY) scripts/recover_universe.py
