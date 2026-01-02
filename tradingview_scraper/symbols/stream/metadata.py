@@ -40,22 +40,35 @@ DEFAULT_EXCHANGE_METADATA = {
 
 def get_us_holidays(year: int) -> Set[str]:
     """Returns a set of major US market holiday dates (YYYY-MM-DD)."""
-    # Simple hardcoded major holidays for 2025/2026
-    holidays = {
-        f"{year}-01-01",  # New Year's Day
-        f"{year}-01-20",  # MLK Day (2025)
-        f"{year}-02-17",  # Presidents Day (2025)
-        f"{year}-04-18",  # Good Friday (2025)
-        f"{year}-05-26",  # Memorial Day (2025)
-        f"{year}-06-19",  # Juneteenth
-        f"{year}-07-04",  # Independence Day
-        f"{year}-09-01",  # Labor Day (2025)
-        f"{year}-11-26",  # Day before Thanksgiving (Early close)
-        f"{year}-11-27",  # Thanksgiving (2025)
-        f"{year}-11-28",  # Day after Thanksgiving (Early close/Closed for some)
-        f"{year}-12-24",  # Christmas Eve (Early Close/Closed)
-        f"{year}-12-25",  # Christmas
-    }
+    holidays = set()
+
+    if year == 2025:
+        holidays = {
+            "2025-01-01",  # New Year's Day
+            "2025-01-20",  # MLK Day
+            "2025-02-17",  # Presidents Day
+            "2025-04-18",  # Good Friday
+            "2025-05-26",  # Memorial Day
+            "2025-06-19",  # Juneteenth
+            "2025-07-04",  # Independence Day
+            "2025-09-01",  # Labor Day
+            "2025-11-27",  # Thanksgiving
+            "2025-12-25",  # Christmas
+        }
+    elif year == 2026:
+        holidays = {
+            "2026-01-01",  # New Year's Day
+            "2026-01-19",  # MLK Day
+            "2026-02-16",  # Presidents Day
+            "2026-04-03",  # Good Friday
+            "2026-05-25",  # Memorial Day
+            "2026-06-19",  # Juneteenth
+            "2026-07-03",  # Independence Day (Observed)
+            "2026-09-07",  # Labor Day
+            "2026-11-26",  # Thanksgiving
+            "2026-12-25",  # Christmas
+        }
+
     return holidays
 
 

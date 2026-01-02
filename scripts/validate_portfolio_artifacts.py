@@ -132,8 +132,14 @@ class PortfolioAuditor:
                 if profile == DataProfile.CRYPTO:
                     is_fresh = age_hours <= FRESHNESS_THRESHOLD_HOURS
                 else:
-                    age_days = (now.date() - last_dt.date()).days
-                    is_fresh = age_days <= FRESHNESS_THRESHOLD_DAYS_TRADFI
+                    # TradFi: Be more lenient during known holidays/weekends
+                    # Use a date-based diff instead of pure hours
+                    last_date = last_dt.date()
+                    today = now.date()
+
+                    # If today is Monday or Tuesday after a long weekend, Friday data is fine (diff <= 4)
+                    # Increased to 5 days to be safe for long institutional holiday breaks
+                    is_fresh = (today - last_date).days <= FRESHNESS_THRESHOLD_DAYS_TRADFI
 
             if not is_fresh:
                 self._record(profile, symbol, "STALE", last_ts)

@@ -142,7 +142,10 @@ class LakehouseStorage:
 
         expected_diff = interval_mins * 60
         gaps = []
-        holidays = get_us_holidays(datetime.now().year)
+
+        # Pre-load holidays for recent years to avoid re-calculation
+        current_year = datetime.now().year
+        holidays = get_us_holidays(current_year) | get_us_holidays(current_year - 1)
 
         timestamps = df["timestamp"].tolist()
         for i in range(1, len(timestamps)):
@@ -156,17 +159,19 @@ class LakehouseStorage:
                     start_dt = datetime.fromtimestamp(gap_start)
                     end_dt = datetime.fromtimestamp(gap_end)
 
-                    # 1. Skip Weekends for Equities/Forex/Futures
+                    # 1. Skip Weekends/Holidays for TradFi
                     if interval == "1d":
                         # Sunday is 6, Saturday is 5
-                        # If gap is purely weekend (Friday to Monday), skip
-                        if (start_dt.weekday() >= 5 or end_dt.weekday() >= 5) and diff <= expected_diff * 3.5:
-                            continue
+                        # If today is Monday, Friday is previous valid day.
+                        # We use a date-range check to see if there are any TRADING days in the gap
+                        date_range = pd.date_range(start=start_dt, end=end_dt, freq="B")
+                        # Filter out US holidays from this range
+                        actual_trading_days = [d for d in date_range if d.strftime("%Y-%m-%d") not in holidays]
 
-                    # 2. Skip US Holidays for Equities/Futures/Forex (Major ones)
-                    if profile in [DataProfile.EQUITY, DataProfile.FUTURES, DataProfile.FOREX]:
-                        start_date_str = start_dt.strftime("%Y-%m-%d")
-                        if start_date_str in holidays:
+                        logger.debug(f"Gap for {symbol}: {start_dt} to {end_dt}. Trading days: {actual_trading_days}")
+
+                        if not actual_trading_days:
+                            # The gap contains NO business days or ONLY holidays
                             continue
 
                 gaps.append((gap_start, gap_end))
