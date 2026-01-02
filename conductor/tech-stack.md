@@ -12,6 +12,7 @@
 * **pandas:** Used for data manipulation and as an export format for structured data.
 * **pywt (PyWavelets):** Employed for Discrete Wavelet Transform (DWT) spectral analysis in regime detection and predictability filtering.
 * **pydantic:** Employed for data validation and settings management.
+* **optuna:** Framework used for automated hyperparameter optimization of the selection engine and risk parameters.
 * **scikit-learn:** Provides robust estimators like Ledoit-Wolf shrinkage for covariance and risk management.
 * **Market Cap Metadata:** External `market_caps_crypto.json` provides global asset ranking for hybrid guards.
 
