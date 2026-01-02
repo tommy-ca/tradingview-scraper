@@ -111,6 +111,11 @@ def get_asset_class(category: str, symbol: str = "") -> str:
 
 
 def select_top_universe(mode: str = "raw"):
+    """
+    Discovery Stage Consolidator.
+    Groups results from all scanners, picks the most liquid venue per identity,
+    and passes a broad "Raw Pool" to the Selection Engine.
+    """
     export_dir = _resolve_export_dir()
     files = [str(p) for p in export_dir.glob("universe_selector_*.json") if "_base_universe" not in p.name]
 
@@ -197,46 +202,16 @@ def select_top_universe(mode: str = "raw"):
                 i["_identity"] = get_asset_identity(i["symbol"], i["_asset_class"])
                 all_items.append(i)
 
-    # 2. Deduplicate and Score
-    unique_assets = {}
+    # 2. Basic Deduplication by Symbol (First pass)
+    unique_symbols = {}
     for item in all_items:
         sym = item["symbol"]
-        if sym not in unique_assets:
-            unique_assets[sym] = item
+        if sym not in unique_symbols:
+            unique_symbols[sym] = item
 
-    # Asset-class specific normalization denominators
-    # (ValueTraded, Volatility, PerformanceAvg)
-    norm_factors = {
-        "CRYPTO": (1e9, 10.0, 50.0),
-        "EQUITIES": (5e8, 5.0, 20.0),
-        "FUTURES": (5e8, 5.0, 20.0),
-        "FOREX": (1e8, 1.0, 5.0),
-        "FIXED_INCOME": (5e8, 2.0, 10.0),
-        "OTHER": (1e8, 5.0, 20.0),
-    }
-
-    scored_items = list(unique_assets.values())
-    for item in scored_items:
-        v_traded = float(item.get("Value.Traded", 0) or 0)
-        adx = float(item.get("ADX", 0) or 0)
-        vol = float(item.get("Volatility.D", 0) or 0)
-        perf3m = float(item.get("Perf.3M", 0) or 0)
-        perf6m = float(item.get("Perf.6M", 0) or 0)
-        is_long = item.get("_direction", "LONG") == "LONG"
-        ac = item.get("_asset_class", "OTHER")
-
-        vt_den, vol_den, perf_den = norm_factors.get(ac, norm_factors["OTHER"])
-
-        p3 = perf3m if is_long else -perf3m
-        p6 = perf6m if is_long else -perf6m
-        p_avg = (p3 + p6) / 2
-
-        score = 0.3 * min(1.0, v_traded / vt_den) + 0.3 * min(1.0, adx / 50) + 0.1 * min(1.0, vol / vol_den) + 0.3 * min(1.0, p_avg / perf_den)
-        item["_alpha_score"] = score
-
-    # 3. Canonical Merging (Best Venue per Identity)
+    # 3. Canonical Consolidation (Best Venue per Identity based on Liquidity)
     identity_groups: Dict[str, List[Dict[str, Any]]] = {}
-    for item in scored_items:
+    for item in unique_symbols.values():
         ident = item["_identity"]
         if ident not in identity_groups:
             identity_groups[ident] = []
@@ -248,41 +223,31 @@ def select_top_universe(mode: str = "raw"):
         if len(group) > 1:
             redundancy_count += len(group) - 1
 
-        group.sort(key=lambda x: x["_alpha_score"], reverse=True)
+        # Use Value.Traded as the primary venue tie-breaker
+        group.sort(key=lambda x: float(x.get("Value.Traded", 0) or 0), reverse=True)
         primary = group[0]
 
-        # Track detailed alternatives for high-fidelity venue swapping
+        # Track alternatives
         primary["implementation_alternatives"] = [
-            {"symbol": x["symbol"], "market": x["_category"], "asset_class": x["_asset_class"], "alpha_score": float(x["_alpha_score"]), "value_traded": float(x.get("Value.Traded", 0) or 0)}
-            for x in group[1:]
+            {"symbol": x["symbol"], "market": x["_category"], "asset_class": x["_asset_class"], "value_traded": float(x.get("Value.Traded", 0) or 0)} for x in group[1:]
         ]
 
         merged_pool.append(primary)
 
     audit_data["merging"] = {"total_unique_identities": len(merged_pool), "redundant_symbols_merged": redundancy_count}
 
-    # 4. Filter by Asset Class
-    final_candidates = []
-    asset_classes = ["CRYPTO", "EQUITIES", "FUTURES", "FOREX", "FIXED_INCOME", "OTHER"]
+    # 4. Global Pool Limit (Relaxed for Downstream Clustering)
+    # We no longer calculate _alpha_score here; we rely on Value.Traded for discovery-stage priority
+    merged_pool.sort(key=lambda x: float(x.get("Value.Traded", 0) or 0), reverse=True)
 
-    class_limit = int(os.getenv("UNIVERSE_CLASS_LIMIT", "30"))
-
-    for ac in asset_classes:
-        class_items = [x for x in merged_pool if x["_asset_class"] == ac]
-        class_items.sort(key=lambda x: x["_alpha_score"], reverse=True)
-        top_class = class_items[:class_limit]
-        logger.info(f"Asset Class: {ac} - Selected {len(top_class)} symbols")
-        final_candidates.extend(top_class)
-
-    # 5. Global Truncation if in 'top' mode
-    if mode == "top":
-        final_candidates.sort(key=lambda x: x["_alpha_score"], reverse=True)
-        final_candidates = final_candidates[: int(os.getenv("UNIVERSE_TOTAL_LIMIT", "80"))]
+    # Increase Raw Pool capacity to 200 to give Log-MPS enough room to filter
+    total_limit = int(os.getenv("UNIVERSE_TOTAL_LIMIT", "200"))
+    final_candidates = merged_pool[:total_limit]
 
     audit_data["final_selection"] = {
         "mode": mode,
         "total_candidates": len(final_candidates),
-        "class_breakdown": {ac: len([x for x in final_candidates if x["_asset_class"] == ac]) for ac in asset_classes},
+        "class_breakdown": {ac: len([x for x in final_candidates if x["_asset_class"] == ac]) for ac in ["CRYPTO", "EQUITIES", "FUTURES", "FOREX", "FIXED_INCOME", "OTHER"]},
     }
 
     # Map to final format
@@ -300,8 +265,13 @@ def select_top_universe(mode: str = "raw"):
                 "value_traded": item.get("Value.Traded", 0),
                 "adx": item.get("ADX", 0),
                 "atr": item.get("ATR", 0),
+                # Include performance fields for Log-MPS
+                "Perf.W": item.get("Perf.W"),
+                "Perf.1M": item.get("Perf.1M"),
+                "Perf.3M": item.get("Perf.3M"),
+                "Perf.6M": item.get("Perf.6M"),
                 "direction": item["_direction"],
-                "alpha_score": item["_alpha_score"],
+                "alpha_score": 1.0,  # Placeholder, Log-MPS will calculate real statistical score
                 "implementation_alternatives": item.get("implementation_alternatives", []),
             }
         )

@@ -6,8 +6,6 @@ import threading
 import time
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import List, Optional
 
 import pandas as pd
 
@@ -17,138 +15,58 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("portfolio_data_prep")
 
 
-def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
-    export_root = Path("export")
-    run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
-
-    if run_id:
-        candidate = export_root / run_id
-        if candidate.exists():
-            return candidate
-
-    if export_root.exists():
-        best_dir: Optional[Path] = None
-        best_mtime = -1.0
-        for subdir in export_root.iterdir():
-            if not subdir.is_dir():
-                continue
-            matches = list(subdir.glob("universe_selector_*.json"))
-            if not matches:
-                continue
-            newest = max(p.stat().st_mtime for p in matches)
-            if newest > best_mtime:
-                best_mtime = newest
-                best_dir = subdir
-        if best_dir is not None:
-            return best_dir
-
-    return export_root
-
-
 def prepare_portfolio_universe():
-    # 1. Identify candidates
-    candidates = []
-
-    # Check for pre-selected candidates file first
-    preselected_file = os.getenv("CANDIDATES_FILE", "data/lakehouse/portfolio_candidates.json")
-    if os.path.exists(preselected_file):
-        logger.info(f"Loading candidates from {preselected_file}")
-        with open(preselected_file, "r") as f:
-            candidates = json.load(f)
-    else:
-        # Fallback to scanning exports (Old behavior)
-        files = [str(p) for p in _resolve_export_dir().glob("universe_selector_*.json")]
-        # Filter for today's timestamp in filename (20251221) - Update to match current date or just take all recent?
-        # Let's just take all for now if fallback is needed, or keep existing logic.
-        # But since we generated candidates, we expect to use them.
-
-        # files = [f for f in files if "20251221" in f] # OLD
-        # Let's verify date dynamically if needed, but for now assuming candidates file exists.
-        pass
-
-    if not candidates:
-        # 1. Identify candidates from latest exports (Original Logic as backup)
-        files = [str(p) for p in _resolve_export_dir().glob("universe_selector_*.json")]
-        today_str = datetime.now().strftime("%Y%m%d")
-        files = [f for f in files if today_str in f]
-
-        for f in files:
-            logger.info(f"Reading file: {f}")
-            with open(f, "r") as j:
-                try:
-                    raw_data = json.load(j)
-                    # Handle both {'data': [...]} and [...] formats
-                    if isinstance(raw_data, dict):
-                        items = raw_data.get("data", [])
-                    elif isinstance(raw_data, list):
-                        items = raw_data
-                    else:
-                        items = []
-
-                    logger.info(f"  Found {len(items)} items in {f}")
-                    for item in items:
-                        if not isinstance(item, dict):
-                            continue
-                        # check 'all' flag - NO, we want raw universe for portfolio usually?
-                        # Or do we only want those passing filter?
-                        # The candidates file we built already filtered top 10.
-                        # Here we probably want passing ones.
-                        if item.get("passes", {}).get("all", False):
-                            direction = "LONG" if "_long" in f.lower() or ("short" not in f.lower() and "mr" not in f.lower()) else "SHORT"
-                            if "_short" in f.lower():
-                                direction = "SHORT"
-
-                            candidates.append(
-                                {"symbol": item["symbol"], "direction": direction, "market": item.get("type", "unknown"), "adx": item.get("ADX", 0), "value_traded": item.get("Value.Traded", 0)}
-                            )
-                except Exception as e:
-                    logger.error(f"  Error parsing {f}: {e}")
-                    continue
-
-    if not candidates:
-        logger.error("No candidates found.")
+    """
+    Preparation Stage.
+    Loads historical data for candidates sanctioned by the Discovery Consolidator.
+    Strictly follows the portfolio_candidates_raw.json manifest.
+    """
+    # 1. Load sanctioned candidates
+    preselected_file = os.getenv("CANDIDATES_FILE", "data/lakehouse/portfolio_candidates_raw.json")
+    if not os.path.exists(preselected_file):
+        logger.error(f"Sanctioned candidate manifest missing: {preselected_file}")
         return
 
-    # Deduplicate by symbol (taking first found direction and metadata)
-    unique_candidates = {}
-    for c in candidates:
-        if c["symbol"] not in unique_candidates:
-            unique_candidates[c["symbol"]] = c
+    logger.info(f"Loading sanctioned candidates from {preselected_file}")
+    with open(preselected_file, "r") as f:
+        universe = json.load(f)
 
-    # CRITICAL: Always ensure benchmarks are in candidates and LONG
+    if not universe:
+        logger.error("No candidates found in manifest.")
+        return
+
+    # 2. Benchmark Enforcement
+    # Always ensure benchmarks are in candidates and LONG
     from tradingview_scraper.settings import get_settings
 
-    for b_sym in get_settings().benchmark_symbols:
-        logger.info("Ensuring benchmark symbol %s is LONG.", b_sym)
-        unique_candidates[b_sym] = {
-            "symbol": b_sym,
-            "description": f"Benchmark ({b_sym})",
-            "sector": "INDEX",
-            "market": "BENCHMARK",
-            "asset_class": "BENCHMARK",
-            "identity": b_sym,
-            "direction": "LONG",
-            "is_baseline": True,
-            "value_traded": 1e12,  # Force to top
-        }
+    settings = get_settings()
 
-    # Sort by value_traded descending to keep the most liquid first
-    sorted_candidates = sorted(unique_candidates.values(), key=lambda x: x.get("value_traded", 0), reverse=True)
+    universe_symbols = {c["symbol"] for c in universe}
+    for b_sym in settings.benchmark_symbols:
+        if b_sym not in universe_symbols:
+            logger.info("Ensuring benchmark symbol %s is LONG.", b_sym)
+            universe.append(
+                {
+                    "symbol": b_sym,
+                    "description": f"Benchmark ({b_sym})",
+                    "sector": "INDEX",
+                    "market": "BENCHMARK",
+                    "asset_class": "BENCHMARK",
+                    "identity": b_sym,
+                    "direction": "LONG",
+                    "is_baseline": True,
+                    "value_traded": 1e12,
+                }
+            )
 
-    max_symbols = int(os.getenv("PORTFOLIO_MAX_SYMBOLS", "200"))
-    if max_symbols > 0:
-        universe = sorted_candidates[:max_symbols]
-    else:
-        universe = sorted_candidates
-    logger.info(f"Portfolio Universe: {len(universe)} symbols after limiting (max={max_symbols}).")
+    logger.info(f"Portfolio Universe: {len(universe)} symbols.")
 
-    # 2. Fetch Historical Data
+    # 3. Fetch Historical Data
     loader = PersistentDataLoader()
     end_date = datetime.now()
     lookback_days = int(os.getenv("PORTFOLIO_LOOKBACK_DAYS", "120"))
     start_date = end_date - timedelta(days=lookback_days)
 
-    # We'll store returns and sidecar metadata here
     price_data = {}
     alpha_meta = {}
     lock = threading.Lock()
@@ -189,10 +107,8 @@ def prepare_portfolio_universe():
 
         if (os.getenv("PORTFOLIO_BACKFILL", "0") == "1") and (is_stale or force_sync):
             try:
-                # Limit backfill depth to 500 days max to prevent large pulls / 429s
                 bf_depth = min(lookback_days + 20, 500)
                 logger.info(f"Backfilling {symbol} (depth={bf_depth})...")
-                # Use a total timeout for backfill
                 run_with_retry(lambda: local_loader.sync(symbol, interval="1d", depth=bf_depth, total_timeout=180), f"Backfill {symbol}")
             except Exception as e:
                 logger.error(f"Backfill failed for {symbol}: {e}")
@@ -200,7 +116,6 @@ def prepare_portfolio_universe():
         if (os.getenv("PORTFOLIO_GAPFILL", "0") == "1") and (is_stale or force_sync):
             try:
                 logger.info(f"Gap filling {symbol} (max_depth=500)...")
-                # max_time=60s, max_fills=20, total_timeout=120s per gap-fill call
                 run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=500, max_fills=20, max_time=120, total_timeout=120), f"Gap fill {symbol}")
             except Exception as e:
                 logger.error(f"Gap fill failed for {symbol}: {e}")
@@ -216,7 +131,7 @@ def prepare_portfolio_universe():
             df = df.set_index("timestamp")["close"]
 
             returns = df.pct_change().dropna()
-            if candidate["direction"] == "SHORT":
+            if candidate.get("direction") == "SHORT":
                 returns = -returns
 
             with lock:
@@ -230,93 +145,65 @@ def prepare_portfolio_universe():
                     "value_traded": candidate.get("value_traded", 0),
                     "direction": candidate.get("direction", "LONG"),
                     "market": candidate.get("market", "UNKNOWN"),
+                    "identity": candidate.get("identity", symbol),
                 }
         except Exception as e:
             skipped_errors.append(symbol)
-            logger.error(f"Failed to load {symbol}: {e} Keys: {list(candidate.keys())}")
+            logger.error(f"Failed to load {symbol}: {e}")
 
     total_batches = math.ceil(len(universe) / batch_size) if batch_size > 0 else 1
 
     for batch_idx in range(total_batches):
         batch = universe[batch_idx * batch_size : (batch_idx + 1) * batch_size]
-        logger.info(
-            "Processing batch %s/%s (%s symbols) [batch_size=%s, lookback_days=%s]",
-            batch_idx + 1,
-            total_batches,
-            len(batch),
-            batch_size,
-            lookback_days,
-        )
+        logger.info("Processing batch %s/%s (%s symbols)", batch_idx + 1, total_batches, len(batch))
         with ThreadPoolExecutor(max_workers=max(1, batch_size)) as executor:
             futures = [executor.submit(fetch_and_store, c) for c in batch]
-
-            # Timeout per batch (e.g. 5 minutes per symbol)
             per_symbol_timeout = 300
             batch_timeout = len(batch) * per_symbol_timeout
-
             done, not_done = wait(futures, timeout=batch_timeout, return_when=ALL_COMPLETED)
 
             for fut in done:
                 try:
                     fut.result()
-                except Exception as e:  # pragma: no cover - already logged
+                except Exception as e:
                     logger.error(f"Worker error: {e}")
 
             if not_done:
-                logger.error(f"Batch timed out after {batch_timeout}s. {len(not_done)} tasks incomplete (moving on).")
+                logger.error(f"Batch timed out. {len(not_done)} tasks incomplete.")
 
-    # 3. Align and Save
-    # We use the UNION of all dates to support mixed calendars (24/7 Crypto vs 5/7 TradFi)
+    # 4. Aligned Matrix Creation
     all_dates = sorted(set().union(*(rets.index for rets in price_data.values())))
     returns_df = pd.DataFrame(index=pd.Index(all_dates))
 
     for symbol, rets in price_data.items():
         returns_df[symbol] = rets
 
-    # Fill missing values with 0.0
-    # This correctly models 'holding' an asset when its market is closed.
+    # Aligned holding model (market closed = 0 returns)
     returns_df = returns_df.fillna(0.0)
 
-    # CRITICAL: Ensure we have enough history for the target backtest period
-    target_rows = 320  # 120 (train) + 200 (test)
-    if len(returns_df) < target_rows:
-        logger.warning("Aligned matrix has only %d rows, target is %d.", len(returns_df), target_rows)
-
-    # Drop zero-variance columns
-    zero_vars: List[str] = []
-    var = returns_df.var()
-    if isinstance(var, pd.Series):
-        zero_vars = [str(c) for c, v in var.items() if v == 0]
+    # Drop zero-variance noise
+    zero_vars = [str(c) for c, v in returns_df.var().items() if v == 0]
     if zero_vars:
         returns_df = returns_df.drop(columns=zero_vars)
         logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
 
-    # Optional dedupe by base symbol (e.g., across exchanges) when enabled
+    # Post-load Deduplication (Optional safety pass)
     if os.getenv("PORTFOLIO_DEDUPE_BASE", "0") == "1":
         deduped_cols = []
-        seen_bases = set()
+        seen_idents = set()
         for col in returns_df.columns:
-            base = col.split(":")[-1]
-            base = base.replace(".P", "").upper()
-            if base in seen_bases:
+            ident = alpha_meta.get(col, {}).get("identity", col)
+            if ident in seen_idents:
                 continue
-            seen_bases.add(base)
+            seen_idents.add(ident)
             deduped_cols.append(col)
         if len(deduped_cols) != len(returns_df.columns):
-            logger.info("Dedupe by base kept %d of %d symbols", len(deduped_cols), len(returns_df.columns))
+            logger.info("Dedupe by identity kept %d of %d symbols", len(deduped_cols), len(returns_df.columns))
             returns_df = returns_df[deduped_cols]
 
-    # Filter alpha_meta to match aligned returns columns
     alpha_meta = {s: alpha_meta[s] for s in returns_df.columns if s in alpha_meta}
 
-    # Coverage summary
-    if skipped_empty:
-        logger.info("Skipped empty symbols: %s", ", ".join(sorted(set(skipped_empty))))
-    if skipped_errors:
-        logger.info("Skipped errored symbols: %s", ", ".join(sorted(set(skipped_errors))))
-
-    logger.info(f"Returns matrix created: {returns_df.shape} (Dates x Symbols)")
-
+    logger.info(f"Returns matrix created: {returns_df.shape}")
     returns_df.to_pickle("data/lakehouse/portfolio_returns.pkl")
     with open("data/lakehouse/portfolio_meta.json", "w") as f:
         json.dump(alpha_meta, f, indent=2)
@@ -326,7 +213,6 @@ def prepare_portfolio_universe():
     print("=" * 50)
     print(f"Matrix Shape : {returns_df.shape}")
     print(f"Symbols      : {', '.join(returns_df.columns)}")
-    print("Saved to data/lakehouse/portfolio_returns.pkl")
 
 
 if __name__ == "__main__":
