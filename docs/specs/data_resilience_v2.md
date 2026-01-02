@@ -51,3 +51,17 @@ To ensure 100% reliability of time-series operations (slicing, alignment, reinde
     - **Partial Data Recovery**: Returns any gathered candles upon timeout instead of failing.
 - **Throttling**: The `BATCH` Makefile param (mapped to `PORTFOLIO_BATCH_SIZE`) controls concurrency to avoid rate limits; `LOOKBACK` maps to `PORTFOLIO_LOOKBACK_DAYS`, and `PORTFOLIO_FORCE_SYNC=1` forces refresh even if locally "fresh".
 - **HTTP Retries**: Scrapers use exponential backoff and retries for status codes `[429, 500, 502, 503, 504]`.
+
+## 6. Stale Symbol Recovery (Targeted Refresh)
+
+When a small subset of symbols goes stale but the broader universe is healthy, use a targeted refresh to force a backfill + gapfill cycle for only those symbols.
+
+**Playbook:**
+1. Create a targeted candidates file with the stale symbols (default path: `data/lakehouse/portfolio_candidates_targeted.json`).
+2. Run the targeted refresh:
+   ```bash
+   make data-refresh-targeted TARGETED_CANDIDATES=data/lakehouse/portfolio_candidates_targeted.json
+   ```
+3. Re-run `make flow-dev` (or `make data-fetch`) to rebuild the full returns matrix after the targeted pass.
+
+**Note:** `data-refresh-targeted` writes a temporary returns matrix for the targeted list, so a full fetch is required afterward to restore the full universe state.

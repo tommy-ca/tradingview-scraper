@@ -15,7 +15,7 @@ The current system has successfully implemented a multi-asset, cluster-aware qua
 ### Stage 2: Data Resilience
 - [ ] **Rigid Lookback**: All assets are forced to a 200-day window. Recently listed high-momentum assets may be dropped.
 - [x] **Throttling Inefficiency**: Batching is active, and `Selective Sync` is implemented.
-- [x] **Self-Healing**: Automated repair pass is integrated into `make prep`.
+- [x] **Self-Healing**: Automated repair pass is integrated into `make data-repair`.
 
 ### Stage 3: Hierarchical Analysis
 - [x] **Static Cutting Threshold**: Regime-adaptive clustering is now implemented.

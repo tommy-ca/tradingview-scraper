@@ -37,10 +37,18 @@ make flow-dev
 make env-sync       # Sync dependencies
 make scan-run       # Run discovery scanners
 make data-fetch     # Ingest market data
+make data-refresh-targeted # Force refresh for stale symbols
 make data-repair    # High-intensity gap repair
 make port-select    # Prune and select candidates
 make port-optimize  # Convex risk allocation
 make port-test      # Run benchmarking tournament
+```
+
+**Stale symbol recovery (targeted):**
+```bash
+# Refresh a small stale subset, then rebuild the full universe
+make data-refresh-targeted TARGETED_CANDIDATES=data/lakehouse/portfolio_candidates_targeted.json
+make flow-dev
 ```
 
 ### Forex Base Universe Audit (Debugging)
