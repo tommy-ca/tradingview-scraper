@@ -40,7 +40,15 @@ $$u_{i,t} = w_{i,target} - w_{i,t-1,drift}$$
 | **VectorBT** | Single-row weight matrix at $t_0$. | Multi-row broadcasted weight matrix. |
 | **Custom/Returns** | Apply friction once at $t_0$; track drift returns. | Calculate daily turnover and subtract daily friction. |
 
-## 4. Default State
-- **Default Mode**: `window`
+## 4. Production Standards (2026 Audit)
+
+### A. Momentum Drift Alpha
+The 2026 rebalance audit revealed that `window` mode consistently outperforms `daily` mode for momentum-driven strategies. 
+- **Mechanism**: Asset winners naturally increase their portfolio weight through drift. `daily` rebalancing prematurely sells these winners to return to target ("cutting the flowers"). 
+- **Discovery**: `window` mode captured ~5% more absolute return in high-alpha `v3.1` profiles while reducing turnover by 17%.
+
+### B. Default State
+- **Production Default**: `window` (Trade once per window, hold through drift).
+- **Institutional/Canary Default**: `daily` (Only if combined with `feat_turnover_penalty`).
 - **Default Tolerance**: `False`
 - **Drift Limit**: `0.05` (5%)

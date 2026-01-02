@@ -33,8 +33,10 @@ To support self-contained reporting, critical steps must log rich structured dat
 - **Clustering**: Logs the simplified `portfolio_clusters` map.
 - **Tournament**: Logs the full multi-engine result summary.
 
-### 2.5 Verification Tool
-A standalone utility `scripts/verify_ledger.py` is provided to "replay" the audit chain and detect any tampering or inconsistencies in the record.
+### 2.5 Behavioral Auditing (Outlier Detection)
+The system employs automated behavioral auditing via `scripts/audit_tournament_outliers.py` to identify simulations that deviate from the statistical consensus.
+- **2σ Sharpe Rule**: Any permutation where the realized Sharpe ratio deviates more than 2 standard deviations from the group mean is flagged for manual review.
+- **Simulator Drift Gate**: Permutations with a Sharpe delta > 0.1 between `nautilus` and `custom` simulators are considered "Unstable" and require numerical investigation.
 
 ## 3. Data Schema
 

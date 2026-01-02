@@ -21,17 +21,16 @@ Selection Intelligence defines the logic for "Pruning" the raw discovered candid
 - **Vetoes**: Hard gates for Survival (< 0.1), ECI (Cost), and Numerical Stability ($\kappa$).
 - **Behavior**: Non-compensatory "Darwinian" survival. Structural failure in any category results in immediate disqualification.
 
-### 2.4 Quantified V3 Profiles (Feature Flag Controlled)
+### 2.4 Alpha Standard (V3.1)
+- **Status**: Validated (2026-01-01 Grand Tournament Top Performer).
+- **Refinement**: Relaxed condition number thresholds ($10^{18}$) and lowered ECI hurdles (0.5%) to allow defensive breadth.
+- **Predictability Filters**: Integrated asset-level "Operation Darwin" vetoes:
+    - **Entropy Max**: $PE \le 0.9$ (Discard chaotic noise).
+    - **Efficiency Min**: $ER \ge 0.1$ (Discard excessive chop).
+    - **Hurst Zone**: Avoid $0.45 < H < 0.55$ (Discard pure random walks).
 
-The system supports two distinct high-fidelity selection profiles under the V3 engine, controlled by institutional feature flags.
-
-| Profile | Feature Flag | Logic | Kappa Threshold | ECI Gate | Rationale |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Darwinian** | `feat_selection_darwinian` | MPS | $10^6$ | **Enabled** | Maximum survival/quality; strictly prunes for numerical stability. |
-| **Robust** | `feat_selection_robust` | MPS | $10^7$ | **Disabled** | Balanced risk/reward; allows more breadth in high-friction environments. |
-
-- **MPS (Multiplicative Probability Scoring)**: Both profiles utilize V3 multiplicative logic to ensure no single point of failure.
-- **Hard Survival**: Both profiles enforce the `P(Survival) >= 0.1` gate.
+### 2.5 Future Evolution: Soft-Weighting
+Grand Tournament findings identified **Spectral Degeneracy** where hard vetoes on noisy assets occasionally discarded high-alpha opportunities. Future versions will transition from binary vetoes to a **Predictability Multiplier** ($MPS \times Efficiency \times (1-Entropy)$) to penalize rather than disqualify.
 
 ## 3. Integration with Risk Profiles (Tournament Dimensions)
 
