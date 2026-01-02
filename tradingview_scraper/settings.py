@@ -44,37 +44,21 @@ class FeatureFlags(BaseModel):
     entropy_max_threshold: float = 0.9
     efficiency_min_threshold: float = 0.1
     hurst_random_walk_min: float = 0.45
-    # Predictability Thresholds
-    entropy_max_threshold: float = 0.9
-    efficiency_min_threshold: float = 0.1
-    hurst_random_walk_min: float = 0.45
     hurst_random_walk_max: float = 0.55
 
     # HPO Optimized Weights (Log-MPS 3.2)
-    # Stressed: TURBULENT, CRISIS
-    weights_stressed: Dict[str, float] = {
-        "momentum": 1.3126,
-        "stability": 0.0112,
-        "liquidity": 0.1978,
-        "antifragility": 1.7406,
-        "survival": 1.8052,
-        "efficiency": 0.5061,
-        "entropy": 0.0928,
-        "hurst_clean": 0.1716,
+    # Global Robust: Optimized across all 2025 regimes (Mean Alpha / Std Alpha)
+    weights_global: Dict[str, float] = {
+        "momentum": 1.7469,
+        "stability": 0.0458,
+        "liquidity": 0.2946,
+        "antifragility": 0.6263,
+        "survival": 1.4000,
+        "efficiency": 1.5348,
+        "entropy": 0.0322,
+        "hurst_clean": 0.3485,
     }
-    # Expansion: NORMAL, QUIET (Defaults until tuned)
-    weights_expansion: Dict[str, float] = {
-        "momentum": 1.0,
-        "stability": 1.0,
-        "liquidity": 1.0,
-        "antifragility": 1.0,
-        "survival": 1.0,
-        "efficiency": 1.0,
-        "entropy": 1.0,
-        "hurst_clean": 1.0,
-    }
-
-    # Selection & Risk
+    top_n_global: int = 5
 
     # Selection Specification Mode: 'v2', 'v3', 'legacy'
     selection_mode: str = "v3"

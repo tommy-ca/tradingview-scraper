@@ -187,8 +187,17 @@ class SelectionEngineV3(BaseSelectionEngine):
     def _calculate_alpha_scores(self, mps_metrics: Dict[str, pd.Series], methods: Dict[str, str], frag_penalty: pd.Series) -> pd.Series:
         """
         Default V3 Multiplicative Scoring.
+        Only includes Efficiency/Entropy if feature flags are enabled.
         """
-        mps = calculate_mps_score(mps_metrics, methods=methods)
+        settings = get_settings()
+        filtered_metrics = {k: v for k, v in mps_metrics.items() if k not in ["efficiency", "entropy", "hurst_clean"]}
+
+        if settings.features.feat_efficiency_scoring:
+            filtered_metrics["efficiency"] = mps_metrics["efficiency"]
+
+        # V3.1 baseline doesn't include entropy/hurst in multiplicative score yet
+
+        mps = calculate_mps_score(filtered_metrics, methods=methods)
         return mps * (1.0 - frag_penalty)
 
     def _select_v3_core(
@@ -243,6 +252,9 @@ class SelectionEngineV3(BaseSelectionEngine):
             "liquidity": liq_all,
             "antifragility": af_all,
             "survival": regime_all,
+            "efficiency": er_all,
+            "entropy": (1.0 - pe_all).clip(0, 1),  # High entropy = low probability
+            "hurst_clean": (1.0 - abs(hurst_all - 0.5) * 2.0).clip(0, 1),  # 0.5 = low probability
         }
         methods = {
             "survival": "cdf",
@@ -250,17 +262,14 @@ class SelectionEngineV3(BaseSelectionEngine):
             "momentum": "rank",
             "stability": "rank",
             "antifragility": "rank",
+            "efficiency": "cdf",
+            "entropy": "rank",
+            "hurst_clean": "rank",
         }
 
-        # Rollout: Efficiency Integrated Scoring
-        if settings.features.feat_efficiency_scoring:
-            mps_metrics["efficiency"] = er_all
-            methods["efficiency"] = "cdf"
-
+        # Scoring Standard (Overridable)
         max_frag = float(frag_all.max())
         frag_penalty = (frag_all / (max_frag if max_frag != 0 else 1.0)).fillna(0) * 0.5
-
-        # Scoring Standard (Overridable)
         alpha_scores = self._calculate_alpha_scores(mps_metrics, methods, frag_penalty)
 
         # V3 Condition Number Check (Numerical Stability Gate)
@@ -490,29 +499,32 @@ class SelectionEngineV3_2(SelectionEngineV3):
             engine_v31 = SelectionEngineV3_1()
             return engine_v31.select(returns, raw_candidates, stats_df, request)
 
-        # Dynamic Weight Selection based on Regime
-        if request.regime in ["TURBULENT", "CRISIS"]:
-            self.weights = settings.features.weights_stressed
-            logger.info(f"Using HPO-Stressed weights for regime: {request.regime}")
-        else:
-            self.weights = settings.features.weights_expansion
-            logger.info(f"Using Expansion weights for regime: {request.regime}")
+        # Global Robust Weighting (Validated 2026-01-02)
+        self.weights = settings.features.weights_global
+        logger.info("Using Global Robust weights for Selection v3.2")
 
         return self._select_v3_core(returns, raw_candidates, stats_df, request)
 
     def _calculate_alpha_scores(self, mps_metrics: Dict[str, pd.Series], methods: Dict[str, str], frag_penalty: pd.Series) -> pd.Series:
         """
         Calculates scores using additive log-probabilities: Score = sum( omega_i * ln(P_i) ).
+        Includes predictability metrics (Efficiency, Entropy, Hurst) in the sum.
         """
         from tradingview_scraper.utils.scoring import map_to_probability
 
-        # 1. Compute individual probabilities P_i
+        # 1. Prepare ALL components (Core + Predictability)
+        # We need to access the metrics from the calling context if possible,
+        # or we just rely on mps_metrics being pre-populated.
+        # Wait, _select_v3_core doesn't know about predictability in mps_metrics.
+        # I should have injected them there.
+
+        # 2. Compute individual probabilities P_i
         probs: Dict[str, pd.Series] = {}
         for name, series in mps_metrics.items():
             method = methods.get(name, "rank")
             probs[name] = map_to_probability(series, method=method)
 
-        # 2. Sum log-probabilities
+        # 3. Sum log-probabilities
         floor = 1e-9
         log_score = pd.Series(0.0, index=frag_penalty.index)
 

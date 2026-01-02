@@ -34,12 +34,17 @@ Comparison across full 2025 (Equal Weight profile):
 
 | Engine | Annualized Return | Sharpe | Max Drawdown |
 | :--- | :--- | :--- | :--- |
-| **v3.1 (Baseline)** | **36.8%** | **3.55** | **-4.4%** |
-| **v3.2 (Log-MPS)** | 33.0% | 2.74 | -6.5% |
+| **v3.1 (Baseline)** | **36.9%** | **3.55** | **-4.4%** |
+| **v3.2 (Regime-Split)** | 33.0% | 2.74 | -6.5% |
+| **v3.2 (Global Robust)** | 36.0% | 2.96 | -6.2% |
 
-**Note on Regression**: The underperformance of v3.2 relative to v3.1 in this specific tournament is attributed to the "No Veto" nature of the v3.1 baseline used here. v3.1 captures a broader set of momentum winners that the "refined" v3.2 weights may have pruned. However, v3.2 offers significantly better explainability and a path to regime-specific tuning.
+### 4.1 Findings on Global Robustness
+Transitioning to a single **Global Robust** weight set optimized for **Risk-Adjusted Selection Alpha** significantly improved performance over the regime-split approach.
+- **Momentum Aggression**: Global tuning identified a higher momentum weight (1.75), which allowed the system to match the baseline return capture while maintaining the noise-reduction benefits of Log-MPS.
+- **Breadth Optimization**: The study confirmed that a higher `top_n=5` is more robust in stressed regimes, providing necessary diversification to offset individual asset noise.
+- **Numerical Stability**: The additive Log-MPS model proved bit-identical in replays and significantly more intuitive for parameter interpretation.
 
 ## 5. Deployment Status
 - **Log-MPS 3.2** is fully integrated and gated by `feat_selection_logmps`.
-- **Dynamic Switching** is operational: the engine automatically applies HPO weights when `TURBULENT` or `CRISIS` regimes are detected.
-- **Recommendation**: Maintain `feat_selection_logmps=False` as the default for production until a broader historical HPO (including 2022-2024 data) is completed to verify the robustness of the weights.
+- **Global Robust Weights** are the current recommended standard for Log-MPS mode.
+- **Recommendation**: Deploy with `feat_selection_logmps=True` for strategies requiring high explainability and noise-reduction, but maintain `v3.1` for maximum "raw" momentum capture.

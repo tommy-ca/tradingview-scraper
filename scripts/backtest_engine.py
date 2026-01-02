@@ -144,7 +144,6 @@ class BacktestEngine:
                     top_n=settings.top_n,
                     threshold=settings.threshold,
                     m_gate=settings.min_momentum_score,
-                    regime=regime,
                 )
                 current_symbols = [w["symbol"] for w in winners if w["symbol"] in train_data_raw.columns]
                 for b_sym in settings.benchmark_symbols:

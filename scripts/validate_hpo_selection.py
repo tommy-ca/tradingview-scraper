@@ -51,6 +51,12 @@ def validate_hpo():
             settings.features.selection_mode = s_cfg["mode"]
             settings.features.feat_selection_logmps = s_cfg["logmps"]
 
+            if s_cfg["logmps"]:
+                settings.top_n = settings.features.top_n_global
+                logger.info(f"Setting breadth top_n to {settings.top_n} (Global Robust)")
+            else:
+                settings.top_n = 3  # Reset to baseline
+
             # Export to ENV
             os.environ["TV_FEATURES_SELECTION_MODE"] = s_cfg["mode"]
             os.environ["TV_FEATURES_FEAT_SELECTION_LOGMPS"] = "1" if s_cfg["logmps"] else "0"

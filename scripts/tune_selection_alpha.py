@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("selection_hpo")
 
 
-def objective(trial, df_cache: pd.DataFrame, top_n: int = 3):
+def objective(trial, df_cache: pd.DataFrame):
     # 1. Suggest weights for components
     weights = {
         "momentum": trial.suggest_float("w_momentum", 0.0, 2.0),
@@ -25,7 +25,10 @@ def objective(trial, df_cache: pd.DataFrame, top_n: int = 3):
         "hurst_clean": trial.suggest_float("w_hurst", 0.0, 2.0),
     }
 
-    # 2. Calculate Log-MPS Score
+    # 2. Suggest top_n (Breadth Tuning)
+    top_n = trial.suggest_int("top_n", 2, 5)
+
+    # 3. Calculate Log-MPS Score
     floor = 1e-9
     df = df_cache.copy()
 
@@ -37,36 +40,52 @@ def objective(trial, df_cache: pd.DataFrame, top_n: int = 3):
 
     df["log_score"] = log_score
 
-    # 3. Select top N symbols per window
+    # 4. Select top N symbols per window
     def get_window_alpha(group):
         selected = group.nlargest(top_n, "log_score")
         sel_ret = selected["forward_return"].mean()
         raw_ret = group["forward_return"].mean()
         return sel_ret - raw_ret
 
-    # Use include_groups=False to avoid future warning
     window_alphas = df.groupby("window_start", group_keys=False).apply(get_window_alpha, include_groups=False)
 
-    return float(window_alphas.mean())
+    # 5. Objective: Risk-Adjusted Selection Alpha
+    # We want high mean and low variance across windows (consistency)
+    mean_alpha = window_alphas.mean()
+    std_alpha = window_alphas.std()
+
+    if std_alpha == 0 or np.isnan(std_alpha):
+        return -1.0  # Penalize lack of variance (usually means no data)
+
+    risk_adjusted = mean_alpha / std_alpha
+
+    return float(risk_adjusted)
 
 
 def run_study(regime_name: str, cache_path: str, trials: int = 200):
     if not os.path.exists(cache_path):
         logger.error(f"Feature cache not found: {cache_path}")
+
         return
 
     df_all = pd.read_parquet(cache_path)
 
     # Filter by regime
+
     if regime_name == "expansion":
         study_df = df_all[df_all["regime"].isin(["NORMAL", "QUIET"])]
+
     elif regime_name == "stressed":
         study_df = df_all[df_all["regime"].isin(["TURBULENT", "CRISIS"])]
+
     else:
+        # 'all' or 'global' mode
+
         study_df = df_all
 
     if study_df.empty:
         logger.warning(f"No data for regime {regime_name}")
+
         return
 
     logger.info(f"Starting HPO for {regime_name} | Rows: {len(study_df)} | Windows: {len(study_df['window_start'].unique())}")
@@ -76,16 +95,28 @@ def run_study(regime_name: str, cache_path: str, trials: int = 200):
     study.optimize(lambda t: objective(t, study_df), n_trials=trials)
 
     logger.info(f"✅ HPO Complete for {regime_name}")
-    logger.info(f"Best Alpha: {study.best_value:.4%}")
+
+    logger.info(f"Best Risk-Adj Alpha: {study.best_value:.4f}")
+
     logger.info("Best Parameters:")
+
     for k, v in study.best_params.items():
         logger.info(f"  {k}: {v:.4f}")
 
-    # Save results
+    # 6. Final Report Artifacts
+
     output_dir = Path("artifacts/hpo")
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    results = {"regime": regime_name, "best_alpha": study.best_value, "best_params": study.best_params, "n_trials": trials}
+    results = {"regime": regime_name, "best_risk_adj_alpha": float(study.best_value), "best_params": study.best_params, "n_trials": trials, "timestamp": pd.Timestamp.now().isoformat()}
+
+    output_file = output_dir / f"selection_best_{regime_name}.json"
+
+    with open(output_file, "w") as f:
+        json.dump(results, f, indent=2)
+
+    logger.info(f"Results saved to {output_file}")
 
     with open(output_dir / f"selection_best_{regime_name}.json", "w") as f:
         json.dump(results, f, indent=2)
