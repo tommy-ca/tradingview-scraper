@@ -103,17 +103,17 @@ The canonical universe is the production raw pool (source of truth), and natural
 - **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run quarterly.
 
 ## Next Steps Tracker
-- [ ] **Phase 3: Directory Restructuring**: Completed. `TradingViewScraperSettings` supports structured paths; `BacktestEngine` and `ReportGenerator` migrated.
+- [x] **Phase 3: Directory Restructuring**: Audit Validated (Run `20260103-235511`). `TradingViewScraperSettings` supports structured paths; `BacktestEngine` and `ReportGenerator` migrated. Run directory now follows standard `config/`, `data/`, `logs/`, `plots/`, `reports/`, `tearsheets/` hierarchy.
 - [x] **Phase 4: Script Audit & Cleanup**: Completed. Categorized and archived 110+ scripts into `maintenance/`, `research/`, and `archive/` subdirectories. Root `scripts/` now contains only Tier 1 production core.
 - **Metadata gate**: Gate satisfied for `20260103-223836` (100% coverage).
 
 ## Status Sync
-- **Artifact Reorganization**: Completed. Run directories now use standard sub-hierarchies (`config/`, `reports/`, etc.).
-- **Metadata gate**: Satisfied—Run `20260103-223836` recorded 100% coverage and passing health audit.
-- **Selection report**: Completed—Run `20260103-223836` confirmed restoration of selection story.
-- **CVXPortfolio warnings**: Completed—Run `20260103-223836` confirmed zero warnings in `12_validation.log`.
-- **Guardrail sentinel**: Completed—Run `20260103-223836` passed invariance check against previous baseline.
-- **Health audit**: Completed for run `20260103-223836` (100% healthy).
+- **Artifact Reorganization**: Audit Validated (Run `20260103-235511`).
+- **Metadata gate**: Satisfied—Run `20260103-235511` recorded 100% coverage and passing health audit.
+- **Selection report**: Completed—Run `20260103-235511` confirmed restoration of selection story.
+- **CVXPortfolio warnings**: Completed—Run `20260103-235511` confirmed zero warnings in `12_validation.log`.
+- **Guardrail sentinel**: Completed—Run `20260103-235511` passed invariance check against previous baseline.
+- **Health audit**: Completed for run `20260103-235511` (100% healthy).
 
 ## Script Audit & Cleanup Roadmap (Jan 2026)
 ### 1. Categorization Tiers
