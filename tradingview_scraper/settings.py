@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from pydantic import BaseModel, Field
 from pydantic_settings import (
@@ -194,6 +194,14 @@ class TradingViewScraperSettings(BaseSettings):
     strict_health: bool = False
     min_days_floor: int = 0
 
+    # Portfolio Data Prep Overrides
+    portfolio_lookback_days: Optional[int] = None
+    portfolio_batch_size: int = 1
+    portfolio_backfill: bool = False
+    portfolio_gapfill: bool = False
+    portfolio_force_sync: bool = False
+    portfolio_dedupe_base: bool = False
+
     # Selection Logic
     top_n: int = 3
     threshold: float = 0.4
@@ -251,14 +259,20 @@ class TradingViewScraperSettings(BaseSettings):
 
         return (
             init_settings,
+            dotenv_settings,
             env_settings,
             ManifestSettingsSource(settings_cls, m_path, p_name),
-            dotenv_settings,
+            file_secret_settings,
         )
 
     def get_discovery_config(self, scanner_type: str) -> Dict[str, Any]:
         """Extracts the discovery configuration for a specific scanner type."""
         return self.discovery.get(scanner_type, {})
+
+    def resolve_portfolio_lookback_days(self) -> int:
+        if self.portfolio_lookback_days is not None:
+            return int(self.portfolio_lookback_days)
+        return int(self.lookback_days)
 
     @property
     def summaries_root_dir(self) -> Path:
@@ -291,6 +305,14 @@ class TradingViewScraperSettings(BaseSettings):
 
         latest.parent.mkdir(parents=True, exist_ok=True)
         self.summaries_runs_dir.mkdir(parents=True, exist_ok=True)
+
+        legacy_latest = self.summaries_runs_dir / "latest"
+        if legacy_latest.exists() and not legacy_latest.is_symlink():
+            try:
+                backup_name = f"legacy_runs_latest_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                legacy_latest.rename(self.summaries_runs_dir / backup_name)
+            except Exception:
+                return
 
         if latest.exists() and not latest.is_symlink() and latest.is_dir():
             try:
@@ -379,9 +401,17 @@ if __name__ == "__main__":
             "features.efficiency_min_threshold": "TV_FEATURES__EFFICIENCY_MIN",
             "features.hurst_random_walk_min": "TV_FEATURES__HURST_RW_MIN",
             "features.hurst_random_walk_max": "TV_FEATURES__HURST_RW_MAX",
+            "portfolio_lookback_days": "PORTFOLIO_LOOKBACK_DAYS",
+            "portfolio_batch_size": "PORTFOLIO_BATCH_SIZE",
+            "portfolio_backfill": "PORTFOLIO_BACKFILL",
+            "portfolio_gapfill": "PORTFOLIO_GAPFILL",
+            "portfolio_force_sync": "PORTFOLIO_FORCE_SYNC",
+            "portfolio_dedupe_base": "PORTFOLIO_DEDUPE_BASE",
         }
         for field, env_name in mapping.items():
-            if "." in field:
+            if field == "portfolio_lookback_days":
+                val = settings.resolve_portfolio_lookback_days()
+            elif "." in field:
                 parts = field.split(".")
                 obj = settings
                 for p in parts:

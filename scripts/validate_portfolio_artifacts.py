@@ -100,8 +100,10 @@ class PortfolioAuditor:
             except Exception:
                 pass
 
+        settings = get_settings()
         now = datetime.now()
-        lookback_days = int(os.getenv("PORTFOLIO_LOOKBACK_DAYS", "100"))
+        lookback_env = os.getenv("PORTFOLIO_LOOKBACK_DAYS")
+        lookback_days = int(lookback_env) if lookback_env else int(settings.resolve_portfolio_lookback_days())
         lookback_cutoff = (now - timedelta(days=lookback_days)).timestamp()
 
         for c in candidates:

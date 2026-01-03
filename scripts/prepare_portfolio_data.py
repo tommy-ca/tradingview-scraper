@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.symbols.stream.metadata import DataProfile, get_symbol_profile
 from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
 from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 
@@ -47,11 +48,20 @@ def prepare_portfolio_universe():
         logger.error("No candidates found in manifest.")
         return
 
+    lookback_env = os.getenv("PORTFOLIO_LOOKBACK_DAYS")
+    fallback_lookback = os.getenv("LOOKBACK")
+    if lookback_env:
+        lookback_days = int(lookback_env)
+    elif fallback_lookback:
+        lookback_days = int(fallback_lookback)
+    else:
+        lookback_days = int(active_settings.resolve_portfolio_lookback_days())
+
     if ledger:
         u_hash = hashlib.sha256(json.dumps(universe, sort_keys=True).encode()).hexdigest()
         ledger.record_intent(
             step="data_prep",
-            params={"lookback_days": int(os.getenv("PORTFOLIO_LOOKBACK_DAYS", "120"))},
+            params={"lookback_days": lookback_days},
             input_hashes={"candidates_manifest": u_hash},
         )
 
@@ -66,14 +76,20 @@ def prepare_portfolio_universe():
     # 3. Fetch Historical Data
     loader = PersistentDataLoader()
     end_date = datetime.now()
-    lookback_days = int(os.getenv("PORTFOLIO_LOOKBACK_DAYS", "365"))
     start_date = end_date - timedelta(days=lookback_days)
 
     price_data = {}
     alpha_meta = {}
     lock = threading.Lock()
     jwt_token = os.getenv("TRADINGVIEW_JWT_TOKEN", "unauthorized_user_token")
-    batch_size = int(os.getenv("PORTFOLIO_BATCH_SIZE", "1"))
+    batch_env = os.getenv("PORTFOLIO_BATCH_SIZE")
+    batch_size = int(batch_env) if batch_env else int(active_settings.portfolio_batch_size)
+    backfill_env = os.getenv("PORTFOLIO_BACKFILL")
+    gapfill_env = os.getenv("PORTFOLIO_GAPFILL")
+    force_env = os.getenv("PORTFOLIO_FORCE_SYNC")
+    do_backfill = backfill_env == "1" if backfill_env is not None else bool(active_settings.portfolio_backfill)
+    do_gapfill = gapfill_env == "1" if gapfill_env is not None else bool(active_settings.portfolio_gapfill)
+    force_sync = force_env == "1" if force_env is not None else bool(active_settings.portfolio_force_sync)
 
     def run_with_retry(func, action: str, retries: int = 2, base_sleep: int = 10):
         """Retry helper to throttle on 429 errors."""
@@ -105,9 +121,7 @@ def prepare_portfolio_universe():
             if (time.time() - mtime) < (12 * 3600):
                 is_stale = False
 
-        force_sync = os.getenv("PORTFOLIO_FORCE_SYNC", "0") == "1"
-
-        if (os.getenv("PORTFOLIO_BACKFILL", "0") == "1") and (is_stale or force_sync):
+        if do_backfill and (is_stale or force_sync):
             try:
                 # Deep Sync: request up to 1000 candles to ensure full coverage of 2025 and beyond
                 bf_depth = max(lookback_days + 50, 1000)
@@ -116,7 +130,7 @@ def prepare_portfolio_universe():
             except Exception as e:
                 logger.error(f"Backfill failed for {symbol}: {e}")
 
-        if (os.getenv("PORTFOLIO_GAPFILL", "0") == "1") and (is_stale or force_sync):
+        if do_gapfill and (is_stale or force_sync):
             try:
                 logger.info(f"Gap filling {symbol} (max_depth=1000)...")
                 run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=1000, max_fills=20, max_time=180, total_timeout=180), f"Gap fill {symbol}")
@@ -181,8 +195,12 @@ def prepare_portfolio_universe():
     for symbol, rets in price_data.items():
         returns_df[symbol] = rets
 
-    # Aligned holding model (market closed = 0 returns)
-    returns_df = returns_df.fillna(0.0)
+    # Drop rows where ALL non-crypto assets are missing (e.g., weekends for TradFi)
+    profiles = {symbol: get_symbol_profile(symbol) for symbol in returns_df.columns}
+    tradfi_cols = [s for s, p in profiles.items() if p != DataProfile.CRYPTO]
+    if tradfi_cols:
+        tradfi_all_nan = returns_df[tradfi_cols].isna().all(axis=1)
+        returns_df = returns_df.loc[~tradfi_all_nan]
 
     # Drop zero-variance noise
     variances = returns_df.var()
@@ -195,7 +213,9 @@ def prepare_portfolio_universe():
         logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
 
     # Post-load Deduplication (Optional safety pass)
-    if os.getenv("PORTFOLIO_DEDUPE_BASE", "0") == "1":
+    dedupe_env = os.getenv("PORTFOLIO_DEDUPE_BASE")
+    do_dedupe = dedupe_env == "1" if dedupe_env is not None else bool(active_settings.portfolio_dedupe_base)
+    if do_dedupe:
         deduped_cols = []
         seen_idents = set()
         for col in returns_df.columns:
