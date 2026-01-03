@@ -20,11 +20,11 @@ def test_v2_selection_basic():
     ]
 
     # Explicitly use v2 mode
-    winners, _, _, _, _ = run_selection(returns, raw_candidates, None, top_n=1, threshold=0.5, mode="v2")
+    response = run_selection(returns, raw_candidates, None, top_n=1, threshold=0.5, mode="v2")
 
-    selected = [w["symbol"] for w in winners]
+    selected = [w["symbol"] for w in response.winners]
     assert "S1" in selected
-    assert len(winners) > 0
+    assert len(response.winners) > 0
 
 
 def test_legacy_selection_logic():
@@ -42,11 +42,11 @@ def test_legacy_selection_logic():
     ]
 
     # Explicitly use legacy mode
-    winners, _, _, _, _ = run_selection(returns, raw_candidates, None, top_n=1, threshold=0.5, mode="legacy")
+    response = run_selection(returns, raw_candidates, None, top_n=1, threshold=0.5, mode="legacy")
 
-    selected = [w["symbol"] for w in winners]
+    selected = [w["symbol"] for w in response.winners]
     assert "S1" in selected
-    assert len(winners) > 0
+    assert len(response.winners) > 0
 
 
 def test_v2_dynamic_selection():
@@ -64,7 +64,7 @@ def test_v2_dynamic_selection():
 
     # Request top_n=4, but high correlation should prune it down
     # Force 1 cluster with high threshold
-    winners, _, _, _, _ = run_selection(returns, raw_candidates, None, top_n=4, threshold=10.0, mode="v2")
+    response = run_selection(returns, raw_candidates, None, top_n=4, threshold=10.0, mode="v2")
 
     # Correlation is near 1.0, so top_n * (1 - 1.0) + 0.5 rounded should be 1
-    assert len(winners) == 1
+    assert len(response.winners) == 1

@@ -61,11 +61,11 @@ def diagnose_v3():
             ]
         )
 
-        winners, clusters, _, vetoes, metrics = run_selection(train_data, raw_candidates, stats_df=stats_df, top_n=2, threshold=0.45, m_gate=-0.05, mode="v3.1")
+        response = run_selection(train_data, raw_candidates, stats_df=stats_df, top_n=2, threshold=0.45, m_gate=-0.05, mode="v3.1")
 
-        n_selected = len(winners)
-        n_clusters = len(clusters) if clusters else 0
-        avg_cluster_size = np.mean([d["size"] for d in clusters.values()]) if clusters else 0
+        n_selected = len(response.winners)
+        n_clusters = len(response.audit_clusters) if response.audit_clusters else 0
+        avg_cluster_size = np.mean([d["size"] for d in response.audit_clusters.values()]) if response.audit_clusters else 0
 
         logs.append(
             {
@@ -74,7 +74,7 @@ def diagnose_v3():
                 "panic_mode": panic_mode,
                 "n_selected": n_selected,
                 "n_clusters": n_clusters,
-                "n_vetoed": len(vetoes),
+                "n_vetoed": len(response.vetoes),
                 "avg_cluster_size": avg_cluster_size,
             }
         )

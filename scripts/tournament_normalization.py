@@ -68,12 +68,12 @@ def run_tournament():
             train_data = returns.iloc[start_idx : start_idx + train_window]
             test_data = returns.iloc[start_idx + train_window : start_idx + train_window + test_window]
 
-            winners, _, _, _, _ = run_selection(train_data, bt.raw_candidates, stats_df=bt._audit_training_stats(train_data), top_n=5)
+            response = run_selection(train_data, bt.raw_candidates, stats_df=bt._audit_training_stats(train_data), top_n=5)
 
-            if not winners:
+            if not response.winners:
                 continue
 
-            selected_symbols = [w["symbol"] for w in winners]
+            selected_symbols = [w["symbol"] for w in response.winners]
             sel_returns = test_data[selected_symbols].mean(axis=1)
             pool_returns = test_data.mean(axis=1)
 

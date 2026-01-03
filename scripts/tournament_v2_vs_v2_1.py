@@ -48,14 +48,14 @@ def run_tournament():
             train_data = returns.iloc[start_idx : start_idx + train_window]
             test_data = returns.iloc[start_idx + train_window : start_idx + train_window + test_window]
 
-            winners, _, _, _, _ = run_selection(train_data, bt.raw_candidates, stats_df=bt._audit_training_stats(train_data), top_n=1)
+            response = run_selection(train_data, bt.raw_candidates, stats_df=bt._audit_training_stats(train_data), top_n=1)
 
-            if not winners:
+            if not response.winners:
                 window_alphas.append(0.0)
                 all_selected.append(set())
                 continue
 
-            selected_symbols = [w["symbol"] for w in winners]
+            selected_symbols = [w["symbol"] for w in response.winners]
             all_selected.append(set(selected_symbols))
 
             sel_returns = test_data[selected_symbols].mean(axis=1)

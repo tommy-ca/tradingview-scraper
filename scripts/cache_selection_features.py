@@ -51,12 +51,10 @@ def cache_features():
 
         # Run selection once to get the raw candidate pool and their probabilities
         # We need ALL symbols in the discovery pool, not just winners
-        winners, _clusters, _spec, _vetoes, metrics = run_selection(
-            train_data, bt.raw_candidates, stats_df=bt._audit_training_stats(train_data), top_n=settings.top_n, threshold=settings.threshold, m_gate=-1.0
-        )
+        response = run_selection(train_data, bt.raw_candidates, stats_df=bt._audit_training_stats(train_data), top_n=settings.top_n, threshold=settings.threshold, m_gate=-1.0)
 
-        component_probs = metrics.get("component_probs", {})
-        raw_metrics = metrics.get("raw_metrics", {})
+        component_probs = response.metrics.get("component_probs", {})
+        raw_metrics = response.metrics.get("raw_metrics", {})
 
         for symbol in train_data.columns:
             if symbol not in forward_returns.index:

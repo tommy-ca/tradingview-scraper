@@ -5,12 +5,12 @@ import logging
 import os
 import shutil
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
 
-from tradingview_scraper.selection_engines import SelectionRequest, build_selection_engine
+from tradingview_scraper.selection_engines import SelectionRequest, SelectionResponse, build_selection_engine
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import AuditLedger, get_df_hash  # type: ignore
 
@@ -29,10 +29,8 @@ def run_selection(
     max_clusters: int = 25,
     m_gate: float = 0.0,
     mode: Optional[str] = None,
-) -> Tuple[List[Dict[str, Any]], Dict[int, Any], str, Dict[str, List[str]], Dict[str, Any]]:
-    """
-    Orchestrates selection using the modular engine system.
-    """
+) -> SelectionResponse:
+    """Orchestrates selection using the modular engine system."""
     settings = get_settings()
     engine_name = mode or settings.features.selection_mode
     engine = build_selection_engine(engine_name)
@@ -45,7 +43,7 @@ def run_selection(
     response = engine.select(returns, raw_candidates, stats_df, request)
     for warning in response.warnings:
         logger.warning(warning)
-    return response.winners, response.audit_clusters, response.spec_version, response.vetoes, response.metrics
+    return response
 
 
 def natural_selection(
@@ -88,7 +86,12 @@ def natural_selection(
             input_hashes={"returns": get_df_hash(returns), "candidates_raw": meta_hash, "stats": get_df_hash(stats_df) if stats_df is not None else "none"},
         )
 
-    winners, audit_clusters, spec_version, vetoes, engine_metrics = run_selection(returns, raw_candidates, stats_df, top_n, threshold, max_clusters, m_gate, mode=mode)
+    response = run_selection(returns, raw_candidates, stats_df, top_n, threshold, max_clusters, m_gate, mode=mode)
+    winners = response.winners
+    audit_clusters = response.audit_clusters
+    spec_version = response.spec_version
+    vetoes = response.vetoes
+    engine_metrics = response.metrics
 
     # Atomic write for winners
     with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(output_path), delete=False) as tf:

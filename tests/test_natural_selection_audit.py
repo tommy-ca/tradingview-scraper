@@ -49,12 +49,12 @@ def test_audit_alpha_score_mathematical_properties():
     settings.features.feat_dynamic_selection = False
 
     # --- TEST CARS 2.0 (Additive) ---
-    winners_v2, _, _, _, _ = run_selection(returns, raw_candidates, stats_df, top_n=1, mode="v2")
+    response_v2 = run_selection(returns, raw_candidates, stats_df, top_n=1, mode="v2")
 
     # --- TEST MPS 3.0 (Multiplicative) ---
-    winners_v3, _, _, _, _ = run_selection(returns, raw_candidates, stats_df, top_n=1, mode="v3")
+    response_v3 = run_selection(returns, raw_candidates, stats_df, top_n=1, mode="v3")
 
-    selected_v3 = [w["symbol"] for w in winners_v3]
+    selected_v3 = [w["symbol"] for w in response_v3.winners]
     assert "FRAGILE_WINNER" not in selected_v3, "MPS 3.0 failed to veto a fragile asset"
     assert "ALPHA_CHAMP" in selected_v3
 
@@ -72,11 +72,11 @@ def test_audit_alpha_parity_ranking():
         raw_candidates.append({"symbol": s, "identity": s, "direction": "LONG", "value_traded": 1e9, "tick_size": 0.01, "lot_size": 1, "price_precision": 2})
 
     # Both systems should agree S0 is the winner if it dominates all metrics
-    w_v2, _, _, _, _ = run_selection(returns, raw_candidates, None, top_n=1, mode="v2")
-    w_v3, _, _, _, _ = run_selection(returns, raw_candidates, None, top_n=1, mode="v3")
+    response_v2 = run_selection(returns, raw_candidates, None, top_n=1, mode="v2")
+    response_v3 = run_selection(returns, raw_candidates, None, top_n=1, mode="v3")
 
-    assert w_v2[0]["symbol"] == "S0"
-    assert w_v3[0]["symbol"] == "S0"
+    assert response_v2.winners[0]["symbol"] == "S0"
+    assert response_v3.winners[0]["symbol"] == "S0"
 
 
 def test_audit_numerical_stability_gate():
@@ -89,10 +89,10 @@ def test_audit_numerical_stability_gate():
     raw_candidates = [{"symbol": s, "identity": s, "direction": "LONG", "value_traded": 1e10, "tick_size": 0.01, "lot_size": 1, "price_precision": 2} for s in symbols]
 
     # High Kappa should force top_n=1 even if we ask for more
-    winners, audit, _, _, _ = run_selection(returns, raw_candidates, None, top_n=3, mode="v3")
+    response = run_selection(returns, raw_candidates, None, top_n=3, mode="v3")
 
     # Check if aggressive pruning was triggered (should result in 1 winner if they are in 1 cluster)
-    assert len(winners) == 1, f"Expected 1 winner due to high kappa, got {len(winners)}"
+    assert len(response.winners) == 1, f"Expected 1 winner due to high kappa, got {len(response.winners)}"
 
 
 def test_audit_cluster_diversity_logic():
@@ -111,10 +111,10 @@ def test_audit_cluster_diversity_logic():
     # In low correlation, we should select more assets (closer to top_n)
     # In high correlation, we should select fewer (closer to 1)
     # We force them into 1 cluster by setting threshold high
-    winners_high, _, _, _, _ = run_selection(returns_high, candidates_high, None, top_n=5, threshold=10.0, mode="v2")
-    winners_low, _, _, _, _ = run_selection(returns_low, candidates_low, None, top_n=5, threshold=10.0, mode="v2")
+    response_high = run_selection(returns_high, candidates_high, None, top_n=5, threshold=10.0, mode="v2")
+    response_low = run_selection(returns_low, candidates_low, None, top_n=5, threshold=10.0, mode="v2")
 
-    assert len(winners_low) > len(winners_high), f"Diversity failed: low={len(winners_low)}, high={len(winners_high)}"
+    assert len(response_low.winners) > len(response_high.winners), f"Diversity failed: low={len(response_low.winners)}, high={len(response_high.winners)}"
 
 
 def test_audit_v3_multi_veto_stack():
@@ -144,9 +144,9 @@ def test_audit_v3_multi_veto_stack():
     settings = get_settings()
     settings.features.feat_dynamic_selection = False
 
-    winners, _, _, _, _ = run_selection(returns, raw_candidates, stats_df, top_n=5, mode="v3")
+    response = run_selection(returns, raw_candidates, stats_df, top_n=5, mode="v3")
 
-    selected = [w["symbol"] for w in winners]
+    selected = [w["symbol"] for w in response.winners]
     assert "HEALTHY" in selected
     assert "NO_META" not in selected
     assert "LOW_LIQ" not in selected

@@ -26,9 +26,9 @@ def test_mps_veto_logic():
     settings = get_settings()
     settings.features.feat_dynamic_selection = False
 
-    winners, _, _, _, _ = run_selection(returns, raw_candidates, stats_df, top_n=1, threshold=0.5, mode="v3")
+    response = run_selection(returns, raw_candidates, stats_df, top_n=1, threshold=0.5, mode="v3")
 
-    selected = [w["symbol"] for w in winners]
+    selected = [w["symbol"] for w in response.winners]
     assert "STABLE" in selected
     assert "FRAGILE" not in selected
 
@@ -49,9 +49,9 @@ def test_v3_metadata_veto():
     settings = get_settings()
     settings.features.feat_dynamic_selection = False
 
-    winners, _, _, _, _ = run_selection(returns, raw_candidates, None, top_n=1, threshold=0.5, mode="v3")
+    response = run_selection(returns, raw_candidates, None, top_n=1, threshold=0.5, mode="v3")
 
-    selected = [w["symbol"] for w in winners]
+    selected = [w["symbol"] for w in response.winners]
     assert "COMPLETE" in selected
     assert "INCOMPLETE" not in selected
 
@@ -72,9 +72,9 @@ def test_v3_eci_veto():
     settings = get_settings()
     settings.features.feat_dynamic_selection = False
 
-    winners, _, _, _, _ = run_selection(returns, raw_candidates, None, top_n=1, threshold=0.5, mode="v3")
+    response = run_selection(returns, raw_candidates, None, top_n=1, threshold=0.5, mode="v3")
 
-    selected = [w["symbol"] for w in winners]
+    selected = [w["symbol"] for w in response.winners]
     assert "LIQUID" in selected
     assert "ILLIQUID" not in selected
 
@@ -103,7 +103,7 @@ def test_v3_aggressive_pruning_kappa():
     settings.features.feat_dynamic_selection = False
 
     # Request 2 winners per cluster
-    winners, _, _, _, _ = run_selection(returns, raw_candidates, None, top_n=2, threshold=0.5, mode="v3")
+    response = run_selection(returns, raw_candidates, None, top_n=2, threshold=0.5, mode="v3")
 
     # Because kappa is high, it should have been forced to 1 winner per cluster
-    assert len(winners) == 1
+    assert len(response.winners) == 1
