@@ -117,8 +117,10 @@ def detect_hedge_anchors():
     for _, r in top_hedges.iterrows():
         md.append(f"| `{r['Symbol']}` | {float(r['Market_Correlation']):.3f} | {float(r['Volatility']):.2%} | {r['Market']} |")
 
-    output_dir = get_settings().prepare_summaries_run_dir()
-    output_path = output_dir / "hedge_anchors.md"
+    settings = get_settings()
+    settings.prepare_summaries_run_dir()
+    output_path = settings.run_reports_dir / "portfolio" / "hedge_anchors.md"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         f.write("\n".join(md))
 

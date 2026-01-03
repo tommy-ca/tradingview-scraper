@@ -326,18 +326,23 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["selected", "raw"], default="selected")
     args = parser.parse_args()
-    output_dir = get_settings().prepare_summaries_run_dir()
+    settings = get_settings()
+    settings.prepare_summaries_run_dir()
     c_path, m_path = "data/lakehouse/portfolio_clusters.json", "data/lakehouse/portfolio_meta.json"
-    o_path, i_path, v_path = output_dir / "cluster_analysis.md", output_dir / "portfolio_clustermap.png", output_dir / "volatility_clustermap.png"
     if args.mode == "raw":
-        c_path, m_path = "data/lakehouse/portfolio_clusters_raw.json", "data/lakehouse/portfolio_candidates_raw.json"
-        o_path, i_path, v_path = output_dir / "raw_factor_analysis.md", output_dir / "raw_clustermap.png", output_dir / "raw_volatility_clustermap.png"
+        c_path = "data/lakehouse/portfolio_clusters_raw.json"
+
+    out_p = settings.run_reports_dir / "research" / "cluster_analysis.md"
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    plot_dir = settings.run_plots_dir / "clustering"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
     analyze_clusters(
         clusters_path=c_path,
         meta_path=m_path,
         returns_path="data/lakehouse/portfolio_returns.pkl",
         stats_path="data/lakehouse/antifragility_stats.json",
-        output_path=str(o_path),
-        image_path=str(i_path),
-        vol_image_path=str(v_path),
+        output_path=str(out_p),
+        image_path=str(plot_dir / "portfolio_clustermap.png"),
+        vol_image_path=str(plot_dir / "volatility_clustermap.png"),
     )

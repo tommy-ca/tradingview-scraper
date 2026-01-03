@@ -22,7 +22,10 @@ def generate_factor_map():
     clusters_path = "data/lakehouse/portfolio_clusters.json"
     stats_path = "data/lakehouse/antifragility_stats.json"
 
-    output_dir = get_settings().prepare_summaries_run_dir()
+    settings = get_settings()
+    settings.prepare_summaries_run_dir()
+    output_dir = settings.run_plots_dir / "risk"
+    output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "factor_map.png"
 
     if not os.path.exists(returns_path) or not os.path.exists(clusters_path):
