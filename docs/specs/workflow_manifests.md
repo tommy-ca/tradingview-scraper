@@ -21,12 +21,30 @@ To maintain institutional stability while allowing for experimental iterations, 
 ### 2.2 Global Defaults (`defaults`)
 The manifest includes a top-level `defaults` block containing parameters shared by all profiles. Profiles only need to define the "delta" from these defaults.
 
-### 2.3 The 5-Layer Resolution Order
-1.  **CLI Flags**: Highest priority tactical overrides.
-2.  **Environment Variables**: OS-level `TV_` prefixed variables.
-3.  **Active Profile**: Profile-specific overrides.
-4.  **Manifest Defaults**: Global baseline.
-5.  **Code Defaults**: Safety fallbacks.
+### 2.3 The 6-Layer Resolution Order (Effective Precedence)
+1.  **CLI Flags / Init Settings**: Highest priority tactical overrides passed by CLIs.
+2.  **Dotenv Settings**: Values from `.env` treated as environment overrides.
+3.  **Environment Variables**: OS-level `TV_` prefixed variables.
+4.  **Active Profile**: Profile-specific overrides inside `profiles.<name>` in the manifest.
+5.  **Manifest Defaults**: Global baseline under `defaults`.
+6.  **Code Defaults**: Safety fallbacks in `TradingViewScraperSettings`.
+
+> Note: The manifest contributes two layers: profile overrides first, then defaults.
+
+### 2.4 CLI -> Env -> Manifest Mapping (Common Knobs)
+The platform supports both direct CLI overrides and environment-driven settings. The manifest is the canonical source for profile/default values, and the Makefile bridges those values into env vars for legacy scripts.
+
+| CLI Arg | Env Var | Manifest Key | Notes |
+| :--- | :--- | :--- | :--- |
+| `--train` | `BACKTEST_TRAIN` | `backtest.train_window` | CLI overrides settings at runtime for tournaments. |
+| `--test` | `BACKTEST_TEST` | `backtest.test_window` | Same precedence as `--train`. |
+| `--step` | `BACKTEST_STEP` | `backtest.step_size` | Same precedence as `--train`. |
+| `PROFILE=development` | `TV_PROFILE` | `profiles.development` | Selects the active manifest profile. |
+| `MANIFEST=...` | `TV_MANIFEST_PATH` | *(manifest file path)* | Chooses the manifest file. |
+| *(n/a)* | `LOOKBACK` | `data.lookback_days` | Used by data prep and health audits. |
+| *(n/a)* | `PORTFOLIO_LOOKBACK_DAYS` | `data.lookback_days` | Explicit portfolio override; falls back to lookback. |
+
+> The Makefile uses `python -m tradingview_scraper.settings --export-env` to translate manifest values into env vars for script compatibility.
 
 ## 3. Manifest Schema
 
