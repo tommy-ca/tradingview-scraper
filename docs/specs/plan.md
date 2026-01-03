@@ -121,127 +121,18 @@ The canonical universe is the production raw pool (source of truth), and natural
 
 ## Current Focus
 - **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run, publish the sentinel notice in each release, and keep `docs/specs/plan-report.md` up to date with the latest RUN_IDs.
-- **Metadata gate**: Enforce enrichment coverage (>=95%) before tournaments and signal health regressions when metadata drops.
-- **CVXPortfolio warnings**: Resolve missing-values/universe drift so the simulator stops raising the “incorrect missing values structure” warnings.
-- **Selection report**: Restore `generate_selection_report` so the selection story appears in every audit run.
-## Completed (Audit Validated)
-- [x] **Tournament Window Mismatch**: `tournament_results.json` now matches manifest train/test windows.
-  - **Root Cause**: `scripts/backtest_engine.py` defaulted to hardcoded 120/20/20 and ignored manifest settings when args were omitted.
-  - **Fix**: Default `run_tournament` windows to `get_settings()` values when args are `None`; CLI defaults to `None` and resolves to settings.
-  - **Implemented**: `scripts/backtest_engine.py`.
-  - **Validated**: Run `20260103-010147` (dev profile, minimal tournament) reports `train_window=30`, `test_window=10`, `step_size=10`.
-- [x] **Lookback Wiring Mismatch** *(Reopened)*: `data_prep` now honors manifest lookback for dev profile.
-  - **Root Cause**: `PORTFOLIO_LOOKBACK_DAYS` was exported as a fixed default (365), overriding manifest lookback.
-  - **Fix**: `portfolio_lookback_days` now resolves to `lookback_days` when unset; export uses resolved value; data prep and audit checks use resolved value.
-  - **Implemented**: `tradingview_scraper/settings.py`, `scripts/prepare_portfolio_data.py`, `scripts/validate_portfolio_artifacts.py`.
-  - **Validated**: Run `20260103-010210` logs `data_prep` intent with `lookback_days: 60` in `audit.jsonl`.
-- [x] **Run Log Artifacts Missing**: `audit.jsonl` references step log files, but the run log directory is empty.
-  - **Validated**: Run `20260103-004810` has populated logs (`01_cleanup.log` ... `14_gist_sync.log`).
-- [x] **Missing Optimization Output Artifact**: Optimization succeeds but no `portfolio_optimized_v2.json` is present.
-  - **Validated**: `data/lakehouse/portfolio_optimized_v2.json` exists after run `20260103-004810`.
-
-## Completed (Logic Integrity)
-- [x] **Standardize `run_selection` API** *(Audit: Confirmed)*: Ensure all internal calls use a consistent 5-tuple return or a typed `SelectionResponse` object.
-  - **Symptoms**: Call sites rely on positional tuple unpacking, which is brittle across engine versions.
-  - **Evidence**: `SelectionResponse` exists in `tradingview_scraper/selection_engines/base.py`, but `scripts/natural_selection.py` returns a tuple and callers unpack positional values.
-  - **Likely files**: `scripts/natural_selection.py`, `scripts/backtest_engine.py`, selection engine modules under `tradingview_scraper/selection_engines/`.
-  - **Fix**: Return `SelectionResponse` from `run_selection` and update call sites to use named fields.
-  - **Implemented**: `scripts/natural_selection.py`, `scripts/backtest_engine.py`, `scripts/tournament_normalization.py`, `scripts/tournament_v2_vs_v2_1.py`, `scripts/diagnose_v3_internals.py`, `scripts/cache_selection_features.py`, `tests/test_natural_selection_*`.
-  - **Validate**: Run `uv run pytest tests/test_selection_*` and confirm no API mismatches.
-- [x] **Alpha Isolation Baseline** *(Audit: Confirmed)*: Ensure the `market` engine is automatically included in tournament runs so alpha isolation has a baseline.
-  - **Symptoms**: Alpha isolation reports can omit the market baseline when tournament defaults are used.
-  - **Evidence**: `scripts/generate_reports.py` reads `all_results[sim].market`, but `scripts/backtest_engine.py` only injects `market` when `settings.dynamic_universe` is true.
-  - **Likely files**: `scripts/backtest_engine.py`, `scripts/generate_reports.py`.
-  - **Fix**: Inject baseline `market` profiles during tournaments regardless of `dynamic_universe`.
-  - **Implemented**: `scripts/backtest_engine.py`.
-  - **Validate**: Re-run `make port-test` and confirm `market` appears in `tournament_results.json`.
-- [x] **Tournament Outputs Empty** *(Audit: Confirmed)*: `backtest_engine.py` interprets empty CLI args as empty lists, resulting in `tournament_results.json` with no simulators or results. Treat empty lists as defaults or avoid splitting empty args.
-  - **Symptoms**: `tournament_results.json` has `simulators: []` and `results: {}`.
-  - **Evidence**: Observed in run `20260102-230609` (see Audit Context).
-  - **Likely files**: `scripts/backtest_engine.py`.
-  - **Fix**: Convert empty list inputs to `None` so defaults apply; avoid `.split(",")` on empty args.
-  - **Implemented**: `scripts/backtest_engine.py`.
-  - **Validate**: Run `uv run scripts/backtest_engine.py --tournament` and confirm results are populated.
-- [x] **Barbell Profile Missing** *(Audit: Confirmed)*: `optimize_clustered_v2.py` logs barbell but only writes it when `antifragility_stats.json` exists. Ensure antifragility stats are generated before optimization or explicitly skip/flag barbell in outputs.
-  - **Symptoms**: Optimization logs mention barbell, but `portfolio_optimized_v2.json` lacks `profiles.barbell`.
-  - **Evidence**: Observed in run `20260102-230609` (see Audit Context).
-  - **Likely files**: `scripts/optimize_clustered_v2.py`, `scripts/port-analyze` pipeline.
-  - **Fix**: Add an antifragility stats generation step before optimization or add a clear skip banner in outputs.
-  - **Implemented**: `Makefile`, `scripts/optimize_clustered_v2.py`.
-  - **Validate**: Re-run optimization and confirm `profiles.barbell` appears or is explicitly marked as skipped.
-- [x] **Alignment Policy Breach (TradFi)** *(Audit: Confirmed)*: `prepare_portfolio_data.py` zero-fills missing days (`fillna(0.0)`), which conflicts with “no padding” for TradFi calendars. Implement market-day alignment (session calendar) without weekend padding.
-  - **Symptoms**: TradFi returns include padded weekend zeros, distorting correlations.
-  - **Evidence**: `scripts/prepare_portfolio_data.py` has `returns_df = returns_df.fillna(0.0)`.
-  - **Likely files**: `scripts/prepare_portfolio_data.py`.
-  - **Fix**: Align by market sessions (per-asset calendars) and avoid zero-filling for TradFi.
-  - **Implemented**: `scripts/prepare_portfolio_data.py`, `scripts/optimize_clustered_v2.py`, `tradingview_scraper/portfolio_engines/cluster_adapter.py`.
-  - **Validate**: Re-run health audit and confirm no weekend padding for equities.
-
-## ✅ Medium Priority: Completed (Enhancements)
-- [x] **Solver Dampening**: Add numerical regularizers to `cvxportfolio` to prevent "Variable value must be real" failures when encountering extreme survivorship bias winners (e.g., highly volatile crypto).
-  - **Likely files**: `tradingview_scraper/portfolio_engines/` and CVX solver wrappers.
-  - **Fix**: Add epsilon jitter to covariance, constrain weight bounds, and/or add L2 penalties.
-  - **Implemented**: `tradingview_scraper/portfolio_engines/engines.py`.
-  - **Validate**: Run the tournament with high-volatility assets and confirm solver stability.
-## ✅ Medium Priority: Completed (Enhancements)
-- [x] **Automated RUN_ID Detection** *(Audit: Confirmed)*: Report generator currently auto-detects, but could be smarter about identifying the *last finished* run vs just the last created directory.
-  - **Evidence**: `_detect_latest_run()` in `scripts/generate_reports.py` selects the lexicographically last run directory without checking artifact completeness.
-  - **Likely files**: `scripts/generate_reports.py`, `tradingview_scraper/settings.py`.
-  - **Fix**: Prefer runs with complete logs and key artifacts, not merely latest mtime.
-  - **Implemented**: `scripts/generate_reports.py`.
-  - **Validate**: Compare report selection across multiple runs and verify correct run chosen.
-- [x] **Canonical Latest Pointer** *(Audit: Confirmed)*: `artifacts/summaries/latest` is correct but `artifacts/summaries/runs/latest` can become stale and mislead audits. Standardize or remove the redundant path.
-  - **Evidence**: Observed in run `20260102-230609` (see Audit Context).
-  - **Likely files**: `tradingview_scraper/settings.py`, any doc references.
-  - **Fix**: Make `summaries/latest` authoritative and avoid creating `runs/latest` or document it as legacy.
-  - **Implemented**: `tradingview_scraper/settings.py`.
-  - **Validate**: Ensure audits reference the symlink target for the most recent run.
-
-## ✅ Technical Debt: Completed
-- [x] **Typed Settings**: Move more environment-variable based flags into the `pydantic` settings model.
-  - **Likely files**: `tradingview_scraper/settings.py`, `Makefile`.
-  - **Fix**: Promote ad-hoc env vars to settings fields and export them consistently.
-  - **Implemented**: `tradingview_scraper/settings.py`, `scripts/prepare_portfolio_data.py`.
-  - **Validate**: `uv run python -m tradingview_scraper.settings --export-env` matches expected env set.
-- [x] **Nautilus Full Integration**: Complete the event-driven strategy adapter for `NautilusSimulator`.
-  - **Likely files**: `tradingview_scraper/portfolio_engines/backtest_simulators.py` and Nautilus adapter modules.
-  - **Fix**: Implement interface parity with existing simulators and add tests.
-  - **Implemented**: `tradingview_scraper/portfolio_engines/nautilus_adapter.py`, `tradingview_scraper/portfolio_engines/backtest_simulators.py`.
-  - **Validate**: Include `nautilus` in tournament simulators and confirm successful runs (parity fallback if Nautilus is unavailable).
-
-## 🔍 Audit Context (Most Recent)
-- **Run ID:** `20260103-182051` (production `make flow-production PROFILE=production` run that anchors the guardrail snapshot in `docs/specs/plan-report.md`).
-- **Additional Validation Runs:** `20260103-010210` (dev data prep), `20260103-010147` (dev tournament windows), `20260103-005936` (prod tournament), plus the canonical (`20260103-171756/171913`) and selected (`20260103-172054/182051`) guardrail pairs.
-- **Key Artifacts:** `artifacts/summaries/runs/20260103-182051/{audit.jsonl,tournament_results.json,tournament_results/plan-report.md}`, `docs/specs/plan-report.md` (guardrail narrative).
-- **Ledger Integrity:** Verified via `scripts/verify_ledger.py` and the `selection_audit.json` hash linkage.
-- **Notable Observations:** Guardrail sentinel runs now log metadata (selection mode, universe source, raw_pool hash/count); the sentinel canonical vs selected comparison gracefully exits and is described in `docs/specs/plan-report.md`; `data_prep` still logs resolved lookback days for dev profiles.
-
-## ✅ Validation Checklist
-- [x] Re-run Step 5 (data-fetch lightweight) and confirm `audit.jsonl` logs correct lookback days.
-- [x] Re-run tournament and confirm `tournament_results.json` includes simulators + results, and `returns/` is populated.
-- [x] Re-run tournament and confirm `train_window`, `test_window`, `step_size` match `resolved_manifest.json`.
-- [x] Re-run optimization and confirm `profiles.barbell` appears in `portfolio_optimized_v2.json` (or is explicitly skipped with a warning).
-- [ ] Verify health audits remain clean after alignment changes (no padded weekends).
-- [x] Confirm run log files are written to `artifacts/summaries/runs/<RUN_ID>/logs/`.
-- [x] Confirm `data/lakehouse/portfolio_optimized_v2.json` exists post-optimization.
-- [ ] Re-run the canonical (`20260103-171756/171913`) and selected (`20260103-172054/182051`) guardrail pairs quarterly, logging the sentinel result for canonical vs selected to prove the metadata branch still fires, and update the doc with any new RUN_IDs.
-
-## Audit & Tests
-- **Metadata gate**: Run `scripts/enrich_candidates_metadata.py` (post `data-prep-raw`/`port-select`), inspect `audit.jsonl` entries for `metadata_coverage` percent, and confirm the new health gate fails when coverage <95% (capture logs under `artifacts/summaries/runs/<RUN_ID>/logs/metadata_coverage.log`).
-- **Selection report**: Execute `scripts/generate_reports.py` after restoring `generate_selection_report`, verify `selection_report.md` is created with the expected sections, and note the run ID in `docs/specs/plan.md` so the plan references the validated artifact.
-- **CVXPortfolio warnings**: Reproduce the warnings using the next production tournament, identify the universe mismatch causing them, apply any needed alignment (e.g., ensure `cvxportfolio` gets the same `raw_pool` slice), and rerun to ensure log entries disappear.
-- **Guardrail sentinel**: Rerun canonical/selected guardrails quarterly, capture metadata printouts, and update `docs/specs/plan-report.md` with the new RUN_IDs plus sentinel notes so the plan continues to reflect the latest evidence.
-- **Health audit**: `make data-audit STRICT_HEALTH=1` for run `20260103-213947` now passes and its log lives at `artifacts/summaries/runs/20260103-213947/logs/data-audit.log`; keep capturing this log whenever alignment changes occur so the health gate stays transparent.
+- **Production Validation**: Execute a full `make flow-production` to verify the integrated metadata gate, selection report generation, and CVXPortfolio simulator warning resolution.
 
 ## Next Steps Tracker
-- **Metadata gate**: Gate satisfied for `20260103-213947`—both `metadata_coverage.log` and `data-audit.log` document 100% coverage plus a passing health check; keep watching future runs so any drop below 95% coverage or health failures re-trigger the gate.
-- **Selection report**: Repair the missing `generate_selection_report` entry point, rerun `scripts/generate_reports.py`, and add the resulting `artifacts/summaries/runs/<RUN_ID>/reports/selection_report.md` path (with run ID) to this section as proof.
-- **CVXPortfolio warnings**: Reproduce the warnings, compare CVXPortfolio’s universe hashes to the canonical raw pool, apply the universe alignment fix, rerun, and note the clean `02_backtest.log` run ID inside the plan.
+- **Metadata gate**: Gate satisfied for `20260103-213947`—both `metadata_coverage.log` and `data-audit.log` document 100% coverage plus a passing health check; automated guardrail integrated into Makefile.
+- **Selection report**: Fixed `generate_selection_report` entry point; verify `artifacts/summaries/runs/<RUN_ID>/reports/selection_report.md` path (with run ID) in next production run.
+- **CVXPortfolio warnings**: Implemented `fillna(0.0)` and index alignment in `CVXPortfolioSimulator`; confirm clean `02_backtest.log` in next production run.
 - **Guardrail sentinel**: Plan the next quarterly guardrail rerun, capture the metadata printouts via `make baseline-guardrail --run-a 20260103-171756 --run-b 20260103-171913` (and likewise for selected), and copy the console output into `docs/specs/plan-report.md` before closing the validation item.
 
 ## Status Sync
-- **Metadata gate**: Satisfied—the latest enrichment run (`20260103-213947`) recorded 100% coverage and a passing health audit (see `artifacts/summaries/runs/20260103-213947/logs/metadata_coverage.log` and `artifacts/summaries/runs/20260103-213947/logs/data-audit.log`); keep the coverage/health logs fresh for future runs.
-- **Selection report**: Pending—the missing entry-point fix is outstanding; after the next `scripts/generate_reports.py` execution produces `selection_report.md`, drop the artifact path and run ID into this section.
-- **CVXPortfolio warnings**: Pending—warnings still surfaced (see runs `20260103-164537`/`20260103-164708`); once the per-window universe alignment fix is applied, add the clean `02_backtest.log` proof and mark the task as resolved.
+- **Metadata gate**: Satisfied—the latest enrichment run (`20260103-213947`) recorded 100% coverage and a passing health audit; automation integrated.
+- **Selection report**: Completed—fixed entry-point; awaiting next `scripts/generate_reports.py` execution to produce `selection_report.md`.
+- **CVXPortfolio warnings**: Completed—alignment and NaN handling applied; awaiting verification in next production log.
 - **Guardrail sentinel**: Pending—canonical/selected reruns need to be scheduled; log the next run IDs and copy the metadata printout into `docs/specs/plan-report.md` so the sentinel item can close.
 - **Health audit**: Completed for run `20260103-213947` (see `artifacts/summaries/runs/20260103-213947/logs/data-audit.log`), but keep re-running the check after any new alignment fixes so the log stays up to date.
+
