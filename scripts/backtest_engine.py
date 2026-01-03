@@ -149,7 +149,7 @@ class BacktestEngine:
         ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
 
         baseline_engine = "market"
-        baseline_profiles = ["market", "equal_weight", "raw_pool_ew"]
+        baseline_profiles = ["market", "benchmark", "raw_pool_ew"]
 
         context_base = {
             "selection_mode": settings.features.selection_mode,
@@ -171,12 +171,6 @@ class BacktestEngine:
                     results[s][eng][prof] = {"windows": [], "summary": None}
                     cumulative[(s, eng, prof)] = []
                     prev_weights[(s, eng, prof)] = initial_holdings.get(prof, pd.Series(dtype=float))
-
-                if eng == "custom" and settings.dynamic_universe:
-                    for prof in ["market_baseline", "benchmark_baseline"]:
-                        results[s][eng][prof] = {"windows": [], "summary": None}
-                        cumulative[(s, eng, prof)] = []
-                        prev_weights[(s, eng, prof)] = pd.Series(dtype=float)
 
             results[s][baseline_engine] = {}
             for prof in baseline_profiles:
@@ -348,16 +342,16 @@ class BacktestEngine:
                         logger.error(f"Engine {eng} Profile {prof} failed: {e}")
 
             # Special Baselines
+            raw_pool_symbol_count = 0
+            raw_pool_returns_hash = None
             try:
                 raw_w_df = None
-                raw_pool_symbol_count = 0
-                raw_pool_returns_hash = None
                 w_market = self._compute_weights(train_data_raw, clusters, stats_df_final, "market", "custom", 1.0, candidate_meta, None, regime, market_env)
                 if not w_market.empty:
                     cached_weights[(baseline_engine, "market")] = w_market
-                w_filt = self._compute_weights(train_data, clusters, stats_df_final, "equal_weight", "custom", cluster_cap, candidate_meta, None, regime, market_env)
-                if not w_filt.empty:
-                    cached_weights[(baseline_engine, "equal_weight")] = w_filt
+                w_bench = self._compute_weights(train_data, clusters, stats_df_final, "benchmark", "custom", 1.0, candidate_meta, None, regime, market_env)
+                if not w_bench.empty:
+                    cached_weights[(baseline_engine, "benchmark")] = w_bench
 
                 # Raw Pool Equal Weight (Selection Alpha Baseline)
                 valid_raw_symbols = []
@@ -371,16 +365,6 @@ class BacktestEngine:
                     raw_pool_symbol_count = len(valid_raw_symbols)
                     if ledger:
                         raw_pool_returns_hash = get_df_hash(raw_pool_train_data[valid_raw_symbols])
-
-                # Backwards-compatible baselines under custom engine (dynamic universe)
-                if settings.dynamic_universe and "custom" in engines:
-                    if not w_market.empty:
-                        cached_weights[("custom", "market_baseline")] = w_market
-                    w_bench = self._compute_weights(train_data_raw, clusters, stats_df_final, "benchmark", "custom", 1.0, candidate_meta, None, regime, market_env)
-                    if not w_bench.empty:
-                        cached_weights[("custom", "benchmark_baseline")] = w_bench
-                    if raw_w_df is not None:
-                        cached_weights[("custom", "raw_pool_ew")] = raw_w_df
 
             except Exception as e:
                 logger.error(f"Failed baselines: {e}")
