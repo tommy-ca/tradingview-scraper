@@ -74,12 +74,13 @@ def natural_selection(
         raw_candidates = json.load(f_meta)
     stats_df = pd.read_json(stats_path).set_index("Symbol") if os.path.exists(stats_path) else None
 
+    meta_hash = hashlib.sha256(json.dumps(raw_candidates, sort_keys=True).encode()).hexdigest()
+
     if ledger:
         if not ledger.last_hash:
             manifest_hash = hashlib.sha256(open(settings.manifest_path, "rb").read()).hexdigest() if settings.manifest_path.exists() else "unknown"
             ledger.record_genesis(settings.run_id, settings.profile, manifest_hash)
 
-        meta_hash = hashlib.sha256(json.dumps(raw_candidates, sort_keys=True).encode()).hexdigest()
         ledger.record_intent(
             step="natural_selection",
             params={"top_n": top_n, "threshold": threshold, "mode": mode},
@@ -155,6 +156,10 @@ def natural_selection(
     except Exception as e:
         logger.warning(f"Could not update audit file: {e}")
 
+    selection_audit_hash = None
+    if os.path.exists(run_dir / "selection_audit.json"):
+        selection_audit_hash = hashlib.sha256((run_dir / "selection_audit.json").read_bytes()).hexdigest()
+
     if ledger:
         audit_payload = cast(
             Dict[str, Any],
@@ -174,11 +179,25 @@ def natural_selection(
                 }
             ),
         )
-        ledger_metrics: Dict[str, Any] = {"n_winners": len(winners), "n_vetoes": len(vetoes), "spec_version": spec_version}
+        ledger_metrics: Dict[str, Any] = {
+            "n_winners": len(winners),
+            "n_vetoes": len(vetoes),
+            "spec_version": spec_version,
+            "raw_pool_count": len(returns.columns),
+            "selected_count": len(winners),
+        }
         if isinstance(sanitized_metrics, dict):
             ledger_metrics.update(sanitized_metrics)
         ledger.record_outcome(
-            step="natural_selection", status="success", output_hashes={"candidates": hashlib.sha256(json.dumps(winners).encode()).hexdigest()}, metrics=ledger_metrics, data=audit_payload
+            step="natural_selection",
+            status="success",
+            output_hashes={
+                "candidates": hashlib.sha256(json.dumps(winners).encode()).hexdigest(),
+                "candidates_raw": meta_hash,
+                "selection_audit": selection_audit_hash or "unknown",
+            },
+            metrics=ledger_metrics,
+            data=audit_payload,
         )
 
     logger.info(f"Natural Selection Complete ({mode or 'default'}): {len(winners)} candidates.")
