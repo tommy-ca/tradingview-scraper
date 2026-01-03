@@ -230,9 +230,13 @@ def prepare_portfolio_universe():
 
     alpha_meta = {s: alpha_meta[s] for s in returns_df.columns if s in alpha_meta}
 
+    returns_path = os.getenv("PORTFOLIO_RETURNS_PATH", "data/lakehouse/portfolio_returns.pkl")
+    meta_path = os.getenv("PORTFOLIO_META_PATH", "data/lakehouse/portfolio_meta.json")
+
     logger.info(f"Returns matrix created: {returns_df.shape}")
-    returns_df.to_pickle("data/lakehouse/portfolio_returns.pkl")
-    with open("data/lakehouse/portfolio_meta.json", "w") as f:
+    logger.info(f"Writing returns matrix to: {returns_path}")
+    returns_df.to_pickle(returns_path)
+    with open(meta_path, "w") as f:
         json.dump(alpha_meta, f, indent=2)
 
     if ledger:
@@ -240,7 +244,7 @@ def prepare_portfolio_universe():
             step="data_prep",
             status="success",
             output_hashes={"returns_matrix": get_df_hash(returns_df)},
-            metrics={"shape": returns_df.shape, "n_symbols": len(returns_df.columns)},
+            metrics={"shape": returns_df.shape, "n_symbols": len(returns_df.columns), "returns_path": returns_path, "meta_path": meta_path},
         )
 
     print("\n" + "=" * 50)

@@ -147,7 +147,14 @@ class AuditLedger:
         }
         self._append(record)
 
-    def record_intent(self, step: str, params: Dict[str, Any], input_hashes: Dict[str, str], data: Optional[Dict[str, Any]] = None):
+    def record_intent(
+        self,
+        step: str,
+        params: Dict[str, Any],
+        input_hashes: Dict[str, str],
+        data: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ):
         """Logs an intent to perform a pipeline action."""
         record = {
             "type": "action",
@@ -160,9 +167,19 @@ class AuditLedger:
         }
         if data:
             record["data"] = data
+        if context:
+            record["context"] = context
         self._append(record)
 
-    def record_outcome(self, step: str, status: str, output_hashes: Dict[str, str], metrics: Dict[str, Any], data: Optional[Dict[str, Any]] = None):
+    def record_outcome(
+        self,
+        step: str,
+        status: str,
+        output_hashes: Dict[str, str],
+        metrics: Dict[str, Any],
+        data: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ):
         """Logs the outcome of a pipeline action."""
         record = {
             "type": "action",
@@ -175,4 +192,6 @@ class AuditLedger:
         }
         if data:
             record["data"] = data
+        if context:
+            record["context"] = context
         self._append(record)

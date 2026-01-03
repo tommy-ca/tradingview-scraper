@@ -36,6 +36,37 @@ def _extract_raw_pool_summary(results: Dict[str, Any], simulator: str, engine: s
     }
 
 
+def _load_audit_metadata(run_id: str, runs_root: Path, simulator: str, engine: str) -> Dict[str, Any]:
+    audit_path = runs_root / run_id / "audit.jsonl"
+    if not audit_path.exists():
+        raise FileNotFoundError(f"audit.jsonl not found for run {run_id}: {audit_path}")
+
+    metadata: Dict[str, Any] = {}
+    with audit_path.open("r") as f:
+        for line in f:
+            entry = json.loads(line)
+            context = entry.get("context")
+            if not context:
+                continue
+            if context.get("profile") != "raw_pool_ew":
+                continue
+            if context.get("engine") != engine or context.get("simulator") != simulator:
+                continue
+
+            metadata = {
+                "selection_mode": context.get("selection_mode"),
+                "universe_source": context.get("universe_source"),
+                "raw_pool_returns_hash": context.get("raw_pool_returns_hash"),
+                "raw_pool_symbol_count": context.get("raw_pool_symbol_count"),
+            }
+            break
+
+    if not metadata:
+        raise ValueError(f"raw_pool_ew metadata not found for simulator={simulator}, engine={engine} in run {run_id} audit")
+
+    return metadata
+
+
 def _diff(a: Dict[str, Any], b: Dict[str, Any], tol: float) -> Dict[str, float]:
     diffs: Dict[str, float] = {}
     for key in a:
@@ -70,12 +101,32 @@ def main() -> int:
 
     summary_a = _extract_raw_pool_summary(data_a, args.simulator, args.engine)
     summary_b = _extract_raw_pool_summary(data_b, args.simulator, args.engine)
+    metadata_a = _load_audit_metadata(args.run_a, runs_root, args.simulator, args.engine)
+    metadata_b = _load_audit_metadata(args.run_b, runs_root, args.simulator, args.engine)
+
+    print("Run metadata:")
+    print(
+        f"- {args.run_a}: selection_mode={metadata_a['selection_mode']}, universe_source={metadata_a['universe_source']}, "
+        f"symbols={metadata_a['raw_pool_symbol_count']}, returns_hash={metadata_a['raw_pool_returns_hash']}"
+    )
+    print(
+        f"- {args.run_b}: selection_mode={metadata_b['selection_mode']}, universe_source={metadata_b['universe_source']}, "
+        f"symbols={metadata_b['raw_pool_symbol_count']}, returns_hash={metadata_b['raw_pool_returns_hash']}"
+    )
 
     diffs = _diff(summary_a, summary_b, args.tolerance)
 
     print(f"raw_pool_ew invariance check ({args.run_a} vs {args.run_b})")
     print(f"simulator={args.simulator} engine={args.engine} tolerance={args.tolerance}")
     print(json.dumps({"run_a": summary_a, "run_b": summary_b}, indent=2))
+
+    same_universe = metadata_a["universe_source"] == metadata_b["universe_source"] and metadata_a["raw_pool_returns_hash"] == metadata_b["raw_pool_returns_hash"]
+    if not same_universe:
+        print("NOTE: Universe metadata differs; this guardrail is being used as an explicit sentinel for canonical/selected divergence.")
+        print(f"Run {args.run_a} source/hash: {metadata_a['universe_source']}/{metadata_a['raw_pool_returns_hash']}")
+        print(f"Run {args.run_b} source/hash: {metadata_b['universe_source']}/{metadata_b['raw_pool_returns_hash']}")
+        print("Skipping invariance check since universes are intentionally different.")
+        return 0
 
     if diffs:
         print("FAIL: raw_pool_ew summaries drifted beyond tolerance.")

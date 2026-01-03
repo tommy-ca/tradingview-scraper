@@ -25,6 +25,9 @@ logger = logging.getLogger("backtest_engine")
 
 class BacktestEngine:
     def __init__(self, returns_path: str = "data/lakehouse/portfolio_returns.pkl"):
+        env_override = os.getenv("BACKTEST_RETURNS_PATH") or os.getenv("TV_RETURNS_PATH")
+        if env_override and returns_path == "data/lakehouse/portfolio_returns.pkl":
+            returns_path = env_override
         if not os.path.exists(returns_path):
             raise FileNotFoundError(f"Returns matrix missing: {returns_path}")
 
@@ -37,6 +40,19 @@ class BacktestEngine:
                 logger.warning(f"Fallback indexing for returns: {e_idx}")
                 df.index = pd.to_datetime(df.index, utc=True).tz_convert(None)
             self.returns = df
+
+        self.raw_returns = None
+        raw_returns_path = os.getenv("RAW_POOL_RETURNS_PATH") or os.getenv("TV_RAW_POOL_RETURNS_PATH") or "data/lakehouse/portfolio_returns_raw.pkl"
+        if os.path.exists(raw_returns_path):
+            with open(raw_returns_path, "rb") as f_in:
+                df_raw = cast(pd.DataFrame, pd.read_pickle(f_in))
+                try:
+                    new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in df_raw.index]
+                    df_raw.index = pd.DatetimeIndex(new_idx)
+                except Exception as e_idx:
+                    logger.warning(f"Fallback indexing for raw returns: {e_idx}")
+                    df_raw.index = pd.to_datetime(df_raw.index, utc=True).tz_convert(None)
+                self.raw_returns = df_raw
 
         self.raw_candidates = []
         raw_path = "data/lakehouse/portfolio_candidates_raw.json"
@@ -96,13 +112,32 @@ class BacktestEngine:
         if not sim_names:
             sim_names = ["custom", "cvxportfolio", "vectorbt", "nautilus"]
 
+        raw_pool_universe = (settings.raw_pool_universe or "selected").strip().lower()
+        if raw_pool_universe not in {"selected", "canonical"}:
+            logger.warning("Unknown raw_pool_universe '%s'; falling back to 'selected'.", raw_pool_universe)
+            raw_pool_universe = "selected"
+
         returns_to_use = cast(pd.DataFrame, self.returns)
         if start_date:
             returns_to_use = cast(pd.DataFrame, returns_to_use[returns_to_use.index >= pd.to_datetime(start_date)])
         if end_date:
             returns_to_use = cast(pd.DataFrame, returns_to_use[returns_to_use.index <= pd.to_datetime(end_date)])
 
-        returns_to_use = returns_to_use.dropna(how="any")
+        returns_to_use = returns_to_use.dropna(how="all")
+
+        raw_returns_to_use = None
+        if raw_pool_universe == "canonical":
+            if self.raw_returns is None:
+                logger.warning("raw_pool_universe set to canonical but raw returns matrix is missing; falling back to selected.")
+                raw_pool_universe = "selected"
+            else:
+                raw_returns_to_use = self.raw_returns
+                if start_date:
+                    raw_returns_to_use = cast(pd.DataFrame, raw_returns_to_use[raw_returns_to_use.index >= pd.to_datetime(start_date)])
+                if end_date:
+                    raw_returns_to_use = cast(pd.DataFrame, raw_returns_to_use[raw_returns_to_use.index <= pd.to_datetime(end_date)])
+                # Align canonical returns to the primary index so windows stay consistent
+                raw_returns_to_use = cast(pd.DataFrame, raw_returns_to_use.reindex(returns_to_use.index))
 
         available_engines = set(list_available_engines())
         results: Dict[str, Dict[str, Any]] = {s: {} for s in sim_names}
@@ -115,6 +150,16 @@ class BacktestEngine:
 
         baseline_engine = "market"
         baseline_profiles = ["market", "equal_weight", "raw_pool_ew"]
+
+        context_base = {
+            "selection_mode": settings.features.selection_mode,
+            "rebalance_mode": settings.features.feat_rebalance_mode,
+            "train_window": train_window,
+            "test_window": test_window,
+            "step_size": step_size,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
 
         for s in sim_names:
             for eng in engines:
@@ -145,7 +190,7 @@ class BacktestEngine:
 
         from scripts.natural_selection import run_selection
 
-        for start_idx in range(0, total_len - train_window - test_window + 1, step_size):
+        for window_index, start_idx in enumerate(range(0, total_len - train_window - test_window + 1, step_size)):
             train_end = start_idx + train_window
             train_data_raw = returns_to_use.iloc[start_idx:train_end]
 
@@ -154,6 +199,71 @@ class BacktestEngine:
             test_data_extended = returns_to_use.iloc[train_end:test_end_idx]
             # Standard test data for metadata and non-extended simulators
             test_data = returns_to_use.iloc[train_end : train_end + test_window]
+
+            raw_train_data_raw = None
+            raw_test_data_extended = None
+            raw_test_data = None
+            raw_window_slice = None
+            if raw_returns_to_use is not None:
+                raw_train_data_raw = raw_returns_to_use.iloc[start_idx:train_end]
+                raw_test_data_extended = raw_returns_to_use.iloc[train_end:test_end_idx]
+                raw_test_data = raw_returns_to_use.iloc[train_end : train_end + test_window]
+                raw_window_slice = raw_returns_to_use.iloc[start_idx:test_end_idx]
+
+            window_slice = returns_to_use.iloc[start_idx:test_end_idx]
+            valid_symbols = [c for c in window_slice.columns if window_slice[c].notna().all()]
+            if not valid_symbols:
+                logger.warning("Window %s has no symbols with full data; skipping.", window_index)
+                continue
+
+            train_data_raw = train_data_raw[valid_symbols]
+            test_data = test_data[valid_symbols]
+            test_data_extended = test_data_extended[valid_symbols]
+
+            raw_pool_candidates = list(train_data_raw.columns)
+            raw_pool_universe_resolved = "selected"
+            if raw_pool_universe == "canonical":
+                canonical_symbols = []
+                for c in self.raw_candidates:
+                    if isinstance(c, dict):
+                        canonical_symbols.append(c.get("symbol"))
+                    else:
+                        canonical_symbols.append(str(c))
+                canonical_symbols = [s for s in canonical_symbols if s]
+                if canonical_symbols:
+                    raw_pool_candidates = canonical_symbols
+                    raw_pool_universe_resolved = "canonical"
+                else:
+                    logger.warning("raw_pool_universe set to canonical but raw candidates are empty; using selected universe.")
+
+            raw_pool_train_data = train_data_raw
+            raw_pool_test_data = test_data
+            raw_pool_test_data_extended = test_data_extended
+            raw_pool_window_slice = window_slice
+            if raw_pool_universe_resolved == "canonical" and raw_train_data_raw is not None:
+                raw_pool_train_data = raw_train_data_raw
+                raw_pool_test_data = raw_test_data if raw_test_data is not None else test_data
+                raw_pool_test_data_extended = raw_test_data_extended if raw_test_data_extended is not None else test_data_extended
+                raw_pool_window_slice = raw_window_slice if raw_window_slice is not None else window_slice
+
+            if raw_pool_universe_resolved == "canonical":
+                if not any(s in raw_pool_train_data.columns for s in raw_pool_candidates):
+                    logger.warning("canonical raw_pool_universe has no overlap with returns matrix; falling back to selected.")
+                    raw_pool_candidates = list(train_data_raw.columns)
+                    raw_pool_universe_resolved = "selected"
+                    raw_pool_train_data = train_data_raw
+                    raw_pool_test_data = test_data
+                    raw_pool_test_data_extended = test_data_extended
+                    raw_pool_window_slice = window_slice
+
+            window_context_base = {
+                **context_base,
+                "window_index": window_index,
+                "train_start": str(train_data_raw.index[0]),
+                "test_start": str(test_data.index[0]),
+                "test_end": str(test_data.index[-1]),
+                "universe_source": raw_pool_universe_resolved,
+            }
 
             regime = self.detector.detect_regime(train_data_raw)[0]
             market_env, _ = cast(Any, self.detector).detect_quadrant_regime(train_data_raw)
@@ -194,8 +304,16 @@ class BacktestEngine:
                         p_weights = prev_weights.get((sim_names[0], eng, prof))
                         if ledger:
                             c_hash = hashlib.sha256(json.dumps(clusters, sort_keys=True).encode()).hexdigest()
+                            opt_context = {
+                                **window_context_base,
+                                "engine": eng,
+                                "profile": prof,
+                            }
                             ledger.record_intent(
-                                step="backtest_optimize", params={"engine": eng, "profile": prof, "regime": regime}, input_hashes={"train_returns": get_df_hash(train_data), "clusters": c_hash}
+                                step="backtest_optimize",
+                                params={"engine": eng, "profile": prof, "regime": regime},
+                                input_hashes={"train_returns": get_df_hash(train_data), "clusters": c_hash},
+                                context=opt_context,
                             )
                         weights_df = self._compute_weights(
                             train_data,
@@ -211,12 +329,18 @@ class BacktestEngine:
                             bayesian_params=b_params,
                         )
                         if ledger and not weights_df.empty:
+                            opt_context = {
+                                **window_context_base,
+                                "engine": eng,
+                                "profile": prof,
+                            }
                             ledger.record_outcome(
                                 step="backtest_optimize",
                                 status="success",
                                 output_hashes={"window_weights": get_df_hash(weights_df)},
                                 metrics={"n_assets": len(weights_df)},
                                 data={"weights": weights_df.set_index("Symbol")["Weight"].to_dict()},
+                                context=opt_context,
                             )
                         if not weights_df.empty:
                             cached_weights[(eng, prof)] = weights_df
@@ -226,6 +350,8 @@ class BacktestEngine:
             # Special Baselines
             try:
                 raw_w_df = None
+                raw_pool_symbol_count = 0
+                raw_pool_returns_hash = None
                 w_market = self._compute_weights(train_data_raw, clusters, stats_df_final, "market", "custom", 1.0, candidate_meta, None, regime, market_env)
                 if not w_market.empty:
                     cached_weights[(baseline_engine, "market")] = w_market
@@ -234,10 +360,17 @@ class BacktestEngine:
                     cached_weights[(baseline_engine, "equal_weight")] = w_filt
 
                 # Raw Pool Equal Weight (Selection Alpha Baseline)
-                valid_raw_symbols = [s for s in train_data_raw.columns if s not in settings.benchmark_symbols]
+                valid_raw_symbols = []
+                if raw_pool_window_slice is not None:
+                    valid_raw_symbols = [s for s in raw_pool_candidates if s in raw_pool_window_slice.columns and raw_pool_window_slice[s].notna().all() and s not in settings.benchmark_symbols]
+                else:
+                    valid_raw_symbols = [s for s in raw_pool_candidates if s in train_data_raw.columns and s not in settings.benchmark_symbols]
                 if valid_raw_symbols:
                     raw_w_df = pd.DataFrame([{"Symbol": s, "Weight": 1.0 / len(valid_raw_symbols)} for s in valid_raw_symbols])
                     cached_weights[(baseline_engine, "raw_pool_ew")] = raw_w_df
+                    raw_pool_symbol_count = len(valid_raw_symbols)
+                    if ledger:
+                        raw_pool_returns_hash = get_df_hash(raw_pool_train_data[valid_raw_symbols])
 
                 # Backwards-compatible baselines under custom engine (dynamic universe)
                 if settings.dynamic_universe and "custom" in engines:
@@ -258,8 +391,14 @@ class BacktestEngine:
                     if (s_name, eng, prof) not in cumulative:
                         continue
                     try:
+                        sim_test_extended = test_data_extended
+                        if prof == "raw_pool_ew" and raw_pool_universe_resolved == "canonical":
+                            sim_test_extended = raw_pool_test_data_extended
+                        if sim_test_extended is None:
+                            sim_test_extended = test_data_extended
+
                         # Use EXTENDED data for simulators that support it (CVXPortfolio)
-                        perf = simulator.simulate(test_data_extended, w_df, initial_holdings=prev_weights.get((s_name, eng, prof)))
+                        perf = simulator.simulate(sim_test_extended, w_df, initial_holdings=prev_weights.get((s_name, eng, prof)))
 
                         # IMPORTANT: result['daily_returns'] must be capped back to test_window length
                         # to avoid window overlap in cumulative calculations
@@ -299,11 +438,23 @@ class BacktestEngine:
                             }
                         )
                         if ledger:
+                            sim_context = {
+                                **window_context_base,
+                                "engine": eng,
+                                "profile": prof,
+                                "simulator": s_name,
+                            }
+                            if prof == "raw_pool_ew":
+                                if raw_pool_symbol_count:
+                                    sim_context["raw_pool_symbol_count"] = raw_pool_symbol_count
+                                if raw_pool_returns_hash:
+                                    sim_context["raw_pool_returns_hash"] = raw_pool_returns_hash
                             ledger.record_outcome(
                                 step="backtest_simulate",
                                 status="success",
                                 output_hashes={"test_returns": get_df_hash(d_returns)},
                                 metrics={"eng": eng, "prof": prof, "sim": s_name, "sharpe": perf["sharpe"]},
+                                context=sim_context,
                             )
                         cumulative[(s_name, eng, prof)].append(d_returns)
                     except Exception as e:

@@ -222,6 +222,7 @@ class TradingViewScraperSettings(BaseSettings):
     benchmark_symbols: List[str] = Field(default_factory=lambda: ["AMEX:SPY"])
     report_mode: str = "full"
     dynamic_universe: bool = False
+    raw_pool_universe: str = "selected"
 
     # Tournament
     engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
@@ -386,6 +387,7 @@ if __name__ == "__main__":
             "benchmark_symbols": "BENCHMARK_SYMBOLS",
             "report_mode": "REPORT_MODE",
             "dynamic_universe": "DYNAMIC_UNIVERSE",
+            "raw_pool_universe": "RAW_POOL_UNIVERSE",
             "engines": "TOURNAMENT_ENGINES",
             "profiles": "TOURNAMENT_PROFILES",
             "gist_id": "GIST_ID",

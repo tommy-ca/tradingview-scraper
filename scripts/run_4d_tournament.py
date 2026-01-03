@@ -17,6 +17,8 @@ def run_4d_tournament():
     selection_configs: List[Dict[str, Any]] = [
         {"name": "v3.1", "mode": "v3.1", "vetoes": False, "efficiency": False},
         {"name": "v3.1_spectral", "mode": "v3.1", "vetoes": True, "efficiency": True},
+        {"name": "v3.2", "mode": "v3.2", "vetoes": True, "efficiency": True},
+        {"name": "v3.2_streamlined", "mode": "v3.2", "vetoes": False, "efficiency": True},
     ]
 
     # Rebalance Axis (New for Window Rebalance Audit)
@@ -49,6 +51,13 @@ def run_4d_tournament():
 
     try:
         run_dir = settings.prepare_summaries_run_dir()
+        log_dir = run_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "rebalance_audit.log"
+        file_handler = logging.FileHandler(log_path, encoding="utf-8")
+        file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        logger.addHandler(file_handler)
+        logger.info("Logging rebalance audit to %s", log_path)
 
         for r_cfg in rebalance_configs:
             reb_name = r_cfg["name"]

@@ -73,6 +73,7 @@ class ProductionPipeline:
             "BACKTEST_STEP": "TV_STEP_SIZE",
             "BACKTEST_SIMULATOR": "TV_BACKTEST_SIMULATOR",
             "BACKTEST_SIMULATORS": "TV_BACKTEST_SIMULATORS",
+            "RAW_POOL_UNIVERSE": "TV_RAW_POOL_UNIVERSE",
         }
         for src, dst in overrides.items():
             val = os.getenv(src)
