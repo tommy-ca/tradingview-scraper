@@ -99,14 +99,14 @@ The canonical universe is the production raw pool (source of truth), and natural
   - [x] **ECI Volatility Defaults**: Fixed. Standardized on 0.5% daily default.
 
 ## Current Focus
-- **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run, publish the sentinel notice in each release, and keep `docs/specs/plan-report.md` up to date with the latest RUN_IDs.
-- **Production Validation (Phase 2)**: Execute a full `make flow-production` to verify the integrated metadata gate, selection report generation, and high-fidelity simulator fixes (truncation/lookahead).
+- **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run quarterly, publish the sentinel notice in each release, and keep `docs/specs/plan-report.md` up to date with the latest RUN_IDs.
+- **Continuous Monitoring**: Monitor the newly integrated metadata gate and fidelity checks in automated runs.
 
 ## Next Steps Tracker
 - **Metadata gate**: Gate satisfied for `20260103-223836` (100% coverage); automated guardrail integrated into Makefile.
 - **Selection report**: Repaired `generate_selection_report` entry point; verified in run `20260103-223836` that the selection story is now included in reports.
-- **Fidelity Fixes**: Verified `CVXPortfolio` and `VectorBT` results cover full history and show zero "missing values" warnings in `12_validation.log`.
-- **Guardrail sentinel**: Plan the next quarterly guardrail rerun, capture the metadata printouts via `make baseline-guardrail`, and copy the console output into `docs/specs/plan-report.md`.
+- **Fidelity Fixes**: Verified `CVXPortfolio` and `VectorBT` results cover full history and show zero "missing values" warnings in `12_validation.log` (Run `20260103-223836`).
+- **Guardrail sentinel**: Next quarterly rerun scheduled for April 2026; metadata printouts archived in `docs/specs/plan-report.md`.
 
 ## Status Sync
 - **Metadata gate**: Satisfied—Run `20260103-223836` recorded 100% coverage and passing health audit.
