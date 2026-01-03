@@ -99,12 +99,12 @@ The canonical universe is the production raw pool (source of truth), and natural
   - [x] **ECI Volatility Defaults**: Fixed. Standardized on 0.5% daily default.
 
 ## Current Focus
-- **Script Audit & Cleanup**: Categorize and archive 140+ scripts into standard subdirectories (`archive/`, `research/`, `maintenance/`) per the Phase 4 roadmap.
+- **Continuous Monitoring**: Monitor the newly integrated metadata gate and fidelity checks in automated runs.
 - **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run quarterly.
 
 ## Next Steps Tracker
 - [ ] **Phase 3: Directory Restructuring**: Completed. `TradingViewScraperSettings` supports structured paths; `BacktestEngine` and `ReportGenerator` migrated.
-- [ ] **Phase 4: Script Audit & Cleanup**: Categorize 140+ scripts into Active, Maintenance, Prototype, and Legacy tiers to declutter the codebase.
+- [x] **Phase 4: Script Audit & Cleanup**: Completed. Categorized and archived 110+ scripts into `maintenance/`, `research/`, and `archive/` subdirectories. Root `scripts/` now contains only Tier 1 production core.
 - **Metadata gate**: Gate satisfied for `20260103-223836` (100% coverage).
 
 ## Status Sync
