@@ -117,25 +117,23 @@ The canonical universe is the production raw pool (source of truth), and natural
 
 ## Script Audit & Cleanup Roadmap (Jan 2026)
 ### 1. Categorization Tiers
-- **Tier 1 (Active/Production)**: Critical for `make flow-production`, `make flow-dev`, or reporting.
-- **Tier 2 (Maintenance/Utility)**: Manual diagnostic or data management tools (e.g., `audit_metadata_*`).
-- **Tier 3 (Research/Prototype)**: Active experiments or `debug_` scripts still in use for development.
-- **Tier 4 (Legacy/Redundant)**: Superseded by new unified logic or one-off fixes no longer relevant.
+- **Tier 1 (Core)**: ~30 scripts in `scripts/` root (e.g., `backtest_engine.py`, `natural_selection.py`).
+- **Tier 2 (Maintenance)**: Diagnostic/Utility tools moving to `scripts/maintenance/`.
+- **Tier 3 (Research)**: Active prototypes moving to `scripts/research/`.
+- **Tier 4 (Archive)**: Legacy/Redundant scripts moving to `scripts/archive/`.
 
-### 2. Archiving Strategy
-- **`scripts/archive/`**: Move Tier 4 scripts here instead of deletion to preserve history.
-- **`scripts/research/`**: Move Tier 3 prototypes here to clean the root `scripts/` directory.
-- **`scripts/maintenance/`**: Move Tier 2 tools here.
-- **Consolidation**: Unified multiple `audit_metadata_*.py` scripts into a single diagnostic suite.
+### 2. Implementation Plan (Atomic Commits)
+1.  **Skeleton**: Create subdirectories with `__init__.py`.
+2.  **Maintenance**: Move tools like `cleanup_metadata_catalog.py`, `update_index_lists.py`.
+3.  **Research**: Move prototypes like `proto_async_ws.py`, `tune_selection_alpha.py`.
+4.  **Archive**: Move legacy scripts like `run_e2e_v1.py`, `summarize_results.py`.
+5.  **Verification**: Confirm `make flow-production` and tests still pass with clean root.
 
-### 3. Cleanup List (Candidate Legacy)
-- `run_e2e_v1.py`
-- `run_grand_tournament.py`
-- `summarize_results.py`
-- `review_summary.py`
-- `review_matrix.py`
-- `verify_phase*.py`
-- `debug_vbt_fix.py`
-- `test_heartbeat_fix.py`
+### 3. Detailed Migration Manifest
+| Target Directory | Scripts to Migrate |
+| :--- | :--- |
+| `scripts/maintenance/` | `cleanup_metadata_catalog`, `update_index_lists`, `track_portfolio_state`, `list_missing_symbols`, `check_backfill_status`, etc. |
+| `scripts/research/` | `analyze_forex_universe`, `subcluster`, `benchmark_risk_models`, `explore_*`, `proto_*`, `research_*`, `tune_*`, etc. |
+| `scripts/archive/` | `run_e2e_v1`, `run_grand_tournament`, `summarize_results`, `verify_phase*`, `debug_*`, `test_*`, etc. |
 
 
