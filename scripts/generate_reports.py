@@ -370,7 +370,7 @@ class ReportGenerator:
         if opt_rows:
             md.extend(
                 [
-                    pd.DataFrame(opt_rows).to_markdown(index=False),
+                    str(pd.DataFrame(opt_rows).to_markdown(index=False)),
                     "\n*Optimization Alpha is the return gained by using advanced risk engines (HRP, MinVar, etc.) instead of Equal Weighting the filtered leaders.*\n",
                 ]
             )
@@ -409,7 +409,7 @@ class ReportGenerator:
         if decay_rows:
             md.extend(
                 [
-                    pd.DataFrame(decay_rows).to_markdown(index=False),
+                    str(pd.DataFrame(decay_rows).to_markdown(index=False)),
                     "\n### Interpretation",
                     "- **Return Decay**: The annualized percentage lost to friction.",
                     "- **Sharpe Decay**: The degradation in risk-adjusted stability.",
@@ -424,14 +424,16 @@ class ReportGenerator:
         simulators, profiles = self.meta.get("simulators") or sorted(self.all_results.keys()), self.meta.get("profiles") or PROFILES
         md = ["# Multi-Engine Optimization Tournament Report", f"Generated on: {pd.Timestamp.now()}", "\n## Backtest Context"]
         md.append(
-            pd.DataFrame(
-                [
-                    {"Parameter": "Run ID", "Value": str(self.settings.run_id)},
-                    {"Parameter": "Train Window", "Value": f"{self.meta.get('train_window', 'N/A')} days"},
-                    {"Parameter": "Test Window", "Value": f"{self.meta.get('test_window', 'N/A')} days"},
-                    {"Parameter": "Step Size", "Value": f"{self.meta.get('step_size', 'N/A')} days"},
-                ]
-            ).to_markdown(index=False)
+            str(
+                pd.DataFrame(
+                    [
+                        {"Parameter": "Run ID", "Value": str(self.settings.run_id)},
+                        {"Parameter": "Train Window", "Value": f"{self.meta.get('train_window', 'N/A')} days"},
+                        {"Parameter": "Test Window", "Value": f"{self.meta.get('test_window', 'N/A')} days"},
+                        {"Parameter": "Step Size", "Value": f"{self.meta.get('step_size', 'N/A')} days"},
+                    ]
+                ).to_markdown(index=False)
+            )
         )
         md.append("\n## Risk Fidelity Audit (Vol vs. Concentration)")
         fidelity_rows: List[Dict[str, Any]] = []
@@ -452,7 +454,7 @@ class ReportGenerator:
         if fidelity_rows:
             df_fid = pd.DataFrame(fidelity_rows).sort_values("Vol-HHI Corr", key=lambda x: x.abs())
             df_fid["Vol-HHI Corr"] = df_fid["Vol-HHI Corr"].apply(lambda x: f"{x:.4f}")
-            md.append("\n" + df_fid.to_markdown(index=False))
+            md.append("\n" + str(df_fid.to_markdown(index=False)))
         for profile in profiles:
             rows: List[Dict[str, Any]] = []
             for sim in simulators:
@@ -482,7 +484,7 @@ class ReportGenerator:
                 for c in ["Return", "Vol", "MDD", "Turnover"]:
                     if c in df_p.columns:
                         df_p[c] = df_p[c].apply(lambda x: _fmt_num(x, ".2%"))
-                md.append(df_p.to_markdown(index=False))
+                md.append(str(df_p.to_markdown(index=False)))
         with open(self.summary_dir / "engine_comparison_report.md", "w") as f:
             f.write("\n".join(md))
 
