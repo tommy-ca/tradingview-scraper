@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
@@ -76,9 +77,10 @@ class ReportGenerator:
                 self.tournament_path = legacy_path
 
         self.returns_dir = self.data_dir / "returns"
-        if not self.returns_dir.exists():
+        # Backward compatibility check for returns
+        if not any(self.returns_dir.glob("*.pkl")):
             legacy_returns = self.summary_dir / "returns"
-            if legacy_returns.exists():
+            if legacy_returns.exists() and any(legacy_returns.glob("*.pkl")):
                 self.returns_dir = legacy_returns
 
         self.tearsheet_root.mkdir(parents=True, exist_ok=True)
@@ -160,7 +162,44 @@ class ReportGenerator:
         self._generate_tournament_benchmark()
         self._generate_selection_report()
         self._generate_master_index()
+        self._cleanup_root_leftovers()
         logger.info(f"Reporting complete. Artifacts in: {self.summary_dir}")
+
+    def _cleanup_root_leftovers(self):
+        """Moves legacy root artifacts to their new structured homes."""
+        mapping = {
+            "cluster_analysis.md": self.reports_dir / "research" / "cluster_analysis.md",
+            "correlation_report.md": self.reports_dir / "research" / "correlations.md",
+            "hedge_anchors.md": self.reports_dir / "portfolio" / "hedge_anchors.md",
+            "portfolio_report.md": self.reports_dir / "portfolio" / "report.md",
+            "selection_audit.md": self.reports_dir / "selection" / "audit.md",
+            "selection_report.md": self.reports_dir / "selection" / "report.md",
+            "data_health_raw.md": self.reports_dir / "selection" / "data_health_raw.md",
+            "data_health_selected.md": self.reports_dir / "selection" / "data_health_selected.md",
+            "alpha_isolation_audit.md": self.reports_dir / "portfolio" / "alpha_isolation.md",
+            "slippage_decay_audit.md": self.reports_dir / "portfolio" / "slippage_decay.md",
+            "engine_comparison_report.md": self.reports_dir / "engine" / "comparison.md",
+            "factor_map.png": self.plots_dir / "risk" / "factor_map.png",
+            "portfolio_clustermap.png": self.plots_dir / "clustering" / "portfolio_clustermap.png",
+            "volatility_clustermap.png": self.plots_dir / "clustering" / "volatility_clustermap.png",
+            "selection_audit.json": self.config_dir / "selection_audit.json",
+            "resolved_manifest.json": self.config_dir / "resolved_manifest.json",
+            "tournament_results.json": self.data_dir / "tournament_results.json",
+            "portfolio_clusters.json": self.data_dir / "metadata" / "portfolio_clusters.json",
+            "correlations.json": self.data_dir / "metadata" / "correlations.json",
+        }
+
+        for filename, target_path in mapping.items():
+            source = self.summary_dir / filename
+            if source.exists() and source.is_file():
+                if not target_path.exists():
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(source), str(target_path))
+                    logger.info(f"Moved {filename} to {target_path.relative_to(self.summary_dir)}")
+                else:
+                    # Target exists, delete duplicate from root
+                    source.unlink()
+                    logger.info(f"Removed duplicate {filename} from root.")
 
     def _generate_selection_report(self):
         try:
@@ -536,6 +575,11 @@ class ReportGenerator:
                 "| :--- | :--- | :--- |",
                 "| Metadata Coverage | PASS | [Logs](logs/metadata_coverage.log) |",
                 "| Data Health | PASS | [Audit](reports/selection/data_health_selected.md) |",
+                "",
+                "## 🕵️ Forensic Navigation",
+                "- **Audit Ledger**: [audit.jsonl](audit.jsonl) (Cryptographically chained)",
+                "- **Rebalance Logs**: [logs/rebalance_audit.log](logs/rebalance_audit.log) (Trade-level trace)",
+                "- **System Glossary**: [docs/specs/audit_artifact_map.md](../../../../docs/specs/audit_artifact_map.md)",
                 "",
                 "## 📁 Artifact Map",
                 "- **Configuration**: [config/](config/)",

@@ -51,7 +51,12 @@ def get_df_hash(df: pd.DataFrame | pd.Series) -> str:
             try:
                 # If it looks like a number, format it specifically
                 if pd.api.types.is_number(x) and not isinstance(x, bool):
-                    data_list.append(f"{float(x):.8f}")
+                    # Use a very robust way to get a float string
+                    try:
+                        val = float(str(x))
+                        data_list.append(f"{val:.8f}")
+                    except (ValueError, TypeError):
+                        data_list.append(str(x))
                 else:
                     data_list.append(str(x))
             except Exception:
