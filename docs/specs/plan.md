@@ -99,20 +99,43 @@ The canonical universe is the production raw pool (source of truth), and natural
   - [x] **ECI Volatility Defaults**: Fixed. Standardized on 0.5% daily default.
 
 ## Current Focus
-- **Artifact Reorganization**: Transition from flat run directories to a structured hierarchy (`config/`, `reports/`, `data/`, `plots/`, `logs/`) per `docs/specs/artifact_hierarchy.md`.
-- **Master Index Generation**: Implement `INDEX.md` as the authoritative entry point for every run.
+- **Script Audit & Cleanup**: Categorize and archive 140+ scripts into standard subdirectories (`archive/`, `research/`, `maintenance/`) per the Phase 4 roadmap.
 - **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run quarterly.
 
 ## Next Steps Tracker
-- [ ] **Phase 3: Directory Restructuring**: Update `TradingViewScraperSettings` to support structured paths and migrate writers in `BacktestEngine` and `ReportGenerator`.
-- [ ] **INDEX.md Implementation**: Add a step to `scripts/generate_reports.py` to compile the master navigation index.
+- [ ] **Phase 3: Directory Restructuring**: Completed. `TradingViewScraperSettings` supports structured paths; `BacktestEngine` and `ReportGenerator` migrated.
+- [ ] **Phase 4: Script Audit & Cleanup**: Categorize 140+ scripts into Active, Maintenance, Prototype, and Legacy tiers to declutter the codebase.
 - **Metadata gate**: Gate satisfied for `20260103-223836` (100% coverage).
 
 ## Status Sync
+- **Artifact Reorganization**: Completed. Run directories now use standard sub-hierarchies (`config/`, `reports/`, etc.).
 - **Metadata gate**: Satisfied—Run `20260103-223836` recorded 100% coverage and passing health audit.
 - **Selection report**: Completed—Run `20260103-223836` confirmed restoration of selection story.
 - **CVXPortfolio warnings**: Completed—Run `20260103-223836` confirmed zero warnings in `12_validation.log`.
 - **Guardrail sentinel**: Completed—Run `20260103-223836` passed invariance check against previous baseline.
 - **Health audit**: Completed for run `20260103-223836` (100% healthy).
+
+## Script Audit & Cleanup Roadmap (Jan 2026)
+### 1. Categorization Tiers
+- **Tier 1 (Active/Production)**: Critical for `make flow-production`, `make flow-dev`, or reporting.
+- **Tier 2 (Maintenance/Utility)**: Manual diagnostic or data management tools (e.g., `audit_metadata_*`).
+- **Tier 3 (Research/Prototype)**: Active experiments or `debug_` scripts still in use for development.
+- **Tier 4 (Legacy/Redundant)**: Superseded by new unified logic or one-off fixes no longer relevant.
+
+### 2. Archiving Strategy
+- **`scripts/archive/`**: Move Tier 4 scripts here instead of deletion to preserve history.
+- **`scripts/research/`**: Move Tier 3 prototypes here to clean the root `scripts/` directory.
+- **`scripts/maintenance/`**: Move Tier 2 tools here.
+- **Consolidation**: Unified multiple `audit_metadata_*.py` scripts into a single diagnostic suite.
+
+### 3. Cleanup List (Candidate Legacy)
+- `run_e2e_v1.py`
+- `run_grand_tournament.py`
+- `summarize_results.py`
+- `review_summary.py`
+- `review_matrix.py`
+- `verify_phase*.py`
+- `debug_vbt_fix.py`
+- `test_heartbeat_fix.py`
 
 
