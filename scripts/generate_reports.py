@@ -88,8 +88,11 @@ class ReportGenerator:
             return None
         # Filter for actual run directories (not symlinks like 'latest')
         date_pattern = re.compile(r"^\d{8}-\d{6}$")
-        runs = sorted([d.name for d in runs_dir.iterdir() if d.is_dir() and not d.is_symlink() and date_pattern.match(d.name)])
-        return runs[-1] if runs else None
+        run_dirs = [d for d in runs_dir.iterdir() if d.is_dir() and not d.is_symlink() and date_pattern.match(d.name)]
+        complete = [d for d in run_dirs if (d / "audit.jsonl").exists() and (d / "tournament_results.json").exists()]
+        candidates = complete or run_dirs
+        candidates = sorted(candidates, key=lambda p: p.name)
+        return candidates[-1].name if candidates else None
 
     def _load_spy_benchmark(self) -> Optional[pd.Series]:
         returns_path = Path("data/lakehouse/portfolio_returns.pkl")
