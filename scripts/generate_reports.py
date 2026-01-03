@@ -336,22 +336,20 @@ class ReportGenerator:
         regime_rows: List[Dict[str, Any]] = []
         market_data = self.all_results.get(sim_name, {}).get("market", {})
         if market_data:
-            first_prof = next((k for k in market_data.keys() if k not in ["_status", "raw_pool_ew"]), None)
-            if first_prof and market_data[first_prof].get("summary"):
-                m_row = dict(market_data[first_prof]["summary"])
+            if market_data.get("market", {}).get("summary"):
+                m_row = dict(market_data["market"]["summary"])
                 m_row["Profile"] = "MARKET (HOLD)"
-                m_row["Details"] = f"[Metrics]({sim_name}_market_{first_prof}_full_report.md)"
+                m_row["Details"] = f"[Metrics]({sim_name}_market_market_full_report.md)"
                 summary_rows.append(m_row)
             if market_data.get("raw_pool_ew", {}).get("summary"):
                 raw_row = dict(market_data["raw_pool_ew"]["summary"])
                 raw_row["Profile"] = "MARKET (RAW EW)"
                 raw_row["Details"] = f"[Metrics]({sim_name}_market_raw_pool_ew_full_report.md)"
                 summary_rows.append(raw_row)
-            filt_key = "equal_weight" if "equal_weight" in market_data else first_prof
-            if filt_key and market_data.get(filt_key, {}).get("summary"):
-                filt_row = dict(market_data[filt_key]["summary"])
+            if market_data.get("benchmark", {}).get("summary"):
+                filt_row = dict(market_data["benchmark"]["summary"])
                 filt_row["Profile"] = "MARKET (FILTERED EW)"
-                filt_row["Details"] = f"[Metrics]({sim_name}_market_{filt_key}_full_report.md)"
+                filt_row["Details"] = f"[Metrics]({sim_name}_market_benchmark_full_report.md)"
                 summary_rows.append(filt_row)
         display_names = {"min_variance": "MIN VARIANCE", "hrp": "HIERARCHICAL RISK PARITY (HRP)", "max_sharpe": "MAX SHARPE", "barbell": "ANTIFRAGILE BARBELL"}
         for prof_key in PROFILES:

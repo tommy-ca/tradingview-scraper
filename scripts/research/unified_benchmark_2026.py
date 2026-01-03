@@ -25,7 +25,7 @@ def run_unified_benchmark():
     settings.features.feat_rebalance_mode = "window"
 
     engines = ["custom"]
-    profiles = ["equal_weight", "hrp", "benchmark_baseline"]
+    profiles = ["equal_weight", "hrp", "benchmark"]
     simulators = ["custom"]
 
     # Full 2025 Matrix (Starting training in 2024 to cover 12 months of testing)

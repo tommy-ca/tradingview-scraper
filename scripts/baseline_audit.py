@@ -63,7 +63,7 @@ def main() -> int:
     results = data.get("results", {})
 
     market_matches = _find_profiles(results, ["market"])
-    benchmark_matches = _find_profiles(results, ["benchmark", "benchmark_baseline"])
+    benchmark_matches = _find_profiles(results, ["benchmark"])
     raw_pool_matches = _find_profiles(results, ["raw_pool_ew"])
 
     summary = {
