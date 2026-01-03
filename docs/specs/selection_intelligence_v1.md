@@ -25,6 +25,7 @@ Selection Intelligence defines the logic for "Pruning" the raw discovered candid
 ### 2.4 Multiplicative Probability Scoring (MPS 3.0 / V3)
 - **Model**: Multiplicative Probabilities ($P_1 \times P_2 \times ...$).
 - **Vetoes**: Hard gates for Survival (< 0.1), ECI (Cost), and Numerical Stability ($\kappa$).
+- **ECI Estimation**: Uses a standardized 0.5% (0.005) daily volatility default when `Volatility.D` metadata is missing or `NaN`. This prevents punitive over-vetoing of assets with high alpha proxies but missing volatility metrics.
 - **Behavior**: Non-compensatory "Darwinian" survival. Structural failure in any category results in immediate disqualification.
 
 ### 2.4 Alpha Standard (V3.1)

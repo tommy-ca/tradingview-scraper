@@ -125,14 +125,22 @@ The canonical universe is the production raw pool (source of truth), and natural
 
 ## Next Steps Tracker
 - **Metadata gate**: Gate satisfied for `20260103-213947`—both `metadata_coverage.log` and `data-audit.log` document 100% coverage plus a passing health check; automated guardrail integrated into Makefile.
-- **Selection report**: Fixed `generate_selection_report` entry point; verify `artifacts/summaries/runs/<RUN_ID>/reports/selection_report.md` path (with run ID) in next production run.
-- **CVXPortfolio warnings**: Implemented `fillna(0.0)` and index alignment in `CVXPortfolioSimulator`; confirm clean `02_backtest.log` in next production run.
+- **Selection report**: Repaired `generate_selection_report` entry point; verified in recent tournament logs that the selection story is now included in reports.
+- **CVXPortfolio warnings**: Implemented `fillna(0.0)` and index alignment in `CVXPortfolioSimulator`; verified clean `02_backtest.log` with zero universe-drift warnings.
 - **Guardrail sentinel**: Plan the next quarterly guardrail rerun, capture the metadata printouts via `make baseline-guardrail --run-a 20260103-171756 --run-b 20260103-171913` (and likewise for selected), and copy the console output into `docs/specs/plan-report.md` before closing the validation item.
 
 ## Status Sync
 - **Metadata gate**: Satisfied—the latest enrichment run (`20260103-213947`) recorded 100% coverage and a passing health audit; automation integrated.
-- **Selection report**: Completed—fixed entry-point; awaiting next `scripts/generate_reports.py` execution to produce `selection_report.md`.
-- **CVXPortfolio warnings**: Completed—alignment and NaN handling applied; awaiting verification in next production log.
+- **Selection report**: Completed—fixed entry-point and restored selection story in `scripts/generate_reports.py`.
+- **CVXPortfolio warnings**: Completed—alignment and NaN handling applied; verified in recent tournament logs.
 - **Guardrail sentinel**: Pending—canonical/selected reruns need to be scheduled; log the next run IDs and copy the metadata printout into `docs/specs/plan-report.md` so the sentinel item can close.
 - **Health audit**: Completed for run `20260103-213947` (see `artifacts/summaries/runs/20260103-213947/logs/data-audit.log`), but keep re-running the check after any new alignment fixes so the log stays up to date.
+
+## Institutional Fidelity (Jan 2026) - Bug Fixes
+- [x] **Simulator Truncation (20-day limit)**: High-fidelity simulators (`CVXPortfolio`, `VectorBT`) were accidentally hardcoded to 20 days.
+  - **Fix**: Removed truncation; both simulators now process full secular history (250-500+ days).
+- [x] **VectorBT Lookahead Bias**: `VectorBTSimulator` used `shift(-1)` which introduced future returns into current weights.
+  - **Fix**: Removed shift; simulator now uses raw periodic returns aligned to rebalance timing.
+- [x] **ECI Volatility Defaults**: `enrich_candidates_metadata.py` used an incorrect 50% default for missing volatility, causing excessive vetoes.
+  - **Fix**: Standardized on 0.5% (0.005) daily volatility default for estimation.
 

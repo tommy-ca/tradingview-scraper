@@ -19,7 +19,9 @@ The Profile-Centric Optimization Engine (v2) is an institutional-grade framework
 ### Design Implication
 - **Selection alpha isolation** requires a canonical baseline (`raw_pool_ew`) that is not affected by selection-mode sweeps.
 - **Optimization profiles** operate on the active universe passed into the engine (typically natural-selected unless explicitly overridden).
-- **Metadata prerequisite**: Candidate manifests must contain `tick_size`, `lot_size`, and `price_precision` before any selection/tournament run. Vetoes are driven by the **candidate manifests** (not `portfolio_meta*.json`), so enrichment must occur after each manifest refresh.
+- **Metadata prerequisite**: Candidate manifests must contain `tick_size`, `lot_size`, and `price_precision` before any selection/tournament run.
+- **Automated Gate**: `scripts/metadata_coverage_guardrail.py` enforces a ≥95% coverage threshold as a mandatory pipeline gate.
+- **Vetoes**: Driven by the **candidate manifests** (not `portfolio_meta*.json`), so enrichment must occur after each manifest refresh.
 
 ## 2. Baseline Profiles Standard (Single Source of Truth)
 

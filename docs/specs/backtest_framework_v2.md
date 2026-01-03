@@ -21,6 +21,7 @@ The framework decouples **Window Management** (rolling walk-forward logic) from 
     - **Market Impact**: Volume-based quadratic impact (requires OHLCV data).
 - **Cash Management**: Uses a stablecoin (USDT) as the base currency for the simulator's cash account.
 - **Use Case**: Institutional implementation audit and "Slippage Decay" analysis.
+- **Depth**: Supports full secular backtest depth (250-500+ days) with strict universe alignment and `fillna(0.0)` for contiguous returns matrices.
 
 ### 2.3 VectorBT Simulator (High-Performance Vectorized)
 - **Method**: Utilizes `vectorbt.Portfolio.from_returns`.
@@ -29,6 +30,8 @@ The framework decouples **Window Management** (rolling walk-forward logic) from 
     - **Fees**: Default 1 bp commission.
 - **Processing**: Numba-accelerated vectorized operations.
 - **Use Case**: Fast event-driven simulation and large-scale parameter sweeps.
+- **Alignment**: Calibrated to use raw periodic returns without internal shifts (zero lookahead).
+- **Depth**: Supports full secular backtest depth.
 
 ## 3. Metrics & Standards
 
