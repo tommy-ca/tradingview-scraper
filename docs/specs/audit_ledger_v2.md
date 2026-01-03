@@ -41,3 +41,12 @@ The system now adheres to the following standards:
 - **Authenticity**: Every run starts with a genesis block pinning the Git commit and library environment.
 - **Integrity**: Each record is linked via SHA-256 to its predecessor, preventing un-traceable modifications.
 - **Reconstructibility**: Decisions are recorded with full parameter sets, allowing for point-in-time forensic analysis.
+
+## 5. Tournament Linkage (Current Behavior)
+When `feat_audit_ledger` is enabled:
+- `backtest_optimize` intents capture training data hashes and cluster lineage hashes.
+- `backtest_simulate` outcomes capture test return hashes and key metrics (e.g., Sharpe).
+
+Notes:
+- The ledger is written to the run-scoped `artifacts/summaries/runs/<RUN_ID>/audit.jsonl`.
+- Derived reports (e.g., `full_4d_comparison_table.md`) are generated from tournament outputs and are not separately hashed in the ledger unless explicitly recorded by a writer.

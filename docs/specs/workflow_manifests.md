@@ -36,15 +36,18 @@ The platform supports both direct CLI overrides and environment-driven settings.
 
 | CLI Arg | Env Var | Manifest Key | Notes |
 | :--- | :--- | :--- | :--- |
-| `--train` | `BACKTEST_TRAIN` | `backtest.train_window` | CLI overrides settings at runtime for tournaments. |
-| `--test` | `BACKTEST_TEST` | `backtest.test_window` | Same precedence as `--train`. |
-| `--step` | `BACKTEST_STEP` | `backtest.step_size` | Same precedence as `--train`. |
+| `--train` | `BACKTEST_TRAIN` | `backtest.train_window` | CLI overrides settings at runtime for tournaments; Makefile maps to `TV_TRAIN_WINDOW` for `--export-env`. |
+| `--test` | `BACKTEST_TEST` | `backtest.test_window` | Same precedence as `--train`; Makefile maps to `TV_TEST_WINDOW`. |
+| `--step` | `BACKTEST_STEP` | `backtest.step_size` | Same precedence as `--train`; Makefile maps to `TV_STEP_SIZE`. |
 | `PROFILE=development` | `TV_PROFILE` | `profiles.development` | Selects the active manifest profile. |
 | `MANIFEST=...` | `TV_MANIFEST_PATH` | *(manifest file path)* | Chooses the manifest file. |
-| *(n/a)* | `LOOKBACK` | `data.lookback_days` | Used by data prep and health audits. |
-| *(n/a)* | `PORTFOLIO_LOOKBACK_DAYS` | `data.lookback_days` | Explicit portfolio override; falls back to lookback. |
+| *(n/a)* | `LOOKBACK` | `data.lookback_days` | Used by data prep and health audits; Makefile maps to `TV_LOOKBACK_DAYS`. |
+| *(n/a)* | `PORTFOLIO_LOOKBACK_DAYS` | `data.lookback_days` | Explicit portfolio override; falls back to lookback; Makefile maps to `TV_PORTFOLIO_LOOKBACK_DAYS`. |
+| *(n/a)* | `BACKTEST_SIMULATOR` / `BACKTEST_SIMULATORS` | `backtest.simulators` | Simulator list for tournaments; Makefile maps to `TV_BACKTEST_SIMULATOR` / `TV_BACKTEST_SIMULATORS`. |
+| *(n/a)* | `CLUSTER_CAP` | `risk.cluster_cap` | Overrides risk cluster cap; Makefile maps to `TV_CLUSTER_CAP`. |
 
 > The Makefile uses `python -m tradingview_scraper.settings --export-env` to translate manifest values into env vars for script compatibility.
+> Shorthand envs (e.g. `BACKTEST_*`, `LOOKBACK`, `CLUSTER_CAP`) are normalized into `TV_*` variables before export.
 
 ## 3. Manifest Schema
 

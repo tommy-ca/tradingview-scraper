@@ -41,11 +41,14 @@
 3.  **Error Free**:
     - The run should complete without crashing.
     - Report generation should not fail.
+4.  **Data Sufficiency**:
+    - Ensure `len(returns.dropna()) >= train_window + test_window` (post-dropna).
+    - If short, increase `LOOKBACK` or reduce the window sizes.
 
 ## 3. Execution Command
 
 ```bash
-CLUSTER_CAP=0.25 uv run scripts/backtest_engine.py \
+TV_RUN_ID=<RUN_ID> CLUSTER_CAP=0.25 uv run scripts/backtest_engine.py \
   --tournament \
   --engines custom,market,skfolio,riskfolio,pyportfolioopt,cvxportfolio \
   --profiles min_variance,hrp,max_sharpe,barbell,equal_weight \
@@ -59,3 +62,6 @@ CLUSTER_CAP=0.25 uv run scripts/backtest_engine.py \
 - Generate Report: `TV_RUN_ID=<id> uv run scripts/generate_reports.py`
 - Analyze `engine_comparison_report.md` for outliers.
 - Commit results to `artifacts/summaries`.
+- If `tournament_4d_results.json` exists, render the full table:
+  `TV_RUN_ID=<id> uv run python scripts/generate_human_table.py`
+- For rebalance audit results: `uv run python scripts/generate_human_table.py --rebalance`

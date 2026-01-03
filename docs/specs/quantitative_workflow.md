@@ -3,7 +3,7 @@
 **Date**: 2025-12-31
 
 ## 1. Overview
-This document defines the standardized pipeline for transforming raw market data into an optimized, multi-asset portfolio. The workflow is unified under a 13-step production sequence.
+This document defines the standardized pipeline for transforming raw market data into an optimized, multi-asset portfolio. The workflow is unified under a 15-step production sequence.
 
 ## 2. The 15-Step Production Sequence
 
@@ -21,6 +21,10 @@ The entire production lifecycle is managed via the **Python Orchestrator** (`scr
 10. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
 11. **Optimization**: Cluster-Aware allocation with Turnover Control (`make port-optimize`).
 12. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`).
+    - Primary output: `tournament_results.json` in `artifacts/summaries/runs/<RUN_ID>/`.
+    - Optional 4D sweep (Selection x Simulator x Engine x Profile) writes `tournament_4d_results.json` and `full_4d_comparison_table.md`.
+      This sweep is not produced by default by `flow-dev` / `flow-production`.
+    - Rebalance audit uses `scripts/run_4d_tournament.py` and writes `rebalance_audit_results.json` (render via `scripts/generate_human_table.py --rebalance`).
 13. **Reporting**: QuantStats Tear-sheets & Alpha Audit (`make port-report`).
 14. **Gist Sync**: Synchronize essential artifacts to private Gist (`make report-sync`).
 15. **Audit Verification**: Final cryptographic signature check of the decision ledger.
@@ -43,6 +47,11 @@ make port-select    # Prune and select candidates
 make port-optimize  # Convex risk allocation
 make port-test      # Run benchmarking tournament
 ```
+
+### Tournament Window Sizing (Minimum Data Requirement)
+The tournament operates on the post-dropna returns matrix. Require:
+`len(returns.dropna()) >= train_window + test_window`.
+If the requirement is not met, the tournament returns early with "data too short".
 
 **Stale symbol recovery (targeted):**
 ```bash

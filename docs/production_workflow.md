@@ -48,6 +48,10 @@ The platform uses **Feature Flags** to gradually roll out high-impact quantitati
 12. **Validation**: Walk-Forward "Tournament" benchmarking across 4 simulators (CVX, VBT, Nautilus, Custom).
     - **Selection Gate**: Verify `Filtered EW` > `Raw EW`.
     - **Optimizer Sanity**: Standardized L2 regularization ($\\gamma=0.05$) and Ledoit-Wolf shrinkage.
+    - **Primary Output**: `tournament_results.json` in the run-scoped summaries directory.
+    - **Optional 4D Sweep**: Selection x Simulator x Engine x Profile writes `tournament_4d_results.json` and `full_4d_comparison_table.md`.
+      This sweep is **not** produced by default `flow-dev` / `flow-production` runs.
+    - **Rebalance Audit**: `scripts/run_4d_tournament.py` emits `rebalance_audit_results.json`; render with `scripts/generate_human_table.py --rebalance`.
 13. **Reporting**: QuantStats Tear-sheets + Alpha Isolation Audit + Risk Fidelity Audit.
 14. **Audit Verification**: Final cryptographic check of the `audit.jsonl` ledger.
 
@@ -70,6 +74,9 @@ The framework treats the market benchmark as a first-class **"Market" Engine**.
 The "Tournament" evaluates an `Engine x Simulator` matrix to quantify the performance lost to friction.
 - **Idealized**: Zero-friction returns (theoretical alpha).
 - **Realized**: High-fidelity simulation including 5bps slippage and 1bp commission.
+
+**Minimum Data Requirement (Tournament)**:
+`len(returns.dropna()) >= train_window + test_window`. If the post-dropna matrix is shorter, the tournament short-circuits with "data too short".
 
 ---
 

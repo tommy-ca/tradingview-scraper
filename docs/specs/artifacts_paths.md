@@ -42,6 +42,20 @@ The settings should expose:
 - `summaries_run_dir = <summaries>/runs/<TV_RUN_ID>`
 - `summaries_latest_link = <summaries>/latest`
 
+## 4.1 Backtest / Tournament Outputs
+Typical tournament artifacts (run-scoped):
+- `artifacts/summaries/runs/<RUN_ID>/tournament_results.json`
+- `artifacts/summaries/runs/<RUN_ID>/tournament_4d_results.json`
+- `artifacts/summaries/runs/<RUN_ID>/full_4d_comparison_table.md`
+- `artifacts/summaries/runs/<RUN_ID>/rebalance_audit_results.json`
+- `artifacts/summaries/runs/<RUN_ID>/full_rebalance_comparison_table.md`
+- `artifacts/summaries/runs/<RUN_ID>/returns/*.pkl`
+- `artifacts/summaries/runs/<RUN_ID>/tearsheets/*.md`
+- `artifacts/summaries/runs/<RUN_ID>/audit.jsonl`
+
+Notes:
+- 4D outputs are optional and only appear when a selection-mode sweep or rebalance audit is executed.
+
 ## 5. Forex Analysis Outputs
 Forex base-universe analysis (see `make forex-analyze`) writes run-scoped artifacts:
 - `artifacts/summaries/runs/<RUN_ID>/forex_universe_report.md`
