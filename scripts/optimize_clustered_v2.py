@@ -55,7 +55,7 @@ class ClusteredOptimizerV2:
             logger.warning("No available symbols for optimization.")
             self.returns = pd.DataFrame()
         else:
-            self.returns = self.returns[available_symbols].fillna(0.0)
+            self.returns = self.returns[available_symbols].dropna(how="any")
 
         # Build cluster benchmarks and aggregate risk stats
         self.cluster_benchmarks = pd.DataFrame()
@@ -430,6 +430,13 @@ if __name__ == "__main__":
         profiles["barbell"] = {
             "assets": barbell_df.to_dict(orient="records"),
             "clusters": barbell_summary,
+        }
+    else:
+        reason = "missing antifragility stats" if optimizer.stats is None else "barbell unavailable"
+        profiles["barbell"] = {
+            "assets": [],
+            "clusters": [],
+            "meta": {"skipped": True, "reason": reason},
         }
 
     # Build cluster registry

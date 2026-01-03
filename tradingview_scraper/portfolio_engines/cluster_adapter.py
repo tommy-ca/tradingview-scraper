@@ -43,7 +43,7 @@ def build_clustered_universe(
     # Ensure returns matches clusters
     all_symbols = [s for c in clusters.values() for s in c]
     available_symbols = [s for s in all_symbols if s in returns.columns]
-    aligned_returns = cast(pd.DataFrame, returns[available_symbols].fillna(0.0))
+    aligned_returns = cast(pd.DataFrame, returns[available_symbols].dropna(how="any"))
 
     cluster_benchmarks = pd.DataFrame(index=aligned_returns.index)
     intra_cluster_weights: Dict[str, pd.Series] = {}
