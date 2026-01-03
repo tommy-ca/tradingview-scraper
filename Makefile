@@ -78,6 +78,7 @@ scan-audit: ## Lint scanner configurations
 # --- DATA Namespace ---
 data-prep-raw: ## Aggregate scans and initialize raw pool
 	$(PY) scripts/select_top_universe.py --mode raw
+	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json PORTFOLIO_RETURNS_PATH=data/lakehouse/portfolio_returns_raw.pkl PORTFOLIO_META_PATH=data/lakehouse/portfolio_meta_raw.json $(PY) scripts/prepare_portfolio_data.py
 	-$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
 
 data-fetch: ## Ingest historical market data
@@ -127,6 +128,18 @@ port-report: ## Generate unified quant reports and tear-sheets
 	$(PY) scripts/generate_reports.py
 	$(PY) scripts/generate_portfolio_report.py
 	$(PY) scripts/generate_audit_summary.py
+
+baseline-audit: ## Validate baseline availability (market/benchmark/raw_pool_ew)
+	@STRICT_ARG=""; if [ "$(STRICT_BASELINE)" = "1" ] || [ "$(TV_STRICT_BASELINE)" = "1" ]; then STRICT_ARG="--strict"; fi; \
+	RAW_ARG=""; if [ "$(REQUIRE_RAW_POOL)" = "1" ] || [ "$(TV_REQUIRE_RAW_POOL)" = "1" ]; then RAW_ARG="--require-raw-pool"; fi; \
+	$(PY) scripts/baseline_audit.py --run-id $(RUN_ID) $$STRICT_ARG $$RAW_ARG
+
+baseline-guardrail: ## Compare raw_pool_ew invariance across two runs (RUN_A, RUN_B)
+	@if [ -z "$(RUN_A)" ] || [ -z "$(RUN_B)" ]; then \
+		echo "Set RUN_A and RUN_B to run IDs for invariance check."; \
+		exit 1; \
+	fi
+	$(PY) scripts/raw_pool_invariance_guardrail.py --run-a $(RUN_A) --run-b $(RUN_B)
 
 report-sync: ## Synchronize artifacts to private Gist
 	@echo ">>> Preparing Gist Payload..."
