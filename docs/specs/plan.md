@@ -62,3 +62,29 @@
 - **Tier 2 (Maintenance)**: Diagnostic/Utility tools in `scripts/maintenance/`.
 - **Tier 3 (Research)**: Active prototypes in `scripts/research/`.
 - **Tier 4 (Archive)**: Legacy/Redundant scripts in `scripts/archive/`.
+
+### 2. Implementation Plan (Atomic Commits)
+1.  **Skeleton**: Create subdirectories with `__init__.py`. (Completed)
+2.  **Maintenance**: Move utility tools. (Completed)
+3.  **Research**: Move prototypes. (Completed)
+4.  **Archive**: Move legacy scripts. (Completed)
+5.  **Verification**: Confirm `make flow-production` and tests still pass with clean root. (Completed)
+
+### 3. Detailed Migration Manifest
+| Target Directory | Scripts to Migrate |
+| :--- | :--- |
+| `scripts/maintenance/` | `cleanup_metadata_catalog`, `update_index_lists`, `track_portfolio_state`, etc. |
+| `scripts/research/` | `analyze_forex_universe`, `subcluster`, `benchmark_risk_models`, `explore_*`, `proto_*`, `research_*`, `tune_*`, etc. |
+| `scripts/archive/` | `run_e2e_v1`, `run_grand_tournament`, `summarize_results`, `verify_phase*`, `debug_*`, `test_*`, etc. |
+
+## Risk Profile Matrix
+| Profile | Category | Universe | Weighting / Optimization | Notes |
+| --- | --- | --- | --- | --- |
+| `market` | Baseline | Benchmark symbols (`settings.benchmark_symbols`) | Equal-weight long-only allocation; no optimizer, no clusters | Institutional hurdle; logged identically across engines (`market_profile_unification`). |
+| `benchmark` | Baseline | Natural-selected universe | Asset-level equal weight over the winners; no clustering | Research baseline; logs universe source + count for every run so alpha deltas are traceable. |
+| `raw_pool_ew` | Selection-alpha baseline | Canonical or selected | Asset-level equal weight across the raw pool, excludes benchmark symbols | Diagnostic only until coverage + invariance pass; record `raw_pool_symbol_count` and hash per window. |
+| `equal_weight` | Risk profile | Natural-selected universe | Hierarchical equal weight (cluster-level HE + HERC 2.0 intra) | Neutral, low-friction profile used for volatility-neutral comparisons. |
+| `min_variance` | Risk profile | Natural-selected universe | Cluster-level minimum variance (solver-driven) | Defensive, low-volatility target; guardrails ensure `HERC 2.0` intra weighting. |
+| `hrp` | Risk profile | Natural-selected universe | Hierarchical risk parity (HRP) | Structural risk-parity baseline for regime robustness; uses cluster distances tuned by metadata. |
+| `max_sharpe` | Risk profile | Natural-selected universe | Cluster-level max Sharpe mean-variance | Growth regime focus; exposures are clamped by cluster caps before solver execution. |
+| `barbell` | Strategy profile | Natural-selected universe | Core HRP sleeve + aggressor sleeve | Convexity-seeking profile that combines core stability with an antifragility-driven tail sleeve. |

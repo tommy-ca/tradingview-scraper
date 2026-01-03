@@ -25,7 +25,19 @@ The Profile-Centric Optimization Engine (v2) is an institutional-grade framework
 
 ## 2. Baseline Profiles Standard (Single Source of Truth)
 
-Only two official baseline profiles are supported: **`market`** and **`benchmark`**. Any other baseline labels (e.g., `market_baseline`, `benchmark_baseline`) are legacy aliases and are not part of the standard taxonomy.
+### Standard Taxonomy (Supported Profiles)
+
+| Category | Profile Name | Description |
+| :--- | :--- | :--- |
+| **Baseline** | `market` | EW over Benchmark Symbols (e.g., SPY). |
+| **Baseline** | `benchmark` | EW over all Natural-Selected Winners. |
+| **Risk Profile**| `min_variance` | Optimized Defensive Sleeve. |
+| **Risk Profile**| `max_sharpe` | Optimized Growth Sleeve. |
+| **Risk Profile**| `hrp` | Hierarchical Risk Parity. |
+| **Strategy** | `barbell` | Combined Core + Aggressor Sleeves. |
+| **Diagnostic** | `raw_pool_ew` | EW over the Raw Pool (excluding benchmarks). |
+
+Only the official profiles listed above are supported. Legacy labels (e.g., `market_baseline`, `benchmark_baseline`, `equal_weight` as a baseline) have been decommissioned.
 
 Note: `equal_weight` may still appear in backtest outputs under the baseline engine for comparison, but it remains a risk profile (see table below).
 

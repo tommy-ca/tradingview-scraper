@@ -39,3 +39,11 @@ A tournament run was executed comparing all engines using the `market` profile.
 
 ## 4. Conclusion
 The unified `market` profile simplifies the codebase while providing a more robust and transparent mechanism for simulator calibration and institutional benchmarking.
+
+### Summary Table
+
+| Category | Profile Name | Definition |
+| :--- | :--- | :--- |
+| **Institutional** | `market` | EW over Benchmark Symbols (SPY). Noise-free hurdle. |
+| **Research** | `benchmark` | EW over Selected Winners. Risk-profile comparator. |
+| **Diagnostics** | `raw_pool_ew` | EW over Raw Pool (Excl. Benchmarks). Selection Alpha isolate. |
