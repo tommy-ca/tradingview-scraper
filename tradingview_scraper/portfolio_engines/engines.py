@@ -601,7 +601,17 @@ class CVXPortfolioEngine(CustomClusteredEngine):
         if request.profile in ["hrp", "risk_parity"]:
             return super()._optimize_cluster_weights(universe=universe, request=request)
 
-        X = universe.cluster_benchmarks
+        X = universe.cluster_benchmarks.copy()
+        X = X.replace([np.inf, -np.inf], np.nan).dropna(how="any")
+        if X.empty:
+            return super()._optimize_cluster_weights(universe=universe, request=request)
+
+        X = X.clip(lower=-0.5, upper=0.5)
+        min_var = float(X.var().min()) if not X.empty else 0.0
+        if min_var < 1e-10:
+            rows, cols = X.shape
+            jitter = 1e-6 * np.sin(np.add.outer(np.arange(rows), np.arange(cols)))
+            X = X + jitter
         n = X.shape[1]
         cap = _effective_cap(request.cluster_cap, n)
 
@@ -621,7 +631,12 @@ class CVXPortfolioEngine(CustomClusteredEngine):
 
         try:
             weights = cvx.SinglePeriodOptimization(obj, constraints).values_in_time(
-                t=X.index[-1], current_weights=pd.Series(1.0 / n, index=X.columns), current_portfolio_value=1.0, past_returns=X, past_volumes=None, current_prices=pd.Series(1.0, index=X.columns)
+                t=X.index[-1],
+                current_weights=pd.Series(1.0 / n, index=X.columns),
+                current_portfolio_value=1.0,
+                past_returns=X,
+                past_volumes=None,
+                current_prices=pd.Series(1.0, index=X.columns),
             )
         except Exception:
             return super()._optimize_cluster_weights(universe=universe, request=request)
