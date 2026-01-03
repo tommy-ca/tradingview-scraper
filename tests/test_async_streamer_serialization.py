@@ -38,8 +38,10 @@ class TestAsyncStreamerSerialization(unittest.IsolatedAsyncioTestCase):
         self.streamer.export_result = True
 
         # We need to mock connect and start_listening if calling stream()
-        with patch.object(self.streamer.stream_obj, "connect", AsyncMock()), patch.object(self.streamer.stream_obj, "start_listening", AsyncMock()), patch.object(
-            self.streamer, "_add_symbol_to_sessions", AsyncMock()
+        with (
+            patch.object(self.streamer.stream_obj, "connect", AsyncMock()),
+            patch.object(self.streamer.stream_obj, "start_listening", AsyncMock()),
+            patch.object(self.streamer, "_add_symbol_to_sessions", AsyncMock()),
         ):
             await self.streamer.stream(exchange="BINANCE", symbol="BTCUSDT", numb_price_candles=1)
 

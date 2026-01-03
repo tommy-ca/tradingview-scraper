@@ -196,9 +196,6 @@ class CVXPortfolioSimulator(BaseSimulator):
             realized_returns = result.v.pct_change().dropna()
             realized_returns.index = returns.index[: len(realized_returns)]
 
-            if len(realized_returns) > 20:
-                realized_returns = realized_returns.iloc[:20]
-
             res = calculate_performance_metrics(realized_returns)
             res.update({"daily_returns": realized_returns, "final_weights": result.w.iloc[-1], "turnover": float(result.turnover.sum())})
             return res
@@ -228,9 +225,7 @@ class VectorBTSimulator(BaseSimulator):
             w_series = w_series.iloc[:, 0]
         w_series = cast(pd.Series, w_series)
 
-        target_len = 20
-        returns_to_use = returns.iloc[:target_len] if len(returns) > target_len else returns
-        prices = (1.0 + returns_to_use[w_series.index]).cumprod()
+        prices = (1.0 + returns[w_series.index]).cumprod()
 
         if rebalance_mode == "daily":
             w_df = pd.DataFrame([w_series.values] * len(prices), columns=w_series.index, index=prices.index)
@@ -242,9 +237,7 @@ class VectorBTSimulator(BaseSimulator):
             close=prices, size=w_df, size_type="target_percent", fees=settings.backtest_slippage + settings.backtest_commission, freq="D", init_cash=100.0, cash_sharing=True, group_by=True
         )
         # Shift and cap returns
-        raw_rets = portfolio.returns()
-        p_returns = raw_rets.shift(-1).fillna(0.0)
-        p_returns = p_returns.iloc[:target_len]
+        p_returns = portfolio.returns().fillna(0.0)
 
         res = calculate_performance_metrics(p_returns)
         res["daily_returns"] = p_returns

@@ -122,8 +122,14 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
         # 3. Pre-Selection ECI Estimator (Step 5.5 Audit)
         # Prevents high-cost assets from consuming rate limits in Step 7
         adv = float(c.get("value_traded") or c.get("Value.Traded") or 1e-9)
-        # Use a conservative 0.5 (50% vol) for early estimation if real vol is missing
-        vol_est = float(c.get("Volatility.D") or 0.5) / 100.0 if "Volatility.D" in c else 0.5
+        # Use a conservative 0.5% (0.005) for early estimation if real vol is missing
+        # TradingView Volatility.D is usually in percent (e.g., 1.5 for 1.5%)
+        raw_vol = c.get("Volatility.D")
+        if raw_vol is not None and not (isinstance(raw_vol, float) and np.isnan(raw_vol)):
+            vol_est = float(raw_vol) / 100.0
+        else:
+            vol_est = 0.005  # 0.5% daily default
+
         eci_est = vol_est * np.sqrt(1e6 / adv)
 
         # Capture Alpha Proxy from scanner (Perf.3M annualized)

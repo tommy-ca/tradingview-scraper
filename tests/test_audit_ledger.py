@@ -1,14 +1,12 @@
 import json
 import os
 import sys
-from pathlib import Path
-import pytest
 
 # Ensure imports work for local modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from tradingview_scraper.utils.audit import AuditLedger  # type: ignore
 from scripts.verify_ledger import verify_audit_chain  # type: ignore
+from tradingview_scraper.utils.audit import AuditLedger  # type: ignore
 
 
 def test_audit_ledger_chaining(tmp_path):

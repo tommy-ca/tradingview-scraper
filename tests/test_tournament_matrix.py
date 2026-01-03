@@ -1,6 +1,5 @@
 import unittest
-import json
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 class TestTournament3DMatrix(unittest.TestCase):

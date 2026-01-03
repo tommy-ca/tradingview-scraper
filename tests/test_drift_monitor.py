@@ -1,8 +1,8 @@
 import json
-import os
+
 import pandas as pd
-import pytest
-from scripts.track_portfolio_state import track_drift, accept_state, STATE_FILE
+
+from scripts.track_portfolio_state import accept_state, track_drift
 
 
 def test_accept_state_lifecycle(tmp_path, monkeypatch):

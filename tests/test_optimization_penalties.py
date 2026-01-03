@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-import pytest
-from tradingview_scraper.portfolio_engines.engines import CustomClusteredEngine
+
 from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
+from tradingview_scraper.portfolio_engines.engines import CustomClusteredEngine
 from tradingview_scraper.settings import get_settings
 
 

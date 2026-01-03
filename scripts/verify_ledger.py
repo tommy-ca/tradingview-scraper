@@ -3,7 +3,6 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import List
 
 from rich.console import Console
 from rich.table import Table
