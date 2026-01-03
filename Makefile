@@ -7,9 +7,18 @@ PROFILE ?= production
 
 # Bridge JSON Manifest to Shell Environment
 ifneq ($(wildcard $(MANIFEST)),)
-    ENV_VARS := $(shell TV_MANIFEST_PATH=$(MANIFEST) TV_PROFILE=$(PROFILE) $(PY) -m tradingview_scraper.settings --export-env | sed 's/export //')
-    $(foreach var,$(ENV_VARS),$(eval $(var)))
-    $(foreach var,$(ENV_VARS),$(eval export $(shell echo "$(var)" | cut -d= -f1)))
+ENV_OVERRIDES := \
+	$(if $(LOOKBACK),TV_LOOKBACK_DAYS=$(LOOKBACK)) \
+	$(if $(PORTFOLIO_LOOKBACK_DAYS),TV_PORTFOLIO_LOOKBACK_DAYS=$(PORTFOLIO_LOOKBACK_DAYS)) \
+	$(if $(BACKTEST_TRAIN),TV_TRAIN_WINDOW=$(BACKTEST_TRAIN)) \
+	$(if $(BACKTEST_TEST),TV_TEST_WINDOW=$(BACKTEST_TEST)) \
+	$(if $(BACKTEST_STEP),TV_STEP_SIZE=$(BACKTEST_STEP)) \
+	$(if $(BACKTEST_SIMULATOR),TV_BACKTEST_SIMULATOR=$(BACKTEST_SIMULATOR)) \
+	$(if $(BACKTEST_SIMULATORS),TV_BACKTEST_SIMULATORS=$(BACKTEST_SIMULATORS)) \
+	$(if $(CLUSTER_CAP),TV_CLUSTER_CAP=$(CLUSTER_CAP))
+ENV_VARS := $(shell TV_MANIFEST_PATH=$(MANIFEST) TV_PROFILE=$(PROFILE) $(ENV_OVERRIDES) $(PY) -m tradingview_scraper.settings --export-env | sed 's/export //')
+$(foreach var,$(ENV_VARS),$(eval $(var)))
+$(foreach var,$(ENV_VARS),$(eval export $(shell echo "$(var)" | cut -d= -f1)))
 endif
 
 # Paths
@@ -106,6 +115,7 @@ port-test: ## Execute 3D benchmarking tournament
 
 port-analyze: ## Factor, correlation, and regime analysis
 	$(PY) scripts/correlation_report.py --hrp --min-col-frac 0.2
+	$(PY) scripts/audit_antifragility.py
 	$(PY) scripts/analyze_clusters.py
 	$(PY) scripts/visualize_factor_map.py
 	$(PY) scripts/research_regime_v2.py

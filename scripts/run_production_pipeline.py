@@ -42,6 +42,9 @@ class ProductionPipeline:
         os.environ["TV_RUN_ID"] = self.run_id
         os.environ["TV_EXPORT_RUN_ID"] = self.run_id
 
+        # Promote common override env vars to TV_ prefixed settings vars
+        self._promote_env_overrides()
+
         # Clear settings cache to ensure it picks up the new env vars
 
         get_settings.cache_clear()
@@ -59,6 +62,22 @@ class ProductionPipeline:
             # Record Genesis
             manifest_hash = self._get_file_hash(self.manifest_path)
             self.ledger.record_genesis(self.run_id, self.profile, manifest_hash)
+
+    def _promote_env_overrides(self) -> None:
+        """Map non-prefixed override env vars to TV_ prefixed settings vars."""
+        overrides = {
+            "LOOKBACK": "TV_LOOKBACK_DAYS",
+            "PORTFOLIO_LOOKBACK_DAYS": "TV_PORTFOLIO_LOOKBACK_DAYS",
+            "BACKTEST_TRAIN": "TV_TRAIN_WINDOW",
+            "BACKTEST_TEST": "TV_TEST_WINDOW",
+            "BACKTEST_STEP": "TV_STEP_SIZE",
+            "BACKTEST_SIMULATOR": "TV_BACKTEST_SIMULATOR",
+            "BACKTEST_SIMULATORS": "TV_BACKTEST_SIMULATORS",
+        }
+        for src, dst in overrides.items():
+            val = os.getenv(src)
+            if val and not os.getenv(dst):
+                os.environ[dst] = val
 
     def _get_file_hash(self, path: Path) -> str:
         if not path.exists():
@@ -268,6 +287,16 @@ class ProductionPipeline:
         self.console.print("\n[bold cyan]🚀 Starting Production Pipeline[/]")
         self.console.print(f"[dim]Profile:[/] {self.profile} | [dim]Run ID:[/] {self.run_id} | [dim]Start Step:[/] {start_step}\n")
 
+        lightweight_lookback = os.getenv("LOOKBACK") or os.getenv("TV_LOOKBACK_DAYS") or "60"
+        lightweight_batch = os.getenv("BATCH") or "5"
+        high_integrity_lookback = (
+            os.getenv("PORTFOLIO_LOOKBACK_DAYS")
+            or os.getenv("TV_PORTFOLIO_LOOKBACK_DAYS")
+            or os.getenv("LOOKBACK")
+            or os.getenv("TV_LOOKBACK_DAYS")
+            or str(self.settings.resolve_portfolio_lookback_days())
+        )
+
         make_base = ["make", f"PROFILE={self.profile}", f"MANIFEST={self.manifest_path}"]
 
         all_steps: List[Tuple[str, List[str], Optional[Callable[[], Any]]]] = [
@@ -275,10 +304,10 @@ class ProductionPipeline:
             ("Environment Check", [*make_base, "env-check"], None),
             ("Discovery", [*make_base, "scan-run"], self.validate_discovery),
             ("Aggregation", [*make_base, "data-prep-raw"], None),
-            ("Lightweight Prep", [*make_base, "data-fetch", "LOOKBACK=60", "BATCH=5"], None),
+            ("Lightweight Prep", [*make_base, "data-fetch", f"LOOKBACK={lightweight_lookback}", f"BATCH={lightweight_batch}"], None),
             ("Natural Selection", [*make_base, "port-select"], self.validate_selection),
             ("Enrichment", [*make_base, "meta-refresh"], None),
-            ("High-Integrity Preparation", [*make_base, "data-fetch"], None),
+            ("High-Integrity Preparation", [*make_base, "data-fetch", f"LOOKBACK={high_integrity_lookback}"], None),
             ("Health Audit", [*make_base, "data-audit", "STRICT_HEALTH=1"], self.validate_health),
             ("Factor Analysis", [*make_base, "port-analyze"], None),
             ("Optimization", [*make_base, "port-optimize"], self.validate_optimization),
