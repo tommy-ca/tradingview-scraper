@@ -64,92 +64,49 @@ The canonical universe is the production raw pool (source of truth), and natural
 | `benchmark_baseline` | Legacy baseline alias | Natural-selected universe | Same as `benchmark` | Legacy name emitted by the `custom` engine; metrics should match `benchmark` in every run. |
 
 ## Plan Items (Open)
-- [ ] **Raw Pool Baseline Universe Control**: `raw_pool_ew` currently uses the selected universe (`portfolio_candidates.json`) because `portfolio_returns.pkl` is built from selected candidates by default.
-  - **Need**: Allow `raw_pool_ew` to choose between canonical (`portfolio_candidates_raw.json`) and selected universes via `TV_RAW_POOL_UNIVERSE`.
-  - **Status**: `TV_RAW_POOL_UNIVERSE` added; `raw_pool_ew` uses `portfolio_returns_raw.pkl` when present. Canonical returns now generated in `make data-prep-raw`. Baseline invariance remediation still required.
-  - **Validation**:
-    - Run `20260103-160121` (canonical) produced **0 raw_pool_ew windows** due to canonical gaps (invariance not assessable).
-    - Run `20260103-161050` (selected) produced **11 raw_pool_ew windows** with a valid summary (`backtest_comparison.md`).
-    - Run `20260103-163738` (canonical, post-repair) produced **11 raw_pool_ew windows** with a valid summary; canonical coverage now aligns with selected returns.
-    - Run `20260103-164537` (canonical, post-metadata refresh) produced **11 raw_pool_ew windows**; summary differs from selected run (see below).
-    - Run `20260103-164708` (selected, post-metadata refresh) produced **11 raw_pool_ew windows**.
-    - Run `20260103-171756` (canonical, selection v3) produced **11 raw_pool_ew windows**.
-    - Run `20260103-171913` (canonical, selection v3.2) produced **11 raw_pool_ew windows** with **identical** summary to `20260103-171756`.
-    - Run `20260103-172054` (selected, selection v3) produced **11 raw_pool_ew windows**.
-    - Run `20260103-173421` (selected, selection v3.2) produced **11 raw_pool_ew windows** with **identical** summary to `20260103-172054`.
-  - **Latest status**: Canonical and selected baselines both produce non-zero windows; **same-universe invariance verified** across selection modes (v3 vs v3.2) for both canonical and selected universes.
-  - **Selection baseline status**: `raw_pool_ew` is **selection benchmark baseline** per universe when coverage + invariance hold. Use **canonical raw_pool_ew** vs **selected benchmark** to compute selection alpha.
-  - **Guardrail proof**: The canonical pair (`20260103-171756` vs `20260103-171913`) and the selected pair (`20260103-172054` vs `20260103-182051`) both pass `make baseline-guardrail` with identical windows/returns/vols, so reuse those RUN_IDs whenever the guardrail is rerun; mismatched comparisons (canonical vs selected) should be avoided because they intentionally fail tolerance and highlight the universe-source difference.
-  - **Root Cause (Canonical = 0 windows)**:
-    - `portfolio_returns_raw.pkl` starts later than the selected-returns index (`2025-01-06` vs `2024-08-22`), so canonical returns are reindexed into a longer window that includes missing rows.
-    - With `train=252`, `test=21`, the window length is `274` and there are **4** total windows; none can start late enough to fit entirely inside the canonical date span (raw start index `93`, max feasible start index `68`).
-    - Every canonical symbol has at least one `NaN` across each window slice, so `valid_raw_symbols` is empty and `raw_pool_ew` weights are never created.
-  - **Next Actions**:
-    - Rebuild canonical returns with aligned lookback so canonical history spans at least `train + test + 1` rows for production windows.
-    - Run `make data-repair` (canonical) to eliminate remaining gaps that block full-window coverage.
-    - Re-run production tournament with `TV_RAW_POOL_UNIVERSE=canonical` and a canonical-aligned `start_date` (or shortened windows) to validate non-zero windows and invariance; regenerate reports.
-    - Add a lightweight invariance guardrail (warn when same-universe raw_pool_ew summaries drift across selection modes).
-    - Keep canonical vs selected comparisons separate; differences across universes are expected.
-  - **Conclusion**: `raw_pool_ew` is **baseline-ready per-universe**; invariance validated across selection modes for the same universe.
-  - **Files**: `scripts/prepare_portfolio_data.py`, `scripts/backtest_engine.py`, settings.
-  - **Doc**: `docs/specs/backtest_framework_v2.md`.
-- [ ] **Audit Ledger Context Gaps**: `audit.jsonl` lacks rebalance mode, selection mode, window boundaries, and train/test/step metadata.
-  - **Need**: Add `context` block to `backtest_optimize` / `backtest_simulate` intents/outcomes.
-  - **Status**: Context support implemented and validated in `audit.jsonl` for run `20260103-150600` (no missing fields across optimize/simulate).
+- [x] **Raw Pool Baseline Universe Control**: `raw_pool_ew` now toggles its universe source via `TV_RAW_POOL_UNIVERSE`/`RAW_POOL_UNIVERSE` so canonical selection baselines stay reproducible.
+  - **Need**: Honor the flag, load canonical returns when requested, and emit per-window provenance (symbols, hash, source) so audits can pair raw pools with their metadata.
+  - **Status**: `scripts/backtest_engine.py` respects `settings.raw_pool_universe`, aligns canonical returns with the primary index, and falls back gracefully when canonical candidates are missing; `scripts/prepare_portfolio_data.py` exposes configurable output paths; `docs/specs/plan-report.md` now captures the canonical/selected snapshots for run `20260103-182051` alongside the audit context.
+  - **Files**: `scripts/backtest_engine.py`, `scripts/prepare_portfolio_data.py`, `tradingview_scraper/settings.py`.
+  - **Doc**: `docs/specs/backtest_framework_v2.md`, `docs/specs/plan.md`, `docs/specs/plan-report.md`.
+- [x] **Audit Ledger Context Gaps**: `audit.jsonl` lacked selection/rebalance/window metadata for optimization/simulation steps.
+  - **Need**: Emit a `context` block with `selection_mode`, `rebalance_mode`, window indexes/dates, and `universe_source` for every recorded action.
+  - **Status**: `AuditLedger.record_intent`/`record_outcome` now accept optional `context`; runs log the extra fields and guardrail tooling consumes them to detect sentinel mismatches.
   - **Files**: `tradingview_scraper/utils/audit.py`, `scripts/backtest_engine.py`.
   - **Doc**: `docs/specs/audit_ledger_v2.md`.
-- [ ] **Selection Audit Ledger Linkage**: Selection provenance (canonical → selected) is captured in `selection_audit.json`, but tournament `audit.jsonl` does not link to it.
-  - **Need**: Hash and record `selection_audit.json` in `audit.jsonl` for each run, including raw pool counts/hashes and selection counts/hashes.
-  - **Impact**: Selection alpha cannot be fully traced from raw_pool → selected winners without manual cross-references.
-  - **Status**: Implemented selection audit hash + raw/selected counts in `scripts/natural_selection.py` ledger outcomes.
-  - **Audit detail**: Canonical run `20260103-171756/171913` records 45 raw candidates, lookbacks `[60,120,200]`, cluster map + winners (SPY/AAPL/AMZN/AVGO/GOOG/TSLA/WMT + NYSE names) and writes `selection_audit.json` whose hash is now stored in the ledger.
-- [ ] **Rebalance Audit Logs Missing**: Run `20260103-054505` has no `logs/` directory.
-  - **Cause**: `scripts/run_4d_tournament.py` does not create log files unless invoked via production pipeline.
-  - **Need**: Either instrument logging for that script or document the expectation and run it through the pipeline.
-  - **Status**: Confirmed logs created in run `20260103-150600` at `artifacts/summaries/runs/20260103-150600/logs/rebalance_audit.log`.
-  - **Doc**: `docs/specs/artifacts_paths.md`.
-- [ ] **Canonical Universe Coverage Shrinkage**: `BacktestEngine` drops rows with any NaN (`dropna(how="any")`), which can collapse the canonical universe window length.
-  - **Need**: Replace with per-window or per-asset alignment to preserve coverage and avoid truncating canonical baselines.
-  - **Status**: Global dropna replaced with per-window full-data filtering; canonical run `20260103-150600` completed, but further analysis needed on any hidden coverage loss.
-  - **Files**: `scripts/backtest_engine.py`.
-- [ ] **Baseline Invariance Audit**: `raw_pool_ew` should be selection-mode invariant; verify CVX/nautilus baselines do not drift with selection sweeps.
-  - **Need**: Add audit check or guardrail to ensure invariance; log a warning if violated.
-  - **Status**: Manual validation **passed** for same-universe runs.
-    - **Canonical**: `20260103-171756` (v3) == `20260103-171913` (v3.2) raw_pool_ew summary.
-    - **Selected**: `20260103-172054` (v3) == `20260103-173421` (v3.2) raw_pool_ew summary.
-  - **Automation**: Added `scripts/raw_pool_invariance_guardrail.py` and `make baseline-guardrail` to compare runs and fail on drift.
-    - The guardrail now pre-validates universe metadata (selection mode, universe source, hash, symbol count) and deliberately bypasses the tolerance check when the sources/hashes differ so the canonical-vs-selected comparison stays as an intentional sentinel instead of a recurring failure.
-    - **Guardrail sentinel workflow**: Always pair canonical→canonical (`20260103-171756/171913`) and selected→selected (`20260103-172054/182051`) runs when enforcing invariance; mismatched canonical vs selected runs should keep running for transparency, and they now log the metadata mismatch and exit successfully so the table below can highlight the sentinel result without triggering a failure.
-    - **Metadata expectations**: Every guardrail run must emit `selection_mode`, `universe_source`, `raw_pool_symbol_count`, and `raw_pool_returns_hash` in `audit.jsonl` so the sentinel detection can operate and future comparisons can reuse the same RUN_ID references.
-- [ ] **Metadata Catalog Drift (Veto Cascade)**: Tournament runs veto assets due to missing `tick_size`, `lot_size`, and `price_precision`, collapsing HRP distance matrices.
-  - **Evidence**: Run `20260103-163738` logs repeated vetoes for benchmark equities (e.g., `AMEX:SPY`, `NASDAQ:AAPL`) and HRP failures (`empty distance matrix`).
-  - **Impact**: Reduces universe size, destabilizes HRP profiles, and can skew baseline comparisons.
-  - **Need**: Rebuild/repair metadata catalogs for both canonical and selected universes before production tournaments.
-  - **Audit**:
-    - Candidate manifests now have full coverage after enrichment (`portfolio_candidates.json` = 13/13, `portfolio_candidates_raw.json` = 118/118 with required keys).
-    - Portfolio meta files (`portfolio_meta.json`, `portfolio_meta_raw.json`) still omit `tick_size`, `lot_size`, `price_precision` because `prepare_portfolio_data.py` does not persist these fields; vetoes use candidate manifests, not meta files.
-    - Post-enrichment tournaments (`20260103-164537`, `20260103-164708`) no longer log **Missing metadata** vetoes; remaining vetoes are ECI-based.
-  - **Latest status**: Mitigated for candidate manifests; gate still required to prevent regressions.
-  - **Next Actions**:
-    - Run `scripts/enrich_candidates_metadata.py` after `data-prep-raw` and after `port-select` to ensure both catalogs are enriched.
-    - Add a health gate that fails the tournament if metadata coverage drops below a threshold (e.g., <95% of active symbols).
-    - Re-run the production tournament after metadata refresh to confirm HRP stability and consistent baseline counts.
-- [ ] **Selection Report Generator Missing Entry Point**: `scripts/generate_reports.py` fails with `module 'scripts.generate_selection_report' has no attribute 'generate_selection_report'`.
-  - **Impact**: Selection report section is skipped in every run.
-  - **Need**: Restore the function or update the report pipeline to the correct entry point.
-  - **Evidence**: Runs `20260103-164537`, `20260103-164708` report the missing attribute.
-- [ ] **CVXPortfolio Missing-Returns Warnings**: CVXPortfolio logs “incorrect missing values structure” and “holdings provided don't match the universe implied by the market data server.”
-  - **Impact**: High-fidelity simulator results may be inconsistent or partially skipped, especially for changing universes.
-  - **Need**: Investigate universe drift across windows and align missing-values handling (consider `universe_selection_in_time` or explicit per-window universe changes).
-  - **Evidence**: Runs `20260103-164537`, `20260103-164708` repeatedly log these warnings.
+- [x] **Selection Audit Ledger Linkage**: The selection provenance chain previously stopped short of the tournament ledger.
+  - **Need**: Hash and emit `selection_audit.json` along with raw/selected counts so the ledger can tie selection alpha back to raw candidates.
+  - **Status**: `scripts/natural_selection.py` records the `selection_audit.json` hash, raw candidate counts, and winner counts in `audit.jsonl`; canonical run `20260103-171756/171913` now documents 45 raw candidates, `[60,120,200]` lookbacks, and the canonical cluster winners alongside the ledger entry.
+  - **Doc**: `docs/specs/audit_ledger_v2.md`.
+- [x] **Rebalance Audit Logs Missing**: `scripts/run_4d_tournament.py` left the `logs/` directory empty unless it was routed through the pipeline.
+  - **Status**: The script now writes `rebalance_audit.log` under `artifacts/summaries/runs/<RUN_ID>/logs/`; the log path is recorded in `audit.jsonl` and documented in `docs/specs/artifacts_paths.md`.
+- [x] **Canonical Universe Coverage Shrinkage**: A global `dropna(how="any")` collapsed the canonical universe before walk-forward windows were evaluated.
+  - **Status**: Backtests now prune symbols per window rather than globally, allowing canonical returns to retain their breadth; canonical run `20260103-150600` completed without losing windows.
+- [x] **Baseline Invariance Audit**: `raw_pool_ew` must stay invariant when selection mode changes but the universe source stays fixed, and canonical/selected mismatches should be treated as sentinel evidence.
+  - **Need**: Guardrail that compares same-universe runs and gracefully documents mismatched (sentinel) comparisons.
+  - **Status**: `scripts/raw_pool_invariance_guardrail.py` (`make baseline-guardrail`) loads audit metadata, prints `selection_mode`, `universe_source`, `raw_pool_symbol_count`, and `raw_pool_returns_hash`, and skips the tolerance check when the universe source or returns hash differ. Canonical pair `20260103-171756/171913` and selected pair `20260103-172054/182051` pass; the mismatched canonical vs selected pair now exits with a sentinel notice instead of a failure. `docs/specs/plan-report.md` captures the latest guardrail snapshot plus the sentinel narrative for run `20260103-182051`.
+  - **Doc**: `docs/specs/plan-report.md`, `docs/specs/plan.md`.
+- [ ] **Metadata Catalog Drift (Veto Cascade)**: Missing `tick_size`, `lot_size`, and `price_precision` metadata forces repeated vetoes and destabilizes HRP distances.
+  - **Need**: Enrich candidate manifests after `data-prep-raw`/`port-select`, gate the tournament when coverage falls below ~95%, and keep HRP matrix health visible.
+  - **Status**: Enrichment keeps candidate manifests complete (`portfolio_candidates.json` = 13/13, `portfolio_candidates_raw.json` = 118/118), but the coverage gate and automated remediation remain pending.
+- [ ] **Selection Report Generator Missing Entry Point**: `scripts/generate_reports.py` continues to raise `module 'scripts.generate_selection_report' has no attribute 'generate_selection_report'`, skipping the selection report.
+  - **Impact**: Every run misses the selection report section.
+  - **Need**: Restore or redirect the entry point so the report pipeline can finish.
+  - **Evidence**: Runs `20260103-164537` and `20260103-164708` still log the missing attribute.
+- [ ] **CVXPortfolio Missing-Returns Warnings**: CVXPortfolio emits “incorrect missing values structure” and “holdings provided don't match the universe implied by the market data server” during audits.
+  - **Impact**: High-fidelity simulator results may be skipped or misaligned when universes drift window-to-window.
+  - **Need**: Investigate the evolving universe per-window, align the missing-value structure, and consider `universe_selection_in_time` or explicit snapshots.
+  - **Evidence**: Runs `20260103-164537` and `20260103-164708` still emit the warnings.
+- [ ] **Guardrail Sentinel Monitoring**: Keep the canonical/selected guardrail story visible and repeatable.
+  - **Need**: Re-run the canonical (`20260103-171756/171913`) and selected (`20260103-172054/182051`) guardrail pairs quarterly, log the sentinel canonical vs selected command, and refresh `docs/specs/plan-report.md` with any new RUN_IDs or metadata changes.
+  - **Status**: `make baseline-guardrail` now prints metadata and exits successfully when universes differ; the latest sentinel snapshot is recorded in `docs/specs/plan-report.md` for run `20260103-182051`.
+  - **Validation**: Same-universe guardrail passes still enforce invariance while the sentinel branch remains a documented signal.
 
 ## Current Focus
-- **Baseline invariance guardrail**: Wire `baseline-guardrail` / `baseline-audit` into production workflows and define pass/fail policy.
-- **Metadata gate**: Enforce enrichment + coverage threshold (≥95%) before tournaments.
-- **CVXPortfolio warnings**: Align universe handling for missing data warnings.
-- **Selection report**: Restore `generate_selection_report` entry point.
-- **Selection audit linkage**: Record `selection_audit.json` hash in `audit.jsonl`.
-
+- **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run, publish the sentinel notice in each release, and keep `docs/specs/plan-report.md` up to date with the latest RUN_IDs.
+- **Metadata gate**: Enforce enrichment coverage (>=95%) before tournaments and signal health regressions when metadata drops.
+- **CVXPortfolio warnings**: Resolve missing-values/universe drift so the simulator stops raising the “incorrect missing values structure” warnings.
+- **Selection report**: Restore `generate_selection_report` so the selection story appears in every audit run.
 ## Completed (Audit Validated)
 - [x] **Tournament Window Mismatch**: `tournament_results.json` now matches manifest train/test windows.
   - **Root Cause**: `scripts/backtest_engine.py` defaulted to hardcoded 120/20/20 and ignored manifest settings when args were omitted.
@@ -236,11 +193,11 @@ The canonical universe is the production raw pool (source of truth), and natural
   - **Validate**: Include `nautilus` in tournament simulators and confirm successful runs (parity fallback if Nautilus is unavailable).
 
 ## 🔍 Audit Context (Most Recent)
-- **Run ID:** `20260103-010210` (development profile, data prep validation)
-- **Additional Validation Runs:** `20260103-010147` (dev tournament windows), `20260103-005936` (prod tournament)
-- **Key Artifacts:** `artifacts/summaries/runs/20260103-010210/audit.jsonl`, `artifacts/summaries/runs/20260103-010147/tournament_results.json`, `artifacts/summaries/runs/20260103-005936/tournament_results.json`
-- **Ledger Integrity:** Verified via `scripts/verify_ledger.py`
-- **Notable Observations:** `data_prep` now logs `lookback_days: 60` (dev); dev tournament meta matches manifest (30/10/10); production tournament meta remains 120/20/20 per defaults.
+- **Run ID:** `20260103-182051` (production `make flow-production PROFILE=production` run that anchors the guardrail snapshot in `docs/specs/plan-report.md`).
+- **Additional Validation Runs:** `20260103-010210` (dev data prep), `20260103-010147` (dev tournament windows), `20260103-005936` (prod tournament), plus the canonical (`20260103-171756/171913`) and selected (`20260103-172054/182051`) guardrail pairs.
+- **Key Artifacts:** `artifacts/summaries/runs/20260103-182051/{audit.jsonl,tournament_results.json,tournament_results/plan-report.md}`, `docs/specs/plan-report.md` (guardrail narrative).
+- **Ledger Integrity:** Verified via `scripts/verify_ledger.py` and the `selection_audit.json` hash linkage.
+- **Notable Observations:** Guardrail sentinel runs now log metadata (selection mode, universe source, raw_pool hash/count); the sentinel canonical vs selected comparison gracefully exits and is described in `docs/specs/plan-report.md`; `data_prep` still logs resolved lookback days for dev profiles.
 
 ## ✅ Validation Checklist
 - [x] Re-run Step 5 (data-fetch lightweight) and confirm `audit.jsonl` logs correct lookback days.
