@@ -77,7 +77,7 @@ def research_resolutions():
                             if "timescale_update" in p:
                                 try:
                                     js = json.loads(p)
-                                    ohlc_data = streamer._serialize_ohlc(js)
+                                    ohlc_data = streamer._extract_ohlc_from_stream(js)
                                     if ohlc_data:
                                         break
                                 except (json.JSONDecodeError, KeyError, TypeError):

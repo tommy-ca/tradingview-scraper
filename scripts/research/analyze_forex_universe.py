@@ -521,7 +521,7 @@ def _build_returns_matrix(
             futures.append(executor.submit(fetch, pair, symbol, meta))
         wait(futures, return_when=ALL_COMPLETED)
 
-    returns_df = cast(pd.DataFrame, pd.DataFrame(returns_map))
+    returns_df = pd.DataFrame(returns_map)
     returns_df = returns_df.fillna(0.0)
 
     # Drop sparse columns based on non-zero return count (treat 0 as missing)
