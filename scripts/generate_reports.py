@@ -157,7 +157,7 @@ class ReportGenerator:
             logger.info("Generating Universe Selection Report...")
             event = self._get_latest_audit_event("natural_selection")
             audit_data = event["data"] if event and event.get("data") and "selection" in event["data"] else None
-            generate_selection_report(audit_path="data/lakehouse/selection_audit.json", output_path=str(self.summary_dir / "selection_audit.md"), audit_data=audit_data)
+            generate_selection_report(audit_path="data/lakehouse/selection_audit.json", output_path=str(self.summary_dir / "selection_report.md"), audit_data=audit_data)
         except Exception as e:
             logger.error(f"Selection Report failed: {e}")
 

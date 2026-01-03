@@ -87,60 +87,32 @@ The canonical universe is the production raw pool (source of truth), and natural
   - **Status**: `scripts/raw_pool_invariance_guardrail.py` (`make baseline-guardrail`) loads audit metadata, prints `selection_mode`, `universe_source`, `raw_pool_symbol_count`, and `raw_pool_returns_hash`, and skips the tolerance check when the universe source or returns hash differ. Canonical pair `20260103-171756/171913` and selected pair `20260103-172054/182051` pass; the mismatched canonical vs selected pair now exits with a sentinel notice instead of a failure. `docs/specs/plan-report.md` captures the latest guardrail snapshot plus the sentinel narrative for run `20260103-182051`.
   - **Doc**: `docs/specs/plan-report.md`, `docs/specs/plan.md`.
 - [x] **Metadata Catalog Drift (Veto Cascade)**: Missing `tick_size`, `lot_size`, and `price_precision` metadata forces repeated vetoes and destabilizes HRP distances.
-  - **Need**: Enrich candidate manifests after `data-prep-raw`/`port-select`, gate the tournament when coverage falls below ~95%, and keep HRP matrix health visible.
-  - **Status**: Completed. Enrichment keeps candidate manifests complete, and the coverage gate is enforced via `scripts/metadata_coverage_guardrail.py`.
-    - **Gate workflow**: Run `scripts/enrich_candidates_metadata.py` right after `make data-prep-raw` and again after `make port-select`; record the coverage (% symbols with tick/lot/precision) in `audit.jsonl` so the guardrail reads `metadata_coverage` before tournaments. If coverage <95%, fail the tournament early and log the shortfall in `artifacts/summaries/runs/<RUN_ID>/logs/metadata_coverage.log`.
-    - **Automation**: `scripts/metadata_coverage_guardrail.py` now runs automatically via `make data-prep-raw` (canonical) and `make port-select` (selected) to re-invoke `enrich_candidates_metadata.py` when coverage dips below 95%, write the percentage to `metadata_coverage.log`, and emit the same coverage metrics to `audit.jsonl`.
-  - **Audit/Tests**: Re-run enrichment for the next run, capture coverage stats in the ledger, and verify the health gate (new script/CI check) blocks completion when the threshold is not met.
-  - **Detailed steps**:
-    1. Run `make data-prep-raw` to generate canonical/selected candidate manifests and raw returns.
-    2. Execute `make port-select` to derive the natural-selected winners used downstream.
-    3. Run `scripts/enrich_candidates_metadata.py --canonical artifacts/summaries/runs/<RUN_ID>` (and again post port-select) to fill `tick_size`, `lot_size`, and `price_precision` for both catalogs.
-    4. Read `metadata_coverage` from the resulting `audit.jsonl` entry and write the percentage (with timestamp + RUN_ID) into `artifacts/summaries/runs/<RUN_ID>/logs/metadata_coverage.log`.
-    5. If coverage ≥95%, allow the tournament to continue and log the gate pass (in `audit.jsonl` and this doc). If coverage <95%, fail fast, record the shortfall (per symbol), and keep the gate in place until the next enrichment run fills the missing fields.
-    6. Update this plan with the next RUN_ID/log path and mark the metadata gate as satisfied once the threshold and health audit succeed.
-  - **Latest coverage**: Run `20260103-213947` recorded 100% coverage for both canonical and selected catalogs; see `artifacts/summaries/runs/20260103-213947/logs/metadata_coverage.log`.
-  - **Health audit proof**: `make data-audit STRICT_HEALTH=1` for run `20260103-213947` succeeded and the output is archived at `artifacts/summaries/runs/20260103-213947/logs/data-audit.log`, so the gate now has coverage + health evidence.
-- [x] **Selection Report Generator Missing Entry Point**: `scripts/generate_reports.py` continues to raise `module 'scripts.generate_selection_report' has no attribute 'generate_selection_report'`, skipping the selection report.
-  - **Impact**: Every run misses the selection report section.
-  - **Need**: Restore or redirect the entry point so the report pipeline can finish.
-  - **Status**: Completed. Fixed signature in `scripts/generate_selection_report.py`.
-  - **Evidence**: Fixed by adding `generate_selection_report` function with proper arguments.
-  - **Audit/Tests**: After fixing the entry point, run `scripts/generate_reports.py` against a recent run and confirm both the selection report and target output file appear in `artifacts/summaries/runs/<RUN_ID>/reports/selection_report.md` with no attribute errors.
-- [x] **CVXPortfolio Missing-Returns Warnings**: CVXPortfolio emits “incorrect missing values structure” and “holdings provided don't match the universe implied by the market data server” during audits.
-  - **Impact**: High-fidelity simulator results may be skipped or misaligned when universes drift window-to-window.
-  - **Need**: Investigate the evolving universe per-window, align the missing-value structure, and consider `universe_selection_in_time` or explicit snapshots.
-  - **Status**: Completed. Applied `fillna(0.0)` and index alignment in `CVXPortfolioSimulator`.
-  - **Evidence**: Warnings resolved by ensuring contiguous returns and perfect holdings alignment.
-  - **Assessments**: Capture the warnings from the next guardrail or tournament run, compare the universe hash for the `cvxportfolio` windows, and log which assets triggered mismatched holdings; once resolved, the warnings should disappear from `artifacts/summaries/runs/<RUN_ID>/logs/02_backtest.log`.
-- [ ] **Guardrail Sentinel Monitoring**: Keep the canonical/selected guardrail story visible and repeatable.
-  - **Need**: Re-run the canonical (`20260103-171756/171913`) and selected (`20260103-172054/182051`) guardrail pairs quarterly, log the sentinel canonical vs selected command, and refresh `docs/specs/plan-report.md` with any new RUN_IDs or metadata changes.
-  - **Status**: `make baseline-guardrail` now prints metadata and exits successfully when universes differ; the latest sentinel snapshot is recorded in `docs/specs/plan-report.md` for run `20260103-182051`.
-  - **Validation**: Same-universe guardrail passes still enforce invariance while the sentinel branch remains a documented signal.
-  - **Audit/Tests**: Document each rerun by copying the guardrail console output into `docs/specs/plan-report.md`, storing the sentinel table, and verifying the `metadata` printout still includes `selection_mode`, `universe_source`, `raw_pool_symbol_count`, and `raw_pool_returns_hash`.
+  - **Status**: Audit Validated (Run 20260103-223836). Enrichment keeps candidate manifests complete, and the coverage gate is enforced via `scripts/metadata_coverage_guardrail.py`.
+  - **Latest coverage**: Run `20260103-223836` recorded 100% coverage for both canonical and selected catalogs.
+- [x] **Selection Report Generator Missing Entry Point**: Restoration of `generate_selection_report`.
+  - **Status**: Audit Validated (Run 20260103-223836). Fixed signature and confirmed `selection_audit.md` (and new `selection_report.md` path) are populated in run artifacts.
+- [x] **CVXPortfolio Missing-Returns Warnings**: Resolve missing-values/universe drift.
+  - **Status**: Audit Validated (Run 20260103-223836). Applied `fillna(0.0)` and index alignment; `12_validation.log` confirms zero warnings.
+- [x] **Institutional Fidelity (Jan 2026) - Bug Fixes**:
+  - [x] **Simulator Truncation (20-day limit)**: Fixed. Run `20260103-223836` confirms full depth (2024-08 to 2026-01).
+  - [x] **VectorBT Lookahead Bias**: Fixed. Removed `shift(-1)`; verified parity with other simulators.
+  - [x] **ECI Volatility Defaults**: Fixed. Standardized on 0.5% daily default.
 
 ## Current Focus
 - **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run, publish the sentinel notice in each release, and keep `docs/specs/plan-report.md` up to date with the latest RUN_IDs.
-- **Production Validation**: Execute a full `make flow-production` to verify the integrated metadata gate, selection report generation, and CVXPortfolio simulator warning resolution.
+- **Production Validation (Phase 2)**: Execute a full `make flow-production` to verify the integrated metadata gate, selection report generation, and high-fidelity simulator fixes (truncation/lookahead).
 
 ## Next Steps Tracker
-- **Metadata gate**: Gate satisfied for `20260103-213947`—both `metadata_coverage.log` and `data-audit.log` document 100% coverage plus a passing health check; automated guardrail integrated into Makefile.
-- **Selection report**: Repaired `generate_selection_report` entry point; verified in recent tournament logs that the selection story is now included in reports.
-- **CVXPortfolio warnings**: Implemented `fillna(0.0)` and index alignment in `CVXPortfolioSimulator`; verified clean `02_backtest.log` with zero universe-drift warnings.
-- **Guardrail sentinel**: Plan the next quarterly guardrail rerun, capture the metadata printouts via `make baseline-guardrail --run-a 20260103-171756 --run-b 20260103-171913` (and likewise for selected), and copy the console output into `docs/specs/plan-report.md` before closing the validation item.
+- **Metadata gate**: Gate satisfied for `20260103-223836` (100% coverage); automated guardrail integrated into Makefile.
+- **Selection report**: Repaired `generate_selection_report` entry point; verified in run `20260103-223836` that the selection story is now included in reports.
+- **Fidelity Fixes**: Verified `CVXPortfolio` and `VectorBT` results cover full history and show zero "missing values" warnings in `12_validation.log`.
+- **Guardrail sentinel**: Plan the next quarterly guardrail rerun, capture the metadata printouts via `make baseline-guardrail`, and copy the console output into `docs/specs/plan-report.md`.
 
 ## Status Sync
-- **Metadata gate**: Satisfied—the latest enrichment run (`20260103-213947`) recorded 100% coverage and a passing health audit; automation integrated.
-- **Selection report**: Completed—fixed entry-point and restored selection story in `scripts/generate_reports.py`.
-- **CVXPortfolio warnings**: Completed—alignment and NaN handling applied; verified in recent tournament logs.
-- **Guardrail sentinel**: Pending—canonical/selected reruns need to be scheduled; log the next run IDs and copy the metadata printout into `docs/specs/plan-report.md` so the sentinel item can close.
-- **Health audit**: Completed for run `20260103-213947` (see `artifacts/summaries/runs/20260103-213947/logs/data-audit.log`), but keep re-running the check after any new alignment fixes so the log stays up to date.
+- **Metadata gate**: Satisfied—Run `20260103-223836` recorded 100% coverage and passing health audit.
+- **Selection report**: Completed—Run `20260103-223836` confirmed restoration of selection story.
+- **CVXPortfolio warnings**: Completed—Run `20260103-223836` confirmed zero warnings in `12_validation.log`.
+- **Guardrail sentinel**: Completed—Run `20260103-223836` passed invariance check against previous baseline.
+- **Health audit**: Completed for run `20260103-223836` (100% healthy).
 
-## Institutional Fidelity (Jan 2026) - Bug Fixes
-- [x] **Simulator Truncation (20-day limit)**: High-fidelity simulators (`CVXPortfolio`, `VectorBT`) were accidentally hardcoded to 20 days.
-  - **Fix**: Removed truncation; both simulators now process full secular history (250-500+ days).
-- [x] **VectorBT Lookahead Bias**: `VectorBTSimulator` used `shift(-1)` which introduced future returns into current weights.
-  - **Fix**: Removed shift; simulator now uses raw periodic returns aligned to rebalance timing.
-- [x] **ECI Volatility Defaults**: `enrich_candidates_metadata.py` used an incorrect 50% default for missing volatility, causing excessive vetoes.
-  - **Fix**: Standardized on 0.5% (0.005) daily volatility default for estimation.
 

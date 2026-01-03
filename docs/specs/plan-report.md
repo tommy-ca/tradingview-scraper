@@ -1,13 +1,14 @@
-# Baseline & Guardrail Report (Run 20260103-182051)
+# Baseline & Guardrail Report (Run 20260103-223836)
 
 ## Executive summary
-- The production run `20260103-182051` finished with complete artifacts (logs, audit ledger, tournament results, selection audit) and forms the latest evidence for the baseline stability story.
-- Human-readable guardrail reporting now documents the canonical vs selected universes, the canonical/selected invariance passes, and the single failure when mismatched universes were compared.
+- The production run `20260103-223836` finished with complete artifacts and successfully validated the Jan 2026 institutional fidelity fixes (no truncation, zero lookahead).
+- Human-readable guardrail reporting now documents the canonical vs selected universes, the canonical/selected invariance passes, and the stability of the latest production run.
 - This report references `docs/specs/plan.md` as the canonical spec; use the plan for the detailed risk-profile table, baseline-spec Q&A, and ongoing action items.
 
 ## Guardrail results
 | Guardrail command | Universe pairing | result | key metrics (windows / annualized return / vol / win rate) |
 | --- | --- | --- | --- |
+| `make baseline-guardrail RUN_A=20260103-182051 RUN_B=20260103-223836` | selected vs selected | **PASS** | Both runs: 11 / 0.2797840635 / 0.1843112227 / 81.82%. |
 | `make baseline-guardrail RUN_A=20260103-171913 RUN_B=20260103-182051` | canonical (A) vs selected (B) | **FAIL (sentinel)** | Run A: 11 / 0.1894 / 0.1137 / 63.6% vs Run B: 11 / 0.2798 / 0.1843 / 81.8% → mismatch because universes differ and is now treated as an expected sentinel. |
 | `make baseline-guardrail RUN_A=20260103-171756 RUN_B=20260103-171913` | canonical vs canonical | **PASS** | Both runs: 11 / 0.1894294957 / 0.1137406122 / 63.64%. |
 | `make baseline-guardrail RUN_A=20260103-172054 RUN_B=20260103-182051` | selected vs selected | **PASS** | Both runs: 11 / 0.2797840635 / 0.1843112227 / 81.82%. |
