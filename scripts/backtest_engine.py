@@ -67,9 +67,9 @@ class BacktestEngine:
     def run_tournament(
         self,
         *,
-        train_window: int = 120,
-        test_window: int = 20,
-        step_size: int = 20,
+        train_window: Optional[int] = None,
+        test_window: Optional[int] = None,
+        step_size: Optional[int] = None,
         profiles: Optional[List[str]] = None,
         engines: Optional[List[str]] = None,
         cluster_cap: float = 0.25,
@@ -79,16 +79,30 @@ class BacktestEngine:
         end_date: Optional[str] = None,
     ) -> Dict:
         settings = get_settings()
+        if train_window is None:
+            train_window = int(settings.train_window)
+        if test_window is None:
+            test_window = int(settings.test_window)
+        if step_size is None:
+            step_size = int(settings.step_size)
         b_params = bayesian_params or {}
         profiles = [p.strip().lower() for p in (profiles or ["min_variance", "hrp", "max_sharpe", "barbell"]) if (p or "").strip()]
         engines = [e.strip().lower() for e in (engines or ["custom", "skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio"]) if (e or "").strip()]
         sim_names = [s.strip().lower() for s in (simulators or ["custom", "cvxportfolio", "vectorbt", "nautilus"]) if (s or "").strip()]
+        if not profiles:
+            profiles = ["min_variance", "hrp", "max_sharpe", "barbell"]
+        if not engines:
+            engines = ["custom", "skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio"]
+        if not sim_names:
+            sim_names = ["custom", "cvxportfolio", "vectorbt", "nautilus"]
 
         returns_to_use = cast(pd.DataFrame, self.returns)
         if start_date:
             returns_to_use = cast(pd.DataFrame, returns_to_use[returns_to_use.index >= pd.to_datetime(start_date)])
         if end_date:
             returns_to_use = cast(pd.DataFrame, returns_to_use[returns_to_use.index <= pd.to_datetime(end_date)])
+
+        returns_to_use = returns_to_use.dropna(how="any")
 
         available_engines = set(list_available_engines())
         results: Dict[str, Dict[str, Any]] = {s: {} for s in sim_names}
@@ -98,6 +112,9 @@ class BacktestEngine:
         initial_holdings = self._load_initial_state()
         run_dir = settings.prepare_summaries_run_dir()
         ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
+
+        baseline_engine = "market"
+        baseline_profiles = ["market", "equal_weight", "raw_pool_ew"]
 
         for s in sim_names:
             for eng in engines:
@@ -115,6 +132,12 @@ class BacktestEngine:
                         results[s][eng][prof] = {"windows": [], "summary": None}
                         cumulative[(s, eng, prof)] = []
                         prev_weights[(s, eng, prof)] = pd.Series(dtype=float)
+
+            results[s][baseline_engine] = {}
+            for prof in baseline_profiles:
+                results[s][baseline_engine][prof] = {"windows": [], "summary": None}
+                cumulative[(s, baseline_engine, prof)] = []
+                prev_weights[(s, baseline_engine, prof)] = pd.Series(dtype=float)
 
         total_len = len(returns_to_use)
         if total_len < train_window + test_window:
@@ -137,7 +160,7 @@ class BacktestEngine:
             stats_df = self._audit_training_stats(train_data_raw)
 
             if settings.dynamic_universe and self.raw_candidates:
-                winners, _, _, _, _ = run_selection(
+                response = run_selection(
                     train_data_raw,
                     self.raw_candidates,
                     stats_df=stats_df,
@@ -145,6 +168,10 @@ class BacktestEngine:
                     threshold=settings.threshold,
                     m_gate=settings.min_momentum_score,
                 )
+                winners = getattr(response, "winners", None)
+                if winners is None and isinstance(response, tuple):
+                    winners = response[0]
+                winners = winners or []
                 current_symbols = [w["symbol"] for w in winners if w["symbol"] in train_data_raw.columns]
                 for b_sym in settings.benchmark_symbols:
                     if b_sym in train_data_raw.columns and b_sym not in current_symbols:
@@ -197,24 +224,33 @@ class BacktestEngine:
                         logger.error(f"Engine {eng} Profile {prof} failed: {e}")
 
             # Special Baselines
-            if settings.dynamic_universe and "custom" in engines:
-                try:
-                    w_market = self._compute_weights(train_data_raw, {}, pd.DataFrame(), "market", "custom", 1.0, {}, None, regime)
+            try:
+                raw_w_df = None
+                w_market = self._compute_weights(train_data_raw, clusters, stats_df_final, "market", "custom", 1.0, candidate_meta, None, regime, market_env)
+                if not w_market.empty:
+                    cached_weights[(baseline_engine, "market")] = w_market
+                w_filt = self._compute_weights(train_data, clusters, stats_df_final, "equal_weight", "custom", cluster_cap, candidate_meta, None, regime, market_env)
+                if not w_filt.empty:
+                    cached_weights[(baseline_engine, "equal_weight")] = w_filt
+
+                # Raw Pool Equal Weight (Selection Alpha Baseline)
+                valid_raw_symbols = [s for s in train_data_raw.columns if s not in settings.benchmark_symbols]
+                if valid_raw_symbols:
+                    raw_w_df = pd.DataFrame([{"Symbol": s, "Weight": 1.0 / len(valid_raw_symbols)} for s in valid_raw_symbols])
+                    cached_weights[(baseline_engine, "raw_pool_ew")] = raw_w_df
+
+                # Backwards-compatible baselines under custom engine (dynamic universe)
+                if settings.dynamic_universe and "custom" in engines:
                     if not w_market.empty:
                         cached_weights[("custom", "market_baseline")] = w_market
-                    w_bench = self._compute_weights(train_data_raw, {}, pd.DataFrame(), "benchmark", "custom", 1.0, {}, None, regime)
+                    w_bench = self._compute_weights(train_data_raw, clusters, stats_df_final, "benchmark", "custom", 1.0, candidate_meta, None, regime, market_env)
                     if not w_bench.empty:
                         cached_weights[("custom", "benchmark_baseline")] = w_bench
-
-                    # NEW: Raw Pool Equal Weight (Selection Alpha Baseline)
-                    # We use train_data_raw which contains ALL valid symbols before selection pruning
-                    valid_raw_symbols = [s for s in train_data_raw.columns if s not in settings.benchmark_symbols]
-                    if valid_raw_symbols:
-                        raw_w_df = pd.DataFrame([{"Symbol": s, "Weight": 1.0 / len(valid_raw_symbols)} for s in valid_raw_symbols])
+                    if raw_w_df is not None:
                         cached_weights[("custom", "raw_pool_ew")] = raw_w_df
 
-                except Exception as e:
-                    logger.error(f"Failed baselines: {e}")
+            except Exception as e:
+                logger.error(f"Failed baselines: {e}")
 
             for s_name in sim_names:
                 simulator = build_simulator(s_name)
@@ -357,10 +393,10 @@ class BacktestEngine:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--train", type=int, default=120)
-    parser.add_argument("--test", type=int, default=20)
-    parser.add_argument("--step", type=int, default=20)
-    parser.add_argument("--cluster-cap", type=float, default=0.25)
+    parser.add_argument("--train", type=int, default=None)
+    parser.add_argument("--test", type=int, default=None)
+    parser.add_argument("--step", type=int, default=None)
+    parser.add_argument("--cluster-cap", type=float, default=None)
     parser.add_argument("--simulators")
     parser.add_argument("--engines")
     parser.add_argument("--profiles")
@@ -369,15 +405,24 @@ if __name__ == "__main__":
     parser.add_argument("--tournament", action="store_true")
     args = parser.parse_args()
     bt = BacktestEngine()
+
+    def _parse_list(arg: Optional[str]) -> Optional[List[str]]:
+        if not arg:
+            return None
+        items = [s.strip() for s in arg.split(",") if s.strip()]
+        return items or None
+
     if args.tournament:
+        settings = get_settings()
+        cluster_cap = float(args.cluster_cap) if args.cluster_cap is not None else float(settings.cluster_cap)
         res = bt.run_tournament(
             train_window=args.train,
             test_window=args.test,
             step_size=args.step,
-            profiles=cast(List[str], (args.profiles or "").split(",")),
-            engines=cast(List[str], (args.engines or "").split(",")),
-            cluster_cap=args.cluster_cap,
-            simulators=cast(List[str], (args.simulators or "").split(",")),
+            profiles=_parse_list(args.profiles),
+            engines=_parse_list(args.engines),
+            cluster_cap=cluster_cap,
+            simulators=_parse_list(args.simulators),
             start_date=args.start_date,
             end_date=args.end_date,
         )
