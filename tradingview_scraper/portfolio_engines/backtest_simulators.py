@@ -309,4 +309,10 @@ class NautilusSimulator(BaseSimulator):
     """Event-driven high-fidelity simulator using NautilusTrader (Placeholder)."""
 
     def simulate(self, returns: pd.DataFrame, weights_df: pd.DataFrame, initial_holdings: Optional[pd.Series] = None) -> Dict[str, Any]:
-        return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+        try:
+            from tradingview_scraper.portfolio_engines.nautilus_adapter import run_nautilus_backtest
+
+            return run_nautilus_backtest(returns=returns, weights_df=weights_df, initial_holdings=initial_holdings, settings=get_settings())
+        except Exception as e:
+            logger.warning(f"Nautilus adapter unavailable, falling back to cvxportfolio parity: {e}")
+            return CVXPortfolioSimulator().simulate(returns, weights_df, initial_holdings)
