@@ -1,49 +1,107 @@
 # Optimization Engine V2: Profile-Centric Allocation
 
-The Profile-Centric Optimization Engine (v2) is an institutional-grade framework designed to handle venue redundancy and benchmark library-specific solver variance across disparate asset classes.
+The Profile-Centric Optimization Engine (v2) is an institutional-grade framework designed to handle venue redundancy and benchmark library-specific solver variance across disparate asset classes. This document is the single source of truth for profile definitions, baseline taxonomy, and universe semantics.
 
-## 1. Profile-Centric Architecture (New Jan 2026)
+## 1. Universe Definitions (Canonical vs Natural-Selected)
 
-As of the 4D Tournament Meta-Analysis, the framework has transitioned from engine-driven logic to a **Profile-First** model. Universal fallbacks have been removed to ensure that every backend library (`skfolio`, `riskfolio`, etc.) utilizes its own native solvers for each risk paradigm.
+### Canonical Universe (Raw Pool)
+- **Source**: `data/lakehouse/portfolio_candidates_raw.json`
+- **Definition**: The merged, post-discovery universe prior to any selection or pruning.
+- **Requirement**: All natural-selected universes must be strict subsets of the canonical universe.
+- **Canonical returns**: `data/lakehouse/portfolio_returns_raw.pkl` built by running `scripts/prepare_portfolio_data.py` with `CANDIDATES_FILE=portfolio_candidates_raw.json` and `PORTFOLIO_RETURNS_PATH=portfolio_returns_raw.pkl`.
+  - **Pipeline**: Generated during `make data-prep-raw` alongside raw candidate aggregation.
+
+### Natural-Selected Universe (Selection Winners)
+- **Source**: `data/lakehouse/portfolio_candidates.json`
+- **Definition**: The selection-engine winners layered on top of the canonical universe.
+- **Default**: The production returns matrix (`data/lakehouse/portfolio_returns.pkl`) is built from this manifest by `scripts/prepare_portfolio_data.py`.
+
+### Design Implication
+- **Selection alpha isolation** requires a canonical baseline (`raw_pool_ew`) that is not affected by selection-mode sweeps.
+- **Optimization profiles** operate on the active universe passed into the engine (typically natural-selected unless explicitly overridden).
+- **Metadata prerequisite**: Candidate manifests must contain `tick_size`, `lot_size`, and `price_precision` before any selection/tournament run. Vetoes are driven by the **candidate manifests** (not `portfolio_meta*.json`), so enrichment must occur after each manifest refresh.
+
+## 2. Baseline Profiles Standard (Single Source of Truth)
+
+Only two official baseline profiles are supported: **`market`** and **`benchmark`**. Any other baseline labels (e.g., `market_baseline`, `benchmark_baseline`) are legacy aliases and are not part of the standard taxonomy.
+
+Note: `equal_weight` may still appear in backtest outputs under the baseline engine for comparison, but it remains a risk profile (see table below).
+
+### 2.1 `market` (Institutional Baseline)
+- **Universe**: `settings.benchmark_symbols` present in the returns matrix.
+- **Weighting**: Equal-weight across benchmark symbols.
+- **Constraints**: Long-only, sum to 1.
+- **Audit**: Record benchmark symbols, symbol count, and returns hash in `audit.jsonl`.
+- **Current behavior**: If no benchmark symbols are present, the engine returns empty weights with a warning.
+- **Design requirement**: No fallback. Missing benchmarks must return empty weights with a warning.
+- **Usage**: Simulator calibration and institutional hurdle rate, not a proxy for the active universe.
+
+### 2.2 `benchmark` (Research Baseline)
+- **Universe**: Active universe passed into the engine (typically the natural-selected universe).
+- **Weighting**: Asset-level equal weight (no clustering, no optimizer).
+- **Constraints**: Long-only, sum to 1.
+- **Audit**: Record universe source, symbol count, and returns hash.
+- **Purpose**: Baseline for comparing **risk profiles** while holding selection fixed; default comparator in backtests.
+
+### 2.3 `raw_pool_ew` (Selection-Alpha Baseline, Backtest-only)
+- **Status**: Not an optimization profile; generated in `scripts/backtest_engine.py`.
+- **Universe**: Controlled by `TV_RAW_POOL_UNIVERSE=selected|canonical` (or `RAW_POOL_UNIVERSE` when promoted by the pipeline).
+- **Canonical returns path**: `RAW_POOL_RETURNS_PATH` / `TV_RAW_POOL_RETURNS_PATH` (defaults to `data/lakehouse/portfolio_returns_raw.pkl`).
+- **Weighting**: Asset-level equal weight across valid raw-pool symbols, excluding `benchmark_symbols`.
+- **Invariance requirement**: Must be selection-mode invariant when the universe source is unchanged.
+- **Invariance protocol**: Validate invariance by running *the same universe source* (canonical or selected) across different selection modes. Do **not** compare canonical vs selected as an invariance test (they are different universes by definition).
+- **Coverage requirement**: Canonical returns must contain at least one contiguous window of `train + test + 1` rows. If canonical history starts later than the selected-returns index, `raw_pool_ew` will yield **0 windows** unless the tournament `start_date` is shifted to the canonical start (or windows are shortened).
+- **Stability gate**: Treat `raw_pool_ew` as **selection benchmark baseline** per universe once window coverage is complete and invariance holds. If either fails, mark as **diagnostic only** and exclude from baseline comparisons.
+- **Comparator scope**: Use `raw_pool_ew` only for **selection alpha** diagnostics; use `benchmark` for risk profile comparisons. Selection alpha requires **canonical raw_pool_ew** vs **selected benchmark** (otherwise $A_s$ collapses toward zero by construction).
+
+## 3. Risk Profile Comparison Table (All Supported Profiles)
+
+| Profile | Category | Universe | Weighting / Optimization | Hierarchy / HERC | Intended use & audit |
+| --- | --- | --- | --- | --- | --- |
+| `market` | Baseline | Benchmark symbols | Equal-weight across benchmark symbols | None | Simulator parity; audit benchmark symbols + hash |
+| `benchmark` | Baseline | Active (natural-selected) universe | Asset-level equal weight | None | Optimization-alpha baseline; audit universe source + count |
+| `raw_pool_ew` | Baseline (backtest) | Canonical or selected (via `TV_RAW_POOL_UNIVERSE`) | Asset-level equal weight; excludes benchmarks | None | Selection-alpha diagnostic; only baseline if stable + invariant |
+| `equal_weight` | Risk | Active universe | Cluster-level equal weight | HERC 2.0 intra (inverse variance) | Neutral diversified profile |
+| `min_variance` | Risk | Active universe | Cluster-level minimum variance | HERC 2.0 intra | Defensive risk control |
+| `hrp` | Risk | Active universe | Cluster-level HRP (native per engine) | HERC 2.0 intra | Structural risk parity |
+| `risk_parity` | Risk | Active universe | Cluster-level equal risk contribution | HERC 2.0 intra | Turbulent/CRISIS defense |
+| `max_sharpe` | Risk | Active universe | Cluster-level max Sharpe / mean-variance | HERC 2.0 intra | Growth regime focus |
+| `barbell` | Strategy | Active universe | Aggressor sleeve + core HRP | HERC 2.0 intra (core) | Convexity + capital preservation |
+| `adaptive` | Meta | Active universe | Switches profile by market environment | HERC 2.0 per chosen profile | Audit `adaptive_profile` + `adaptive_base` |
+
+Notes:
+- For cluster-based profiles, intra-cluster weights are produced by **HERC 2.0** (inverse variance) in the Custom engine and are applied downstream when expanding cluster weights to asset weights.
+- `equal_weight` is **Hierarchical Equal Weight** (cluster-level equal weight with HERC intra), not a flat asset-level EW.
+
+## 4. Profile-Centric Architecture (Jan 2026)
+
+As of the 4D Tournament Meta-Analysis, the framework uses a **Profile-First** model. Universal fallbacks are removed so that every backend library (`skfolio`, `riskfolio`, etc.) uses its native solvers for each risk paradigm.
 
 ### Layer 1: Across Clusters (Factor Level)
 The total capital is first distributed across high-level hierarchical risk buckets.
-- **Max Cluster Cap (25%)**: Strictly enforced via linear constraints ($w_{cluster} \le 0.25$) to prevent systemic over-concentration.
-- **Numerical Stability**: Standardized on **Tikhonov Regularization** ($10^{-6} \cdot I$) for all covariance matrices to ensure strictly positive definite inputs for convex solvers.
-- **Turnover Control**: Implements an **L1-norm penalty** on weight changes relative to the previously implemented state:
-  $$Penalty_{Turnover} = \lambda \cdot \sum |w_{t} - w_{t-1}|$$
+- **Max Cluster Cap (25%)**: Enforced via linear constraints ($w_{cluster} \le 0.25$).
+- **Numerical Stability**: Standardized on **Tikhonov Regularization** ($10^{-6} \cdot I$).
+- **Turnover Control**: L1 penalty on weight changes vs prior state.
 
-### Core Institutional Profiles
+### Layer 2: Within Clusters (Instrument Level)
+- **HERC 2.0**: Intra-cluster weights use inverse variance to equalize risk contribution.
+- **Cluster Benchmarks**: Cluster returns are computed as the risk-weighted (HERC) average of member assets.
 
-#### 1. Hierarchical Risk Parity (HRP)
-- **Library Native**: Uses `HierarchicalRiskParity` (skfolio) and native recursive bisection backends.
-- **Goal**: Maintain stable risk contributions across the correlation tree.
-
-#### 2. Native Risk Parity
-- **Implementation**: Convex log-barrier equal risk contribution.
-- **Solvers**: `RiskBudgeting` (skfolio), `rp_optimization` (riskfolio).
-- **Rationale**: Superior stability during **TURBULENT** and **CRISIS** regimes (2025 winner).
-
-#### 3. Research Baselines (Standardized EW)
-- **`market` Profile**: Force-allocation to a single asset (**SPY**). Used as the absolute market yardstick.
-- **`benchmark` Profile**: Equal-Weighting of the **entire unpruned candidate pool**. Used to isolate the value added by selection/pruning logic.
-
-#### 4. Antifragile Barbell
-- **Aggressor Sleeve (5-15%)**: Allocates to clusters with the highest **Antifragility Scores** (convexity leaders).
-- **Core Sleeve (85-95%)**: Allocates to the remaining universe using the **HRP** profile.
-
-## 2. Intra-Cluster Allocation (Instrument Level)
-Within each factor, weight is distributed using a **Momentum-Volatility Hybrid**:
-- **Formula**: $Weight \propto 0.5 \cdot InverseVolatility + 0.5 \cdot AlphaRank$.
-- **Rationale**: Ensures the portfolio is anchored by stable instruments while rewarding the highest-momentum members within a correlated group.
-
-## 3. Simulator Parity & Fidelity
-All tournament profiles are validated across four synchronized simulators:
-- **`cvxportfolio`**: The High-Fidelity standard (Linear transaction costs + N+1 alignment).
-- **`nautilus` / `custom`**: Synchronized with **Turnover-Aware Friction** to ensure research parity.
+## 5. Simulator Parity & Fidelity
+All profiles are validated across synchronized simulators:
+- **`cvxportfolio`**: High-fidelity standard (linear costs + N+1 alignment).
+- **`nautilus` / `custom`**: Turnover-aware friction parity.
 - **`vectorbt`**: Vectorized rapid prototyping.
 
-## 4. Decision Support & Audit Trace
+## 6. Decision Support & Audit Trace
 - **Audit Ledger**: Every decision is cryptographically logged in `audit.jsonl`.
-- **Atomic Renaming**: Ensures audit logs remain uncorrupted during multi-threaded optimization runs.
-- **Atomic selection**: Every run archives its specific selection state for 100% provenance.
+- **Atomic Renaming**: Ensures audit logs remain uncorrupted during multi-threaded runs.
+- **Selection Provenance**: Each run archives its specific selection state.
+
+## 7. Current Status & Gaps (2026-01-03)
+- **raw_pool_ew selection baseline**: Verified invariant across selection modes for same-universe runs (canonical v3/v3.2 and selected v3/v3.2). Guardrail automation remains open.
+- **Canonical returns wiring**: `BacktestEngine` uses `portfolio_returns_raw.pkl` when present; `make data-prep-raw` generates canonical returns, but gap repair may still be required for full coverage.
+- **Canonical window constraint**: If canonical returns start after the selected index, no walk-forward window can satisfy `train + test + 1` coverage (example: run `20260103-160121` produced 0 windows). Use a canonical-aligned `start_date` or shorter windows to validate baselines.
+- **Audit completeness**: `raw_pool_symbol_count` and `raw_pool_returns_hash` are logged when `raw_pool_ew` windows exist; missing windows yield no audit entries.
+- **Market fallback**: The `market` profile returns empty weights if benchmark symbols are missing (no fallback by design).
+- **Adaptive mapping**: `AdaptiveMetaEngine` currently maps `NORMAL` to `max_sharpe` (not `benchmark`).

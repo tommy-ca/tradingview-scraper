@@ -81,6 +81,51 @@ The framework isolates alpha sources by comparing returns across three distinct 
 - **Optimization Alpha ($A_o$):** $R_{optimized} - R_{filtered}$ (Value of portfolio optimization).
 - **Selection Efficiency:** The ratio of $A_s$ to total excess return.
 
+**Baseline taxonomy**: The only official baseline profiles are `market` and `benchmark` (see `docs/specs/optimization_engine_v2.md`). `raw_pool_ew` is a backtest-only **selection benchmark baseline** used to isolate selection alpha and is not an optimization profile.
+- **Risk profile comparisons**: Use `benchmark` as the default baseline when comparing risk profiles inside the active universe; use `market` for simulator calibration.
+- **Selection alpha**: Use **canonical raw_pool_ew** vs **selected benchmark** to measure $A_s$.
+
+#### Raw Pool Baseline: Universe Source (Canonical vs Selected)
+The `raw_pool_ew` baseline must support two universe sources:
+1. **Canonical**: `portfolio_candidates_raw.json` (post-merge canonical universe, pre-selection).
+2. **Selected**: `portfolio_candidates.json` (natural-selection winners).
+
+**Rule**: `raw_pool_ew` must be selection-mode invariant. Changing selection mode must not change `raw_pool_ew` unless the **universe source** is explicitly switched.
+
+**Control**: Expose a single flag to choose the universe source (default: `selected` for backward compatibility):
+- `TV_RAW_POOL_UNIVERSE=selected|canonical` (primary, matches `TV_` settings prefix)
+- `RAW_POOL_UNIVERSE=selected|canonical` (supported when run via the production pipeline env promotion)
+
+**Audit**: The audit ledger must record the universe source, symbol count, and returns hash for each `raw_pool_ew` window so the baseline is fully reproducible.
+
+**Current Status (2026-01-03)**:
+- **Implemented**: `scripts/backtest_engine.py` honors `raw_pool_universe` (`selected` default) and resolves `canonical` via `data/lakehouse/portfolio_candidates_raw.json` when present.
+- **Fallbacks**: If the canonical list is empty or has zero overlap with the returns matrix, it automatically falls back to `selected`.
+- **Baseline construction**: `raw_pool_ew` weights are equal-weighted across valid raw-pool symbols, excluding `benchmark_symbols`, and only symbols with full window data are retained.
+- **Coverage constraint**: Canonical returns must include at least one contiguous `train + test + 1` window aligned to the backtest index. If canonical history starts later than the selected index, no valid windows will exist unless `start_date` is shifted to the canonical start (or windows are shortened).
+- **Selection baseline**: Same-universe invariance validated across selection modes (canonical v3/v3.2 and selected v3/v3.2). Guardrail automation remains open.
+- **Audit gap**: `raw_pool_symbol_count` and `raw_pool_returns_hash` are now recorded for `raw_pool_ew` windows, but historical runs may not include these fields.
+- **Canonical wiring**: `raw_pool_ew` uses `data/lakehouse/portfolio_returns_raw.pkl` when present; canonical returns are generated in `make data-prep-raw`.
+
+**Design Goals**:
+- **Selection invariance**: `raw_pool_ew` must be identical across selection modes when the universe source is unchanged.
+- **Invariance protocol**: Validate by running the same `TV_RAW_POOL_UNIVERSE` under multiple selection modes; do **not** compare canonical vs selected as an invariance test.
+- **Canonical-first**: When `canonical` is requested, build and use a canonical returns matrix (or per-window slice) sourced from `portfolio_candidates_raw.json`.
+- **Explicit provenance**: Each window must record `universe_source`, symbol count, and the returns matrix hash in `audit.jsonl`.
+- **Graceful degradation**: If canonical inputs are missing, log a single warning and fall back to `selected` without silent behavior changes.
+- **Benchmark isolation**: Keep benchmark symbols out of `raw_pool_ew` weights unless explicitly requested.
+- **Stability gate**: If `raw_pool_ew` window coverage is incomplete or invariance fails, mark it as **diagnostic only** and exclude it from baseline comparisons.
+- **Validation**: After canonical repairs, run a production-profile tournament with `TV_RAW_POOL_UNIVERSE=canonical` (and a canonical-aligned `start_date` when needed) to confirm non-zero windows and stable baseline metrics.
+
+**Selection Audit Linkage**:
+- Each tournament run must archive `selection_audit.json` (or `.md`) and record its hash in `audit.jsonl`.
+- This bridges the canonical → selected provenance with selection alpha metrics (`raw_pool_ew` vs `benchmark`).
+
+**Metadata Gate (Pre-Tournament)**:
+- **Requirement**: Candidate manifests must include `tick_size`, `lot_size`, and `price_precision` before any selection or tournament run.
+- **Source of truth**: Vetoes use the candidate manifests, not `portfolio_meta*.json`.
+- **Operational step**: Run `scripts/enrich_candidates_metadata.py` after `data-prep-raw` and after `port-select`.
+
 ### 5.5 High-Fidelity Simulations
 To eliminate the "First-Trade Bias" (where starting from 100% cash creates an artificial spike in turnover and transaction costs), the engine supports **Warm-Start Initialization**.
 - **Mechanism**: The backtester attempts to load the last implemented state from `data/lakehouse/portfolio_actual_state.json`.

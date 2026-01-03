@@ -101,3 +101,26 @@ The system uses `PORTFOLIO_MIN_DAYS_FLOOR` to ensure that only assets with suffi
 
 ### 6.3 Hard Health Gates
 In `production` mode (`strict_health: true`), the pipeline will fail-fast if any selected symbols have unresolved data gaps after the automated recovery phase, preventing capital allocation on degraded data.
+
+### 6.4 Metadata Coverage Gate (Pre-Selection & Pre-Tournament)
+Selection and tournament vetoes rely on candidate manifest metadata (not `portfolio_meta*.json`), so metadata enrichment is a hard prerequisite:
+- **Required fields**: `tick_size`, `lot_size`, `price_precision`
+- **When**: Immediately after `data-prep-raw` and after `port-select`
+- **Enrichment command**: `uv run scripts/enrich_candidates_metadata.py`
+- **Gate**: Fail the run if metadata coverage drops below a defined threshold (recommended ≥95% of active symbols)
+
+### 6.5 Optional Automation (Recommended)
+To reduce operator error, add dedicated workflow steps/targets:
+- `make metadata-refresh`: run `scripts/enrich_candidates_metadata.py` after candidate generation
+- `make metadata-audit`: assert coverage for required fields and fail fast below threshold
+- `make invariance-check`: run matched tournaments with the same universe source across selection modes and compare summaries
+
+### 6.6 Baseline Readiness Gate (Pre-Tournament)
+To ensure a **solid benchmark baseline** for backtesting risk profiles, enforce the following checks before tournament runs:
+- **Benchmark symbols present**: `settings.benchmark_symbols` must exist in the returns matrix; otherwise the `market` baseline is empty by design.
+- **`benchmark` baseline availability**: The active universe must have sufficient coverage to produce equal-weight weights for the full window.
+- **`raw_pool_ew` invariance**: If enabled, `raw_pool_ew` must be selection-mode invariant for the **same universe source** (canonical or selected). Log a warning or fail if drift is detected.
+
+Suggested automation targets:
+- `make baseline-audit`: validate `market` + `benchmark` availability and report coverage
+- `make baseline-guardrail`: compare `raw_pool_ew` summaries across selection modes for the same universe source

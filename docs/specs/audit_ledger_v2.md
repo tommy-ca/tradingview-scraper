@@ -21,6 +21,12 @@ The `Action` record in the ledger will be expanded to include:
 - `env_hash`: Hash of the `uv.lock` and project configuration.
 - `data_slice_hash`: Hash of the specific training window slice used.
 - `state_seed`: The random seed used for any stochastic optimizers.
+- `context`: Structured metadata required for deterministic replay, including:
+  - `selection_mode`, `rebalance_mode`
+  - `train_window`, `test_window`, `step_size`
+  - `window_index`, `train_start`, `test_start`, `test_end`
+  - `engine`, `profile`, `simulator`
+  - `universe_source` (raw pool: `canonical` vs `selected`)
 
 ### B. Replay Orchestrator
 A new tool, `scripts/replay_backtest.py`, will be developed to:
@@ -50,3 +56,11 @@ When `feat_audit_ledger` is enabled:
 Notes:
 - The ledger is written to the run-scoped `artifacts/summaries/runs/<RUN_ID>/audit.jsonl`.
 - Derived reports (e.g., `full_4d_comparison_table.md`) are generated from tournament outputs and are not separately hashed in the ledger unless explicitly recorded by a writer.
+
+### 5.1 Required Backtest Context (Jan 2026)
+For every `backtest_optimize` and `backtest_simulate` entry, the ledger must also include a `context` block with:
+- `selection_mode`, `rebalance_mode`
+- `train_window`, `test_window`, `step_size`
+- `window_index`, `train_start`, `test_start`, `test_end`
+- `engine`, `profile`, `simulator`
+- `universe_source` (raw pool baseline: `canonical` or `selected`)

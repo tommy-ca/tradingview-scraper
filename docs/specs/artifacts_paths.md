@@ -52,9 +52,11 @@ Typical tournament artifacts (run-scoped):
 - `artifacts/summaries/runs/<RUN_ID>/returns/*.pkl`
 - `artifacts/summaries/runs/<RUN_ID>/tearsheets/*.md`
 - `artifacts/summaries/runs/<RUN_ID>/audit.jsonl`
+- `artifacts/summaries/runs/<RUN_ID>/logs/*.log`
 
 Notes:
 - 4D outputs are optional and only appear when a selection-mode sweep or rebalance audit is executed.
+- `logs/` is created by the production pipeline (`scripts/run_production_pipeline.py`). Ad-hoc scripts (e.g., `scripts/run_4d_tournament.py`) may not emit logs unless wrapped by the pipeline or explicitly instrumented.
 
 ## 5. Forex Analysis Outputs
 Forex base-universe analysis (see `make forex-analyze`) writes run-scoped artifacts:

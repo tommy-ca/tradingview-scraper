@@ -16,15 +16,19 @@ The following engines are implemented using a unified `BaseRiskEngine` interface
 
 ## 2. Standardized Portfolio Profiles
 
-The framework benchmarks institutional risk management paradigms. All engines must implement these profiles natively:
+The framework benchmarks institutional risk management paradigms. Profile definitions are standardized in `docs/specs/optimization_engine_v2.md`. All engines must implement these profiles natively:
 
-- **`market`**: Institutional Baseline (Single asset **SPY**, Equal-Weight).
-- **`benchmark`**: Research Baseline (**Unpruned candidate pool**, Equal-Weight).
+- **`market`**: Institutional baseline (benchmark symbols, equal-weight).
+- **`benchmark`**: Research baseline (active universe, asset-level equal-weight).
+- **`equal_weight`**: Hierarchical equal weight (cluster-level EW, HERC intra).
 - **`hrp`**: Hierarchical Risk Parity (Library-specific tree bisection).
 - **`risk_parity`**: Equal Risk Contribution (Library-specific native solvers).
 - **`max_sharpe`**: Optimized return-to-risk ratio.
 - **`barbell`**: Sleeve-based sleeve strategy.
 - **`min_variance`**: Absolute risk minimization.
+- **`adaptive`**: Regime-driven profile switcher (meta profile).
+
+Note: `raw_pool_ew` is a backtest-only, selection-alpha diagnostic baseline and should not be used as a benchmark baseline unless stability/invariance criteria are met (see `docs/specs/optimization_engine_v2.md`).
 
 ## 3. Benchmarking Framework
 

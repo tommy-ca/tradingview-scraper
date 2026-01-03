@@ -57,3 +57,20 @@ To quantify the value of the selection logic, the platform measures **Selection 
 $$ A_s = \text{Return}(\text{Filtered EW}) - \text{Return}(\text{Raw Discovery EW}) $$
 
 This metric is archived in the **Immutable Audit Ledger** at each walk-forward step of the backtest.
+
+### 4.1 Baseline Coupling Rules
+- **`raw_pool_ew` scope**: Used only for selection alpha isolation; it must remain **selection-mode invariant** when the universe source is unchanged.
+- **Universe separation**: Do **not** compare canonical vs selected `raw_pool_ew` as an invariance test; those are different universes by definition.
+- **Risk profile comparisons**: Use `benchmark` as the default baseline when comparing risk profiles; use `market` for simulator calibration.
+- **Selection alpha calculation**: Requires `raw_pool_ew` built from the **canonical** universe and `benchmark` built from the **selected** universe; if both baselines use the same universe, $A_s$ collapses toward zero by construction.
+
+### 4.2 Selection Audit Requirements (Canonical → Selected)
+To make selection alpha reproducible and reviewable, every selection run must emit a structured audit record and be archived with the run:
+- **Canonical source**: `portfolio_candidates_raw.json` (raw pool) with `raw_pool_count` and `raw_pool_hash`.
+- **Selected output**: `portfolio_candidates.json` with `selected_count` and `selection_hash`.
+- **Selection mode + lookbacks**: `selection_mode` and `lookbacks_used` (e.g., `[60,120,200]`).
+- **Cluster map**: cluster sizes and selected winners per cluster.
+- **Vetoes**: rejected symbols and veto reasons (ECI/entropy/efficiency/Hurst, etc.).
+- **Archival**: Persist `selection_audit.json` (or `.md`) in the run directory and link its hash in `audit.jsonl`.
+
+**Gap note**: Tournament `audit.jsonl` currently does not log explicit selection intents. Selection provenance is captured in `selection_audit.json`; the audit ledger must link to it for full traceability.

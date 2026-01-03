@@ -49,7 +49,7 @@ The `AdaptiveMetaEngine` utilizes the quadrant detection to dynamically switch b
 | **`INFLATIONARY_TREND`** | `barbell` | Capture volatile alpha while protecting the core. |
 | **`STAGNATION`** | `min_variance` | Preserve capital and capture yield in flat markets. |
 | **`CRISIS`** | `hrp` | Prioritize structural survival and tail-risk hedging. |
-| **`NORMAL`** | `benchmark` | Maintain diversified exposure during neutral periods. |
+| **`NORMAL`** | `max_sharpe` | Current `AdaptiveMetaEngine` mapping for neutral periods. |
 
 **Audit Fidelity**: Every adaptive switch is recorded in the audit ledger (`audit.jsonl`) with the metadata tags `adaptive_profile` and `market_environment`, ensuring full transparency of the decision chain.
 
@@ -65,4 +65,4 @@ To move beyond purely historical metrics, the system now incorporates a Bayesian
 ### B. HERC 2.0 (Self-Consistent Tree)
 - **Standard**: Hierarchical Equal Risk Contribution is now enforced at both the cluster and asset level.
 - **Logic**: Replaced alpha-blending with true **Inverse-Volatility** within each hierarchical bucket.
-- **Result**: Reduced benchmark profile volatility by **34%** compared to simple Hierarchical Equal Weighting.
+- **Result**: Reduced hierarchical equal-weight (`equal_weight`) volatility by **34%** compared to simple Hierarchical Equal Weighting.

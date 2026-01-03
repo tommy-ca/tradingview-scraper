@@ -6,20 +6,22 @@ This document details the transition from a standalone `market` engine to a unif
 
 Previously, the institutional benchmark was handled by a special-case `MarketBaselineEngine`. This created duplication in rebalancing and backtesting logic.
 
-**New Standard**: The institutional benchmark is now a native `market` profile implemented in the base optimization class (`CustomClusteredEngine`).
+**New Standard**: The institutional benchmark is now a native `market` profile implemented in the base optimization class (`CustomClusteredEngine`). Baseline taxonomy is standardized in `docs/specs/optimization_engine_v2.md`.
 
 | Feature | Legacy Implementation | Unified Implementation |
 | :--- | :--- | :--- |
 | **Engine Class** | `MarketBaselineEngine` | Integrated into all engines |
-| **Profile Name** | `equal_weight` (special case) | `market` |
+| **Profile Name** | `market_baseline` / `equal_weight` (legacy) | `market` |
 | **Universe** | Fixed SPY (hardcoded fallback) | `settings.benchmark_symbols` |
 | **Parity** | Engine-specific | Guaranteed across all engines |
+
+Note: `equal_weight` remains a distinct hierarchical equal-weight profile (see `docs/specs/optimization_engine_v2.md`) and is not a market baseline.
 
 ## 2. Implementation Details
 
 The `market` profile logic follows these steps:
 1.  **Symbol Filtering**: Filter the available training returns to only those found in `settings.benchmark_symbols`.
-2.  **Fallback**: If no benchmark symbols are found in the returns matrix, the engine falls back to an equal-weight allocation across the entire active universe (ensuring continuity).
+2.  **No Fallback**: If no benchmark symbols are found, the engine returns empty weights with a warning.
 3.  **Equal Weighting**: Assign $1/N$ weight to all target symbols.
 4.  **Metadata Tagging**: All benchmark assets are tagged with `Cluster_ID: MARKET_BENCHMARK`.
 
