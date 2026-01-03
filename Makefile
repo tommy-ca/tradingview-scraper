@@ -80,6 +80,7 @@ data-prep-raw: ## Aggregate scans and initialize raw pool
 	$(PY) scripts/select_top_universe.py --mode raw
 	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json PORTFOLIO_RETURNS_PATH=data/lakehouse/portfolio_returns_raw.pkl PORTFOLIO_META_PATH=data/lakehouse/portfolio_meta_raw.json $(PY) scripts/prepare_portfolio_data.py
 	-$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
+	$(PY) scripts/metadata_coverage_guardrail.py --target canonical:data/lakehouse/portfolio_candidates_raw.json:data/lakehouse/portfolio_returns_raw.pkl
 
 data-fetch: ## Ingest historical market data
 	$(PY) scripts/prepare_portfolio_data.py
@@ -105,6 +106,7 @@ data-audit: ## Session-Aware health audit (use STRICT_HEALTH=1)
 port-select: ## Natural selection and pruning
 	$(PY) scripts/enrich_candidates_metadata.py
 	$(PY) scripts/natural_selection.py
+	$(PY) scripts/metadata_coverage_guardrail.py --target selected:data/lakehouse/portfolio_candidates.json:data/lakehouse/portfolio_returns.pkl
 
 port-optimize: ## Strategic asset allocation (Convex)
 	$(PY) scripts/optimize_clustered_v2.py

@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -67,6 +67,9 @@ class ReturnsSimulator(BaseSimulator):
         target_len = len(returns)
 
         w_target = weights_df.set_index("Symbol")["Weight"].astype(float)
+        if isinstance(w_target, pd.DataFrame):
+            w_target = w_target.iloc[:, 0]
+        w_target = cast(pd.Series, w_target)
         if "cash" not in w_target.index:
             w_target["cash"] = max(0.0, 1.0 - w_target.sum())
 
@@ -182,9 +185,13 @@ class CVXPortfolioSimulator(BaseSimulator):
             cost_list.append(self.cvp.HoldingCost(short_fees=settings.features.short_borrow_cost))
 
         try:
-            returns_cvx = returns.astype(np.float64).clip(-0.5, 2.0)
+            returns_cvx = returns.astype(np.float64).clip(-0.5, 2.0).fillna(0.0)
             simulator = self.cvp.MarketSimulator(returns=returns_cvx, costs=cost_list, cash_key=cash_key, min_history=pd.Timedelta(days=0))
-            result = simulator.backtest(policy, start_time=start_t, end_time=end_t, h=h_init)
+
+            # Ensure holdings and universe are perfectly aligned for the simulator
+            h_init_cvx = h_init.reindex(returns_cvx.columns, fill_value=0.0)
+
+            result = simulator.backtest(policy, start_time=start_t, end_time=end_t, h=h_init_cvx)
 
             realized_returns = result.v.pct_change().dropna()
             realized_returns.index = returns.index[: len(realized_returns)]
@@ -217,6 +224,9 @@ class VectorBTSimulator(BaseSimulator):
 
         rebalance_mode = settings.features.feat_rebalance_mode
         w_series = weights_df.set_index("Symbol")["Weight"].astype(float)
+        if isinstance(w_series, pd.DataFrame):
+            w_series = w_series.iloc[:, 0]
+        w_series = cast(pd.Series, w_series)
 
         target_len = 20
         returns_to_use = returns.iloc[:target_len] if len(returns) > target_len else returns
@@ -278,7 +288,7 @@ class VectorBTSimulator(BaseSimulator):
             # Let's try to get VBT total trade value.
             try:
                 # Value of all trades
-                total_trade_val = portfolio.trades.value.abs().sum()
+                total_trade_val = portfolio.trades().value.abs().sum()
                 vbt_total_turnover = total_trade_val / 2.0 / 100.0  # Normalize by init_cash=100
 
                 # Correct it

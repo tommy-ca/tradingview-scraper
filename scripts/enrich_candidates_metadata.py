@@ -1,3 +1,4 @@
+import argparse
 import json
 import logging
 import os
@@ -142,5 +143,14 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
     logger.info(f"✅ Total candidates: {len(candidates)}. Enriched {enriched_count} with institutional defaults.")
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Enrich candidate manifests with liquidity metadata.")
+    parser.add_argument("--candidates", default="data/lakehouse/portfolio_candidates_raw.json", help="Path to the candidates JSON file to enrich")
+    parser.add_argument("--returns", default="data/lakehouse/portfolio_returns.pkl", help="Optional returns matrix to align against")
+    args = parser.parse_args()
+
+    enrich_metadata(candidates_path=args.candidates, returns_path=args.returns)
+
+
 if __name__ == "__main__":
-    enrich_metadata()
+    main()

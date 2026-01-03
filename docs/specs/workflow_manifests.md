@@ -108,6 +108,7 @@ Selection and tournament vetoes rely on candidate manifest metadata (not `portfo
 - **When**: Immediately after `data-prep-raw` and after `port-select`
 - **Enrichment command**: `uv run scripts/enrich_candidates_metadata.py`
 - **Gate**: Fail the run if metadata coverage drops below a defined threshold (recommended ≥95% of active symbols)
+- **Automated guard**: `scripts/metadata_coverage_guardrail.py` is now run by `make data-prep-raw` (canonical) and `make port-select` (selected); it reruns `enrich_candidates_metadata.py` when coverage dips, logs the percentage for each catalog, and fails the pipeline if the threshold cannot be reached.
 
 ### 6.5 Optional Automation (Recommended)
 To reduce operator error, add dedicated workflow steps/targets:
