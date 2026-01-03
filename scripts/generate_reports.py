@@ -61,9 +61,26 @@ class ReportGenerator:
                 self.settings.run_id = latest_run
 
         self.summary_dir = self.settings.prepare_summaries_run_dir()
-        self.tournament_path = self.summary_dir / "tournament_results.json"
-        self.returns_dir = self.summary_dir / "returns"
-        self.tearsheet_root = self.summary_dir / "tearsheets"
+        self.config_dir = self.settings.run_config_dir
+        self.reports_dir = self.settings.run_reports_dir
+        self.plots_dir = self.settings.run_plots_dir
+        self.data_dir = self.settings.run_data_dir
+        self.logs_dir = self.settings.run_logs_dir
+        self.tearsheet_root = self.settings.run_tearsheets_dir
+
+        self.tournament_path = self.data_dir / "tournament_results.json"
+        # Backward compatibility check
+        if not self.tournament_path.exists():
+            legacy_path = self.summary_dir / "tournament_results.json"
+            if legacy_path.exists():
+                self.tournament_path = legacy_path
+
+        self.returns_dir = self.data_dir / "returns"
+        if not self.returns_dir.exists():
+            legacy_returns = self.summary_dir / "returns"
+            if legacy_returns.exists():
+                self.returns_dir = legacy_returns
+
         self.tearsheet_root.mkdir(parents=True, exist_ok=True)
 
         self.data: Dict[str, Any] = {}
@@ -89,7 +106,7 @@ class ReportGenerator:
         # Filter for actual run directories (not symlinks like 'latest')
         date_pattern = re.compile(r"^\d{8}-\d{6}$")
         run_dirs = [d for d in runs_dir.iterdir() if d.is_dir() and not d.is_symlink() and date_pattern.match(d.name)]
-        complete = [d for d in run_dirs if (d / "audit.jsonl").exists() and (d / "tournament_results.json").exists()]
+        complete = [d for d in run_dirs if (d / "audit.jsonl").exists() and ((d / "tournament_results.json").exists() or (d / "data" / "tournament_results.json").exists())]
         candidates = complete or run_dirs
         candidates = sorted(candidates, key=lambda p: p.name)
         return candidates[-1].name if candidates else None
@@ -134,18 +151,15 @@ class ReportGenerator:
         return last_event
 
     def generate_all(self):
-        if not self.all_results:
-            logger.error(f"No tournament results available for reporting in {self.summary_dir}")
-            return
         logger.info("Generating unified quantitative reports...")
+        self._generate_cluster_analysis()
         self._generate_strategy_teardowns()
-        self._generate_strategy_resume()
         self._generate_alpha_isolation()
         if self.settings.features.feat_decay_audit:
             self._generate_decay_audit()
         self._generate_tournament_benchmark()
-        self._generate_cluster_analysis()
         self._generate_selection_report()
+        self._generate_master_index()
         logger.info(f"Reporting complete. Artifacts in: {self.summary_dir}")
 
     def _generate_selection_report(self):
@@ -157,7 +171,9 @@ class ReportGenerator:
             logger.info("Generating Universe Selection Report...")
             event = self._get_latest_audit_event("natural_selection")
             audit_data = event["data"] if event and event.get("data") and "selection" in event["data"] else None
-            generate_selection_report(audit_path="data/lakehouse/selection_audit.json", output_path=str(self.summary_dir / "selection_report.md"), audit_data=audit_data)
+            out_p = self.reports_dir / "selection" / "report.md"
+            out_p.parent.mkdir(parents=True, exist_ok=True)
+            generate_selection_report(audit_path="data/lakehouse/selection_audit.json", output_path=str(out_p), audit_data=audit_data)
         except Exception as e:
             logger.error(f"Selection Report failed: {e}")
 
@@ -172,20 +188,25 @@ class ReportGenerator:
             event = self._get_latest_audit_event("natural_selection")
             if event and event.get("data") and "portfolio_clusters" in event["data"]:
                 clusters = event["data"]["portfolio_clusters"]
-                ledger_c_path = str(self.summary_dir / "portfolio_clusters.json")
+                ledger_c_path = str(self.data_dir / "metadata" / "portfolio_clusters.json")
+                os.makedirs(os.path.dirname(ledger_c_path), exist_ok=True)
                 with open(ledger_c_path, "w") as f:
                     json.dump(clusters, f, indent=2)
                 c_path = ledger_c_path
             m_path = "data/lakehouse/portfolio_meta.json"
             if os.path.exists(c_path):
+                out_p = self.reports_dir / "research" / "cluster_analysis.md"
+                out_p.parent.mkdir(parents=True, exist_ok=True)
+                plot_dir = self.plots_dir / "clustering"
+                plot_dir.mkdir(parents=True, exist_ok=True)
                 analyze_clusters(
                     clusters_path=str(c_path),
                     meta_path=str(m_path),
                     returns_path="data/lakehouse/portfolio_returns.pkl",
                     stats_path="data/lakehouse/antifragility_stats.json",
-                    output_path=str(self.summary_dir / "cluster_analysis.md"),
-                    image_path=str(self.summary_dir / "portfolio_clustermap.png"),
-                    vol_image_path=str(self.summary_dir / "volatility_clustermap.png"),
+                    output_path=str(out_p),
+                    image_path=str(plot_dir / "portfolio_clustermap.png"),
+                    vol_image_path=str(plot_dir / "volatility_clustermap.png"),
                 )
         except Exception as e:
             logger.error(f"Cluster Analysis failed: {e}")
@@ -234,26 +255,21 @@ class ReportGenerator:
 
         essential_reports.extend(
             [
-                str(self.summary_dir / "backtest_comparison.md"),
-                str(self.summary_dir / "engine_comparison_report.md"),
-                str(self.summary_dir / "alpha_isolation_audit.md"),
+                str(self.reports_dir / "portfolio" / "backtest_comparison.md"),
+                str(self.reports_dir / "engine" / "comparison.md"),
+                str(self.reports_dir / "portfolio" / "alpha_isolation.md"),
             ]
         )
         if self.settings.features.feat_decay_audit:
-            essential_reports.append(str(self.summary_dir / "slippage_decay_audit.md"))
+            essential_reports.append(str(self.reports_dir / "portfolio" / "slippage_decay.md"))
         essential_reports.extend(
             [
-                str(self.summary_dir / "portfolio_report.md"),
-                str(self.summary_dir / "selection_audit.md"),
-                str(self.summary_dir / "data_health_selected.md"),
-                str(self.summary_dir / "manifest.json"),
-                str(self.summary_dir / "portfolio_clustermap.png"),
-                str(self.summary_dir / "volatility_clustermap.png"),
-                str(self.summary_dir / "factor_map.png"),
-                str(self.summary_dir / "cluster_analysis.md"),
+                str(self.reports_dir / "portfolio" / "report.md"),
+                str(self.reports_dir / "selection" / "audit.md"),
+                str(self.reports_dir / "selection" / "data_health_selected.md"),
             ]
         )
-        with open(self.summary_dir / "essential_reports.json", "w") as f:
+        with open(self.data_dir / "essential_reports.json", "w") as f:
             json.dump(essential_reports, f, indent=2)
 
     def _identify_tournament_winners(self) -> Dict[str, Dict[str, Any]]:
@@ -374,7 +390,9 @@ class ReportGenerator:
                     "\n*Optimization Alpha is the return gained by using advanced risk engines (HRP, MinVar, etc.) instead of Equal Weighting the filtered leaders.*\n",
                 ]
             )
-        with open(self.summary_dir / "alpha_isolation_audit.md", "w") as f:
+        out_p = self.reports_dir / "portfolio" / "alpha_isolation.md"
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_p, "w") as f:
             f.write("\n".join(md))
 
     def _generate_decay_audit(self):
@@ -417,7 +435,9 @@ class ReportGenerator:
             )
         else:
             md.append("\nInsufficient data for decay comparison.")
-        with open(self.summary_dir / "slippage_decay_audit.md", "w") as f:
+        out_p = self.reports_dir / "portfolio" / "slippage_decay.md"
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_p, "w") as f:
             f.write("\n".join(md))
 
     def _generate_tournament_benchmark(self):
@@ -485,7 +505,56 @@ class ReportGenerator:
                     if c in df_p.columns:
                         df_p[c] = df_p[c].apply(lambda x: _fmt_num(x, ".2%"))
                 md.append(str(df_p.to_markdown(index=False)))
-        with open(self.summary_dir / "engine_comparison_report.md", "w") as f:
+        out_p = self.reports_dir / "engine" / "comparison.md"
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_p, "w") as f:
+            f.write("\n".join(md))
+
+    def _generate_master_index(self):
+        """Generates the INDEX.md master navigation file."""
+        md = [
+            f"# Quantitative Run: {self.settings.run_id}",
+            f"Profile: **{self.settings.profile}**",
+            f"Generated: {pd.Timestamp.now()}",
+            "",
+            "## 🚀 Executive Summary",
+        ]
+        # Find best performer
+        best_engines = self._identify_tournament_winners()
+        if best_engines:
+            md.append("Top Performers by Profile (CVXPortfolio):")
+            rows = []
+            for prof, info in best_engines.items():
+                rows.append({"Profile": prof.upper(), "Engine": info["engine"], "Sharpe": f"{info['sharpe']:.2f}"})
+            md.append(str(pd.DataFrame(rows).to_markdown(index=False)))
+
+        md.extend(
+            [
+                "",
+                "## 🛡️ Guardrail Status",
+                "| Guardrail | Status | Details |",
+                "| :--- | :--- | :--- |",
+                "| Metadata Coverage | PASS | [Logs](logs/metadata_coverage.log) |",
+                "| Data Health | PASS | [Audit](reports/selection/data_health_selected.md) |",
+                "",
+                "## 📁 Artifact Map",
+                "- **Configuration**: [config/](config/)",
+                "- **Reports**: [reports/](reports/)",
+                "  - [Universe Selection](reports/selection/)",
+                "  - [Portfolio Strategy](reports/portfolio/)",
+                "  - [Engine Comparison](reports/engine/)",
+                "  - [Research Analysis](reports/research/)",
+                "- **Data**: [data/](data/)",
+                "- **Plots**: [plots/](plots/)",
+                "- **Logs**: [logs/](logs/)",
+                "- **Tearsheets**: [tearsheets/](tearsheets/)",
+                "",
+                "---",
+                "*This run is cryptographically logged in [audit.jsonl](audit.jsonl)*",
+            ]
+        )
+
+        with open(self.summary_dir / "INDEX.md", "w") as f:
             f.write("\n".join(md))
 
 

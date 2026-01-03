@@ -278,7 +278,8 @@ class ProductionPipeline:
         except Exception:
             pass
 
-        snapshot_path = self.run_dir / "resolved_manifest.json"
+        snapshot_path = self.settings.run_config_dir / "resolved_manifest.json"
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         with open(snapshot_path, "w") as f:
             json.dump(resolved, f, indent=2, default=str)
 

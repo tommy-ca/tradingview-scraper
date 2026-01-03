@@ -245,7 +245,11 @@ def main():
             json.dump(clusters, f_out, indent=2)
         print(f"Saved {len(clusters)} clusters to {cluster_path}")
 
-    json_path = out_dir / "correlation_report.json"
+    settings = get_settings()
+    settings.prepare_summaries_run_dir()
+
+    json_path = settings.run_data_dir / "metadata" / "correlations.json"
+    json_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.write_text(json.dumps(report, indent=2))
 
     # Markdown summary
@@ -268,7 +272,9 @@ def main():
         if isinstance(hrp_dict, dict):
             for sym, w in sorted(hrp_dict.items(), key=lambda x: x[1], reverse=True):
                 lines.append(f"- {sym}: {w:.4f}")
-    md_path = out_dir / "correlation_report.md"
+
+    md_path = settings.run_reports_dir / "research" / "correlations.md"
+    md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text("\n".join(lines))
 
 

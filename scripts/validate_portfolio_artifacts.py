@@ -241,8 +241,10 @@ class PortfolioAuditor:
                     status_str = f"⚠️ {status_str}"
                 md.append(f"| `{r['symbol']}` | {status_str} | {r['last_date']} | {r['gaps']} |")
 
-        output_dir = get_settings().prepare_summaries_run_dir()
-        report_path = output_dir / f"data_health_{mode}.md"
+        settings = get_settings()
+        settings.prepare_summaries_run_dir()
+        report_path = settings.run_reports_dir / "selection" / f"data_health_{mode}.md"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w") as f:
             f.write("\n".join(md))
         print(f"✅ Data health report generated at: {report_path}")

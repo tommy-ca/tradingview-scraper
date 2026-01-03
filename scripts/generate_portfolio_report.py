@@ -290,11 +290,14 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
 
 
 if __name__ == "__main__":
-    output_dir = get_settings().prepare_summaries_run_dir()
+    settings = get_settings()
+    settings.prepare_summaries_run_dir()
+    out_p = settings.run_reports_dir / "portfolio" / "report.md"
+    out_p.parent.mkdir(parents=True, exist_ok=True)
     generate_markdown_report(
         "data/lakehouse/portfolio_optimized_v2.json",
         "data/lakehouse/portfolio_returns.pkl",
         "data/lakehouse/portfolio_candidates.json",
         "data/lakehouse/antifragility_stats.json",
-        str(output_dir / "portfolio_report.md"),
+        str(out_p),
     )

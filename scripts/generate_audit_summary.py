@@ -65,8 +65,10 @@ def generate_summary():
         for name, stats in opt.get("profiles", {}).items():
             md.append(f"| {name.replace('_', ' ').title()} | {stats['assets']} | Cluster {stats['top_cluster']} |")
 
-    output_dir = get_settings().prepare_summaries_run_dir()
-    output_file = output_dir / OUTPUT_FILENAME
+    settings = get_settings()
+    output_dir = settings.run_reports_dir / "selection"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / "audit.md"
     with open(output_file, "w") as f:
         f.write("\n".join(md))
 

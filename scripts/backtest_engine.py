@@ -577,14 +577,16 @@ if __name__ == "__main__":
             start_date=args.start_date,
             end_date=args.end_date,
         )
-        out = get_settings().prepare_summaries_run_dir()
-        with open(out / "tournament_results.json", "w") as f:
+        settings = get_settings()
+        out = settings.prepare_summaries_run_dir()
+        data_dir = settings.run_data_dir
+        with open(data_dir / "tournament_results.json", "w") as f:
             json.dump({"meta": res["meta"], "results": res["results"]}, f, indent=2)
 
-        get_settings().promote_summaries_latest()
+        settings.promote_summaries_latest()
 
         if "returns" in res:
-            ret_dir = out / "returns"
-            ret_dir.mkdir(exist_ok=True)
+            ret_dir = data_dir / "returns"
+            ret_dir.mkdir(parents=True, exist_ok=True)
             for k, v in res["returns"].items():
                 v.to_pickle(ret_dir / f"{k}.pkl")

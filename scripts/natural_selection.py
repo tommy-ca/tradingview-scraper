@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import tempfile
+from datetime import datetime
 from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
@@ -116,12 +117,15 @@ def natural_selection(
     sanitized_metrics = cast(Dict[str, Any], _sanitize(engine_metrics))
 
     # Update Audit File with selection info (Atomic + Locked)
-    os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
-    lock_file = AUDIT_FILE + ".lock"
+    settings = get_settings()
+    run_audit_file = settings.run_config_dir / "selection_audit.json"
+    run_audit_file.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = str(run_audit_file) + ".lock"
     try:
         with open(lock_file, "w") as lf:
             fcntl.flock(lf, fcntl.LOCK_EX)
             audit_data = {}
+            # Base data from shared lakehouse audit
             if os.path.exists(AUDIT_FILE):
                 try:
                     with open(AUDIT_FILE, "r") as f:
@@ -129,20 +133,27 @@ def natural_selection(
                         if content:
                             audit_data = json.loads(content)
                 except Exception:
-                    logger.warning("Existing audit file corrupted, starting fresh.")
+                    pass
 
-            audit_data["selection"] = _sanitize(
-                {
-                    "total_raw_symbols": len(returns.columns),
-                    "total_selected": len(winners),
-                    "lookbacks_used": [60, 120, 200],
-                    "clusters": audit_clusters,
-                    "mode": mode or "default",
-                    "spec_version": spec_version,
-                    "vetoes": vetoes,
-                    "engine_metrics": sanitized_metrics,
-                }
-            )
+            audit_data["selection"] = {
+                "timestamp": datetime.now().isoformat(),
+                "total_raw_symbols": len(raw_candidates),
+                "total_selected": len(winners),
+                "lookbacks_used": [60, 120, 200],
+                "clusters": {str(k): v for k, v in audit_clusters.items()},
+                "spec_version": spec_version,
+                "vetoes": vetoes,
+                "metrics": sanitized_metrics,
+            }
+
+            # Write to run directory audit
+            with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(run_audit_file), delete=False) as tf:
+                json.dump(audit_data, tf, indent=2)
+                temp_name = tf.name
+            os.replace(temp_name, run_audit_file)
+
+            # Update shared lakehouse audit
+            os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
             with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(AUDIT_FILE), delete=False) as tf:
                 json.dump(audit_data, tf, indent=2)
                 temp_name = tf.name
