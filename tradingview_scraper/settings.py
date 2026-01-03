@@ -288,12 +288,41 @@ class TradingViewScraperSettings(BaseSettings):
         return self.summaries_runs_dir / self.run_id
 
     @property
+    def run_config_dir(self) -> Path:
+        return self.summaries_run_dir / "config"
+
+    @property
+    def run_reports_dir(self) -> Path:
+        return self.summaries_run_dir / "reports"
+
+    @property
+    def run_plots_dir(self) -> Path:
+        return self.summaries_run_dir / "plots"
+
+    @property
+    def run_data_dir(self) -> Path:
+        return self.summaries_run_dir / "data"
+
+    @property
+    def run_logs_dir(self) -> Path:
+        return self.summaries_run_dir / "logs"
+
+    @property
+    def run_tearsheets_dir(self) -> Path:
+        return self.summaries_run_dir / "tearsheets"
+
+    @property
     def summaries_latest_link(self) -> Path:
         return self.summaries_root_dir / "latest"
 
     def prepare_summaries_run_dir(self) -> Path:
         run_dir = self.summaries_run_dir
         run_dir.mkdir(parents=True, exist_ok=True)
+
+        # Pre-create standard subdirectories
+        for d in [self.run_config_dir, self.run_reports_dir, self.run_plots_dir, self.run_data_dir, self.run_logs_dir, self.run_tearsheets_dir]:
+            d.mkdir(parents=True, exist_ok=True)
+
         return run_dir
 
     def promote_summaries_latest(self) -> None:
