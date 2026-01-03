@@ -1,93 +1,98 @@
 import json
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 import pandas as pd
 
 
-def generate_report():
-    path = Path("artifacts/summaries/latest/tournament_4d_results.json")
+def generate_selection_report(
+    audit_path: str = "data/lakehouse/selection_audit.json",
+    output_path: str = "selection_audit.md",
+    audit_data: Optional[Dict[str, Any]] = None,
+):
+    """
+    Generates a markdown report summarizing the universe selection process.
+    """
+    path = Path(audit_path)
     if not path.exists():
-        print("Results not found.")
+        print(f"Selection audit not found at {path}")
         return
 
-    with open(path, "r") as f:
-        data = json.load(f)
-
-    results_4d = data.get("results_4d", {})
-
-    # We want to compare v2/v3 Equal Weight (or closest proxy) vs Raw Pool Equal Weight
-    # Proxy for Selected EW: 'skfolio' engine with 'equal_weight' profile (if exists), or 'custom' 'benchmark' (which is EW)
-    # Baseline: 'custom' 'raw_pool_ew'
-
-    rows = []
-
-    # We need to aggregate across windows or use the summary
-    # Let's use the summary 'total_return' and 'sharpe'
-
-    # 1. Get Baseline (Raw Pool EW) per Simulator
-    # Usually under 'custom' engine, 'raw_pool_ew' profile
-    baselines = {}  # (mode, simulator) -> {ret, sharpe}
-
-    for mode, sim_data in results_4d.items():
-        for sim, engines in sim_data.items():
-            # Check custom engine first
-            if "custom" in engines:
-                raw_data = engines["custom"].get("raw_pool_ew")
-                if raw_data and raw_data.get("summary"):
-                    baselines[(mode, sim)] = raw_data["summary"]
-
-    # 2. Compare Candidates (Selected EW)
-    # We'll use 'benchmark' profile as proxy for Selected EW (it EWs the selected universe)
-
-    for mode, sim_data in results_4d.items():
-        for sim, engines in sim_data.items():
-            baseline = baselines.get((mode, sim))  # Note: Baseline technically changes per mode if selection changes
-
-            if not baseline:
-                # Fallback: maybe raw_pool_ew wasn't run for this mode/sim?
-                continue
-
-            # Find Selected EW (Benchmark Profile)
-            # Use 'custom' engine for cleanest comparison (no optimizer noise)
-            if "custom" in engines:
-                sel_data = engines["custom"].get("benchmark")
-                if sel_data and sel_data.get("summary"):
-                    summ = sel_data["summary"]
-
-                    sel_ret = summ.get("total_return", 0)
-                    sel_sharpe = summ.get("sharpe", 0)
-
-                    raw_ret = baseline.get("total_return", 0)
-                    raw_sharpe = baseline.get("sharpe", 0)
-
-                    rows.append(
-                        {
-                            "Mode": mode,
-                            "Simulator": sim,
-                            "Selection Alpha (Ret)": f"{sel_ret - raw_ret:.2%}",
-                            "Sharpe Delta": f"{sel_sharpe - raw_sharpe:.2f}",
-                            "Selected Ret": f"{sel_ret:.2%}",
-                            "Raw Ret": f"{raw_ret:.2%}",
-                        }
-                    )
-
-    if not rows:
-        print("No comparison data found.")
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Failed to load selection audit: {e}")
         return
 
-    df = pd.DataFrame(rows)
-    df = df.sort_values(["Mode", "Simulator"])
+    md = ["# Universe Selection Report", f"Source: `{audit_path}`", ""]
 
-    print(df.to_markdown(index=False))
+    # 1. Selection Metadata
+    md.append("## 1. Selection Context")
+    md.append(f"- **Selection Mode**: {data.get('selection_mode', 'N/A')}")
+    md.append(f"- **Lookback Days**: {data.get('lookback_days', 'N/A')}")
+    md.append(f"- **Lookback Windows**: {data.get('lookbacks', [])}")
+    md.append(f"- **Total Candidates**: {len(data.get('candidates', []))}")
+    md.append(f"- **Selected Winners**: {len(data.get('winners', []))}")
+    md.append("")
 
-    out_path = Path("artifacts/summaries/latest/selection_alpha_report.md")
-    with open(out_path, "w") as f:
-        f.write("# Selection Alpha Benchmark\n\n")
-        f.write("**Metric**: Equal-Weight Selected Universe vs Equal-Weight Raw Discovery Universe.\n\n")
-        f.write(df.to_markdown(index=False))
+    # 2. Winners Table
+    if "winners" in data:
+        md.append("## 2. Selected Winners")
+        winners = data["winners"]
+        if winners:
+            # Try to enrich with metadata if available in 'candidates' list
+            candidate_map = {c["symbol"]: c for c in data.get("candidates", []) if isinstance(c, dict) and "symbol" in c}
 
-    print(f"\nReport saved to {out_path}")
+            rows = []
+            for sym in winners:
+                if not isinstance(sym, str):
+                    continue
+                c_info = candidate_map.get(sym, {})
+                rows.append(
+                    {
+                        "Symbol": sym,
+                        "Sector": c_info.get("sector", "N/A"),
+                        "Asset Class": c_info.get("asset_class", "N/A"),
+                        "Direction": c_info.get("direction", "LONG"),
+                    }
+                )
+
+            if rows:
+                df = pd.DataFrame(rows)
+                md.append(df.to_markdown(index=False))
+        else:
+            md.append("No winners selected.")
+        md.append("")
+
+    # 3. Vetoed Assets
+    if "vetoes" in data:
+        md.append("## 3. Selection Vetoes")
+        vetoes = data["vetoes"]
+        if vetoes:
+            md.append(f"Total Vetoes: {len(vetoes)}")
+            # If vetoes is a dict of symbol -> reason
+            if isinstance(vetoes, dict):
+                v_rows = [{"Symbol": s, "Reason": r} for s, r in vetoes.items()]
+                md.append(pd.DataFrame(v_rows).to_markdown(index=False))
+            else:
+                for v in vetoes:
+                    md.append(f"- {str(v)}")
+        else:
+            md.append("No assets were vetoed.")
+        md.append("")
+
+    # Write output
+    try:
+        out_p = Path(output_path)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_p, "w") as f:
+            f.write("\n".join(md))
+        print(f"Selection report saved to {output_path}")
+    except Exception as e:
+        print(f"Failed to write selection report: {e}")
 
 
 if __name__ == "__main__":
-    generate_report()
+    # For standalone testing
+    generate_selection_report()
