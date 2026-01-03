@@ -60,10 +60,10 @@ def generate_selection_report(
 
             if rows:
                 df = pd.DataFrame(rows)
-                md.append(df.to_markdown(index=False))
+                md.append(str(df.to_markdown(index=False)))
         else:
             md.append("No winners selected.")
-        md.append("")
+    md.append("")
 
     # 3. Vetoed Assets
     if "vetoes" in data:
@@ -74,10 +74,11 @@ def generate_selection_report(
             # If vetoes is a dict of symbol -> reason
             if isinstance(vetoes, dict):
                 v_rows = [{"Symbol": s, "Reason": r} for s, r in vetoes.items()]
-                md.append(pd.DataFrame(v_rows).to_markdown(index=False))
+                md.append(str(pd.DataFrame(v_rows).to_markdown(index=False)))
             else:
                 for v in vetoes:
                     md.append(f"- {str(v)}")
+
         else:
             md.append("No assets were vetoed.")
         md.append("")

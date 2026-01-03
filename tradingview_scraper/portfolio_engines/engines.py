@@ -607,7 +607,8 @@ class CVXPortfolioEngine(CustomClusteredEngine):
             return super()._optimize_cluster_weights(universe=universe, request=request)
 
         X = X.clip(lower=-0.5, upper=0.5)
-        min_var = float(X.var().min()) if not X.empty else 0.0
+        vars = X.var()
+        min_var = float(np.min(vars)) if not X.empty else 0.0
         if min_var < 1e-10:
             rows, cols = X.shape
             jitter = 1e-6 * np.sin(np.add.outer(np.arange(rows), np.arange(cols)))
