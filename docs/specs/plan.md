@@ -81,13 +81,12 @@
   - Market tag: `Cluster_ID: MARKET`.
   - Max Sharpe ridge: configurable via `EngineRequest.l2_gamma` (default 0.05).
   - **Validation**: `uv run pytest -q tests/test_portfolio_engines.py` and `uv run pytest`.
-  - **Pytest warnings** (summary; see `uv run pytest` output for full context):
-    - `tradingview_scraper/symbols/technicals.py:9` `UserWarning`: `pkg_resources` deprecation (setuptools).
-    - `scripts/maintenance/cleanup_metadata_catalog.py:60` `FutureWarning`: dtype assignment when filling `timezone` ("UTC").
-    - `scripts/maintenance/cleanup_metadata_catalog.py:65` `FutureWarning`: dtype assignment when filling `session` ("24x7").
-    - `tradingview_scraper/symbols/stream/metadata.py:347` `FutureWarning`: concat behavior with empty/all-NA frames.
-    - `.venv/.../quantstats/stats.py:1542` `RuntimeWarning`: divide by zero in `cagr_ratio / abs(max_dd)`.
-    - `.venv/.../statsmodels/regression/linear_model.py:955` `RuntimeWarning`: divide by zero in `log`.
+  - **Pytest warnings**: Resolved (0 warnings) after:
+    - Replaced `pkg_resources` resource loading with `importlib.resources` in the `technicals` and `news` scrapers.
+    - Cast `timezone` / `session` to string in `cleanup_metadata_catalog.py` before patching crypto defaults.
+    - Avoided `pd.concat` against empty/all-NA frames in `MetadataCatalog` upserts/retirements.
+    - Computed Calmar without triggering QuantStats divide-by-zero behavior.
+    - Suppressed numpy runtime warnings inside the ADF stationarity score call.
 
 
 ## Script Audit & Cleanup Roadmap (Jan 2026)
