@@ -28,7 +28,8 @@
 - [x] **Scalability Architectural Design**: Defined the transition to Ray/Prefect/SkyPilot stack in `docs/specs/mlops_scalability_v1.md`.
 - [x] **Benchmarking Standardization**: Quantified and standardized evaluation gates in `docs/specs/benchmark_standards_v1.md`.
   - **Robustness & Antifragility**: Temporal Fragility / Friction Alignment / Selection Stability / Quantified Antifragility are implemented in `tradingview_scraper/utils/metrics.py` and `scripts/research/audit_tournament_forensics.py`.
-  - **Institutional Safety (Spec + Partial Tooling)**: Added standards for Market Sensitivity (Beta), Concentration (HHI/Cluster Cap), Tail Risk (CVaR/MDD), Turnover Efficiency, Simulator Parity, and Regime Robustness. Some checks are enforced via `scripts/validate_portfolio_artifacts.py` and/or surfaced in reports; remaining scoreboard integration is queued.
+  - **Institutional Safety (Spec + Tooling)**: Added standards for Market Sensitivity (Beta), Concentration (HHI/Cluster Cap), Tail Risk (CVaR/MDD), Turnover Efficiency, Simulator Parity, and Regime Robustness; scoreboard + candidate filter is implemented in `scripts/research/tournament_scoreboard.py`.
+  - **Scoreboard Learnings**: Recent tournament runs validated other gates but predate antifragility summary fields; strict scoreboard runs show missing `af_dist` / `stress_alpha` until a fresh tournament is re-run with the updated benchmark instrumentation.
 
 ## Current Focus
 - **MLOps Scalability Pivot (Phase 6)**: Transition to Ray (Compute) and Prefect (Orchestration) to eliminate execution bottlenecks and focus on Alpha Core per `docs/specs/mlops_scalability_v1.md`.
@@ -40,6 +41,16 @@
 - [ ] **Phase 5: Performance Optimization**: Implement multiprocessing/Ray logic in `Grand4DTournament`.
 - [x] **Benchmark Gate: Quantified Antifragility**: Added strategy-level convexity and crisis-response metrics to tournament summaries (`scripts/backtest_engine.py`) and audits (`scripts/research/audit_tournament_forensics.py`).
 - [x] **Benchmark Scoreboard Expansion**: Implemented `scripts/research/tournament_scoreboard.py` to generate a single tournament scoreboard + candidate filter (CSV + Markdown).
+- [x] **Benchmark Scoreboard Validation Run**: Audit Validated (Run `20260104-163801`).
+  - `TV_FEATURES__FEAT_AUDIT_LEDGER=1 TV_RUN_ID=20260104-163801 uv run scripts/research/grand_4d_tournament.py --selection-modes v3.2 --rebalance-modes window --engines skfolio --profiles barbell,hrp --simulators custom,cvxportfolio,nautilus`
+  - `uv run scripts/research/tournament_scoreboard.py --run-id 20260104-163801`
+  - `uv run scripts/archive/verify_ledger.py artifacts/summaries/runs/20260104-163801/audit.jsonl`
+  - Barbell optimize outcomes recorded (5 success / 5 empty / 1 error; 0 missing intent→outcome gaps).
+- [ ] **Full Grand 4D Sweep (Scoreboard-Ready)**: Run the default 4D grid with audit ledger enabled and per-cell returns persisted under `data/grand_4d/<rebalance>/<selection>/returns/`, then run the scoreboard strict.
+  - `TV_FEATURES__FEAT_AUDIT_LEDGER=1 TV_RUN_ID=<RUN_ID> uv run scripts/research/grand_4d_tournament.py`
+  - `uv run scripts/research/tournament_scoreboard.py --run-id <RUN_ID>`
+- [x] **Grand 4D Orchestrator Parity**: Updated `scripts/research/grand_4d_tournament.py` to persist per-cell artifacts under `data/grand_4d/<rebalance>/<selection>/` (writes `tournament_results.json` + `returns/*.pkl` via the shared writer in `scripts/backtest_engine.py`).
+- [x] **Audit Ledger Completeness Gate**: Updated `scripts/backtest_engine.py` to record `backtest_optimize` outcomes for success/empty/error and to record `backtest_simulate` errors as outcomes (eliminates silent intent→no-outcome gaps).
 - [x] **Phase 3: Directory Restructuring**: Audit Validated (Run `20260103-235511`).
 
 - [x] **Phase 4: Script Audit & Cleanup**: Completed. Categorized and archived 110+ scripts.
@@ -47,12 +58,24 @@
 
 ## Status Sync
 - **Artifact Reorganization**: Audit Validated (Run `20260103-235511`).
+- **Grand 4D Smoke Validation**: Audit Validated (Run `20260104-161534`). Verified per-cell persistence under `data/grand_4d/<rebalance>/<selection>/` and `backtest_summary` outcomes in `audit.jsonl`.
+- **Benchmark Scoreboard Validation**: Audit Validated (Run `20260104-163801`). Verified per-cell `data/grand_4d/window/v3.2/returns/*.pkl`, ledger integrity, and strict scoreboard generation (no silent `backtest_optimize` gaps; barbell empty/error outcomes are recorded).
+- **Scoreboard Generation (uv minimal env)**: Validated (Run `20260104-165334`). `uv run scripts/research/tournament_scoreboard.py --run-id latest --allow-missing` generates `data/tournament_scoreboard.csv`, `data/tournament_candidates.csv`, and `reports/research/tournament_scoreboard.md` without requiring `tabulate` (markdown fallback).
 - **4D Tournament Validation**: Audit Validated (Run `20260104-005636`). Completed full multi-dimensional sweep (Selection x Rebalance x Simulator x Engine). `v3.2 / skfolio / barbell` established as the champion configuration with Sharpe 3.96. High-fidelity parity confirmed between `nautilus` and `cvxportfolio`.
+  - **Scoreboard note**: This run does not include `data/returns/*.pkl` and contains no `backtest_summary` events in `audit.jsonl`, so strict candidates fail on missing `af_dist` / `stress_alpha`.
+  - **Audit ledger deep check**: Hash chain verified; `backtest_simulate` successes = 13,992; `backtest_optimize` intents = 3,465 vs successes = 3,201 (264 missing, mostly barbell), which also reduces window coverage for some configs.
+  - **Fix implemented**: Grand 4D sweeps now persist per-cell `returns/*.pkl` and backtest engine records optimize outcomes; rerun required to validate strict candidates.
+  - **Scoreboard validation**: Scoreboard generation succeeds on the latest run that includes `data/tournament_results.json` + `data/returns/*.pkl` (e.g., `20260104-003407`), but strict candidates remain empty until antifragility is present in tournament summaries.
 - **Metadata gate**: Satisfied—Run `20260104-005636` recorded 100% coverage.
 - **Selection report**: Completed—Confirmed restoration of selection story in run artifacts.
 - **CVXPortfolio warnings**: Resolved—Run `20260104-005636` confirms zero "universe mismatch" warnings in tournament logs.
 - **Guardrail sentinel**: Completed—Passed invariance check against previous baseline.
 - **Health audit**: Completed for latest production run (100% healthy).
+- **Dev env (uv)**: Synced with `uv sync --all-extras`; validated `uv run pytest`.
+- **Streamer end-of-history exit**: `Streamer.stream()` only starts idle packet counting after the first OHLC/indicator payload; requesting beyond available history returns partial OHLC quickly.
+  - [x] **Spec**: Updated WebSocket guardrails in `docs/specs/data_resilience_v2.md`.
+  - [x] **Spec**: Updated handshake-safe idle guidance in `docs/specs/price_stream_resilience.md`.
+  - [x] **Audit**: `uv run pytest -q tests/test_streamer_parity.py::TestStreamerParity::test_graceful_timeout_handling`.
 
 
 ## Script Audit & Cleanup Roadmap (Jan 2026)

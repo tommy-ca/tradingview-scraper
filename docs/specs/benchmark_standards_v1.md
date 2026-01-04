@@ -118,3 +118,17 @@ Antifragility is measured at the **strategy** level using **out-of-sample (OOS)*
 3. **Scoreboard + Candidate Filter**: Run `scripts/research/tournament_scoreboard.py` to generate `data/tournament_scoreboard.csv`, `data/tournament_candidates.csv`, and `reports/research/tournament_scoreboard.md`.
 4. **Production Artifact Audit**: Run `scripts/validate_portfolio_artifacts.py` to enforce market sensitivity (beta), cluster concentration caps, and other post-optimization safety checks.
 5. **Guardrail Gate**: Configurations failing the **Institutional** or **Robust** thresholds are flagged in the `INDEX.md` and excluded from the "Production Candidate" list.
+
+### 3.1 Operational Notes (Scoreboard Readiness)
+- **Audit ledger required**: Enable `feat_audit_ledger` so `audit.jsonl` contains `backtest_optimize` outcomes (weights) and `backtest_summary` outcomes (aggregates). Intent-only logging is insufficient for strict gating.
+- **Audit ledger completeness**: Verify there are no `backtest_optimize` intents without matching outcomes; missing outcomes reduce window coverage and can invalidate window-derived audits. Example: Run `20260104-005636` had 264 missing optimize outcomes, heavily concentrated in `barbell`.
+  - **Validation focus**: Always audit `barbell` first, since it was the primary source of missing outcomes in prior sweeps.
+- **Audit ledger integrity**: Use `uv run scripts/archive/verify_ledger.py artifacts/summaries/runs/<RUN_ID>/audit.jsonl` to confirm the cryptographic hash chain before trusting downstream audits.
+- **Daily beta/corr requires returns pickles**: `scripts/backtest_engine.py --tournament` writes `data/returns/*.pkl`. Grand 4D sweeps should persist per-cell returns under `data/grand_4d/<rebalance>/<selection>/returns/*.pkl` (and the per-cell `tournament_results.json`).
+- **Grand sweep artifact parity**: `scripts/research/grand_4d_tournament.py` should persist per-cell artifacts using the same writer as `scripts/backtest_engine.py` so scoreboard gating can use daily series metrics.
+- **Window beta/corr requires enough windows**: If `data/returns/*.pkl` are missing, beta/corr are computed from per-window returns and require at least 10 windows.
+- **Selection stability requires optimize success**: Jaccard/HHI require `backtest_optimize` success outcomes (weights). `empty`/`error` outcomes will show up as missing selection metrics in the scoreboard.
+- **Simulator parity requires both simulators**: `parity_ann_return_gap` is only computed when both `cvxportfolio` and `nautilus` results exist for the same (selection, rebalance, engine, profile).
+- **Strict candidates require antifragility fields**: Runs created before `antifragility_dist` / `antifragility_stress` were added to tournament summaries will produce zero strict candidates unless `--allow-missing` is used (legacy/backfill only).
+- **Recommended invocation**: `make tournament-scoreboard` or `uv run scripts/research/tournament_scoreboard.py --run-id latest` (or pass an explicit run id). Use `--allow-missing` only for legacy runs.
+- **Grand sweep smoke test**: `TV_FEATURES__FEAT_AUDIT_LEDGER=1 TV_RUN_ID=<RUN_ID> uv run scripts/research/grand_4d_tournament.py --selection-modes v3.2 --rebalance-modes window --engines skfolio --profiles hrp --simulators custom,cvxportfolio,nautilus` then `uv run scripts/research/tournament_scoreboard.py --run-id <RUN_ID>`.
