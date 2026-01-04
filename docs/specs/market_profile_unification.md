@@ -23,7 +23,7 @@ The `market` profile logic follows these steps:
 1.  **Symbol Filtering**: Filter the available training returns to only those found in `settings.benchmark_symbols`.
 2.  **No Fallback**: If no benchmark symbols are found, the engine returns empty weights with a warning.
 3.  **Equal Weighting**: Assign $1/N$ weight to all target symbols.
-4.  **Metadata Tagging**: All benchmark assets are tagged with `Cluster_ID: MARKET_BENCHMARK`.
+4.  **Metadata Tagging**: All benchmark assets are tagged with `Cluster_ID: MARKET`.
 
 ## 3. Validation
 

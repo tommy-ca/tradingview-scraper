@@ -20,8 +20,8 @@ The detector utilizes a combination of spectral, statistical, and Markovian fact
 
 - **`QUIET`** (Score < 0.7): Low volatility ratio, low turbulence, high stationarity. Aggressor allocation: **15%**.
 - **`NORMAL`** (Score 0.7 - 1.8): Standard market conditions. Aggressor allocation: **10%**.
-- **`TURBULENT`** (Score 1.8 - 2.5 or HMM Upgraded): High spectral noise (DWT > 0.7) or strong trending behavior (Hurst > 0.65). Aggressor allocation: **5%**.
-- **`CRISIS`** (Score > 2.5 or HMM/Quadrant Confirmed): High weighted score (Shock + Noise + Persistence). Aggressor allocation: **3%**.
+- **`TURBULENT`** (Score 1.8 - 2.5 or HMM Upgraded): High spectral noise (DWT > 0.7) or strong trending behavior (Hurst > 0.65). Aggressor allocation: **8%**.
+- **`CRISIS`** (Score > 2.5 or HMM/Quadrant Confirmed): High weighted score (Shock + Noise + Persistence). Aggressor allocation: **5%**.
 
 3. **Quadrant-Based (All Weather) Methodology**
 

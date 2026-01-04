@@ -14,7 +14,7 @@ Hierarchical Risk Parity (HRP) consists of three main stages:
 | Engine | Stage 1: Distance | Stage 1: Linkage | Stage 3: Bisection Logic |
 | :--- | :--- | :--- | :--- |
 | **Custom** | Pearson ($d = \sqrt{0.5(1-\rho)}$) | **Single** | **Pure Lopez de Prado (2016)** |
-| **skfolio** | Pearson | **Complete** | native `HierarchicalRiskParity` (Optimized) |
+| **skfolio** | Distance Correlation | **Ward** | native `HierarchicalRiskParity` (Optimized) |
 | **riskfolio** | Pearson | **Ward** | native `HCPortfolio` |
 | **pypfopt** | Pearson | **Single** | native `HRPOpt` |
 | **cvxportfolio**| N/A | N/A | **Convex Approximation** (Log-barrier) |

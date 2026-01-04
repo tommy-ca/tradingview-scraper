@@ -86,6 +86,7 @@ Note: `equal_weight` may still appear in backtest outputs under the baseline eng
 Notes:
 - For cluster-based profiles, intra-cluster weights are produced by **HERC 2.0** (inverse variance) in the Custom engine and are applied downstream when expanding cluster weights to asset weights.
 - `equal_weight` is **Hierarchical Equal Weight** (cluster-level equal weight with HERC intra), not a flat asset-level EW.
+- `barbell` is cluster-driven: select the top `max_aggressor_clusters` clusters by `Antifragility_Score` (currently 1 leader per cluster), allocate the aggressor sleeve via `aggressor_weight`, and allocate the core sleeve via `hrp` over the remaining clusters. When `aggressor_weight` is left at its default, it is regime-adjusted: QUIET 15% / NORMAL 10% / TURBULENT 8% / CRISIS 5%.
 
 ## 4. Profile-Centric Architecture (Jan 2026)
 

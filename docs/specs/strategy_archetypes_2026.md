@@ -8,20 +8,18 @@ The Barbell profile implements structural isolation between high-optionality alp
 
 | Component | standard | Rationale |
 | :--- | :--- | :--- |
-| **Aggressors (10%)** | Top 5 Assets by Antifragility Score | Captures high-optionality, convex returns. |
-| **Core (90%)** | Optimized Core Sleeve | Prevents idiosyncratic decay of the overall portfolio. |
-| **Core Engine** | `hrp` (Native skfolio) | Prioritizes absolute stability for the core foundation. |
-| **Adaptive Scaling** | Regime-Aware Aggressor Weight | Reduces aggressor sleeve to 5% in `CRISIS` and expands to 15% in `QUIET`. |
+| **Aggressors (default: 10%)** | Top `max_aggressor_clusters` clusters by `Antifragility_Score` (**n** leaders per cluster; currently **n=1**) | Convexity sleeve with factor diversification. |
+| **Core (default: 90%)** | Core HRP sleeve over the remaining clusters | Capital preservation + diversified stability. |
+| **Core Engine** | `hrp` (engine-native; see `docs/specs/hrp_implementation_parity.md`) | Defensive allocator used as the barbell core sleeve. |
+| **Adaptive Scaling** | Default aggressor schedule: **QUIET 15% / NORMAL 10% / TURBULENT 8% / CRISIS 5%** (override by explicitly setting `aggressor_weight`) | Preserve core under stress while retaining optionality. |
 
 ## 2. Native Hierarchical Risk Parity (HRP)
 
-The `hrp` profile provides the "capital preservation" standard using recursive tree-based bisection.
+The `hrp` profile provides the "capital preservation" standard using engine-native hierarchical risk parity implementations.
 
-- **Algorithm**: Recursive Bisection (Native `skfolio` implementation).
-- **Distance Metric**: **Pearson Correlation**.
-- **Linkage Method**: **COMPLETE** (validated as the "Outstanding" configuration).
-- **Risk Measure**: Variance.
-- **Role**: Serves as the high-fidelity defensive baseline and the core optimization logic for the Barbell sleeve.
+- **Canonical reference**: See `docs/specs/hrp_implementation_parity.md` for exact distance/linkage per backend.
+- **skfolio implementation**: Ward linkage + Distance Correlation + RiskMeasure=Standard Deviation (per `tradingview_scraper/portfolio_engines/engines.py`).
+- **Role**: Defensive baseline and the core optimization logic for the Barbell sleeve.
 
 ## 3. All Weather Quadrant Detector
 
@@ -40,5 +38,5 @@ The `MarketRegimeDetector` classifies market environments into four quadrants to
 
 ## 4. Institutional Fidelity Standards
 - **Ledoit-Wolf Shrinkage**: Universal for all covariance-dependent steps.
-- **L2 Regularization ($\gamma=0.05$)**: Universal guard against overfitting in all non-HRP optimizations.
+- **L2 Regularization (default $\gamma=0.05$, configurable)**: Guard against overfitting in all non-HRP optimizations.
 - **Audit Requirement**: All transitions and weights must be recorded in the SHA-256 chained ledger.

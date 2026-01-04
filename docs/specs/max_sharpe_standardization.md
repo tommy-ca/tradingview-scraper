@@ -11,8 +11,10 @@ To ensure parity and prevent "Ghost Alpha" (overfitting), all engines must adher
 | **Risk Measure** | Variance (Standard MVO) | Universal baseline for risk-adjusted returns. |
 | **Returns Estimator** | 200-day Annualized Mean | Captures mid-term momentum without being overly sensitive to noise. |
 | **Covariance Estimator** | **Ledoit-Wolf Shrinkage** | Reduces eigenvalue spreading and improves out-of-sample stability. |
-| **Regularization** | **L2 Ridge ($\gamma = 0.05$)** | Penalizes extreme weight concentrations and promotes diversification. |
+| **Regularization** | **L2 Ridge (default $\gamma = 0.05$, configurable)** | Penalizes extreme weight concentrations and promotes diversification. |
 | **Constraints** | Long-Only, $\sum w = 1$, 25% Cluster Cap | Institutional liquidity and diversification guards. |
+
+**Configurability**: The ridge coefficient is configurable via `EngineRequest.l2_gamma` (default: 0.05). Set `l2_gamma=0.0` to disable explicit L2.
 
 ## 2. Technical Design (Updated Jan 2026)
 
@@ -20,11 +22,11 @@ To ensure parity and prevent "Ghost Alpha" (overfitting), all engines must adher
 We will move covariance estimation out of individual engine wrappers and into the `_optimize_cluster_weights` flow. All engines will be provided with a **Shrunk Covariance Matrix** computed via `sklearn.covariance.ledoit_wolf`.
 
 ### B. Wrapper Alignments
-- **`custom`**: Transitioned from Quadratic Utility to **Direct Sharpe Maximization** via Charnes-Cooper Transformation.
-- **`skfolio`**: Uses native `MeanRisk(MAXIMIZE_RATIO)` with `l2_coef=0.05`.
-- **`riskfolio`**: Synchronized to $\gamma=0.05$ L2 standard.
-- **`pyportfolioopt`**: Implements standardized L2 regularization and shrunk covariance.
-- **`cvxportfolio`**: Uses `LedoitWolf()` risk forecasting.
+- **`custom`**: Uses **Direct Sharpe Maximization** via Charnes-Cooper Transformation with explicit L2 (`l2_gamma`).
+- **`skfolio`**: Uses native `MeanRisk(MAXIMIZE_RATIO)` with `l2_coef=l2_gamma`.
+- **`riskfolio`**: Uses L2 coefficient `l2_gamma` in classic MVO optimization.
+- **`pyportfolioopt`**: Uses `objective_functions.L2_reg(gamma=l2_gamma)` with shrunk covariance.
+- **`cvxportfolio`**: Uses `LedoitWolf()` risk forecasting (no explicit ridge term).
 
 ## 3. Research Findings: Fractional Programming (Jan 2026)
 
