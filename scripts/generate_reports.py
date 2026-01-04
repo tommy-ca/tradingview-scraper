@@ -26,6 +26,9 @@ SUMMARY_COLS = [
     "annualized_return",
     "annualized_vol",
     "avg_window_sharpe",
+    "af_dist",
+    "stress_alpha",
+    "stress_delta",
     "avg_turnover",
     "sortino",
     "calmar",
@@ -334,20 +337,34 @@ class ReportGenerator:
         best_engines = self._identify_tournament_winners()
         summary_rows: List[Dict[str, Any]] = []
         regime_rows: List[Dict[str, Any]] = []
+
+        def _inject_antifragility_fields(row: Dict[str, Any]) -> None:
+            dist = row.get("antifragility_dist")
+            if isinstance(dist, dict):
+                row["af_dist"] = _safe_float(dist.get("af_dist"))
+
+            stress = row.get("antifragility_stress")
+            if isinstance(stress, dict):
+                row["stress_alpha"] = _safe_float(stress.get("stress_alpha"))
+                row["stress_delta"] = _safe_float(stress.get("stress_delta"))
+
         market_data = self.all_results.get(sim_name, {}).get("market", {})
         if market_data:
             if market_data.get("market", {}).get("summary"):
                 m_row = dict(market_data["market"]["summary"])
+                _inject_antifragility_fields(m_row)
                 m_row["Profile"] = "MARKET (HOLD)"
                 m_row["Details"] = f"[Metrics]({sim_name}_market_market_full_report.md)"
                 summary_rows.append(m_row)
             if market_data.get("raw_pool_ew", {}).get("summary"):
                 raw_row = dict(market_data["raw_pool_ew"]["summary"])
+                _inject_antifragility_fields(raw_row)
                 raw_row["Profile"] = "MARKET (RAW EW)"
                 raw_row["Details"] = f"[Metrics]({sim_name}_market_raw_pool_ew_full_report.md)"
                 summary_rows.append(raw_row)
             if market_data.get("benchmark", {}).get("summary"):
                 filt_row = dict(market_data["benchmark"]["summary"])
+                _inject_antifragility_fields(filt_row)
                 filt_row["Profile"] = "MARKET (FILTERED EW)"
                 filt_row["Details"] = f"[Metrics]({sim_name}_market_benchmark_full_report.md)"
                 summary_rows.append(filt_row)
@@ -360,6 +377,7 @@ class ReportGenerator:
                 continue
             summary = prof_data["summary"]
             row = dict(summary)
+            _inject_antifragility_fields(row)
             disp_name = display_names.get(prof_key, prof_key.upper())
             row["Profile"] = disp_name
             row["Details"] = f"[Metrics]({sim_name}_{eng_name}_{prof_key}_full_report.md)"
@@ -370,9 +388,11 @@ class ReportGenerator:
         if not summary_rows:
             return
         df = pd.DataFrame(summary_rows)
-        for c in ["total_cumulative_return", "annualized_return", "annualized_vol", "avg_turnover", "win_rate"]:
+        for c in ["total_cumulative_return", "annualized_return", "annualized_vol", "avg_turnover", "win_rate", "stress_alpha", "stress_delta"]:
             if c in df.columns:
                 df[c] = df[c].apply(lambda x: _fmt_num(x, ".2%"))
+        if "af_dist" in df.columns:
+            df["af_dist"] = df["af_dist"].apply(lambda x: _fmt_num(x, ".2f"))
         for c in SUMMARY_COLS:
             if c not in df.columns:
                 df[c] = None
