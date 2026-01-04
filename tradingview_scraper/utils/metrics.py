@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -87,7 +87,14 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
 
     if n_obs < MIN_OBSERVATIONS:
         res = empty_res.copy()
-        res.update({"total_return": float(total_return), "annualized_return": float(annualized_return), "realized_vol": float(realized_vol), "max_drawdown": float(max_drawdown)})
+        res.update(
+            {
+                "total_return": float(total_return),
+                "annualized_return": float(annualized_return),
+                "realized_vol": float(realized_vol),
+                "max_drawdown": float(max_drawdown),
+            }
+        )
         return res
 
     try:
@@ -233,3 +240,136 @@ def get_full_report_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Se
         return "\n".join(md)
     except Exception as e:
         return f"# Strategy Report: {title}\n\nError: {e}"
+
+
+def calculate_temporal_fragility(sharpe_series: pd.Series) -> float:
+    """Coefficient of variation of Sharpe across windows."""
+    s = sharpe_series.dropna()
+    if s.empty or len(s) < 2:
+        return 0.0
+    mean_sharpe = float(s.mean())
+    if abs(mean_sharpe) < 1e-9:
+        return 0.0
+    return float(s.std() / abs(mean_sharpe))
+
+
+def calculate_friction_alignment(sharpe_real: float, sharpe_ideal: float) -> float:
+    """Sharpe decay ratio from idealized -> high-fidelity simulation."""
+    if abs(sharpe_ideal) < 1e-9:
+        return 0.0
+    return float(1.0 - (sharpe_real / sharpe_ideal))
+
+
+def calculate_selection_jaccard(universe_a: List[str], universe_b: List[str]) -> float:
+    """Jaccard similarity between two symbol sets."""
+    set_a = set(universe_a)
+    set_b = set(universe_b)
+    intersection = len(set_a.intersection(set_b))
+    union = len(set_a.union(set_b))
+    if union == 0:
+        return 1.0
+    return float(intersection / union)
+
+
+def calculate_antifragility_distribution(
+    daily_returns: pd.Series,
+    *,
+    q: float = 0.95,
+    min_obs: int = 100,
+    min_tail: int = 10,
+    eps: float = 1e-12,
+) -> Dict[str, Any]:
+    """Quantified antifragility from return distribution (skew + tail asymmetry)."""
+    rets = daily_returns.dropna().copy()
+    n_obs = int(len(rets))
+    if n_obs < min_obs:
+        return {"n_obs": n_obs, "is_sufficient": False}
+
+    q_hi = float(rets.quantile(q))
+    q_lo = float(rets.quantile(1.0 - q))
+
+    right_tail = rets[rets > q_hi]
+    left_tail = rets[rets < q_lo]
+
+    n_right = int(len(right_tail))
+    n_left = int(len(left_tail))
+    if n_right < min_tail or n_left < min_tail:
+        return {"n_obs": n_obs, "n_right": n_right, "n_left": n_left, "is_sufficient": False}
+
+    skew = float(rets.skew())
+    tail_gain = float(right_tail.mean())
+    tail_loss = float(abs(left_tail.mean()))
+
+    if tail_gain <= 0:
+        tail_asym = 0.0
+    else:
+        tail_asym = float(tail_gain / (tail_loss + eps))
+
+    af_dist = float(skew + math.log(tail_asym + eps))
+
+    return {
+        "q": float(q),
+        "n_obs": n_obs,
+        "n_right": n_right,
+        "n_left": n_left,
+        "skew": skew,
+        "tail_gain": tail_gain,
+        "tail_loss": tail_loss,
+        "tail_asym": tail_asym,
+        "af_dist": af_dist,
+        "is_sufficient": True,
+    }
+
+
+def calculate_antifragility_stress(
+    strategy_returns: pd.Series,
+    reference_returns: pd.Series,
+    *,
+    q_stress: float = 0.10,
+    min_obs: int = 100,
+    min_stress: int = 10,
+) -> Dict[str, Any]:
+    """Quantified antifragility from stress response vs a reference baseline."""
+    strat = strategy_returns.dropna().copy()
+    ref = reference_returns.dropna().copy()
+
+    idx = strat.index.intersection(ref.index)
+    if idx.empty:
+        return {"n_obs": 0, "is_sufficient": False}
+
+    strat = strat.reindex(idx)
+    ref = ref.reindex(idx)
+
+    n_obs = int(len(idx))
+    if n_obs < min_obs:
+        return {"n_obs": n_obs, "is_sufficient": False}
+
+    stress_cut = float(ref.quantile(q_stress))
+    stress_mask = ref <= stress_cut
+    n_stress = int(stress_mask.sum())
+    if n_stress < min_stress:
+        return {"q_stress": float(q_stress), "n_obs": n_obs, "n_stress": n_stress, "is_sufficient": False}
+
+    diff = strat - ref
+
+    stress_alpha = float(diff[stress_mask].mean())
+    calm_alpha = float(diff[~stress_mask].mean())
+    stress_delta = float(stress_alpha - calm_alpha)
+
+    stress_mean = float(strat[stress_mask].mean())
+    calm_mean = float(strat[~stress_mask].mean())
+
+    stress_hit_rate = float((strat[stress_mask] > ref[stress_mask]).mean())
+
+    return {
+        "q_stress": float(q_stress),
+        "n_obs": n_obs,
+        "n_stress": n_stress,
+        "stress_alpha": stress_alpha,
+        "calm_alpha": calm_alpha,
+        "stress_delta": stress_delta,
+        "stress_mean": stress_mean,
+        "calm_mean": calm_mean,
+        "stress_hit_rate": stress_hit_rate,
+        "is_sufficient": True,
+    }
