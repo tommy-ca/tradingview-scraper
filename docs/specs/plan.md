@@ -42,7 +42,7 @@
 
 ## Status Sync
 - **Artifact Reorganization**: Audit Validated (Run `20260103-235511`).
-- **4D Tournament Validation**: In Progress (Run `20260104-005636`). Initial results for `v2.1 / window` confirm high-fidelity simulator parity and significant optimization alpha.
+- **4D Tournament Validation**: Audit Validated (Run `20260104-005636`). Completed full multi-dimensional sweep (Selection x Rebalance x Simulator x Engine). `v3.2 / skfolio / barbell` established as the champion configuration with Sharpe 3.96. High-fidelity parity confirmed between `nautilus` and `cvxportfolio`.
 - **Metadata gate**: Satisfied—Run `20260104-005636` recorded 100% coverage.
 - **Selection report**: Completed—Confirmed restoration of selection story in run artifacts.
 - **CVXPortfolio warnings**: Resolved—Run `20260104-005636` confirms zero "universe mismatch" warnings in tournament logs.
