@@ -76,6 +76,18 @@
   - [x] **Spec**: Updated WebSocket guardrails in `docs/specs/data_resilience_v2.md`.
   - [x] **Spec**: Updated handshake-safe idle guidance in `docs/specs/price_stream_resilience.md`.
   - [x] **Audit**: `uv run pytest -q tests/test_streamer_parity.py::TestStreamerParity::test_graceful_timeout_handling`.
+- **Risk profile spec audit**: Synced barbell/HRP/market/max_sharpe specs to production.
+  - Barbell aggressors: top clusters (1 leader/cluster), default schedule QUIET 15% / NORMAL 10% / TURBULENT 8% / CRISIS 5%.
+  - Market tag: `Cluster_ID: MARKET`.
+  - Max Sharpe ridge: configurable via `EngineRequest.l2_gamma` (default 0.05).
+  - **Validation**: `uv run pytest -q tests/test_portfolio_engines.py` and `uv run pytest`.
+  - **Pytest warnings** (summary; see `uv run pytest` output for full context):
+    - `tradingview_scraper/symbols/technicals.py:9` `UserWarning`: `pkg_resources` deprecation (setuptools).
+    - `scripts/maintenance/cleanup_metadata_catalog.py:60` `FutureWarning`: dtype assignment when filling `timezone` ("UTC").
+    - `scripts/maintenance/cleanup_metadata_catalog.py:65` `FutureWarning`: dtype assignment when filling `session` ("24x7").
+    - `tradingview_scraper/symbols/stream/metadata.py:347` `FutureWarning`: concat behavior with empty/all-NA frames.
+    - `.venv/.../quantstats/stats.py:1542` `RuntimeWarning`: divide by zero in `cagr_ratio / abs(max_dd)`.
+    - `.venv/.../statsmodels/regression/linear_model.py:955` `RuntimeWarning`: divide by zero in `log`.
 
 
 ## Script Audit & Cleanup Roadmap (Jan 2026)
