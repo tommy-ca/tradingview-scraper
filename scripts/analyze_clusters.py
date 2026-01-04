@@ -34,7 +34,8 @@ def perform_subclustering(symbols: List[str], returns: pd.DataFrame, threshold: 
     if len(non_constant) < 2:
         return {1: symbols}
 
-    corr = sub_rets[non_constant].corr()
+    sub_rets_df = cast(pd.DataFrame, sub_rets[non_constant])
+    corr = sub_rets_df.corr()
 
     # Hierarchical Linkage
     dist_matrix = np.sqrt(0.5 * (1 - corr.values.clip(-1, 1)))

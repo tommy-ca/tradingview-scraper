@@ -38,7 +38,8 @@ def calculate_effective_gaps(symbol: str, returns_series: pd.Series, profile: Da
 
         # Determine valid trading sessions in this date range
         try:
-            valid_sessions = cal.sessions_in_range(dates[0].normalize(), dates[-1].normalize())
+            d_idx = pd.DatetimeIndex(dates)
+            valid_sessions = cal.sessions_in_range(d_idx[0].normalize(), d_idx[-1].normalize())
             # Convert to date set for fast lookup
             valid_dates = set(valid_sessions.to_series().dt.date)
 

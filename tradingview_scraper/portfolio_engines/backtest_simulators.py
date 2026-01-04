@@ -155,7 +155,11 @@ class CVXPortfolioSimulator(BaseSimulator):
         if cash_key not in universe:
             universe.append(cash_key)
 
-        w_target = weights_df.set_index("Symbol")["Weight"].astype(float).reindex(universe, fill_value=0.0)
+        w_target_raw = weights_df.set_index("Symbol")["Weight"].astype(float)
+        if isinstance(w_target_raw, pd.DataFrame):
+            w_target_raw = w_target_raw.iloc[:, 0]
+        w_target = cast(pd.Series, w_target_raw).reindex(universe, fill_value=0.0)
+
         non_cash_sum = float(w_target.drop(index=[cash_key]).abs().sum())
         w_target[cash_key] = max(0.0, 1.0 - non_cash_sum)
         w_target = w_target.fillna(0.0)
@@ -186,6 +190,11 @@ class CVXPortfolioSimulator(BaseSimulator):
 
         try:
             returns_cvx = returns.astype(np.float64).clip(-0.5, 2.0).fillna(0.0)
+
+            # Explicitly add cash if not present to avoid CVXPortfolio auto-injection warnings and alignment issues
+            if cash_key not in returns_cvx.columns:
+                returns_cvx[cash_key] = 0.0
+
             simulator = self.cvp.MarketSimulator(returns=returns_cvx, costs=cost_list, cash_key=cash_key, min_history=pd.Timedelta(days=0))
 
             # Ensure holdings and universe are perfectly aligned for the simulator
