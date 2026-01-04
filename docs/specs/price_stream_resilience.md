@@ -15,6 +15,7 @@ This specification details the improvements to the `RealTimeData` class in `trad
     - `idle_packet_limit`: Number of consecutive heartbeats before triggering a reconnect (default: 5).
     - `ws_timeout`: WebSocket timeout in seconds (default: 15.0).
 - **Counter Reset**: Any valid data packet (JSON) must reset the idle packet counter to zero.
+- **Handshake-Safe Counter Start**: The idle packet counter must not start until at least one non-heartbeat data packet has been received (avoids false timeouts during session negotiation).
 
 ### 3. Resilience & Reconnection
 - **Automatic Recovery**: Upon reaching the `idle_packet_limit` or encountering a `WebSocketConnectionClosedException`, the system must automatically attempt to reconnect.
@@ -38,3 +39,6 @@ This specification details the improvements to the `RealTimeData` class in `trad
     - Main loop for receiving and yielding data.
     - Handles heartbeats and increments idle counter.
     - Breaks loop on idle limit to trigger retry in outer scope.
+
+## Related: `Streamer` End-of-History
+- `Streamer.stream()` includes an additional collector loop that returns partial OHLC once it detects "no new OHLC/indicator updates" after at least one payload (see `tradingview_scraper/symbols/stream/streamer.py`).

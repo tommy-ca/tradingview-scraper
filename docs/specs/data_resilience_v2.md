@@ -49,6 +49,8 @@ To ensure 100% reliability of time-series operations (slicing, alignment, reinde
 - **WebSocket Resilience**:
     - **Total Execution Timeout**: Main collection loop exits if `total_timeout` is reached.
     - **Partial Data Recovery**: Returns any gathered candles upon timeout instead of failing.
+    - **End-of-History Handling**: When requesting more candles than TradingView can serve, treat "no new OHLC/indicator updates" as an end-of-history signal and return the partial dataset once `idle_packet_limit` is reached (see `Streamer.stream()` in `tradingview_scraper/symbols/stream/streamer.py`).
+    - **Handshake-Safe Idle Counter**: Do not start the `idle_packet_limit` counter until at least one OHLC/indicator payload has been received (prevents false failures during session negotiation; validated by `tests/test_streamer_parity.py::TestStreamerParity::test_graceful_timeout_handling`).
 - **Throttling**: The `BATCH` Makefile param (mapped to `PORTFOLIO_BATCH_SIZE`) controls concurrency to avoid rate limits; `LOOKBACK` maps to `PORTFOLIO_LOOKBACK_DAYS`, and `PORTFOLIO_FORCE_SYNC=1` forces refresh even if locally "fresh".
 - **HTTP Retries**: Scrapers use exponential backoff and retries for status codes `[429, 500, 502, 503, 504]`.
 

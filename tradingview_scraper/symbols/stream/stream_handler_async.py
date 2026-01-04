@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import re
 import secrets
 import string
 from typing import Any, Dict, Optional
@@ -65,6 +64,30 @@ class AsyncStreamHandler:
 
     def prepend_header(self, message: str) -> str:
         return f"~m~{len(message)}~m~{message}"
+
+    def _extract_packets(self, raw_data: str) -> list[tuple[str, str]]:
+        packets: list[tuple[str, str]] = []
+        i = 0
+        while i < len(raw_data):
+            if not raw_data.startswith("~m~", i):
+                break
+            start = i
+            i += 3
+            header_end = raw_data.find("~m~", i)
+            if header_end == -1:
+                break
+            length_str = raw_data[i:header_end]
+            if not length_str.isdigit():
+                break
+            length = int(length_str)
+            i = header_end + 3
+            payload = raw_data[i : i + length]
+            packets.append((raw_data[start : i + length], payload))
+            i += length
+
+        if packets:
+            return packets
+        return [(raw_data, raw_data)]
 
     def construct_message(self, func: str, param_list: list) -> str:
         return json.dumps({"m": func, "p": param_list}, separators=(",", ":"))
@@ -131,27 +154,22 @@ class AsyncStreamHandler:
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     raw_data = msg.data
 
-                    # Split messages (TradingView sometimes batches them)
-                    # Messages look like ~m~<length>~m~<content>
-                    parts = [x for x in re.split(r"~m~\d+~m~", raw_data) if x]
-
-                    if not parts:
+                    packets = self._extract_packets(raw_data)
+                    if not packets:
                         continue
 
                     has_data = False
-                    for p in parts:
-                        if p.startswith("~h~"):
-                            logger.debug(f"Received heartbeat: {p}, echoing back")
-                            # Construct full packet for echo
-                            echo_msg = f"~m~{len(p)}~m~{p}"
-                            await self.ws.send_str(echo_msg)
+                    for packet, payload in packets:
+                        if payload.startswith("~h~"):
+                            logger.debug(f"Received heartbeat: {payload}, echoing back")
+                            await self.ws.send_str(packet)
                             heartbeat_count += 1
                         else:
                             try:
-                                await self.data_queue.put(json.loads(p))
+                                await self.data_queue.put(json.loads(payload))
                                 has_data = True
                             except json.JSONDecodeError:
-                                logger.error(f"Failed to decode message: {p}")
+                                logger.error(f"Failed to decode message: {payload}")
 
                     if has_data:
                         heartbeat_count = 0

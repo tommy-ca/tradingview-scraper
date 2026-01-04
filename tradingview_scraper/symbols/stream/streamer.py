@@ -242,16 +242,19 @@ class Streamer:
             logging.info(f"Starting data collection for {numb_price_candles} candles and {expected_indicator_count} indicators")
 
             idle_packets = 0
+            has_any_data = False
             for i, pkt in enumerate(self.get_data()):
                 received_data = self._extract_ohlc_from_stream(pkt)
                 received_indicator_data = self._extract_indicator_from_stream(pkt)
 
                 if received_data:
                     ohlc_json_data = received_data
+                    has_any_data = True
                     idle_packets = 0
                     logging.debug(f"OHLC data updated: {len(ohlc_json_data)} candles")
                 if received_indicator_data:
                     indicator_json_data.update(received_indicator_data)
+                    has_any_data = True
                     idle_packets = 0
                     logging.info(f"Indicator data received: {len(indicator_json_data)}/{expected_indicator_count} indicators")
 
@@ -268,10 +271,10 @@ class Streamer:
                         logging.warning(f"Total timeout ({total_timeout}s) reached for {exchange_symbol}. Returning partial data.")
                         break
 
-                if received_data is None and not received_indicator_data:
+                if has_any_data and not received_data and not received_indicator_data:
                     idle_packets += 1
 
-                if idle_packets >= self.idle_packet_limit:
+                if has_any_data and idle_packets >= self.idle_packet_limit:
                     logging.warning(
                         "Idle timeout after %s packets without new data. Collected: OHLC=%s, Indicators=%s",
                         idle_packets,
