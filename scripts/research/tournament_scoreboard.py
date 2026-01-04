@@ -417,10 +417,12 @@ def build_scoreboard(
                 base = baseline_summary.get(str(sim), {})
                 base_cvar = _safe_float(base.get("cvar_95"))
                 base_mdd = _safe_float(base.get("max_drawdown"))
-                if row.get("cvar_95") is not None and base_cvar not in [None, 0.0]:
-                    row["cvar_mult"] = float(abs(row["cvar_95"]) / (abs(base_cvar) + 1e-12))
-                if row.get("max_drawdown") is not None and base_mdd not in [None, 0.0]:
-                    row["mdd_mult"] = float(abs(row["max_drawdown"]) / (abs(base_mdd) + 1e-12))
+                cvar_95 = _safe_float(row.get("cvar_95"))
+                if cvar_95 is not None and base_cvar is not None and base_cvar != 0.0:
+                    row["cvar_mult"] = float(abs(cvar_95) / (abs(base_cvar) + 1e-12))
+                max_drawdown = _safe_float(row.get("max_drawdown"))
+                if max_drawdown is not None and base_mdd is not None and base_mdd != 0.0:
+                    row["mdd_mult"] = float(abs(max_drawdown) / (abs(base_mdd) + 1e-12))
 
                 # Beta/correlation: prefer daily returns pickles, fall back to window returns.
                 beta, corr = None, None
@@ -499,23 +501,54 @@ def build_scoreboard(
     return df
 
 
+def _to_markdown_table(df: pd.DataFrame) -> str:
+    try:
+        return str(df.to_markdown(index=False))
+    except ImportError:
+        if df.empty:
+            return "_(empty)_"
+
+        cols = [str(c) for c in df.columns]
+        raw_rows = df.astype(object).values.tolist()
+
+        def _cell(x: Any) -> str:
+            if x is None:
+                return ""
+            if isinstance(x, float) and np.isnan(x):
+                return ""
+            return str(x)
+
+        rows = [[_cell(x) for x in row] for row in raw_rows]
+        widths = [max(len(cols[i]), *(len(r[i]) for r in rows)) for i in range(len(cols))]
+
+        def _fmt_row(items: List[str]) -> str:
+            return "| " + " | ".join(items[i].ljust(widths[i]) for i in range(len(cols))) + " |"
+
+        header = _fmt_row(cols)
+        sep = "| " + " | ".join("-" * widths[i] for i in range(len(cols))) + " |"
+        body = "\n".join(_fmt_row(r) for r in rows)
+        return "\n".join([header, sep, body])
+
+
 def _write_markdown(df: pd.DataFrame, out_path: Path, *, thresholds: CandidateThresholds) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     md = ["# Tournament Scoreboard", f"Generated on: {pd.Timestamp.now()}", "", "## Thresholds", ""]
     md.append(
-        pd.DataFrame(
-            [
-                {"Key": "max_friction_decay", "Value": thresholds.max_friction_decay},
-                {"Key": "max_temporal_fragility", "Value": thresholds.max_temporal_fragility},
-                {"Key": "min_selection_jaccard", "Value": thresholds.min_selection_jaccard},
-                {"Key": "min_af_dist", "Value": thresholds.min_af_dist},
-                {"Key": "min_stress_alpha", "Value": thresholds.min_stress_alpha},
-                {"Key": "max_turnover", "Value": thresholds.max_turnover},
-                {"Key": "max_tail_multiplier", "Value": thresholds.max_tail_multiplier},
-                {"Key": "max_parity_ann_return_gap", "Value": thresholds.max_parity_ann_return_gap},
-            ]
-        ).to_markdown(index=False)
+        _to_markdown_table(
+            pd.DataFrame(
+                [
+                    {"Key": "max_friction_decay", "Value": thresholds.max_friction_decay},
+                    {"Key": "max_temporal_fragility", "Value": thresholds.max_temporal_fragility},
+                    {"Key": "min_selection_jaccard", "Value": thresholds.min_selection_jaccard},
+                    {"Key": "min_af_dist", "Value": thresholds.min_af_dist},
+                    {"Key": "min_stress_alpha", "Value": thresholds.min_stress_alpha},
+                    {"Key": "max_turnover", "Value": thresholds.max_turnover},
+                    {"Key": "max_tail_multiplier", "Value": thresholds.max_tail_multiplier},
+                    {"Key": "max_parity_ann_return_gap", "Value": thresholds.max_parity_ann_return_gap},
+                ]
+            )
+        )
     )
 
     md.append("\n## Top Candidates")
@@ -544,17 +577,17 @@ def _write_markdown(df: pd.DataFrame, out_path: Path, *, thresholds: CandidateTh
             "parity_ann_return_gap",
         ]
         cols = [c for c in cols if c in top.columns]
-        md.append(top[cols].to_markdown(index=False))
+        md.append(_to_markdown_table(top.loc[:, cols]))
 
     md.append("\n## Full Scoreboard (Top 200 by candidate then Sharpe)")
-    md.append(df.head(200).to_markdown(index=False))
+    md.append(_to_markdown_table(df.head(200)))
 
     out_path.write_text("\n".join(md), encoding="utf-8")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run-id", default=None)
+    parser.add_argument("--run-id", default=None, help="Run ID (YYYYMMDD-HHMMSS) or 'latest'")
     parser.add_argument("--allow-missing", action="store_true")
     parser.add_argument("--max-friction-decay", type=float, default=CandidateThresholds.max_friction_decay)
     parser.add_argument("--max-temporal-fragility", type=float, default=CandidateThresholds.max_temporal_fragility)
@@ -568,7 +601,16 @@ def main() -> None:
 
     settings = get_settings()
 
-    run_id = args.run_id or os.getenv("TV_RUN_ID")
+    run_id: Optional[str] = None
+    if args.run_id:
+        if str(args.run_id).lower() in {"latest", "auto"}:
+            run_id = None
+        else:
+            run_id = str(args.run_id)
+    else:
+        env_run_id = os.getenv("TV_RUN_ID")
+        run_id = env_run_id if env_run_id else None
+
     if not run_id:
         run_id = _detect_latest_run()
     if not run_id:
@@ -616,14 +658,22 @@ def main() -> None:
 
     audit_opt = _load_optimize_metrics(audit_path)
 
+    is_grand_sweep = "rebalance_audit_results" in payload
+
     all_parts: List[pd.DataFrame] = []
     for sel, reb, results in _iter_result_blobs(payload, default_selection=default_selection, default_rebalance=default_rebalance):
+        cell_returns_dir = returns_dir
+        if is_grand_sweep:
+            candidate_returns = data_dir / "grand_4d" / reb / sel / "returns"
+            if candidate_returns.exists() and any(candidate_returns.glob("*.pkl")):
+                cell_returns_dir = candidate_returns
+
         df = build_scoreboard(
             results,
             selection_mode=sel,
             rebalance_mode=reb,
             audit_opt=audit_opt,
-            returns_dir=returns_dir,
+            returns_dir=cell_returns_dir,
             thresholds=thresholds,
             allow_missing=bool(args.allow_missing),
         )

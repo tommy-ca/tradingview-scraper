@@ -131,6 +131,12 @@ port-report: ## Generate unified quant reports and tear-sheets
 	$(PY) scripts/generate_portfolio_report.py
 	$(PY) scripts/generate_audit_summary.py
 
+tournament-scoreboard: ## Generate tournament scoreboard (latest run)
+	$(PY) scripts/research/tournament_scoreboard.py --run-id latest
+
+tournament-scoreboard-run: ## Generate tournament scoreboard for RUN_ID
+	$(PY) scripts/research/tournament_scoreboard.py --run-id $(RUN_ID)
+
 baseline-audit: ## Validate baseline availability (market/benchmark/raw_pool_ew)
 	@STRICT_ARG=""; if [ "$(STRICT_BASELINE)" = "1" ] || [ "$(TV_STRICT_BASELINE)" = "1" ]; then STRICT_ARG="--strict"; fi; \
 	RAW_ARG=""; if [ "$(REQUIRE_RAW_POOL)" = "1" ] || [ "$(TV_REQUIRE_RAW_POOL)" = "1" ]; then RAW_ARG="--require-raw-pool"; fi; \
