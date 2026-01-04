@@ -185,6 +185,7 @@ def _solve_sharpe_fractional(
     cov: np.ndarray,
     mu: np.ndarray,
     risk_free_rate: float = 0.0,
+    l2_gamma: float = 0.05,
     solver: Optional[str] = None,
     solver_options: Optional[Dict[str, Any]] = None,
 ) -> np.ndarray:
@@ -202,7 +203,8 @@ def _solve_sharpe_fractional(
     cov_reg = cov + np.eye(n) * 1e-6
     risk = cp.quad_form(y, cov_reg)
 
-    obj = cp.Minimize(risk)
+    ridge = float(max(l2_gamma, 0.0))
+    obj = cp.Minimize(risk + ridge * cp.sum_squares(y))
     constraints = [mu_adj @ y == 1, cp.sum(y) == kappa, y >= 0, y <= cap * kappa, kappa >= 0]
 
     try:
@@ -434,7 +436,14 @@ class CustomClusteredEngine(BaseRiskEngine):
             if s > 0:
                 p_weights_np = p_weights_np / s
         if request.profile == "max_sharpe":
-            w = _solve_sharpe_fractional(n=n, cap=cap, cov=cov, mu=mu, risk_free_rate=request.risk_free_rate)
+            w = _solve_sharpe_fractional(
+                n=n,
+                cap=cap,
+                cov=cov,
+                mu=mu,
+                risk_free_rate=request.risk_free_rate,
+                l2_gamma=float(request.l2_gamma),
+            )
         else:
             w = _solve_cvxpy(n=n, cap=cap, cov=cov, mu=mu, penalties=penalties, profile=request.profile, risk_free_rate=request.risk_free_rate, prev_weights=p_weights_np, l2_gamma=l2_gamma)
         return _safe_series(w, X.columns)
@@ -541,7 +550,7 @@ class SkfolioEngine(CustomClusteredEngine):
             # Risk Parity via equal risk budgeting in skfolio
             model = RiskBudgeting(risk_measure=RiskMeasure.VARIANCE)
         elif request.profile == "max_sharpe":
-            model = MeanRisk(objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_measure=RiskMeasure.VARIANCE, l2_coef=0.05)
+            model = MeanRisk(objective_function=ObjectiveFunction.MAXIMIZE_RATIO, risk_measure=RiskMeasure.VARIANCE, l2_coef=float(request.l2_gamma))
         else:
             model = MeanRisk(objective_function=ObjectiveFunction.MINIMIZE_RISK, risk_measure=RiskMeasure.VARIANCE)
 
@@ -593,7 +602,7 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
             return pd.Series(1.0 / n if n > 0 else 0.0, index=X.columns)
         else:
             ef = EfficientFrontier(X.mean() * 252, pd.DataFrame(_cov_shrunk(X), index=X.columns, columns=X.columns), weight_bounds=(0.0, cap))
-            ef.add_objective(objective_functions.L2_reg, gamma=0.05)
+            ef.add_objective(objective_functions.L2_reg, gamma=float(request.l2_gamma))
             if request.profile == "max_sharpe":
                 ef.max_sharpe(risk_free_rate=request.risk_free_rate)
             else:
@@ -632,7 +641,13 @@ class RiskfolioEngine(CustomClusteredEngine):
         else:
             port = rp.Portfolio(returns=X)
             port.assets_stats(method_mu="hist", method_cov="ledoit")
-            w = port.optimization(model="Classic", rm="MV", obj="Sharpe" if request.profile == "max_sharpe" else "MinRisk", rf=cast(Any, float(request.risk_free_rate)), l=cast(Any, 0.05))
+            w = port.optimization(
+                model="Classic",
+                rm="MV",
+                obj="Sharpe" if request.profile == "max_sharpe" else "MinRisk",
+                rf=cast(Any, float(request.risk_free_rate)),
+                l=cast(Any, float(request.l2_gamma)),
+            )
 
         w_series = w.iloc[:, 0] if isinstance(w, pd.DataFrame) else pd.Series(w)
         return _enforce_cap_series(w_series.reindex(X.columns).fillna(0.0).astype(float), cap)

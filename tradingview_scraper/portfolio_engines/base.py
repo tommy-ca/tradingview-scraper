@@ -20,6 +20,7 @@ class EngineRequest:
     engine: str = "custom"
     cluster_cap: float = 0.25
     risk_free_rate: float = 0.0
+    l2_gamma: float = 0.05
     aggressor_weight: float = 0.10
     max_aggressor_clusters: int = 5
     regime: str = "NORMAL"
