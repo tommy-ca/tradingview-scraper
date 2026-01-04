@@ -45,10 +45,12 @@ class ProductionPipeline:
         # Promote common override env vars to TV_ prefixed settings vars
         self._promote_env_overrides()
 
-        # Clear settings cache to ensure it picks up the new env vars
-
-        get_settings.cache_clear()
+        # NOTE: Do not clear the settings cache here.
+        # Tests and callers may patch the singleton settings instance (e.g., summaries_dir, feat_audit_ledger).
         self.settings = get_settings()
+        self.settings.run_id = self.run_id
+        self.settings.profile = profile
+        self.settings.manifest_path = self.manifest_path
 
         # Setup Audit Ledger
         self.run_dir = self.settings.prepare_summaries_run_dir()
