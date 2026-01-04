@@ -3,11 +3,10 @@
 import argparse
 import json
 import logging
-import os
 import sys
+from importlib.resources import files
 from typing import List, Optional
 
-import pkg_resources
 import requests
 from bs4 import BeautifulSoup
 
@@ -300,15 +299,14 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename("tradingview_scraper", "data/languages.json")
-        if not os.path.exists(path):
-            print(f"[ERROR] Languages file not found at {path}.")
-            return []
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                exchanges = json.load(f)
-            return list(exchanges.values())
-        except IOError as e:
+            raw = files("tradingview_scraper").joinpath("data/languages.json").read_text(encoding="utf-8")
+            exchanges = json.loads(raw)
+            return list(exchanges.values()) if isinstance(exchanges, dict) else []
+        except FileNotFoundError:
+            print("[ERROR] Languages file not found in package data.")
+            return []
+        except (OSError, json.JSONDecodeError) as e:
             print(f"[ERROR] Error reading languages file: {e}")
             return []
 
@@ -321,15 +319,13 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename("tradingview_scraper", "data/exchanges.txt")
-        if not os.path.exists(path):
-            print(f"[ERROR] Exchanges file not found at {path}.")
-            return []
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                exchanges = f.readlines()
-            return [exchange.strip() for exchange in exchanges]
-        except IOError as e:
+            text = files("tradingview_scraper").joinpath("data/exchanges.txt").read_text(encoding="utf-8")
+            return [line.strip() for line in text.splitlines() if line.strip()]
+        except FileNotFoundError:
+            print("[ERROR] Exchanges file not found in package data.")
+            return []
+        except OSError as e:
             print(f"[ERROR] Error reading exchanges file: {e}")
             return []
 
@@ -342,19 +338,17 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename("tradingview_scraper", "data/news_providers.txt")
-        if not os.path.exists(path):
-            print(f"[ERROR] News provider file not found at {path}.")
-            return []
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                providers = f.readlines()
-            return [provider.strip() for provider in providers]
-        except IOError as e:
+            text = files("tradingview_scraper").joinpath("data/news_providers.txt").read_text(encoding="utf-8")
+            return [line.strip() for line in text.splitlines() if line.strip()]
+        except FileNotFoundError:
+            print("[ERROR] News provider file not found in package data.")
+            return []
+        except OSError as e:
             print(f"[ERROR] Error reading providers file: {e}")
             return []
 
-    def _load_areas(self) -> list:
+    def _load_areas(self) -> dict:
         """Load areas from a specified file.
 
         Returns:
@@ -363,15 +357,14 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename("tradingview_scraper", "data/areas.json")
-        if not os.path.exists(path):
-            print(f"[ERROR] Areas file not found at {path}.")
-            return []
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                areas = json.load(f)
-            return areas
-        except IOError as e:
+            raw = files("tradingview_scraper").joinpath("data/areas.json").read_text(encoding="utf-8")
+            areas = json.loads(raw)
+            return areas if isinstance(areas, dict) else {}
+        except FileNotFoundError:
+            print("[ERROR] Areas file not found in package data.")
+            return {}
+        except (OSError, json.JSONDecodeError) as e:
             print(f"[ERROR] Error reading areas file: {e}")
             return []
 

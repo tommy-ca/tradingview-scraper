@@ -4,9 +4,9 @@ import json
 import logging
 import os
 import re
+from importlib.resources import files
 from typing import List, Optional
 
-import pkg_resources
 import requests
 
 from tradingview_scraper.symbols.utils import (
@@ -177,8 +177,16 @@ class Indicators:
         Returns:
             List[str]: A list of indicators loaded from the file. Returns an empty list if the file is not found.
         """
-        path = pkg_resources.resource_filename("tradingview_scraper", "data/indicators.txt")
-        return self._load_file(path)
+        try:
+            text = files("tradingview_scraper").joinpath("data/indicators.txt").read_text(encoding="utf-8")
+        except FileNotFoundError:
+            logger.error("[ERROR] indicators file not found in package data.")
+            return []
+        except Exception as e:
+            logger.error("[ERROR] Error reading indicators data: %s", e)
+            return []
+
+        return [line.strip() for line in text.splitlines() if line.strip()]
 
     def _load_exchanges(self) -> List[str]:
         """Load exchanges from a specified file.
@@ -186,8 +194,16 @@ class Indicators:
         Returns:
             List[str]: A list of exchanges loaded from the file. Returns an empty list if the file is not found.
         """
-        path = pkg_resources.resource_filename("tradingview_scraper", "data/exchanges.txt")
-        return self._load_file(path)
+        try:
+            text = files("tradingview_scraper").joinpath("data/exchanges.txt").read_text(encoding="utf-8")
+        except FileNotFoundError:
+            logger.error("[ERROR] exchanges file not found in package data.")
+            return []
+        except Exception as e:
+            logger.error("[ERROR] Error reading exchanges data: %s", e)
+            return []
+
+        return [line.strip() for line in text.splitlines() if line.strip()]
 
     def _load_timeframes(self) -> dict:
         """Load timeframes from a specified file.
@@ -195,16 +211,16 @@ class Indicators:
         Returns:
             dict: A dictionary of timeframes loaded from the file. Returns a dict with '1d' as default.
         """
-        path = pkg_resources.resource_filename("tradingview_scraper", "data/timeframes.json")
-
-        if not os.path.exists(path):
-            logger.error("[ERROR] Timeframe file not found at %s.", path)
-            return {"1d": None}
-
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                timeframes = json.load(f)
-            return timeframes.get("indicators", {"1d": None})
-        except (IOError, json.JSONDecodeError) as e:
+            raw = files("tradingview_scraper").joinpath("data/timeframes.json").read_text(encoding="utf-8")
+            timeframes = json.loads(raw)
+            if isinstance(timeframes, dict):
+                return timeframes.get("indicators", {"1d": None})
+            logger.error("[ERROR] Unexpected timeframe payload type: %s", type(timeframes))
+            return {"1d": None}
+        except FileNotFoundError:
+            logger.error("[ERROR] Timeframe file not found in package data.")
+            return {"1d": None}
+        except (OSError, json.JSONDecodeError) as e:
             logger.error("[ERROR] Error reading timeframe file: %s", e)
             return {"1d": None}
