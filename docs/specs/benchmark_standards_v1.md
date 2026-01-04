@@ -115,5 +115,6 @@ Antifragility is measured at the **strategy** level using **out-of-sample (OOS)*
 
 1. **Tournament Execution**: Run multi-window backtests across all configurations.
 2. **Forensic Audit**: Apply `scripts/research/audit_tournament_forensics.py` to calculate the robustness and antifragility metrics (requires audit ledger; antifragility is sourced from `backtest_summary`).
-3. **Production Artifact Audit**: Run `scripts/validate_portfolio_artifacts.py` to enforce market sensitivity (beta), cluster concentration caps, and other post-optimization safety checks.
-4. **Guardrail Gate**: Configurations failing the **Institutional** or **Robust** thresholds are flagged in the `INDEX.md` and excluded from the "Production Candidate" list.
+3. **Scoreboard + Candidate Filter**: Run `scripts/research/tournament_scoreboard.py` to generate `data/tournament_scoreboard.csv`, `data/tournament_candidates.csv`, and `reports/research/tournament_scoreboard.md`.
+4. **Production Artifact Audit**: Run `scripts/validate_portfolio_artifacts.py` to enforce market sensitivity (beta), cluster concentration caps, and other post-optimization safety checks.
+5. **Guardrail Gate**: Configurations failing the **Institutional** or **Robust** thresholds are flagged in the `INDEX.md` and excluded from the "Production Candidate" list.

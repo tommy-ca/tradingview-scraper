@@ -39,7 +39,7 @@
 - [ ] **Phase 6: MLOps Integration**: Refactor backtest units into atomized tasks; integrate Ray shared object store.
 - [ ] **Phase 5: Performance Optimization**: Implement multiprocessing/Ray logic in `Grand4DTournament`.
 - [x] **Benchmark Gate: Quantified Antifragility**: Added strategy-level convexity and crisis-response metrics to tournament summaries (`scripts/backtest_engine.py`) and audits (`scripts/research/audit_tournament_forensics.py`).
-- [ ] **Benchmark Scoreboard Expansion**: Integrate Beta/HHI/Tail Risk/Turnover/Simulator Parity/Regime Robustness gates into a single tournament scoreboard and candidate filter.
+- [x] **Benchmark Scoreboard Expansion**: Implemented `scripts/research/tournament_scoreboard.py` to generate a single tournament scoreboard + candidate filter (CSV + Markdown).
 - [x] **Phase 3: Directory Restructuring**: Audit Validated (Run `20260103-235511`).
 
 - [x] **Phase 4: Script Audit & Cleanup**: Completed. Categorized and archived 110+ scripts.
