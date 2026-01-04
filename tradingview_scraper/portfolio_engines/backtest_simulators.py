@@ -138,7 +138,8 @@ class CVXPortfolioSimulator(BaseSimulator):
             self.cvp = cvp
             self.Policy = Policy
         except ImportError:
-            raise ImportError("cvxportfolio not installed.")
+            self.cvp = None
+            self.Policy = None
 
     def simulate(
         self,
@@ -146,6 +147,9 @@ class CVXPortfolioSimulator(BaseSimulator):
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
+        if self.cvp is None:
+            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+
         settings = get_settings()
         cash_key = "cash"
 
@@ -213,8 +217,20 @@ class CVXPortfolioSimulator(BaseSimulator):
             return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
 
 
+# Backward-compatible alias (legacy/tests).
+CvxPortfolioSimulator = CVXPortfolioSimulator
+
+
 class VectorBTSimulator(BaseSimulator):
     """High-performance vectorized simulator using VectorBT."""
+
+    def __init__(self):
+        try:
+            import vectorbt as vbt
+
+            self.vbt = vbt
+        except ImportError:
+            self.vbt = None
 
     def simulate(
         self,
@@ -222,10 +238,10 @@ class VectorBTSimulator(BaseSimulator):
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
-        try:
-            import vectorbt as vbt
-        except ImportError:
-            raise ImportError("vectorbt not installed.")
+        if self.vbt is None:
+            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+
+        vbt = self.vbt
         settings = get_settings()
 
         rebalance_mode = settings.features.feat_rebalance_mode
