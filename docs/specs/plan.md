@@ -26,15 +26,20 @@
   - [x] **VectorBT Lookahead Bias**: Fixed. Removed `shift(-1)`; verified parity with other simulators.
   - [x] **ECI Volatility Defaults**: Fixed. Standardized on 0.5% daily default.
 - [x] **Scalability Architectural Design**: Defined the transition to Ray/Prefect/SkyPilot stack in `docs/specs/mlops_scalability_v1.md`.
+- [x] **Benchmarking Standardization**: Quantified and standardized evaluation gates in `docs/specs/benchmark_standards_v1.md`.
+  - **Robustness & Antifragility**: Temporal Fragility / Friction Alignment / Selection Stability / Quantified Antifragility are implemented in `tradingview_scraper/utils/metrics.py` and `scripts/research/audit_tournament_forensics.py`.
+  - **Institutional Safety (Spec + Partial Tooling)**: Added standards for Market Sensitivity (Beta), Concentration (HHI/Cluster Cap), Tail Risk (CVaR/MDD), Turnover Efficiency, Simulator Parity, and Regime Robustness. Some checks are enforced via `scripts/validate_portfolio_artifacts.py` and/or surfaced in reports; remaining scoreboard integration is queued.
 
 ## Current Focus
 - **MLOps Scalability Pivot (Phase 6)**: Transition to Ray (Compute) and Prefect (Orchestration) to eliminate execution bottlenecks and focus on Alpha Core per `docs/specs/mlops_scalability_v1.md`.
-- **4D Tournament Validation**: Audit and finalize results from the Grand 4D Tournament.
+- **Robustness Evaluation**: Benchmark 4D tournament results against **Temporal Fragility**, **Friction Alignment**, **Selection Stability**, and **Quantified Antifragility** (distribution + stress-response) to identify robust production candidates.
 - **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run quarterly.
 
 ## Next Steps Tracker
 - [ ] **Phase 6: MLOps Integration**: Refactor backtest units into atomized tasks; integrate Ray shared object store.
 - [ ] **Phase 5: Performance Optimization**: Implement multiprocessing/Ray logic in `Grand4DTournament`.
+- [x] **Benchmark Gate: Quantified Antifragility**: Added strategy-level convexity and crisis-response metrics to tournament summaries (`scripts/backtest_engine.py`) and audits (`scripts/research/audit_tournament_forensics.py`).
+- [ ] **Benchmark Scoreboard Expansion**: Integrate Beta/HHI/Tail Risk/Turnover/Simulator Parity/Regime Robustness gates into a single tournament scoreboard and candidate filter.
 - [x] **Phase 3: Directory Restructuring**: Audit Validated (Run `20260103-235511`).
 
 - [x] **Phase 4: Script Audit & Cleanup**: Completed. Categorized and archived 110+ scripts.
