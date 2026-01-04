@@ -290,6 +290,38 @@ def _solve_cvxpy(
         return np.array([1.0 / n] * n)
 
 
+class MarketBaselineEngine(BaseRiskEngine):
+    @property
+    def name(self) -> str:
+        return "market_baseline"
+
+    @classmethod
+    def is_available(cls) -> bool:
+        return True
+
+    def optimize(self, *, returns: pd.DataFrame, clusters: Dict[str, List[str]], meta: Optional[Dict[str, Any]], stats: Optional[pd.DataFrame], request: EngineRequest) -> EngineResponse:
+        targets = list(returns.columns)
+        if not targets:
+            return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(), meta={"backend": "market_ew_empty"}, warnings=["empty returns"])
+
+        w = 1.0 / len(targets)
+        rows = []
+        for s in targets:
+            m = (meta or {}).get(str(s), {})
+            direction = str(m.get("direction", "LONG"))
+            rows.append(
+                {
+                    "Symbol": str(s),
+                    "Weight": w,
+                    "Net_Weight": w * (1.0 if direction == "LONG" else -1.0),
+                    "Direction": direction,
+                    "Cluster_ID": "MARKET_EW",
+                    "Description": m.get("description", "N/A"),
+                }
+            )
+        return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(rows), meta={"backend": "market_ew"}, warnings=[])
+
+
 class CustomClusteredEngine(BaseRiskEngine):
     @property
     def name(self) -> str:
@@ -416,18 +448,32 @@ class CustomClusteredEngine(BaseRiskEngine):
         if stats_local.empty:
             return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["no mapping"]
         best_per_cluster = stats_local.sort_values("Antifragility_Score", ascending=False).groupby("Cluster_ID").first()
-        top_clusters = best_per_cluster.sort_values("Antifragility_Score", ascending=False).head(request.max_aggressor_clusters)
+        ranked = best_per_cluster.sort_values("Antifragility_Score", ascending=False)
+
+        max_aggressor_clusters = min(int(request.max_aggressor_clusters), max(0, len(ranked) - 1))
+        if max_aggressor_clusters <= 0:
+            fallback_weights = self._optimize_cluster_weights(
+                universe=universe,
+                request=EngineRequest(profile="hrp", cluster_cap=request.cluster_cap, risk_free_rate=request.risk_free_rate),
+            )
+            fallback_df = _weights_df_from_cluster_weights(universe=universe, cluster_weights=fallback_weights, meta=meta)
+            return fallback_df, {"backend": "custom"}, ["barbell fallback: insufficient clusters for core"]
+
+        top_clusters = ranked.head(max_aggressor_clusters)
         aggressor_symbols = [str(s) for s in top_clusters["Symbol"].tolist()]
         aggressor_cluster_ids = [str(c) for c in top_clusters.index.tolist()]
         if not aggressor_symbols:
             return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["no aggressors"]
-        agg_total = {"QUIET": 0.15, "TURBULENT": 0.08, "CRISIS": 0.05}.get(request.regime, 0.10)
+        agg_total = float(request.aggressor_weight)
+        if request.aggressor_weight == EngineRequest.aggressor_weight:
+            agg_total = {"QUIET": 0.15, "TURBULENT": 0.08, "CRISIS": 0.05}.get(request.regime, agg_total)
+        agg_total = max(0.0, min(0.95, agg_total))
         agg_per = agg_total / len(aggressor_symbols)
         excluded = []
         for c_id in aggressor_cluster_ids:
             excluded.extend(universe.clusters.get(str(c_id), []))
         core_symbols = [s for s in universe.returns.columns if s not in excluded]
-        if len(core_symbols) < 2:
+        if len(core_symbols) < 1:
             return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["no core"]
         core_clusters = {c_id: [s for s in syms if s in core_symbols] for c_id, syms in universe.clusters.items() if str(c_id) not in aggressor_cluster_ids}
         core_clusters = {c_id: syms for c_id, syms in core_clusters.items() if syms}
@@ -471,6 +517,10 @@ class SkfolioEngine(CustomClusteredEngine):
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
+        if n <= 0:
+            return pd.Series(dtype=float, index=X.columns)
+        if n == 1:
+            return pd.Series([1.0], index=X.columns)
 
         # Native skfolio implementations for core profiles
         if request.profile == "equal_weight":
@@ -528,8 +578,12 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
 
         X = universe.cluster_benchmarks
         n = X.shape[1]
-
+        if n <= 0:
+            return pd.Series(dtype=float, index=X.columns)
+        if n == 1:
+            return pd.Series([1.0], index=X.columns)
         cap = _effective_cap(request.cluster_cap, n)
+
         if request.profile == "hrp":
             hrp = HRPOpt(X)
             weights = hrp.optimize()
@@ -680,6 +734,7 @@ class AdaptiveMetaEngine(BaseRiskEngine):
 
 
 _ENGINE_CLASSES = {
+    "market": MarketBaselineEngine,
     "custom": CustomClusteredEngine,
     "skfolio": SkfolioEngine,
     "riskfolio": RiskfolioEngine,
