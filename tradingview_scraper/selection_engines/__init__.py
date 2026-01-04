@@ -27,3 +27,7 @@ def build_selection_engine(mode: str) -> BaseSelectionEngine:
     if mode not in SELECTION_ENGINES:
         raise ValueError(f"Unknown selection mode: {mode}")
     return SELECTION_ENGINES[mode]()
+
+
+def get_selection_engine(mode: str) -> BaseSelectionEngine:
+    return build_selection_engine(mode)

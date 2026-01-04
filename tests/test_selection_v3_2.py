@@ -10,7 +10,7 @@ from tradingview_scraper.settings import FeatureFlags
 
 
 def test_v3_2_logmps_parity_with_v3_1():
-    """Verify that v3.2 with default weights matches v3.1 logic results."""
+    """Verify that v3.2 Log-MPS matches v3.1 when weights are neutral."""
     np.random.seed(42)
     n_days = 100
     n_syms = 10
@@ -26,11 +26,19 @@ def test_v3_2_logmps_parity_with_v3_1():
     # Run v3.1
     res_v31 = engine_v31.select(returns, raw_candidates, stats_df=None, request=request)
 
-    # Run v3.2 with flag ON and default weights
+    # Run v3.2 with flag ON and neutral weights (parity mode)
     with patch("tradingview_scraper.selection_engines.engines.get_settings") as mock_get:
-        # We need to preserve other flags if they affect selection
-        # Default FeatureFlags has most things off.
-        mock_get.return_value.features = FeatureFlags(feat_selection_logmps=True)
+        parity_weights = {
+            "momentum": 1.0,
+            "stability": 1.0,
+            "liquidity": 1.0,
+            "antifragility": 1.0,
+            "survival": 1.0,
+            "efficiency": 1.0,
+            "entropy": 0.0,
+            "hurst_clean": 0.0,
+        }
+        mock_get.return_value.features = FeatureFlags(feat_selection_logmps=True, weights_global=parity_weights)
         res_v32 = engine_v32.select(returns, raw_candidates, stats_df=None, request=request)
 
     assert [w["symbol"] for w in res_v32.winners] == [w["symbol"] for w in res_v31.winners]

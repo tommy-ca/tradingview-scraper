@@ -170,7 +170,13 @@ class SelectionEngineV2(BaseSelectionEngine):
                 sub_rets = sub_rets.to_frame()
 
             actual_top_n = request.top_n
-            # Dynamic selection logic omitted for pure V2/V2.1 comparison unless requested
+            if settings.features.feat_dynamic_selection and len(symbols) > 1:
+                c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
+                n_syms = len(symbols)
+                if n_syms > 1:
+                    upper_indices = np.triu_indices(n_syms, k=1)
+                    mean_c = float(np.mean(c_corr.values[upper_indices]))
+                    actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
 
             # MOMENTUM GATE (Local window)
             window = min(60, len(sub_rets))
@@ -431,12 +437,13 @@ class SelectionEngineV3(BaseSelectionEngine):
                 adv = 1e8
 
             vol_val = float(vol_all[s]) if s in vol_all.index else 0.5
-            # Cap ECI impact at 10% to prevent numerical blowups in illiquid data
-            eci = min(0.10, float(vol_val * np.sqrt(order_size / adv)))
+            eci_raw = float(vol_val * np.sqrt(order_size / adv))
+            # Cap ECI in logs/metrics, but use raw ECI for veto decisions.
+            eci = min(0.10, eci_raw)
 
             annual_alpha = float(mom_all[s]) if s in mom_all.index else 0.0
-            if annual_alpha - eci < self.eci_hurdle:
-                _record_veto(str(s), f"High ECI ({eci:.4f}) relative to Alpha ({annual_alpha:.4f})")
+            if annual_alpha - eci_raw < self.eci_hurdle:
+                _record_veto(str(s), f"High ECI ({eci_raw:.4f}) relative to Alpha ({annual_alpha:.4f})")
 
         for s in disqualified:
             alpha_scores.loc[s] = -1.0
