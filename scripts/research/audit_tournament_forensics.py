@@ -69,7 +69,8 @@ def load_audit_data(run_id: str) -> pd.DataFrame:
                 # 3. Aggregated Summary Metrics (per config)
                 if data.get("step") == "backtest_summary" and data.get("status") == "success":
                     ctx = data.get("context", {})
-                    metrics = data.get("metrics", {})
+                    outcome = data.get("outcome", {})
+                    metrics = outcome.get("metrics", {})
 
                     rows.append(
                         {
