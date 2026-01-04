@@ -2,16 +2,16 @@ import json
 
 import pandas as pd
 
-from scripts.track_portfolio_state import accept_state, track_drift
+from scripts.maintenance.track_portfolio_state import accept_state, track_drift
 
 
 def test_accept_state_lifecycle(tmp_path, monkeypatch):
     """Verify that accept_state correctly snapshots current optimal."""
     test_state_file = tmp_path / "portfolio_actual_state.json"
-    monkeypatch.setattr("scripts.track_portfolio_state.STATE_FILE", str(test_state_file))
+    monkeypatch.setattr("scripts.maintenance.track_portfolio_state.STATE_FILE", str(test_state_file))
 
     optimized_data = {"profiles": {"max_sharpe": {"assets": [{"Symbol": "X", "Weight": 1.0}]}}}
-    monkeypatch.setattr("scripts.track_portfolio_state._load_optimized_data", lambda: optimized_data)
+    monkeypatch.setattr("scripts.maintenance.track_portfolio_state._load_optimized_data", lambda: optimized_data)
 
     # Run accept
     accept_state(backup=False)
@@ -29,7 +29,7 @@ def test_partial_rebalance_dust_filtering(tmp_path, monkeypatch, capsys):
     """Verify that small drifts are skipped when feat_partial_rebalance is ON."""
     # Setup temporary state file
     test_state_file = tmp_path / "portfolio_actual_state.json"
-    monkeypatch.setattr("scripts.track_portfolio_state.STATE_FILE", str(test_state_file))
+    monkeypatch.setattr("scripts.maintenance.track_portfolio_state.STATE_FILE", str(test_state_file))
 
     # Enable feature flag
     settings = get_settings()
@@ -59,7 +59,7 @@ def test_partial_rebalance_dust_filtering(tmp_path, monkeypatch, capsys):
     def mock_load_optimized():
         return optimized_data
 
-    monkeypatch.setattr("scripts.track_portfolio_state._load_optimized_data", mock_load_optimized)
+    monkeypatch.setattr("scripts.maintenance.track_portfolio_state._load_optimized_data", mock_load_optimized)
 
     # Run track_drift with 1% threshold
     orders_csv = tmp_path / "orders.csv"

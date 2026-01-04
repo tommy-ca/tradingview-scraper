@@ -4,13 +4,13 @@ import pandas as pd
 import pytest
 
 # Import the script's function
-from scripts.cleanup_metadata_catalog import cleanup_metadata_catalog
+from scripts.maintenance.cleanup_metadata_catalog import cleanup_metadata_catalog
 
 
 @pytest.fixture
 def mock_catalogs(tmp_path):
     """Sets up mock MetadataCatalog and ExchangeCatalog with temporary paths."""
-    with patch("scripts.cleanup_metadata_catalog.MetadataCatalog") as MockMeta, patch("scripts.cleanup_metadata_catalog.ExchangeCatalog") as MockEx:
+    with patch("scripts.maintenance.cleanup_metadata_catalog.MetadataCatalog") as MockMeta, patch("scripts.maintenance.cleanup_metadata_catalog.ExchangeCatalog") as MockEx:
         # Mock MetadataCatalog
         meta_inst = MockMeta.return_value
         meta_inst._df = pd.DataFrame(

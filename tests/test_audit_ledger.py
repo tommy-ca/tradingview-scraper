@@ -5,7 +5,7 @@ import sys
 # Ensure imports work for local modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from scripts.verify_ledger import verify_audit_chain  # type: ignore
+from scripts.archive.verify_ledger import verify_audit_chain  # type: ignore
 from tradingview_scraper.utils.audit import AuditLedger  # type: ignore
 
 
