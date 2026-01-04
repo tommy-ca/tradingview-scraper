@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
@@ -263,7 +264,18 @@ class BacktestEngine:
             market_env, _ = cast(Any, self.detector).detect_quadrant_regime(train_data_raw)
             stats_df = self._audit_training_stats(train_data_raw)
 
-            if settings.dynamic_universe and self.raw_candidates:
+            candidate_symbols = []
+            for c in self.raw_candidates:
+                if isinstance(c, dict):
+                    sym = c.get("symbol")
+                else:
+                    sym = str(c)
+                if sym:
+                    candidate_symbols.append(str(sym))
+
+            has_candidate_overlap = any(s in train_data_raw.columns for s in candidate_symbols)
+
+            if settings.dynamic_universe and self.raw_candidates and has_candidate_overlap:
                 response = run_selection(
                     train_data_raw,
                     self.raw_candidates,
@@ -280,7 +292,11 @@ class BacktestEngine:
                 for b_sym in settings.benchmark_symbols:
                     if b_sym in train_data_raw.columns and b_sym not in current_symbols:
                         current_symbols.append(b_sym)
-                train_data, candidate_meta = train_data_raw[current_symbols], {w["symbol"]: w for w in winners}
+                if current_symbols:
+                    train_data, candidate_meta = train_data_raw[current_symbols], {w["symbol"]: w for w in winners}
+                else:
+                    logger.warning("Dynamic selection produced empty universe; falling back to selected universe.")
+                    train_data, candidate_meta = train_data_raw, {}
             else:
                 train_data, candidate_meta = train_data_raw, {}
 
@@ -322,7 +338,30 @@ class BacktestEngine:
                             market_env,
                             bayesian_params=b_params,
                         )
-                        if ledger and not weights_df.empty:
+                        if ledger:
+                            opt_context = {
+                                **window_context_base,
+                                "engine": eng,
+                                "profile": prof,
+                            }
+                            weights_payload = {}
+                            if not weights_df.empty:
+                                try:
+                                    weights_payload = weights_df.set_index("Symbol")["Weight"].to_dict()
+                                except Exception:
+                                    weights_payload = {}
+                            ledger.record_outcome(
+                                step="backtest_optimize",
+                                status="success" if not weights_df.empty else "empty",
+                                output_hashes={"window_weights": get_df_hash(weights_df)},
+                                metrics={"n_assets": len(weights_df)},
+                                data={"weights": weights_payload},
+                                context=opt_context,
+                            )
+                        if not weights_df.empty:
+                            cached_weights[(eng, prof)] = weights_df
+                    except Exception as e:
+                        if ledger:
                             opt_context = {
                                 **window_context_base,
                                 "engine": eng,
@@ -330,15 +369,11 @@ class BacktestEngine:
                             }
                             ledger.record_outcome(
                                 step="backtest_optimize",
-                                status="success",
-                                output_hashes={"window_weights": get_df_hash(weights_df)},
-                                metrics={"n_assets": len(weights_df)},
-                                data={"weights": weights_df.set_index("Symbol")["Weight"].to_dict()},
+                                status="error",
+                                output_hashes={"error": hashlib.sha256(str(e).encode()).hexdigest()},
+                                metrics={"eng": eng, "prof": prof, "error": str(e)},
                                 context=opt_context,
                             )
-                        if not weights_df.empty:
-                            cached_weights[(eng, prof)] = weights_df
-                    except Exception as e:
                         logger.error(f"Engine {eng} Profile {prof} failed: {e}")
 
             # Special Baselines
@@ -346,10 +381,25 @@ class BacktestEngine:
             raw_pool_returns_hash = None
             try:
                 raw_w_df = None
-                w_market = self._compute_weights(train_data_raw, clusters, stats_df_final, "market", "custom", 1.0, candidate_meta, None, regime, market_env)
+                baseline_opt = build_engine("custom")
+
+                w_market = baseline_opt.optimize(
+                    returns=train_data_raw,
+                    clusters=clusters,
+                    meta=candidate_meta,
+                    stats=stats_df_final,
+                    request=EngineRequest(profile=cast(ProfileName, "market"), engine="custom", cluster_cap=1.0),
+                ).weights
                 if not w_market.empty:
                     cached_weights[(baseline_engine, "market")] = w_market
-                w_bench = self._compute_weights(train_data, clusters, stats_df_final, "benchmark", "custom", 1.0, candidate_meta, None, regime, market_env)
+
+                w_bench = baseline_opt.optimize(
+                    returns=train_data,
+                    clusters=clusters,
+                    meta=candidate_meta,
+                    stats=stats_df_final,
+                    request=EngineRequest(profile=cast(ProfileName, "benchmark"), engine="custom", cluster_cap=1.0),
+                ).weights
                 if not w_bench.empty:
                     cached_weights[(baseline_engine, "benchmark")] = w_bench
 
@@ -442,6 +492,25 @@ class BacktestEngine:
                             )
                         cumulative[(s_name, eng, prof)].append(d_returns)
                     except Exception as e:
+                        if ledger:
+                            sim_context = {
+                                **window_context_base,
+                                "engine": eng,
+                                "profile": prof,
+                                "simulator": s_name,
+                            }
+                            if prof == "raw_pool_ew":
+                                if raw_pool_symbol_count:
+                                    sim_context["raw_pool_symbol_count"] = raw_pool_symbol_count
+                                if raw_pool_returns_hash:
+                                    sim_context["raw_pool_returns_hash"] = raw_pool_returns_hash
+                            ledger.record_outcome(
+                                step="backtest_simulate",
+                                status="error",
+                                output_hashes={"error": hashlib.sha256(str(e).encode()).hexdigest()},
+                                metrics={"eng": eng, "prof": prof, "sim": s_name, "error": str(e)},
+                                context=sim_context,
+                            )
                         results[s_name][eng][prof].setdefault("errors", []).append(str(e))
 
         baseline_returns: Dict[str, Dict[str, pd.Series]] = {s: {} for s in sim_names}
@@ -587,6 +656,26 @@ class BacktestEngine:
         return s
 
 
+def persist_tournament_artifacts(res: Dict[str, Any], data_dir: Path) -> None:
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    out_path = data_dir / "tournament_results.json"
+    with open(out_path, "w") as f:
+        json.dump({"meta": res.get("meta", {}), "results": res.get("results", {})}, f, indent=2)
+
+    returns = res.get("returns")
+    if not isinstance(returns, dict) or not returns:
+        return
+
+    ret_dir = data_dir / "returns"
+    ret_dir.mkdir(parents=True, exist_ok=True)
+    for k, v in returns.items():
+        try:
+            v.to_pickle(ret_dir / f"{k}.pkl")
+        except Exception as e:
+            logger.warning("Failed to persist returns series %s: %s", k, e)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--train", type=int, default=None)
@@ -623,15 +712,8 @@ if __name__ == "__main__":
             end_date=args.end_date,
         )
         settings = get_settings()
-        out = settings.prepare_summaries_run_dir()
+        settings.prepare_summaries_run_dir()
         data_dir = settings.run_data_dir
-        with open(data_dir / "tournament_results.json", "w") as f:
-            json.dump({"meta": res["meta"], "results": res["results"]}, f, indent=2)
+        persist_tournament_artifacts(res, data_dir)
 
         settings.promote_summaries_latest()
-
-        if "returns" in res:
-            ret_dir = data_dir / "returns"
-            ret_dir.mkdir(parents=True, exist_ok=True)
-            for k, v in res["returns"].items():
-                v.to_pickle(ret_dir / f"{k}.pkl")

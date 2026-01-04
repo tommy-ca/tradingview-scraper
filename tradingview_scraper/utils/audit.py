@@ -23,12 +23,26 @@ def get_df_hash(df: pd.DataFrame | pd.Series) -> str:
         return hashlib.sha256(b"empty").hexdigest()
 
     try:
+        obj = df.copy()
+
+        idx = obj.index
+        if isinstance(idx, pd.DatetimeIndex) and idx.tz is not None:
+            obj.index = idx.tz_convert(None)
+
+        if isinstance(obj, pd.DataFrame):
+            try:
+                obj = obj.sort_index().sort_index(axis=1)
+            except Exception:
+                obj = obj.reindex(sorted(obj.index, key=str)).reindex(columns=sorted(obj.columns, key=str))
+        else:
+            try:
+                obj = obj.sort_index()
+            except Exception:
+                obj = obj.reindex(sorted(obj.index, key=str))
+
         # 1. Standardize Index
-        # Force all DatetimeIndices to naive UTC
-        idx = df.index
+        idx = obj.index
         if isinstance(idx, pd.DatetimeIndex):
-            if idx.tz is not None:
-                idx = idx.tz_convert(None)
             # Use ISO format for maximum string stability
             idx_list = idx.strftime("%Y-%m-%dT%H:%M:%S").tolist()
         else:
@@ -38,14 +52,14 @@ def get_df_hash(df: pd.DataFrame | pd.Series) -> str:
 
         # 2. Standardize Columns (if DataFrame)
         cols_str = ""
-        if isinstance(df, pd.DataFrame):
-            cols_str = "|".join([str(c) for c in df.columns])
+        if isinstance(obj, pd.DataFrame):
+            cols_str = "|".join([str(c) for c in obj.columns])
 
         # 3. Standardize Data
         # We use a high-precision rounded string representation for floats to avoid
         # float64 byte variations across different architectures/OS.
         # 8 decimals is enough for financial returns.
-        data_flat = df.to_numpy().flatten()
+        data_flat = obj.to_numpy().flatten()
         data_list = []
         for x in data_flat:
             try:
