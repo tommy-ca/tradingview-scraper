@@ -148,7 +148,7 @@ def _beta_corr(x: pd.Series, y: pd.Series) -> Tuple[Optional[float], Optional[fl
     var = _safe_float(float(np.var(y2)))
     if var is None or var <= 0:
         return None, corr
-    cov = _safe_float(float(np.cov(x2, y2)[0, 1]))
+    cov = _safe_float(float(np.mean((x2 - x2.mean()) * (y2 - y2.mean()))))
     if cov is None:
         return None, corr
     beta = float(cov / var)
