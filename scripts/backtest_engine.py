@@ -444,12 +444,56 @@ class BacktestEngine:
                     except Exception as e:
                         results[s_name][eng][prof].setdefault("errors", []).append(str(e))
 
+        baseline_returns: Dict[str, Dict[str, pd.Series]] = {s: {} for s in sim_names}
+        for s in sim_names:
+            for b_prof in baseline_profiles:
+                pieces = cumulative.get((s, baseline_engine, b_prof))
+                if pieces:
+                    baseline_returns[s][b_prof] = pd.concat(pieces)
+
         for s in sim_names:
             for eng, p_map in results[s].items():
                 for prof, p_data in p_map.items():
                     if prof != "_status" and p_data.get("windows"):
                         full_rets = pd.concat(cumulative[(s, eng, prof)])
-                        p_data["summary"] = self._summarize_results(p_data["windows"], full_rets)
+                        ref_label: Optional[str] = None
+                        ref_series: Optional[pd.Series] = None
+                        for candidate in ["market", "raw_pool_ew", "benchmark"]:
+                            if candidate in baseline_returns.get(s, {}):
+                                ref_label = candidate
+                                ref_series = baseline_returns[s][candidate]
+                                break
+                        summary = self._summarize_results(
+                            p_data["windows"],
+                            full_rets,
+                            reference_returns=ref_series,
+                            reference_label=ref_label,
+                        )
+                        p_data["summary"] = summary
+                        if ledger and isinstance(summary, dict):
+                            summary_context = {
+                                **context_base,
+                                "engine": eng,
+                                "profile": prof,
+                                "simulator": s,
+                            }
+                            dist = cast(Dict[str, Any], summary.get("antifragility_dist", {}))
+                            stress = cast(Dict[str, Any], summary.get("antifragility_stress", {}))
+                            ledger.record_outcome(
+                                step="backtest_summary",
+                                status="success",
+                                output_hashes={"cumulative_returns": get_df_hash(full_rets)},
+                                metrics={
+                                    "eng": eng,
+                                    "prof": prof,
+                                    "sim": s,
+                                    "af_dist": dist.get("af_dist"),
+                                    "stress_alpha": stress.get("stress_alpha"),
+                                    "stress_delta": stress.get("stress_delta"),
+                                    "stress_ref": stress.get("reference", ref_label),
+                                },
+                                context=summary_context,
+                            )
 
         meta_plus = {"train_window": train_window, "test_window": test_window, "step_size": step_size, "simulators": sim_names}
         return {"meta": meta_plus, "results": results, "returns": {f"{s}_{e}_{p}": pd.concat(v) for (s, e, p), v in cumulative.items() if v}}
@@ -507,10 +551,27 @@ class BacktestEngine:
         )
         return build_engine(engine).optimize(returns=train_data, clusters=clusters, meta=meta, stats=stats_df, request=req).weights
 
-    def _summarize_results(self, windows: List[Dict], cumulative_returns: pd.Series) -> Dict:
-        from tradingview_scraper.utils.metrics import calculate_performance_metrics
+    def _summarize_results(
+        self,
+        windows: List[Dict],
+        cumulative_returns: pd.Series,
+        *,
+        reference_returns: Optional[pd.Series] = None,
+        reference_label: Optional[str] = None,
+    ) -> Dict:
+        from tradingview_scraper.utils.metrics import (
+            calculate_antifragility_distribution,
+            calculate_antifragility_stress,
+            calculate_performance_metrics,
+        )
 
         s = calculate_performance_metrics(cumulative_returns)
+        s["antifragility_dist"] = calculate_antifragility_distribution(cumulative_returns)
+        if reference_returns is not None and reference_label is not None:
+            stress = calculate_antifragility_stress(cumulative_returns, reference_returns)
+            stress["reference"] = reference_label
+            s["antifragility_stress"] = stress
+
         if not windows:
             s.update({"total_cumulative_return": s.get("total_return", 0.0), "avg_window_return": 0.0, "avg_window_sharpe": 0.0, "avg_turnover": 0.0, "win_rate": 0.0})
             return s
