@@ -44,8 +44,11 @@ def cleanup_metadata_catalog():
     logger.info("Fixing data types...")
 
     # Convert pricescale and minmov to int
-    df["pricescale"] = pd.to_numeric(df["pricescale"], errors="coerce").fillna(1).astype("Int64")
-    df["minmov"] = pd.to_numeric(df["minmov"], errors="coerce").fillna(1).astype("Int64")
+    pricescale = pd.Series(pd.to_numeric(df["pricescale"], errors="coerce"))
+    minmov = pd.Series(pd.to_numeric(df["minmov"], errors="coerce"))
+
+    df["pricescale"] = pd.Series(pricescale).fillna(1).astype("Int64")
+    df["minmov"] = pd.Series(minmov).fillna(1).astype("Int64")
 
     # Recalculate tick_size
     logger.info("Recalculating tick_size...")
@@ -56,11 +59,19 @@ def cleanup_metadata_catalog():
     crypto_exchanges = {ex for ex, meta in DEFAULT_EXCHANGE_METADATA.items() if meta.get("is_crypto")}
 
     # Fix timezone for crypto symbols
-    crypto_mask = df["exchange"].isin(crypto_exchanges)
+    crypto_mask = df["exchange"].isin(list(crypto_exchanges))
+    if "timezone" in df.columns:
+        df["timezone"] = df["timezone"].astype("string")
+    else:
+        df["timezone"] = pd.Series(pd.NA, index=df.index, dtype="string")
     df.loc[crypto_mask & df["timezone"].isna(), "timezone"] = "UTC"
 
     # Fix session for crypto symbols
     crypto_types = ["spot", "swap"]
+    if "session" in df.columns:
+        df["session"] = df["session"].astype("string")
+    else:
+        df["session"] = pd.Series(pd.NA, index=df.index, dtype="string")
     crypto_session_mask = crypto_mask & df["type"].isin(crypto_types) & df["session"].isna()
     df.loc[crypto_session_mask, "session"] = "24x7"
 

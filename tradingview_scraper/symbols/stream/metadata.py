@@ -344,7 +344,11 @@ class MetadataCatalog:
 
         # 3. Append new records
         if new_records:
-            self._df = pd.concat([self._df, pd.DataFrame(new_records)], ignore_index=True)
+            new_df = pd.DataFrame(new_records)
+            if self._df.empty:
+                self._df = new_df.reset_index(drop=True)
+            else:
+                self._df = pd.concat([self._df, new_df], ignore_index=True)
 
         self.save()
 
@@ -374,7 +378,11 @@ class MetadataCatalog:
             new_records.append(record)
 
         if new_records:
-            self._df = pd.concat([self._df, pd.DataFrame(new_records)], ignore_index=True)
+            new_df = pd.DataFrame(new_records)
+            if self._df.empty:
+                self._df = new_df.reset_index(drop=True)
+            else:
+                self._df = pd.concat([self._df, new_df], ignore_index=True)
             self.save()
             logger.info(f"Retired {len(new_records)} symbols. New inactive versions created.")
 
