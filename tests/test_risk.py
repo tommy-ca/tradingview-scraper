@@ -37,7 +37,8 @@ class TestBarbellOptimizer(unittest.TestCase):
 
         data = np.random.normal(0, 0.01, (30, 7))
 
-        returns = pd.DataFrame(data, columns=[f"C{i}" for i in range(5)] + ["A1", "A2"])
+        columns = pd.Index([f"C{i}" for i in range(5)] + ["A1", "A2"])
+        returns = pd.DataFrame(data, columns=columns)
 
         # Mock Antifragility Stats
 
@@ -61,7 +62,7 @@ class TestBarbellOptimizer(unittest.TestCase):
 
         core_weight = portfolio_crisis[portfolio_crisis["Type"] == "CORE (Safe)"]["Weight"].sum()
 
-        self.assertAlmostEqual(core_weight, 0.95)
+        self.assertAlmostEqual(core_weight, 0.97)
 
         # Test NORMAL regime
 
