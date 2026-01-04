@@ -118,7 +118,8 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
             cvar_95 = var_95
 
         sortino = float(qs.stats.sortino(rets, rf=0, periods=ann_factor))
-        calmar = float(qs.stats.calmar(rets))
+        # Avoid division-by-zero RuntimeWarning inside QuantStats when max drawdown is 0.
+        calmar = float(annualized_return) / (abs(max_drawdown_qs) + 1e-12)
         omega = float(qs.stats.omega(rets))
 
         return {

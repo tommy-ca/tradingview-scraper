@@ -148,8 +148,13 @@ def calculate_stationarity_score(returns: np.ndarray) -> float:
         return 0.5
 
     try:
+        if float(np.nanstd(returns)) < 1e-12:
+            return 0.5
+
         # p-value: probability that the process has a unit root (non-stationary)
-        result = adfuller(returns)
+        # StatsModels ADF can emit RuntimeWarnings for degenerate series; suppress locally.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            result = adfuller(returns)
         p_value = float(result[1])
         return p_value  # High p-value = non-stationary
     except Exception as e:
