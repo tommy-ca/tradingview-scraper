@@ -14,14 +14,14 @@
 - [x] **Friction Alignment Fix**: Resolved cash-leg cost double-counting in simple simulators.
 
 ## Current Focus
-- **Full Production Sweep (Q1 2026)**: Execute the first official multi-dimensional tournament with sleeve-aware gating and high-fidelity friction alignment.
-- **Institutional Reporting**: Finalize the unified tearsheet and alpha audit for the Q1 candidate list.
+- **Full Production Sweep (Q1 2026)**: Completed. Successfully generated the first official multi-dimensional tournament with sleeve-aware gating. (Run `20260106-prod-q1`)
+- **Institutional Reporting**: Finalizing the unified tearsheet and alpha audit for the Q1 candidate list.
 - **Guardrail sentinel readiness**: Keep canonical and selected guardrail pairs re-run quarterly.
 
 ## Next Steps Tracker (Rescheduled Queue)
 
 ### Now (Jan 2026): Production Operations
-- [ ] **Q1 2026 Institutional Scoreboard**: Launch full Grand 4D tournament (`LOOKBACK=500`, full dimension grid).
+- [x] **Q1 2026 Institutional Scoreboard**: Completed (Run `20260106-prod-q1`). 4 Strict Candidates emerged.
 - [ ] **Downstream consumer migration**: Update forensics/reporting to use explicit `decision_*` regime keys (avoid implicit `windows[].regime`).
 - [x] **Stabilization Audit**: Completed the Q1 2026 strict-scoreboard issue backlog (ISS-001 to ISS-008). See `docs/specs/audit_q1_2026_scoreboard_stabilization.md` for resolution history.
 
