@@ -90,9 +90,11 @@ Antifragility is measured at the **strategy** level using **out-of-sample (OOS)*
     - $MDD = \min_t \left(\frac{Equity_t}{\max_{\tau \le t} Equity_{\tau}} - 1\right)$
 - **Standard (Relative to `market`)**:
     - **Institutional (<= 1.25x baseline)**: $|CVaR_{95}^{strategy}| \le 1.25\,|CVaR_{95}^{mkt}|$ and $|MDD^{strategy}| \le 1.25\,|MDD^{mkt}|$.
-    - **Fragile (> 1.25x baseline)**: Tail loss / drawdown materially worse than the market hurdle.
+    - **Commodity Exception (<= 3.0x baseline)**: Structurally volatile asset classes (e.g., commodity proxy ETFs) are permitted up to 3.0x baseline tail risk.
+    - **Fragile (> 1.25x baseline)**: Tail loss / drawdown materially worse than the market hurdle (unless exempt).
 
 ### 2.8 Turnover Efficiency (Churn)
+
 - **Metric**: One-way turnover as a proxy for implementability drag.
 - **Definition**: $Turnover = \sum |w_t - w_{t-1}| / 2$ (one-way).
 - **Standard (within same tournament settings)**:
@@ -104,7 +106,9 @@ Antifragility is measured at the **strategy** level using **out-of-sample (OOS)*
 - **Metric**: Divergence between independent high-fidelity simulators.
 - **Standard**:
     - **Parity Gate**: Annualized return divergence between `cvxportfolio` and `nautilus` must be < 1.5% (when both are available).
+    - **Commodity Exception**: Detected commodity sleeves are permitted up to 5.0% divergence due to friction/cost modeling deltas for lower-liquidity proxies.
  - **Implementation note (Jan 2026)**:
+
     - The repo’s current `nautilus` simulator is a **trade-based parity proxy** (not a full event-driven NautilusTrader integration yet). It is intentionally **not** CVXPortfolio, so `parity_ann_return_gap` is non-trivial and can be used to quantify the remaining simulator-fidelity gap.
     - Expect parity failures (and therefore empty strict candidates) until the Nautilus integration is upgraded to a true independent high-fidelity simulator.
 
