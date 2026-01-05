@@ -1,4 +1,5 @@
 import argparse
+import glob
 import json
 import logging
 import os
@@ -25,6 +26,7 @@ LAKEHOUSE_PATH = "data/lakehouse"
 CANDIDATES_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_candidates.json")
 CANDIDATES_RAW_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_candidates_raw.json")
 RETURNS_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_returns.pkl")
+RETURNS_RAW_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_returns_raw.pkl")
 OPTIMIZED_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_optimized_v2.json")
 FRESHNESS_THRESHOLD_HOURS = 72
 # Daily bars for TradFi can be stale across weekends/holidays; use a day-based threshold.
@@ -45,6 +47,62 @@ class PortfolioAuditor:
             "status_counts": {"OK": 0, "OK (MARKET CLOSED)": 0, "DEGRADED (GAPS)": 0, "STALE": 0, "MISSING": 0, "DROPPED": 0},
         }
         self.audit_failures = []
+
+    def _symbol_from_lakehouse_filename(self, filename: str) -> Optional[str]:
+        # Expected: <EXCHANGE>_<TICKER>_<INTERVAL>.parquet with <TICKER> possibly containing underscores.
+        if not filename.endswith(".parquet"):
+            return None
+        stem = filename[: -len(".parquet")]
+        parts = stem.split("_")
+        if len(parts) < 3:
+            return None
+        exchange = parts[0]
+        interval = parts[-1]
+        if not exchange or not interval:
+            return None
+        ticker = "_".join(parts[1:-1])
+        if not ticker:
+            return None
+        return f"{exchange}:{ticker}"
+
+    def _resolve_candidate_symbol(self, symbol: str, *, interval: str, returns_symbols: set) -> str:
+        # Selected-mode candidates should already be fully qualified (EXCHANGE:SYMBOL).
+        if ":" in symbol:
+            return symbol
+
+        # Raw-mode candidates may be unqualified (e.g., "AAPL"). If the lakehouse already contains a
+        # unique match for the daily parquet, resolve it so health checks don't false-fail.
+        try:
+            lakehouse_dir = os.path.join(LAKEHOUSE_PATH)
+            # Match any exchange prefix (NASDAQ_AAPL_1d.parquet, NYSE_AAPL_1d.parquet, ...).
+            glob_pat = os.path.join(lakehouse_dir, f"*_{symbol}_{interval}.parquet")
+            matches = sorted([p for p in glob.glob(glob_pat) if os.path.isfile(p)])
+        except Exception:
+            return symbol
+
+        resolved: List[str] = []
+        for path in matches:
+            candidate = self._symbol_from_lakehouse_filename(os.path.basename(path))
+            if candidate:
+                resolved.append(candidate)
+
+        if not resolved:
+            return symbol
+        if len(resolved) == 1:
+            return resolved[0]
+
+        in_returns = [s for s in resolved if s in returns_symbols]
+        if len(in_returns) == 1:
+            return in_returns[0]
+
+        # Prefer common US venues if ambiguous.
+        preferred_prefixes = ("NASDAQ:", "NYSE:", "AMEX:")
+        for pref in preferred_prefixes:
+            for cand in resolved:
+                if cand.startswith(pref):
+                    return cand
+
+        return resolved[0]
 
     def calculate_market_sensitivity(self, assets: List[Dict[str, Any]], returns_df: Optional[pd.DataFrame]) -> Tuple[float, float]:
         """Calculates Beta and Correlation to SPY benchmark."""
@@ -91,10 +149,11 @@ class PortfolioAuditor:
         with open(target_file, "r") as f:
             candidates = json.load(f)
 
+        returns_file = RETURNS_FILE if mode == "selected" else RETURNS_RAW_FILE
         returns_symbols = set()
-        if os.path.exists(RETURNS_FILE):
+        if os.path.exists(returns_file):
             try:
-                returns_df = pd.read_pickle(RETURNS_FILE)
+                returns_df = pd.read_pickle(returns_file)
                 if isinstance(returns_df, pd.DataFrame):
                     returns_symbols = set(returns_df.columns)
             except Exception:
@@ -107,7 +166,8 @@ class PortfolioAuditor:
         lookback_cutoff = (now - timedelta(days=lookback_days)).timestamp()
 
         for c in candidates:
-            symbol = c["symbol"]
+            raw_symbol = c["symbol"]
+            symbol = self._resolve_candidate_symbol(str(raw_symbol), interval="1d", returns_symbols=returns_symbols)
             meta = self.catalog.get_instrument(symbol)
             profile = get_symbol_profile(symbol, meta)
 

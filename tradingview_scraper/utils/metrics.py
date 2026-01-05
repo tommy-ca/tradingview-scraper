@@ -286,16 +286,33 @@ def calculate_antifragility_distribution(
     if n_obs < min_obs:
         return {"n_obs": n_obs, "is_sufficient": False}
 
-    q_hi = float(rets.quantile(q))
-    q_lo = float(rets.quantile(1.0 - q))
+    # Use negligible jitter to avoid tie-driven empty tails, then select tails on
+    # the jittered thresholds but compute statistics on the original returns.
+    rets_j = _apply_jitter(rets)
 
-    right_tail = rets[rets > q_hi]
-    left_tail = rets[rets < q_lo]
+    q_hi = float(rets_j.quantile(q))
+    q_lo = float(rets_j.quantile(1.0 - q))
+
+    right_tail = rets[rets_j >= q_hi]
+    left_tail = rets[rets_j <= q_lo]
 
     n_right = int(len(right_tail))
     n_left = int(len(left_tail))
-    if n_right < min_tail or n_left < min_tail:
-        return {"n_obs": n_obs, "n_right": n_right, "n_left": n_left, "is_sufficient": False}
+
+    # Tail sufficiency should be coherent with the chosen quantile and the sample size.
+    # Example: at q=0.95 with 160 observations, the expected tail size is ~8; requiring
+    # 10 tail points would make the metric permanently unavailable for small smokes.
+    expected_tail = max(1, int(math.floor((1.0 - float(q)) * float(n_obs))))
+    min_tail_eff = min(int(min_tail), expected_tail)
+    if n_right < min_tail_eff or n_left < min_tail_eff:
+        return {
+            "q": float(q),
+            "n_obs": n_obs,
+            "n_right": n_right,
+            "n_left": n_left,
+            "min_tail_required": int(min_tail_eff),
+            "is_sufficient": False,
+        }
 
     skew = float(rets.skew())
     tail_gain = float(right_tail.mean())
@@ -313,6 +330,7 @@ def calculate_antifragility_distribution(
         "n_obs": n_obs,
         "n_right": n_right,
         "n_left": n_left,
+        "min_tail_required": int(min_tail_eff),
         "skew": skew,
         "tail_gain": tail_gain,
         "tail_loss": tail_loss,

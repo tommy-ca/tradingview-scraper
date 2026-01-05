@@ -29,10 +29,12 @@ def _effective_cap(cluster_cap: float, n: int) -> float:
 def _safe_series(values: np.ndarray, index: pd.Index) -> pd.Series:
     if len(index) != len(values):
         raise ValueError("weights and index size mismatch")
+    if len(index) == 0:
+        return pd.Series(dtype=float, index=index)
     s = pd.Series(values, index=index)
     s = s.fillna(0.0)
     if float(s.sum()) <= 0:
-        return pd.Series(1.0 / len(index), index=index)
+        return pd.Series(1.0 / len(index), index=index) if len(index) > 0 else pd.Series(dtype=float, index=index)
     return s / float(s.sum())
 
 
@@ -396,6 +398,10 @@ class CustomClusteredEngine(BaseRiskEngine):
     def _optimize_cluster_weights(self, *, universe: ClusteredUniverse, request: EngineRequest) -> pd.Series:
         X = universe.cluster_benchmarks
         n = X.shape[1]
+        if n <= 0:
+            return pd.Series(dtype=float, index=X.columns)
+        if n == 1:
+            return pd.Series([1.0], index=X.columns)
         cap = _effective_cap(request.cluster_cap, n)
         cov = _cov_shrunk(X)
         mu_eq = cast(Any, np.asarray(X.mean(), dtype=float)) * 252
@@ -403,7 +409,7 @@ class CustomClusteredEngine(BaseRiskEngine):
         mu = mu_eq
 
         if request.profile == "equal_weight":
-            return pd.Series(1.0 / n if n > 0 else 0.0, index=X.columns)
+            return pd.Series(1.0 / n, index=X.columns)
 
         if request.profile == "hrp":
             # PURE CUSTOM HRP: Implementation of Lopez de Prado Recursive Bisection
@@ -531,6 +537,12 @@ class SkfolioEngine(CustomClusteredEngine):
         if n == 1:
             return pd.Series([1.0], index=X.columns)
 
+        # Small-n policy: skfolio HRP can be brittle for tiny universes (n=2). Default to our
+        # custom HRP implementation to keep behavior deterministic and avoid internal failures.
+        if request.profile == "hrp" and n < 3:
+            logger.warning("skfolio hrp: cluster_benchmarks n=%s < 3; using custom HRP fallback.", n)
+            return super()._optimize_cluster_weights(universe=universe, request=request)
+
         # Native skfolio implementations for core profiles
         if request.profile == "equal_weight":
             from skfolio.optimization import EqualWeighted
@@ -562,15 +574,22 @@ class SkfolioEngine(CustomClusteredEngine):
         except Exception:
             pass
 
-        model.fit(X)
-        raw = cast(Dict[Any, Any], model.weights_)
-        if isinstance(raw, dict):
-            w = np.array([float(raw.get(str(k), 0.0)) for k in X.columns])
-        else:
-            w = np.asarray(raw, dtype=float)
-            if w.size != n:
-                w = np.array([1.0 / n] * n)
-        return _enforce_cap_series(pd.Series(w, index=X.columns).fillna(0.0), cap)
+        try:
+            model.fit(X)
+            raw = cast(Dict[Any, Any], model.weights_)
+            if isinstance(raw, dict):
+                w = np.array([float(raw.get(str(k), 0.0)) for k in X.columns])
+            else:
+                w = np.asarray(raw, dtype=float)
+                if w.size != n:
+                    w = np.array([1.0 / n] * n)
+            return _enforce_cap_series(pd.Series(w, index=X.columns).fillna(0.0), cap)
+        except Exception as e:
+            if request.profile == "hrp":
+                logger.warning("skfolio hrp failed (n=%s): %s; using custom HRP fallback.", n, e)
+                return super()._optimize_cluster_weights(universe=universe, request=request)
+            logger.warning("skfolio optimize failed (profile=%s, n=%s): %s; falling back to equal-weight.", request.profile, n, e)
+            return _enforce_cap_series(pd.Series([1.0 / n] * n, index=X.columns), cap)
 
 
 class PyPortfolioOptEngine(CustomClusteredEngine):

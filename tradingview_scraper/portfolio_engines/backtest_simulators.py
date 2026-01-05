@@ -342,5 +342,5 @@ class NautilusSimulator(BaseSimulator):
 
             return run_nautilus_backtest(returns=returns, weights_df=weights_df, initial_holdings=initial_holdings, settings=get_settings())
         except Exception as e:
-            logger.warning(f"Nautilus adapter unavailable, falling back to cvxportfolio parity: {e}")
-            return CVXPortfolioSimulator().simulate(returns, weights_df, initial_holdings)
+            logger.warning(f"Nautilus adapter unavailable, falling back to custom simulator: {e}")
+            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)

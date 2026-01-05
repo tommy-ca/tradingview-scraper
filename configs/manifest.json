@@ -12,7 +12,7 @@
       "min_days_floor": 320
     },
     "selection": {
-      "top_n": 2,
+      "top_n": 5,
       "threshold": 0.45,
       "min_momentum_score": -0.05
     },
@@ -22,8 +22,8 @@
       "profile": "barbell"
     },
     "backtest": {
-      "train_window": 120,
-      "test_window": 20,
+      "train_window": 180,
+      "test_window": 40,
       "step_size": 20,
       "backtest_simulator": "cvxportfolio",
       "backtest_slippage": 0.0005,

@@ -211,8 +211,8 @@ class TradingViewScraperSettings(BaseSettings):
     cluster_cap: float = 0.25
 
     # Backtest
-    train_window: int = 120
-    test_window: int = 20
+    train_window: int = 180
+    test_window: int = 40
     step_size: int = 20
     backtest_simulator: str = "custom"
     backtest_simulators: str = "custom,cvxportfolio,vectorbt"
@@ -459,6 +459,6 @@ if __name__ == "__main__":
 
         # Export Feature Flags (Only boolean 'feat_' toggles)
         for feat_name, val in settings.features.model_dump().items():
-            if feat_name.startswith("feat_"):
+            if feat_name.startswith("feat_") and isinstance(val, bool):
                 env_val = "1" if val else "0"
                 print(f"export TV_FEATURES__{feat_name.upper()}={env_val}")

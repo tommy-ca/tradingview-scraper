@@ -26,7 +26,11 @@ class CandidateThresholds:
     max_friction_decay: float = 0.30
     max_temporal_fragility: float = 1.50
     min_selection_jaccard: float = 0.30
-    min_af_dist: float = 0.00
+    # Institutional default (Jan 2026): `af_dist` is skew-dominated, so `0.0` acts
+    # like a strict "positive skew required" gate. `-0.2` admits barbell-like
+    # profiles in stability-default (`180/40/20`) runs while still excluding the
+    # baseline `market` antifragility signature (~ -0.55 to -0.60).
+    min_af_dist: float = -0.20
     min_stress_alpha: float = 0.00
     max_turnover: float = 0.50
     max_tail_multiplier: float = 1.25
@@ -63,6 +67,92 @@ def _detect_latest_run() -> Optional[str]:
     candidates = complete or run_dirs
     candidates = sorted(candidates, key=lambda p: p.name)
     return candidates[-1].name if candidates else None
+
+
+def _iter_recent_run_ids(*, limit: int = 20) -> List[str]:
+    runs_dir = Path("artifacts/summaries/runs/")
+    if not runs_dir.exists():
+        return []
+    date_pattern = re.compile(r"^\d{8}-\d{6}$")
+    run_dirs = [d for d in runs_dir.iterdir() if d.is_dir() and not d.is_symlink() and date_pattern.match(d.name)]
+    run_ids = sorted([d.name for d in run_dirs])
+    return run_ids[-limit:]
+
+
+def _baseline_temporal_fragility_medians(scoreboard_csv: Path) -> Dict[str, float]:
+    """Baseline temporal_fragility per profile, aggregated as median across simulators."""
+    try:
+        df = pd.read_csv(scoreboard_csv)
+    except Exception:
+        return {}
+
+    if df.empty or "temporal_fragility" not in df.columns:
+        return {}
+
+    base = df[(df["engine"] == "market") & (df["profile"].isin(["market", "raw_pool_ew"]))].copy()
+    if base.empty:
+        return {}
+
+    out: Dict[str, float] = {}
+    for prof in ["market", "raw_pool_ew"]:
+        vals = base[base["profile"] == prof]["temporal_fragility"].dropna()
+        if not vals.empty:
+            out[prof] = float(np.median(vals.astype(float).values))
+    return out
+
+
+def _auto_calibrate_max_temporal_fragility(
+    *,
+    n_runs: int,
+    pctl: float,
+    raw_blowup_cutoff: float,
+    margin: float,
+    current_run_id: str,
+) -> Optional[float]:
+    """Auto-derive a temporal fragility gate from the latest N runs.
+
+    Percentile reference anchored to baseline rows:
+    - `market` baseline: always included.
+    - `raw_pool_ew` baseline: included only when not in a CV blow-up regime (median <= cutoff).
+    """
+    if n_runs <= 0:
+        return None
+
+    # Iterate backwards from newest. Use a larger scan window to tolerate missing scoreboards.
+    recent = list(reversed(_iter_recent_run_ids(limit=max(50, n_runs * 5))))
+    # Avoid leakage from the run being scored if its scoreboard already exists.
+    recent = [r for r in recent if str(r) != str(current_run_id)]
+
+    market_vals: List[float] = []
+    raw_vals: List[float] = []
+
+    for rid in recent:
+        scoreboard = Path(f"artifacts/summaries/runs/{rid}/data/tournament_scoreboard.csv")
+        if not scoreboard.exists():
+            continue
+        meds = _baseline_temporal_fragility_medians(scoreboard)
+        m = meds.get("market")
+        r = meds.get("raw_pool_ew")
+        if m is not None:
+            market_vals.append(float(m))
+        if r is not None and float(r) <= raw_blowup_cutoff:
+            raw_vals.append(float(r))
+
+        if len(market_vals) >= n_runs and len(raw_vals) >= n_runs:
+            break
+
+    # Require at least a small minimum history for calibration to be meaningful.
+    if len(market_vals) < max(3, min(n_runs, 5)):
+        return None
+
+    f_mkt = float(np.percentile(np.array(market_vals, dtype=float), pctl))
+    if raw_vals:
+        f_raw = float(np.percentile(np.array(raw_vals, dtype=float), pctl))
+        base = max(f_mkt, f_raw)
+    else:
+        base = f_mkt
+
+    return float(base + float(margin))
 
 
 def _load_json(path: Path) -> Dict[str, Any]:
@@ -126,13 +216,24 @@ def _load_returns_series(returns_dir: Path, key: str) -> Optional[pd.Series]:
         s = pd.read_pickle(path)
         if isinstance(s, pd.Series):
             s.index = pd.to_datetime(s.index)
-            return s.dropna()
+            s = s.dropna()
+            # Overlapping walk-forward windows can create duplicate timestamps when
+            # per-window return segments are concatenated. Prefer the last value.
+            if s.index.has_duplicates:
+                s = s[~s.index.duplicated(keep="last")]
+            return s.sort_index()
     except Exception:
         return None
     return None
 
 
 def _beta_corr(x: pd.Series, y: pd.Series) -> Tuple[Optional[float], Optional[float]]:
+    # Defensive: overlapping windows can introduce duplicate timestamps.
+    if x.index.has_duplicates:
+        x = x[~x.index.duplicated(keep="last")].sort_index()
+    if y.index.has_duplicates:
+        y = y[~y.index.duplicated(keep="last")].sort_index()
+
     idx = x.index.intersection(y.index)
     if idx.empty:
         return None, None
@@ -172,16 +273,19 @@ def _windows_return_series(windows: List[Dict[str, Any]]) -> Optional[pd.Series]
     if not rows:
         return None
     rows = sorted(rows, key=lambda x: x[0])
-    return pd.Series([r for _, r in rows], index=pd.DatetimeIndex([t for t, _ in rows])).dropna()
+    s = pd.Series([r for _, r in rows], index=pd.DatetimeIndex([t for t, _ in rows])).dropna()
+    if s.index.has_duplicates:
+        s = s[~s.index.duplicated(keep="last")]
+    return s.sort_index()
 
 
-def _regime_stats(windows: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _regime_stats(windows: List[Dict[str, Any]], *, regime_key: str = "regime") -> Dict[str, Any]:
     rows = []
     for w in windows:
         if not isinstance(w, dict):
             continue
         r = _safe_float(w.get("returns"))
-        regime = w.get("regime")
+        regime = w.get(regime_key)
         if r is None or not regime:
             continue
         rows.append({"regime": str(regime), "returns": float(r)})
@@ -412,7 +516,10 @@ def build_scoreboard(
                 sharpe_series = pd.Series([_safe_float(w.get("sharpe")) for w in windows]).dropna()
                 row["temporal_fragility"] = calculate_temporal_fragility(sharpe_series)
 
-                row.update(_regime_stats(windows))
+                # Prefer realized regime labels if they are available and non-null;
+                # fall back to decision-time regime labels otherwise.
+                use_realized = any(isinstance(w, dict) and ("realized_regime" in w) and (w.get("realized_regime") is not None) for w in windows)
+                row.update(_regime_stats(windows, regime_key="realized_regime" if use_realized else "regime"))
 
                 base = baseline_summary.get(str(sim), {})
                 base_cvar = _safe_float(base.get("cvar_95"))
@@ -455,6 +562,13 @@ def build_scoreboard(
         return pd.DataFrame()
 
     df = pd.DataFrame(rows)
+
+    df["is_baseline"] = (df["engine"].astype(str) == "market") & df["profile"].astype(str).isin(["market", "benchmark", "raw_pool_ew"])
+    df["baseline_role"] = None
+    mkt = df["engine"].astype(str) == "market"
+    df.loc[mkt & (df["profile"].astype(str) == "benchmark"), "baseline_role"] = "anchor"
+    df.loc[mkt & (df["profile"].astype(str) == "market"), "baseline_role"] = "baseline"
+    df.loc[mkt & (df["profile"].astype(str) == "raw_pool_ew"), "baseline_role"] = "calibration"
 
     # Cross-simulator gates computed per (selection, rebalance, engine, profile)
     def _pivot_metric(metric: str) -> pd.DataFrame:
@@ -551,11 +665,20 @@ def _write_markdown(df: pd.DataFrame, out_path: Path, *, thresholds: CandidateTh
         )
     )
 
-    md.append("\n## Top Candidates")
     cand = df[df["is_candidate"]].copy()
-    top = cand.head(50)
+    is_baseline = cand.get("is_baseline", pd.Series(False, index=cand.index)).astype(bool)
+    base_cand = cand[is_baseline].copy()
+    strat_cand = cand[~is_baseline].copy()
+
+    md.append("\n## Candidate Summary")
+    md.append(f"- Total candidate rows: {len(cand)}")
+    md.append(f"- Non-baseline candidate rows: {len(strat_cand)}")
+    md.append(f"- Baseline candidate rows: {len(base_cand)}")
+
+    md.append("\n## Top Candidates (Non-Baseline)")
+    top = strat_cand.head(50)
     if top.empty:
-        md.append("No candidates passed all gates.")
+        md.append("No non-baseline candidates passed all gates.")
     else:
         cols = [
             "selection",
@@ -579,6 +702,38 @@ def _write_markdown(df: pd.DataFrame, out_path: Path, *, thresholds: CandidateTh
         cols = [c for c in cols if c in top.columns]
         md.append(_to_markdown_table(top.loc[:, cols]))
 
+    md.append("\n## Baseline Reference Rows")
+    base = df[df.get("is_baseline", pd.Series(False, index=df.index)).astype(bool)].copy()
+    if base.empty:
+        md.append("No baseline rows present in the scoreboard payload.")
+    else:
+        # Surface baseline status prominently: these rows should be treated as reference anchors/calibration,
+        # not as "winners" in downstream ranking.
+        cols = [
+            "selection",
+            "rebalance",
+            "simulator",
+            "engine",
+            "profile",
+            "baseline_role",
+            "is_candidate",
+            "candidate_failures",
+            "avg_window_sharpe",
+            "annualized_return",
+            "max_drawdown",
+            "avg_turnover",
+            "friction_decay",
+            "temporal_fragility",
+            "selection_jaccard",
+            "af_dist",
+            "stress_alpha",
+            "cvar_mult",
+            "mdd_mult",
+            "parity_ann_return_gap",
+        ]
+        cols = [c for c in cols if c in base.columns]
+        md.append(_to_markdown_table(base.loc[:, cols]))
+
     md.append("\n## Full Scoreboard (Top 200 by candidate then Sharpe)")
     md.append(_to_markdown_table(df.head(200)))
 
@@ -590,7 +745,11 @@ def main() -> None:
     parser.add_argument("--run-id", default=None, help="Run ID (YYYYMMDD-HHMMSS) or 'latest'")
     parser.add_argument("--allow-missing", action="store_true")
     parser.add_argument("--max-friction-decay", type=float, default=CandidateThresholds.max_friction_decay)
-    parser.add_argument("--max-temporal-fragility", type=float, default=CandidateThresholds.max_temporal_fragility)
+    parser.add_argument("--max-temporal-fragility", type=float, default=None, help="Override max temporal fragility gate (disables auto-calibration).")
+    parser.add_argument("--calibration-runs", type=int, default=8, help="Latest-N runs used for temporal fragility auto-calibration.")
+    parser.add_argument("--calibration-percentile", type=float, default=95.0, help="Percentile used for temporal fragility calibration (e.g. 90, 95).")
+    parser.add_argument("--calibration-margin", type=float, default=0.25, help="Additive margin applied after temporal fragility percentile calibration.")
+    parser.add_argument("--raw-pool-blowup-cutoff", type=float, default=5.0, help="Exclude raw_pool_ew baseline medians above this cutoff when calibrating.")
     parser.add_argument("--min-selection-jaccard", type=float, default=CandidateThresholds.min_selection_jaccard)
     parser.add_argument("--min-af-dist", type=float, default=CandidateThresholds.min_af_dist)
     parser.add_argument("--min-stress-alpha", type=float, default=CandidateThresholds.min_stress_alpha)
@@ -645,9 +804,33 @@ def main() -> None:
         else:
             returns_dir = None
 
+    # Auto-calibrate max_temporal_fragility from latest N runs unless explicitly overridden.
+    max_temporal_fragility = args.max_temporal_fragility
+    if max_temporal_fragility is None:
+        auto_val = _auto_calibrate_max_temporal_fragility(
+            n_runs=int(args.calibration_runs),
+            pctl=float(args.calibration_percentile),
+            raw_blowup_cutoff=float(args.raw_pool_blowup_cutoff),
+            margin=float(args.calibration_margin),
+            current_run_id=str(run_id),
+        )
+        if auto_val is not None:
+            max_temporal_fragility = float(auto_val)
+            logger.info(
+                "Auto-calibrated max_temporal_fragility=%.4f (runs=%d pctl=%.1f margin=%.2f raw_blowup_cutoff=%.2f)",
+                max_temporal_fragility,
+                int(args.calibration_runs),
+                float(args.calibration_percentile),
+                float(args.calibration_margin),
+                float(args.raw_pool_blowup_cutoff),
+            )
+        else:
+            max_temporal_fragility = float(CandidateThresholds.max_temporal_fragility)
+            logger.info("Using default max_temporal_fragility=%.4f (insufficient history for auto-calibration).", max_temporal_fragility)
+
     thresholds = CandidateThresholds(
         max_friction_decay=args.max_friction_decay,
-        max_temporal_fragility=args.max_temporal_fragility,
+        max_temporal_fragility=float(max_temporal_fragility),
         min_selection_jaccard=args.min_selection_jaccard,
         min_af_dist=args.min_af_dist,
         min_stress_alpha=args.min_stress_alpha,

@@ -106,3 +106,39 @@ def test_build_scoreboard_candidate_flag_fails_on_friction_decay():
     row = df[(df["engine"] == "skfolio") & (df["profile"] == "hrp") & (df["simulator"] == "cvxportfolio")].iloc[0]
     assert bool(row["is_candidate"]) is False
     assert "friction_decay" in str(row["candidate_failures"])
+
+
+def test_build_scoreboard_populates_selection_jaccard_for_baselines_when_present():
+    mkt_windows = [_win("2024-01-10", sharpe=1.0, returns=0.01), _win("2024-01-20", sharpe=1.0, returns=-0.01)]
+    mkt_summary = _summary(sharpe=1.0, ann_ret=0.05, mdd=-0.10, cvar=-0.02, turnover=0.10, af_dist=0.0, stress_alpha=0.0)
+
+    results = {
+        "custom": {
+            "market": {
+                "market": {"summary": mkt_summary, "windows": mkt_windows},
+                "benchmark": {"summary": mkt_summary, "windows": mkt_windows},
+                "raw_pool_ew": {"summary": mkt_summary, "windows": mkt_windows},
+            }
+        }
+    }
+
+    audit_opt = {
+        ("v3.2", "window", "market", "market"): {"selection_jaccard": 0.90},
+        ("v3.2", "window", "market", "benchmark"): {"selection_jaccard": 0.80},
+        ("v3.2", "window", "market", "raw_pool_ew"): {"selection_jaccard": 0.70},
+    }
+
+    df = build_scoreboard(
+        results,
+        selection_mode="v3.2",
+        rebalance_mode="window",
+        audit_opt=audit_opt,
+        returns_dir=None,
+        thresholds=CandidateThresholds(),
+        allow_missing=False,
+    )
+
+    for profile, expected in [("market", 0.90), ("benchmark", 0.80), ("raw_pool_ew", 0.70)]:
+        row = df[(df["engine"] == "market") & (df["profile"] == profile) & (df["simulator"] == "custom")].iloc[0]
+        assert abs(float(row["selection_jaccard"]) - expected) < 1e-12
+        assert "missing:selection_jaccard" not in str(row["candidate_failures"])

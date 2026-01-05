@@ -19,6 +19,41 @@ ENV_OVERRIDES := \
 ENV_VARS := $(shell TV_MANIFEST_PATH=$(MANIFEST) TV_PROFILE=$(PROFILE) $(ENV_OVERRIDES) $(PY) -m tradingview_scraper.settings --export-env | sed 's/export //')
 $(foreach var,$(ENV_VARS),$(eval $(var)))
 $(foreach var,$(ENV_VARS),$(eval export $(shell echo "$(var)" | cut -d= -f1)))
+
+# Promote institutional (non-TV_) env var names to TV_-prefixed equivalents so
+# `get_settings()` consumers see Make/manifest overrides.
+#
+# - The settings model uses `env_prefix="TV_"`.
+# - `--export-env` intentionally prints human-friendly/institutional var names.
+# - Without this promotion, `make ... BACKTEST_TRAIN=...` updates the exported
+#   `BACKTEST_*` vars but not `TV_*`, so window overrides won't take effect.
+ifeq ($(origin TV_LOOKBACK_DAYS), undefined)
+export TV_LOOKBACK_DAYS := $(LOOKBACK)
+endif
+ifeq ($(origin TV_PORTFOLIO_LOOKBACK_DAYS), undefined)
+export TV_PORTFOLIO_LOOKBACK_DAYS := $(PORTFOLIO_LOOKBACK_DAYS)
+endif
+ifeq ($(origin TV_TRAIN_WINDOW), undefined)
+export TV_TRAIN_WINDOW := $(BACKTEST_TRAIN)
+endif
+ifeq ($(origin TV_TEST_WINDOW), undefined)
+export TV_TEST_WINDOW := $(BACKTEST_TEST)
+endif
+ifeq ($(origin TV_STEP_SIZE), undefined)
+export TV_STEP_SIZE := $(BACKTEST_STEP)
+endif
+ifeq ($(origin TV_BACKTEST_SIMULATOR), undefined)
+export TV_BACKTEST_SIMULATOR := $(BACKTEST_SIMULATOR)
+endif
+ifeq ($(origin TV_BACKTEST_SIMULATORS), undefined)
+export TV_BACKTEST_SIMULATORS := $(BACKTEST_SIMULATORS)
+endif
+ifeq ($(origin TV_CLUSTER_CAP), undefined)
+export TV_CLUSTER_CAP := $(CLUSTER_CAP)
+endif
+ifeq ($(origin TV_RAW_POOL_UNIVERSE), undefined)
+export TV_RAW_POOL_UNIVERSE := $(RAW_POOL_UNIVERSE)
+endif
 endif
 
 # Paths
@@ -62,7 +97,7 @@ endif
 
 # --- ENV Namespace ---
 env-sync: ## Synchronize dependencies using uv
-	uv sync
+	uv sync --all-extras
 
 env-check: ## Validate manifest and configuration integrity
 	$(PY) scripts/validate_manifest.py
@@ -79,6 +114,7 @@ scan-audit: ## Lint scanner configurations
 data-prep-raw: ## Aggregate scans and initialize raw pool
 	$(PY) scripts/select_top_universe.py --mode raw
 	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json PORTFOLIO_RETURNS_PATH=data/lakehouse/portfolio_returns_raw.pkl PORTFOLIO_META_PATH=data/lakehouse/portfolio_meta_raw.json $(PY) scripts/prepare_portfolio_data.py
+	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_candidates_raw.json --returns data/lakehouse/portfolio_returns_raw.pkl
 	-$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
 	$(PY) scripts/metadata_coverage_guardrail.py --target canonical:data/lakehouse/portfolio_candidates_raw.json:data/lakehouse/portfolio_returns_raw.pkl
 

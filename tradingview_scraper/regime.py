@@ -1,4 +1,6 @@
 import logging
+import os
+from pathlib import Path
 from typing import Dict, Tuple, cast
 
 import numpy as np
@@ -21,7 +23,14 @@ class MarketRegimeDetector:
     long-term memory (Hurst), and stationarity (ADF).
     """
 
-    def __init__(self, crisis_threshold: float = 1.8, quiet_threshold: float = 0.7):
+    def __init__(
+        self,
+        crisis_threshold: float = 1.8,
+        quiet_threshold: float = 0.7,
+        *,
+        audit_path: str | Path = "data/lakehouse/regime_audit.jsonl",
+        enable_audit_log: bool = True,
+    ):
         """
         Args:
             crisis_threshold: Weighted score above which regime is CRISIS.
@@ -29,6 +38,19 @@ class MarketRegimeDetector:
         """
         self.crisis_threshold = crisis_threshold
         self.quiet_threshold = quiet_threshold
+
+        # Environment overrides for audit logging hygiene.
+        # - `TV_DISABLE_REGIME_AUDIT=1` disables logging entirely.
+        # - `TV_REGIME_AUDIT_PATH=/path/to/file.jsonl` overrides the output path.
+        if str(os.getenv("TV_DISABLE_REGIME_AUDIT", "")).strip() in {"1", "true", "TRUE", "yes", "YES"}:
+            enable_audit_log = False
+
+        env_path = str(os.getenv("TV_REGIME_AUDIT_PATH", "")).strip()
+        if env_path:
+            audit_path = env_path
+
+        self.enable_audit_log = bool(enable_audit_log)
+        self.audit_path = Path(audit_path) if audit_path else None
 
     def _save_audit_log(
         self,
@@ -40,9 +62,9 @@ class MarketRegimeDetector:
         """Saves detection metadata to the central audit ledger."""
         import datetime
         import json
-        import os
 
-        audit_path = "data/lakehouse/regime_audit.jsonl"
+        if not self.enable_audit_log or self.audit_path is None:
+            return
 
         def _format_metric(value: float | int | str) -> float | int | str:
             if isinstance(value, (int, float, np.number)):
@@ -57,8 +79,8 @@ class MarketRegimeDetector:
             "metrics": {k: _format_metric(v) for k, v in metrics.items()},
         }
         try:
-            os.makedirs(os.path.dirname(audit_path), exist_ok=True)
-            with open(audit_path, "a") as f:
+            self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.audit_path.open("a") as f:
                 f.write(json.dumps(entry) + "\n")
         except Exception as e:
             logger.error(f"Failed to write regime audit log: {e}")

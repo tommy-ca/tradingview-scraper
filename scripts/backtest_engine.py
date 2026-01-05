@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, Iterable, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -25,6 +25,73 @@ logger = logging.getLogger("backtest_engine")
 
 
 class BacktestEngine:
+    def _min_dynamic_universe_assets(self) -> int:
+        try:
+            return int(os.getenv("TV_MIN_DYNAMIC_UNIVERSE_ASSETS", "10"))
+        except Exception:
+            return 10
+
+    def _max_symbol_daily_vol(self) -> float:
+        try:
+            return float(os.getenv("TV_MAX_SYMBOL_DAILY_VOL", "0.10"))
+        except Exception:
+            return 0.10
+
+    def _max_symbol_abs_daily_return(self) -> float:
+        try:
+            return float(os.getenv("TV_MAX_SYMBOL_ABS_DAILY_RETURN", "0.20"))
+        except Exception:
+            return 0.20
+
+    def _vol_filter_universe(self, returns: pd.DataFrame, *, context: str) -> List[str]:
+        """Universal eligibility stabilizer.
+
+        Filters symbols with extreme daily volatility in the training window to prevent
+        abrupt universe shifts and high-volatility entrants from dominating short-window
+        Sharpe behavior.
+        """
+        if returns.empty or len(returns.columns) == 0:
+            return [str(c) for c in returns.columns]
+
+        max_daily_vol = self._max_symbol_daily_vol()
+        max_abs_ret = self._max_symbol_abs_daily_return()
+        try:
+            vols = returns.std(numeric_only=True).dropna()
+        except Exception:
+            # Fallback: attempt conversion (should already be numeric)
+            vols = returns.apply(pd.to_numeric, errors="coerce").std().dropna()
+
+        if vols.empty:
+            return [str(c) for c in returns.columns]
+
+        try:
+            max_abs = returns.abs().max(numeric_only=True).dropna()
+        except Exception:
+            max_abs = returns.apply(pd.to_numeric, errors="coerce").abs().max().dropna()
+
+        eligible_mask = (vols <= max_daily_vol) & (max_abs <= max_abs_ret)
+        eligible = vols[eligible_mask].index.astype(str).tolist()
+        if not eligible:
+            logger.warning(
+                "Eligibility filter (%s): no columns under max_daily_vol=%.4f and max_abs_ret=%.4f; skipping filter.",
+                context,
+                max_daily_vol,
+                max_abs_ret,
+            )
+            return [str(c) for c in returns.columns]
+
+        removed = len(returns.columns) - len(eligible)
+        if removed > 0:
+            logger.info(
+                "Eligibility filter (%s): removed %d/%d columns failing daily_vol<=%.4f and abs_ret<=%.4f.",
+                context,
+                removed,
+                len(returns.columns),
+                max_daily_vol,
+                max_abs_ret,
+            )
+        return eligible
+
     def __init__(self, returns_path: str = "data/lakehouse/portfolio_returns.pkl"):
         env_override = os.getenv("BACKTEST_RETURNS_PATH") or os.getenv("TV_RETURNS_PATH")
         if env_override and returns_path == "data/lakehouse/portfolio_returns.pkl":
@@ -61,7 +128,98 @@ class BacktestEngine:
             with open(raw_path, "r") as f:
                 self.raw_candidates = json.load(f)
 
-        self.detector = MarketRegimeDetector()
+        # Regime detector audit logs should be run-scoped in tournament mode to avoid
+        # polluting the global `data/lakehouse/regime_audit.jsonl` file.
+        settings = get_settings()
+        self.detector = MarketRegimeDetector(audit_path=settings.summaries_run_dir / "regime_audit.jsonl")
+
+    def _normalize_raw_candidates(self) -> List[Dict[str, Any]]:
+        normalized: List[Dict[str, Any]] = []
+        for c in self.raw_candidates:
+            if isinstance(c, dict):
+                sym = c.get("symbol")
+                if sym:
+                    normalized.append({**c, "symbol": str(sym)})
+                continue
+            sym = str(c).strip()
+            if sym:
+                normalized.append({"symbol": sym})
+        return normalized
+
+    def _resolve_symbol_in_universe(self, symbol: str, *, universe_cols: List[str]) -> str:
+        sym = str(symbol).strip()
+        if not sym:
+            return sym
+
+        cols_set = set(universe_cols)
+        if sym in cols_set:
+            return sym
+
+        exchange = None
+        ticker = sym
+        if ":" in sym:
+            exchange, ticker = sym.split(":", 1)
+            ticker = ticker.strip()
+            exchange = exchange.strip()
+
+        ticker_map: Dict[str, List[str]] = {}
+        for col in universe_cols:
+            col_str = str(col)
+            col_ticker = col_str.split(":", 1)[1] if ":" in col_str else col_str
+            ticker_map.setdefault(col_ticker, []).append(col_str)
+
+        matches = ticker_map.get(ticker) or []
+        if not matches:
+            return sym
+
+        if exchange:
+            exact = f"{exchange}:{ticker}"
+            if exact in cols_set:
+                return exact
+
+        if len(matches) == 1:
+            return matches[0]
+
+        preferred_prefixes = (
+            "NASDAQ:",
+            "NYSE:",
+            "AMEX:",
+            "CME:",
+            "CBOT:",
+            "COMEX:",
+            "NYMEX:",
+            "FX:",
+            "OANDA:",
+            "BINANCE:",
+            "COINBASE:",
+            "KRAKEN:",
+        )
+        for pref in preferred_prefixes:
+            for m in matches:
+                if m.startswith(pref):
+                    return m
+
+        return matches[0]
+
+    def _resolve_symbols_in_universe(self, symbols: Iterable[str], *, universe_cols: Iterable[str]) -> List[str]:
+        cols = [str(c) for c in universe_cols]
+        resolved: List[str] = []
+        seen = set()
+        for s in symbols:
+            sym = str(s).strip()
+            if not sym:
+                continue
+            r = self._resolve_symbol_in_universe(sym, universe_cols=cols)
+            if r and r not in seen:
+                resolved.append(r)
+                seen.add(r)
+        return resolved
+
+    def _ensure_ledger_genesis(self, ledger: AuditLedger, settings) -> None:
+        if ledger.last_hash:
+            return
+        manifest_hash = hashlib.sha256(open(settings.manifest_path, "rb").read()).hexdigest() if settings.manifest_path.exists() else "unknown"
+        ledger.record_genesis(settings.run_id, settings.profile, manifest_hash)
 
     def _load_initial_state(self) -> Dict[str, pd.Series]:
         state_path = "data/lakehouse/portfolio_actual_state.json"
@@ -148,6 +306,8 @@ class BacktestEngine:
         initial_holdings = self._load_initial_state()
         run_dir = settings.prepare_summaries_run_dir()
         ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
+        if ledger:
+            self._ensure_ledger_genesis(ledger, settings)
 
         baseline_engine = "market"
         baseline_profiles = ["market", "benchmark", "raw_pool_ew"]
@@ -226,7 +386,7 @@ class BacktestEngine:
                         canonical_symbols.append(str(c))
                 canonical_symbols = [s for s in canonical_symbols if s]
                 if canonical_symbols:
-                    raw_pool_candidates = canonical_symbols
+                    raw_pool_candidates = self._resolve_symbols_in_universe(canonical_symbols, universe_cols=train_data_raw.columns)
                     raw_pool_universe_resolved = "canonical"
                 else:
                     logger.warning("raw_pool_universe set to canonical but raw candidates are empty; using selected universe.")
@@ -242,6 +402,7 @@ class BacktestEngine:
                 raw_pool_window_slice = raw_window_slice if raw_window_slice is not None else window_slice
 
             if raw_pool_universe_resolved == "canonical":
+                raw_pool_candidates = self._resolve_symbols_in_universe(raw_pool_candidates, universe_cols=raw_pool_train_data.columns)
                 if not any(s in raw_pool_train_data.columns for s in raw_pool_candidates):
                     logger.warning("canonical raw_pool_universe has no overlap with returns matrix; falling back to selected.")
                     raw_pool_candidates = list(train_data_raw.columns)
@@ -260,45 +421,145 @@ class BacktestEngine:
                 "universe_source": raw_pool_universe_resolved,
             }
 
-            regime = self.detector.detect_regime(train_data_raw)[0]
-            market_env, _ = cast(Any, self.detector).detect_quadrant_regime(train_data_raw)
+            decision_regime, decision_regime_score = self.detector.detect_regime(train_data_raw)
+            decision_quadrant, _ = cast(Any, self.detector).detect_quadrant_regime(train_data_raw)
+            regime = decision_regime
+            market_env = decision_quadrant
             stats_df = self._audit_training_stats(train_data_raw)
 
-            candidate_symbols = []
-            for c in self.raw_candidates:
-                if isinstance(c, dict):
-                    sym = c.get("symbol")
-                else:
-                    sym = str(c)
-                if sym:
-                    candidate_symbols.append(str(sym))
+            realized_regime = None
+            realized_regime_score = None
+            realized_quadrant = None
+            if str(os.getenv("TV_ENABLE_REALIZED_REGIME", "")).strip() in {"1", "true", "TRUE", "yes", "YES"}:
+                try:
+                    realized_regime, realized_regime_score = self.detector.detect_regime(test_data)
+                    realized_quadrant, _ = cast(Any, self.detector).detect_quadrant_regime(test_data)
+                except Exception:
+                    realized_regime, realized_regime_score, realized_quadrant = None, None, None
 
-            has_candidate_overlap = any(s in train_data_raw.columns for s in candidate_symbols)
+            raw_candidates_norm = self._normalize_raw_candidates()
+            candidate_symbols = [str(c.get("symbol", "")).strip() for c in raw_candidates_norm if c.get("symbol")]
+            candidate_symbols_resolved = self._resolve_symbols_in_universe(candidate_symbols, universe_cols=train_data_raw.columns)
+            has_candidate_overlap = any(s in train_data_raw.columns for s in candidate_symbols_resolved)
+
+            eligible_cols = set(self._vol_filter_universe(train_data_raw, context=f"train_window:{window_index}"))
 
             if settings.dynamic_universe and self.raw_candidates and has_candidate_overlap:
-                response = run_selection(
-                    train_data_raw,
-                    self.raw_candidates,
-                    stats_df=stats_df,
-                    top_n=settings.top_n,
-                    threshold=settings.threshold,
-                    m_gate=settings.min_momentum_score,
-                )
-                winners = getattr(response, "winners", None)
-                if winners is None and isinstance(response, tuple):
-                    winners = response[0]
-                winners = winners or []
-                current_symbols = [w["symbol"] for w in winners if w["symbol"] in train_data_raw.columns]
-                for b_sym in settings.benchmark_symbols:
-                    if b_sym in train_data_raw.columns and b_sym not in current_symbols:
-                        current_symbols.append(b_sym)
-                if current_symbols:
-                    train_data, candidate_meta = train_data_raw[current_symbols], {w["symbol"]: w for w in winners}
-                else:
-                    logger.warning("Dynamic selection produced empty universe; falling back to selected universe.")
+                resolved_candidates = []
+                for c in raw_candidates_norm:
+                    sym = str(c.get("symbol", "")).strip()
+                    if not sym:
+                        continue
+                    resolved = self._resolve_symbol_in_universe(sym, universe_cols=[str(x) for x in train_data_raw.columns])
+                    if resolved != sym:
+                        resolved_candidates.append({**c, "symbol": resolved})
+                    else:
+                        resolved_candidates.append(c)
+
+                def _stable_candidates_hash(cands: List[Dict[str, Any]]) -> str:
+                    try:
+                        blob = json.dumps(sorted(cands, key=lambda x: str(x.get("symbol", ""))), sort_keys=True)
+                        return hashlib.sha256(blob.encode()).hexdigest()
+                    except Exception:
+                        return hashlib.sha256(str(len(cands)).encode()).hexdigest()
+
+                sel_context = {**window_context_base, "universe_source": raw_pool_universe_resolved}
+                if ledger:
+                    ledger.record_intent(
+                        step="backtest_select",
+                        params={
+                            "selection_mode": settings.features.selection_mode,
+                            "top_n": settings.top_n,
+                            "threshold": settings.threshold,
+                            "min_momentum_score": settings.min_momentum_score,
+                        },
+                        input_hashes={"train_returns": get_df_hash(train_data_raw), "candidates_raw": _stable_candidates_hash(resolved_candidates)},
+                        context=sel_context,
+                    )
+
+                try:
+                    response = run_selection(
+                        train_data_raw,
+                        resolved_candidates,
+                        stats_df=stats_df,
+                        top_n=settings.top_n,
+                        threshold=settings.threshold,
+                        m_gate=settings.min_momentum_score,
+                    )
+                except Exception as e:
+                    logger.warning("Dynamic selection failed; falling back to selected universe. (%s)", e)
+                    if ledger:
+                        ledger.record_outcome(
+                            step="backtest_select",
+                            status="error",
+                            output_hashes={"winners": "none"},
+                            metrics={"n_raw_candidates": len(resolved_candidates), "n_train_symbols": len(train_data_raw.columns)},
+                            context=sel_context,
+                        )
                     train_data, candidate_meta = train_data_raw, {}
+                else:
+                    winners = getattr(response, "winners", None)
+                    if winners is None and isinstance(response, tuple):
+                        winners = response[0]
+                    winners = winners or []
+                    winner_symbols = [w.get("symbol") for w in winners if w.get("symbol") in train_data_raw.columns]
+                    bench_set = set(str(b) for b in settings.benchmark_symbols)
+                    non_bench_winner_symbols = [s for s in winner_symbols if s and str(s) not in bench_set]
+                    current_symbols = list(non_bench_winner_symbols)
+                    for b_sym in settings.benchmark_symbols:
+                        if b_sym in train_data_raw.columns and b_sym not in current_symbols:
+                            current_symbols.append(b_sym)
+                    current_symbols = [s for s in current_symbols if s]
+
+                    if ledger:
+                        try:
+                            winners_blob = json.dumps(sorted(winners, key=lambda x: str(x.get("symbol", ""))), sort_keys=True)
+                            winners_hash = hashlib.sha256(winners_blob.encode()).hexdigest()
+                        except Exception:
+                            winners_hash = hashlib.sha256(str(len(winners)).encode()).hexdigest()
+                        ledger.record_outcome(
+                            step="backtest_select",
+                            status="success",
+                            output_hashes={"winners": winners_hash},
+                            metrics={
+                                "n_raw_candidates": len(resolved_candidates),
+                                "n_candidate_overlap": len([s for s in candidate_symbols_resolved if s in train_data_raw.columns]),
+                                "n_winners": len(winners),
+                                "n_non_benchmark_winners": len(non_bench_winner_symbols),
+                                "n_benchmark_symbols": len([s for s in current_symbols if str(s) in bench_set]),
+                                "n_universe_symbols": len(current_symbols) if non_bench_winner_symbols else len(train_data_raw.columns),
+                            },
+                            context=sel_context,
+                        )
+
+                    if non_bench_winner_symbols and current_symbols:
+                        train_data, candidate_meta = train_data_raw[current_symbols], {str(w.get("symbol")): w for w in winners if w.get("symbol")}
+                    else:
+                        logger.warning("Dynamic selection produced no winners; falling back to selected universe.")
+                        train_data, candidate_meta = train_data_raw, {}
             else:
                 train_data, candidate_meta = train_data_raw, {}
+
+            # Universal stabilizer: enforce minimum universe breadth and drop extreme-volatility columns.
+            min_assets = self._min_dynamic_universe_assets()
+            try:
+                filtered_cols = [c for c in train_data.columns if str(c) in eligible_cols]
+                if len(filtered_cols) >= min_assets:
+                    train_data = train_data.loc[:, filtered_cols]
+                else:
+                    # If dynamic selection collapsed the universe (or filtering would collapse it),
+                    # prefer falling back to the selected universe with eligibility filtering applied.
+                    raw_filtered = [c for c in train_data_raw.columns if str(c) in eligible_cols]
+                    if len(raw_filtered) >= min_assets:
+                        logger.warning(
+                            "Eligibility stabilizer: falling back to selected universe (filtered) because train universe too small (have=%d, need=%d).",
+                            len(filtered_cols),
+                            min_assets,
+                        )
+                        train_data = train_data_raw.loc[:, raw_filtered]
+                        candidate_meta = {}
+            except Exception as e:
+                logger.warning("Eligibility stabilizer failed; continuing without filter. (%s)", e)
 
             clusters = self._cluster_data(train_data)
             stats_df_final = self._audit_training_stats(train_data)
@@ -382,7 +643,25 @@ class BacktestEngine:
             try:
                 raw_w_df = None
                 baseline_opt = build_engine("custom")
+                baseline_clusters_hash = None
+                if ledger:
+                    try:
+                        baseline_clusters_hash = hashlib.sha256(json.dumps(clusters, sort_keys=True).encode()).hexdigest()
+                    except Exception:
+                        baseline_clusters_hash = "unknown"
 
+                if ledger:
+                    opt_context = {
+                        **window_context_base,
+                        "engine": baseline_engine,
+                        "profile": "market",
+                    }
+                    ledger.record_intent(
+                        step="backtest_optimize",
+                        params={"engine": baseline_engine, "profile": "market", "regime": regime, "baseline": True},
+                        input_hashes={"train_returns": get_df_hash(train_data_raw), "clusters": baseline_clusters_hash or "unknown"},
+                        context=opt_context,
+                    )
                 w_market = baseline_opt.optimize(
                     returns=train_data_raw,
                     clusters=clusters,
@@ -392,7 +671,39 @@ class BacktestEngine:
                 ).weights
                 if not w_market.empty:
                     cached_weights[(baseline_engine, "market")] = w_market
+                if ledger:
+                    opt_context = {
+                        **window_context_base,
+                        "engine": baseline_engine,
+                        "profile": "market",
+                    }
+                    weights_payload = {}
+                    if not w_market.empty:
+                        try:
+                            weights_payload = w_market.set_index("Symbol")["Weight"].to_dict()
+                        except Exception:
+                            weights_payload = {}
+                    ledger.record_outcome(
+                        step="backtest_optimize",
+                        status="success" if not w_market.empty else "empty",
+                        output_hashes={"window_weights": get_df_hash(w_market)},
+                        metrics={"n_assets": len(w_market), "baseline": True},
+                        data={"weights": weights_payload},
+                        context=opt_context,
+                    )
 
+                if ledger:
+                    opt_context = {
+                        **window_context_base,
+                        "engine": baseline_engine,
+                        "profile": "benchmark",
+                    }
+                    ledger.record_intent(
+                        step="backtest_optimize",
+                        params={"engine": baseline_engine, "profile": "benchmark", "regime": regime, "baseline": True},
+                        input_hashes={"train_returns": get_df_hash(train_data), "clusters": baseline_clusters_hash or "unknown"},
+                        context=opt_context,
+                    )
                 w_bench = baseline_opt.optimize(
                     returns=train_data,
                     clusters=clusters,
@@ -402,6 +713,26 @@ class BacktestEngine:
                 ).weights
                 if not w_bench.empty:
                     cached_weights[(baseline_engine, "benchmark")] = w_bench
+                if ledger:
+                    opt_context = {
+                        **window_context_base,
+                        "engine": baseline_engine,
+                        "profile": "benchmark",
+                    }
+                    weights_payload = {}
+                    if not w_bench.empty:
+                        try:
+                            weights_payload = w_bench.set_index("Symbol")["Weight"].to_dict()
+                        except Exception:
+                            weights_payload = {}
+                    ledger.record_outcome(
+                        step="backtest_optimize",
+                        status="success" if not w_bench.empty else "empty",
+                        output_hashes={"window_weights": get_df_hash(w_bench)},
+                        metrics={"n_assets": len(w_bench), "baseline": True},
+                        data={"weights": weights_payload},
+                        context=opt_context,
+                    )
 
                 # Raw Pool Equal Weight (Selection Alpha Baseline)
                 valid_raw_symbols = []
@@ -409,12 +740,46 @@ class BacktestEngine:
                     valid_raw_symbols = [s for s in raw_pool_candidates if s in raw_pool_window_slice.columns and raw_pool_window_slice[s].notna().all() and s not in settings.benchmark_symbols]
                 else:
                     valid_raw_symbols = [s for s in raw_pool_candidates if s in train_data_raw.columns and s not in settings.benchmark_symbols]
+
+                # Universal stabilizer: remove extreme-volatility symbols from raw_pool_ew baseline.
+                try:
+                    raw_pool_train = raw_pool_train_data if raw_pool_train_data is not None else train_data_raw
+                    raw_eligible = set(self._vol_filter_universe(raw_pool_train, context=f"raw_pool_ew:{window_index}"))
+                    valid_raw_symbols = [s for s in valid_raw_symbols if str(s) in raw_eligible]
+                except Exception as e:
+                    logger.warning("Eligibility stabilizer (raw_pool_ew) failed; continuing without filter. (%s)", e)
                 if valid_raw_symbols:
                     raw_w_df = pd.DataFrame([{"Symbol": s, "Weight": 1.0 / len(valid_raw_symbols)} for s in valid_raw_symbols])
                     cached_weights[(baseline_engine, "raw_pool_ew")] = raw_w_df
                     raw_pool_symbol_count = len(valid_raw_symbols)
                     if ledger:
                         raw_pool_returns_hash = get_df_hash(raw_pool_train_data[valid_raw_symbols])
+                if ledger:
+                    opt_context = {
+                        **window_context_base,
+                        "engine": baseline_engine,
+                        "profile": "raw_pool_ew",
+                    }
+                    ledger.record_intent(
+                        step="backtest_optimize",
+                        params={"engine": baseline_engine, "profile": "raw_pool_ew", "regime": regime, "baseline": True},
+                        input_hashes={"train_returns": raw_pool_returns_hash or "unknown", "clusters": baseline_clusters_hash or "unknown"},
+                        context=opt_context,
+                    )
+                    weights_payload = {}
+                    if raw_w_df is not None and not raw_w_df.empty:
+                        try:
+                            weights_payload = raw_w_df.set_index("Symbol")["Weight"].to_dict()
+                        except Exception:
+                            weights_payload = {}
+                    ledger.record_outcome(
+                        step="backtest_optimize",
+                        status="success" if raw_w_df is not None and not raw_w_df.empty else "empty",
+                        output_hashes={"window_weights": get_df_hash(raw_w_df) if raw_w_df is not None else "none"},
+                        metrics={"n_assets": len(raw_w_df) if raw_w_df is not None else 0, "baseline": True, "raw_pool_symbol_count": raw_pool_symbol_count},
+                        data={"weights": weights_payload},
+                        context=opt_context,
+                    )
 
             except Exception as e:
                 logger.error(f"Failed baselines: {e}")
@@ -460,7 +825,15 @@ class BacktestEngine:
                                 "train_start": str(train_data.index[0]),
                                 "start_date": str(test_data.index[0]),
                                 "end_date": str(test_data.index[-1]),
+                                # Backward compatible: `regime` remains the canonical field for now,
+                                # but it is explicitly decision-time (train-derived) regime labeling.
                                 "regime": regime,
+                                "decision_regime": decision_regime,
+                                "decision_regime_score": float(decision_regime_score),
+                                "decision_quadrant": decision_quadrant,
+                                "realized_regime": realized_regime,
+                                "realized_regime_score": realized_regime_score,
+                                "realized_quadrant": realized_quadrant,
                                 "kappa": kappa,
                                 "returns": perf["total_return"],
                                 "vol": perf["realized_vol"],
@@ -633,6 +1006,17 @@ class BacktestEngine:
             calculate_antifragility_stress,
             calculate_performance_metrics,
         )
+
+        # Walk-forward windows can overlap (e.g., step < test_window). In that case, the
+        # concatenated OOS return series contains duplicate dates. Antifragility metrics
+        # expect a unique index; keep the latest observation for each date (most recent window).
+        try:
+            if cumulative_returns.index.has_duplicates:
+                cumulative_returns = cumulative_returns[~cumulative_returns.index.duplicated(keep="last")]
+            if reference_returns is not None and reference_returns.index.has_duplicates:
+                reference_returns = reference_returns[~reference_returns.index.duplicated(keep="last")]
+        except Exception:
+            pass
 
         s = calculate_performance_metrics(cumulative_returns)
         s["antifragility_dist"] = calculate_antifragility_distribution(cumulative_returns)
