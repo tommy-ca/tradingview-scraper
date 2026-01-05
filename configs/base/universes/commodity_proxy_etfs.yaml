@@ -2,20 +2,20 @@
 base_preset: ../hygiene/institutional.yaml
 markets: ["america"]
 
-# Ensure we only emit the canonical proxy basket (symbols are matched by base
-# symbol, so exchange aliases like AMEX/NYSEARCA are tolerated).
-include_symbols:
-  - "PDBC" # Broad commodities (actively managed roll)
-  - "GLD"  # Gold
-  - "SLV"  # Silver
-  - "USO"  # Oil (WTI proxy)
-  - "DBB"  # Industrial metals basket
-  - "CPER" # Copper proxy
-  - "DBA"  # Agriculture basket (optional diversifier)
-
-# Pull enough rows so the include_symbols are guaranteed to appear if TradingView
-# serves them (then we filter down).
-prefilter_limit: 2000
+# Static universe emitter: emit the canonical proxy basket even when the
+# TradingView screener endpoint is unavailable.
+static_mode: true
+static_symbols:
+  # NOTE: In this repo’s TradingView history fetcher, US ETFs are typically
+  # resolved under the `AMEX:` namespace (TradingView uses AMEX as the ETF
+  # exchange alias for many NYSE Arca listings).
+  - "AMEX:PDBC" # Broad commodities (actively managed roll)
+  - "AMEX:GLD"  # Gold
+  - "AMEX:SLV"  # Silver
+  - "AMEX:USO"  # Oil (WTI proxy)
+  - "AMEX:DBB"  # Industrial metals basket
+  - "AMEX:CPER" # Copper proxy
+  - "AMEX:DBA"  # Agriculture basket (optional diversifier)
 
 filters:
   - left: "type"

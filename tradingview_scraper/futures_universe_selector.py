@@ -248,6 +248,15 @@ class SelectorConfig(BaseModel):
     include_symbols: List[str] = Field(default_factory=list)
     include_symbol_files: List[str] = Field(default_factory=list)
     exclude_symbols: List[str] = Field(default_factory=list)
+    # Static universe support: allows configs to emit a deterministic basket even
+    # when TradingView screener endpoints are unavailable or intentionally skipped.
+    #
+    # - If static_mode is true, the selector will emit static_symbols directly and
+    #   will not query TradingView screeners.
+    # - If static_mode is false but static_symbols is provided, the selector may
+    #   fall back to static_symbols when the screener returns no rows.
+    static_mode: bool = False
+    static_symbols: List[str] = Field(default_factory=list)
     include_perps_only: bool = False
     exclude_perps: bool = False
     exclude_dated_futures: bool = False
@@ -1562,16 +1571,22 @@ class FuturesUniverseSelector:
         aggregated: List[Dict[str, Any]] = []
         errors: List[str] = []
 
-        for payload in payloads:
-            market_rows, market_errors = self._screen_market(
-                payload["market"],
-                payload["filters"],
-                payload["columns"],
-                exchange=payload.get("exchange"),
-                max_rows=payload.get("limit"),
-            )
-            aggregated.extend(market_rows)
-            errors.extend(market_errors)
+        if self.config.static_mode:
+            aggregated = [{"symbol": str(s)} for s in (self.config.static_symbols or []) if str(s).strip()]
+        else:
+            for payload in payloads:
+                market_rows, market_errors = self._screen_market(
+                    payload["market"],
+                    payload["filters"],
+                    payload["columns"],
+                    exchange=payload.get("exchange"),
+                    max_rows=payload.get("limit"),
+                )
+                aggregated.extend(market_rows)
+                errors.extend(market_errors)
+
+            if not aggregated and self.config.static_symbols:
+                aggregated = [{"symbol": str(s)} for s in self.config.static_symbols if str(s).strip()]
 
         result = self.process_data(aggregated)
 
