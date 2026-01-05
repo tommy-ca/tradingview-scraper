@@ -35,6 +35,30 @@ def _calculate_standard_turnover(w_target: pd.Series, h_init: Optional[pd.Series
     return float((w1 - w0).abs().sum()) / 2.0
 
 
+def _calculate_asset_turnover(w_target: pd.Series, h_init: Optional[pd.Series]) -> float:
+    """
+    Calculates the total absolute trade volume for non-cash assets.
+    This is used for friction calculation (slippage/commission).
+    """
+    w1 = w_target.copy()
+    # Ensure we only look at non-cash assets for cost calculation
+    if "cash" in w1.index:
+        w1 = w1.drop(index="cash")
+
+    if h_init is None:
+        w0 = pd.Series(0.0, index=w1.index)
+    else:
+        w0 = h_init.copy()
+        if "cash" in w0.index:
+            w0 = w0.drop(index="cash")
+
+    all_assets = sorted(list(set(w1.index) | set(w0.index)))
+    w1 = w1.reindex(all_assets, fill_value=0.0)
+    w0 = w0.reindex(all_assets, fill_value=0.0)
+
+    return float((w1 - w0).abs().sum())
+
+
 class BaseSimulator(ABC):
     """Abstract base class for all backtest simulators."""
 
@@ -79,12 +103,14 @@ class ReturnsSimulator(BaseSimulator):
         total_rate = settings.backtest_slippage + settings.backtest_commission
 
         # 1. Initial Rebalance at t=0
-        turnover_t0 = _calculate_standard_turnover(w_target, initial_holdings)
-        friction_t0 = turnover_t0 * 2.0 * total_rate
+        # Friction is calculated only on non-cash assets
+        asset_turnover_t0 = _calculate_asset_turnover(w_target, initial_holdings)
+        friction_t0 = asset_turnover_t0 * total_rate
 
         daily_p_rets = []
         current_weights = w_target.copy()
-        total_turnover = turnover_t0
+        # Reported turnover remains the standard one-way including cash for consistency
+        total_turnover = _calculate_standard_turnover(w_target, initial_holdings)
 
         for t in range(target_len):
             returns_t = returns.iloc[t].reindex(current_weights.index, fill_value=0.0)
@@ -104,10 +130,10 @@ class ReturnsSimulator(BaseSimulator):
                         do_rebalance = False
 
                 if do_rebalance:
-                    turnover_t = _calculate_standard_turnover(w_target, drift_weights)
-                    friction_t = turnover_t * 2.0 * total_rate
+                    asset_turnover_t = _calculate_asset_turnover(w_target, drift_weights)
+                    friction_t = asset_turnover_t * total_rate
                     current_weights = w_target.copy()
-                    total_turnover += turnover_t
+                    total_turnover += _calculate_standard_turnover(w_target, drift_weights)
                 else:
                     current_weights = drift_weights
             else:

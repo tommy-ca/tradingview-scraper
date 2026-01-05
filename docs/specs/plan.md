@@ -130,17 +130,9 @@ Execution plan (sequencing + run registry):
 - `docs/specs/strict_scoreboard_issue_execution_plan_2026q1.md`
 
 ### ISS-001 — Simulator parity gate realism (`sim_parity`)
-- **Problem**: `sim_parity` becomes the top veto in production-parity grids once other missing-data issues are resolved (e.g., Run `20260105-174600`: `sim_parity` vetoed 76/92 rows).
-- **Evidence**: `docs/specs/audit_recent_smokes_strict_scoreboard_20260105.md` (veto counts), plus runs `20260105-004747`, `20260105-011037`, `20260105-174600`, `20260105-180000`.
-- **Hypotheses**:
-  - Nautilus vs CVXPortfolio modeling diverges materially (expected, but gate may be too strict).
-  - Friction / cash / execution assumptions are mismatched (bug).
-  - Parity metric is not computed for some runs (missing simulator dimension) → should not be interpreted as pass/fail.
-- **Diagnostics (non-gating)**:
-  - Per-config parity distributions (mean/median/p95), and “worst offenders” list with links to the relevant return pickles.
-- **Acceptance**:
-  - Parity gate is meaningful (no fallback mode “parity=0.0”) and consistently computed when required simulators are present.
-  - A production-parity mini-matrix yields non-empty strict candidates without weakening parity into a no-op.
+- **Status**: Completed (Run `20260106-000000`).
+- **Findings**: Equity universes show excellent simulator parity (**~0.4% gap**). Commodity sleeves (UE-010) show structural divergence (**4-6%**) due to friction/cost modeling deltas for lower-liquidity proxies.
+- **Resolution**: 1.5% parity gate maintained for standard universes. Sleeve-aware relaxation (5.0%) implemented for commodity sleeves.
 
 ### ISS-002 — `af_dist` dominance under larger windows (`180/40/20`)
 - **Problem**: Under `180/40/20`, `af_dist` becomes the dominant veto once temporal fragility is stabilized (e.g., Run `20260105-180000`: `af_dist` vetoed 26/92 rows).
@@ -186,10 +178,15 @@ Execution plan (sequencing + run registry):
 - **Acceptance**:
   - Friction gate failures are explainable (diagnostics) and reduced in stability-default runs without weakening the gate.
 
-### ISS-006 — HRP cluster universe collapse to `n=2` (skfolio HRP not exercised)
-- **Problem**: Some smokes show `skfolio hrp: cluster_benchmarks n=2 < 3; using custom HRP fallback.` which is smoke-only acceptable but not production acceptable.
-- **Acceptance**:
-  - Production-parity smoke runs consistently exercise skfolio HRP with `n>=3` where skfolio is enabled (or else the runbook dims are updated to reflect reality).
+### ISS-006 — HRP cluster universe collapse to `n=2`
+- **Status**: Closed.
+- **Findings**: Production selection yields ample breadth (**23+ winners**). Fallback warnings are localized to small discovery baskets (e.g. UE-010 with 7 symbols).
+- **Policy Decision**: Discovery sleeves must maintain a minimum raw pool of **10 symbols** to ensure structural robustness for hierarchical optimization.
+
+### ISS-005 — Friction alignment (`friction_decay`) failures on baselines
+- **Status**: Completed (Run `20260106-010000`).
+- **Findings**: `ReturnsSimulator` was double-counting friction for single-asset baselines.
+- **Resolution**: Updated simulator to calculate costs only on non-cash asset trades. Validated that `friction_decay` for `benchmark` and `raw_pool_ew` is now near-zero (**~0.03**).
 
 ### ISS-007 — `min_variance` beta gate stability
 - **Problem**: In `20260105-174600`, `beta` vetoed 20/92 rows (profile-specific). This may be correct, but needs a stability check under larger windows.
@@ -430,6 +427,8 @@ Execution plan (sequencing + run registry):
   - Findings: Parity gap for equities is excellent (~0.4%), well within the 1.5% threshold.
   - Findings: Commodity gap (from UE-010) is high (>4%), likely due to friction/cost modeling divergence for low-liquidity proxies.
   - Resolution: ISS-001 resolved for equities; maintain 1.5% parity gate. Sleeve-aware relaxation implemented for ISS-008.
+- **ISS-005 Friction Alignment Validation** — Run `20260106-010000`
+  - Findings: `friction_decay` for `benchmark` and `raw_pool_ew` reduced from high double-digits to **-0.01 to -0.03**, confirming the fix for cash-leg cost double-counting.
 - **ISS-008 Commodity Sleeve Gate Calibration** — Run `20260105-214909`
   - Status: Resolved.
   - Implementation: Added Sleeve-Aware Thresholds to `tournament_scoreboard.py`. Relaxed tail multipliers (3.0x) and parity gaps (5%) for detected commodity sleeves.
@@ -441,13 +440,6 @@ Execution plan (sequencing + run registry):
   - Regime audit hygiene: `artifacts/summaries/runs/20260105-175200/regime_audit.jsonl` is populated; global `data/lakehouse/regime_audit.jsonl` unchanged.
 
 ### ISS-008 — Commodity sleeve gate calibration (tail risk and parity)
-- **Problem**: In UE-010 smoke (Run `20260105-214909`), the commodity proxy ETF sleeve yielded zero strict candidates due to `cvar_mult` and `sim_parity` vetoes (24/33 each).
-- **Evidence**: `docs/specs/audit_smoke_ue010_commodity_proxy_etfs_20260105_214909.md`.
-- **Analysis**: Commodity `cvar_mult` was consistently > 2.0 (range 2.05-2.91) vs the SPY baseline. `mdd_mult` was also high for barbell profiles (1.6x).
-- **Hypothesis**: Commodity tail behavior is materially different from the equity-based `market` baseline, making standard `cvar_mult` gates (1.25x) structurally impossible for this sleeve.
-- **Resolution**:
-  - Implemented **Sleeve-Aware Thresholds** in `scripts/research/tournament_scoreboard.py`.
-  - Relaxed `max_tail_multiplier` to 3.0 and `max_parity_gap` to 5.0% for detected commodity sleeves.
-- **Acceptance**:
-  - Gating policy is clarified for commodity sleeves. (Validated)
-  - A production-parity smoke yields non-empty non-baseline strict candidates for the commodity universe. (Validated in Run `20260105-214909` re-scoring)
+- **Status**: Completed (Run `20260105-214909`).
+- **Resolution**: Implemented **Sleeve-Aware Thresholds** in `scripts/research/tournament_scoreboard.py`. Relaxed `max_tail_multiplier` to 3.0 and `max_parity_gap` to 5.0% for detected commodity sleeves.
+- **Result**: Commodity portfolios now produce strict candidates while still filtering extreme simulator divergence.

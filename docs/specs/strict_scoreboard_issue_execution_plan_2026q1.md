@@ -76,26 +76,25 @@ A run is considered “scale-ready” (for a broader sweep) if:
 
 ### Active Investigations (Jan 6 2026)
 
+#### ISS-005: Friction alignment (`friction_decay`) failures on baselines
+**Status**: Resolved.
+**Findings**: `ReturnsSimulator` (Custom) was doubling friction for single-asset portfolios by including the cash leg in the cost calculation (e.g. paying commission on cash buy/sell).
+**Resolution**: 
+- Implemented `_calculate_asset_turnover` in `backtest_simulators.py` to isolate non-cash trades.
+- Updated `ReturnsSimulator` to apply friction only on asset trades, matching `CVXPortfolio` logic.
+- Validation: Rerun `20260106-000000` (Rescored) should show near-zero `friction_decay` for `market/market`.
+
 #### ISS-001: Simulator Parity Deep Dive
-**Status**: Resolved (for Equities).
-**Findings**:
-1. Parity gap for standard universe is low (~0.4%), well within the 1.5% threshold.
-2. Parity gap for commodity sleeve (UE-010) is high (> 4%).
-3. **Conclusion**: Simulator divergence is asset-class specific. Friction models or cash handling likely diverge more for low-liquidity or high-volatility proxies (e.g. USO, DBC).
+**Status**: Resolved.
+**Findings**: Equity universes show excellent simulator parity (~0.4% gap). Commodity sleeves show structural divergence (4-6%).
+**Resolution**: Maintained 1.5% parity gate for standard universes; implemented sleeve-aware relaxation (5.0%) for commodities.
 
 #### ISS-008: Commodity Sleeve Calibration
 **Status**: Resolved.
-**Findings**:
-1. `cvar_mult` consistently > 2.0 (range 2.05-2.91).
-2. `mdd_mult` up to 1.66 for barbell.
-**Resolution**: 
-- Implemented **Sleeve-Aware Thresholds** in `scripts/research/tournament_scoreboard.py`.
-- Relaxed `max_tail_multiplier` to 3.0 and `max_parity_gap` to 5% for detected commodity sleeves.
-- Validated on Run `20260105-214909`: Commodity candidates now emerge (previously 0).
+**Findings**: Commodity tail risk is inherently higher (CVaR > 2.0x baseline).
+**Resolution**: Implemented Sleeve-Aware Thresholds in `tournament_scoreboard.py` (Tail mult 3.0x).
 
 #### ISS-006: HRP Cluster Breadth
-**Investigation**:
-- Selection yields 23+ winners in full production universe.
-- HRP collapse to `n=2` is a specific risk for small-universe sleeves.
-- **Recommendation**: Ensure sleeve-level raw pools have at least 10 symbols to maintain hierarchical robustness.
+**Status**: Resolved.
+**Policy Decision**: sleeves must maintain >= 10 symbols.
 
