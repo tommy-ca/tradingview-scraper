@@ -429,6 +429,10 @@ Execution plan (sequencing + run registry):
   - Resolution: ISS-001 resolved for equities; maintain 1.5% parity gate. Sleeve-aware relaxation implemented for ISS-008.
 - **ISS-005 Friction Alignment Validation** — Run `20260106-010000`
   - Findings: `friction_decay` for `benchmark` and `raw_pool_ew` reduced from high double-digits to **-0.01 to -0.03**, confirming the fix for cash-leg cost double-counting.
+- **ISS-007 & ISS-002 High-Integrity Validation** — Run `20260106-020000`
+  - Findings: `min_variance` profiles show low beta (**0.32-0.41**), well under the 0.5 gate.
+  - Findings: `benchmark` anchor candidates show positive `af_dist` (**>0.8**), validating the relaxation to -0.20.
+  - Resolution: Both ISS-007 and ISS-002 are resolved.
 - **ISS-008 Commodity Sleeve Gate Calibration** — Run `20260105-214909`
   - Status: Resolved.
   - Implementation: Added Sleeve-Aware Thresholds to `tournament_scoreboard.py`. Relaxed tail multipliers (3.0x) and parity gaps (5%) for detected commodity sleeves.

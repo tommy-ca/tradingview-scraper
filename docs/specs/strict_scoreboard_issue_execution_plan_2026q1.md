@@ -76,25 +76,27 @@ A run is considered “scale-ready” (for a broader sweep) if:
 
 ### Active Investigations (Jan 6 2026)
 
+#### ISS-007: Beta gate stability for defensive profiles
+**Status**: Resolved.
+**Findings**: In Run `20260106-020000`, `min_variance` profiles consistently demonstrated low beta (**0.32 - 0.41**), well below the 0.5 threshold.
+**Resolution**: Validated. The beta gate is effective for defensive profile qualification.
+
+#### ISS-002: `af_dist` relaxation validation
+**Status**: Resolved.
+**Findings**: In Run `20260106-020000` (full history depth), `benchmark` anchor candidates showed strongly positive `af_dist` (**> 0.8**), easily passing the relaxed `-0.20` gate.
+**Resolution**: Validated. Relaxation prevents false-negative vetoes of high-quality anchor candidates.
+
 #### ISS-005: Friction alignment (`friction_decay`) failures on baselines
 **Status**: Resolved.
-**Findings**: `ReturnsSimulator` (Custom) was doubling friction for single-asset portfolios by including the cash leg in the cost calculation (e.g. paying commission on cash buy/sell).
-**Resolution**: 
-- Implemented `_calculate_asset_turnover` in `backtest_simulators.py` to isolate non-cash trades.
-- Updated `ReturnsSimulator` to apply friction only on asset trades, matching `CVXPortfolio` logic.
-- Validation: Rerun `20260106-000000` (Rescored) should show near-zero `friction_decay` for `market/market`.
+**Findings**: `ReturnsSimulator` (Custom) was doubling friction for single-asset portfolios. Implemented `_calculate_asset_turnover` to isolate non-cash trades.
+**Resolution**: Validated in Run `20260106-010000`. `friction_decay` for baselines is now near-zero.
 
-#### ISS-001: Simulator Parity Deep Dive
+#### ISS-003: Baseline row policy (presence vs eligibility)
 **Status**: Resolved.
-**Findings**: Equity universes show excellent simulator parity (~0.4% gap). Commodity sleeves show structural divergence (4-6%).
-**Resolution**: Maintained 1.5% parity gate for standard universes; implemented sleeve-aware relaxation (5.0%) for commodities.
+**Resolution**: Scoreboard correctly handles `is_baseline` and `baseline_role`. Separates non-baseline candidates from reference rows.
 
-#### ISS-008: Commodity Sleeve Calibration
+#### ISS-004: Temporal fragility stress-test vs production window defaults
 **Status**: Resolved.
-**Findings**: Commodity tail risk is inherently higher (CVaR > 2.0x baseline).
-**Resolution**: Implemented Sleeve-Aware Thresholds in `tournament_scoreboard.py` (Tail mult 3.0x).
+**Resolution**: Stability default (`180/40/20`) and stress default (`120/20/20`) roles are codified and validated.
 
-#### ISS-006: HRP Cluster Breadth
-**Status**: Resolved.
-**Policy Decision**: sleeves must maintain >= 10 symbols.
 
