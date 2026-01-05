@@ -96,6 +96,12 @@ make daily-run MANIFEST=configs/research_experiment_v1.json PROFILE=aggressive
 ### 6.1 Manifest Archiving
 Every run automatically snapshots the active `manifest.json` into its run-scoped directory (`artifacts/summaries/runs/<RUN_ID>/manifest.json`). This ensures that every implemented portfolio is accompanied by its full historical configuration context.
 
+### 6.1.1 Audit Ledger Defaults (Recommended)
+The institutional default manifest (`configs/manifest.json`) enables `features.feat_audit_ledger` by default so that every run produces an `audit.jsonl` decision trail suitable for strict tournament gating and reproducibility audits.
+
+- **Default**: `features.feat_audit_ledger: true` (via `defaults.features`)
+- **Override (local-only)**: set `TV_FEATURES__FEAT_AUDIT_LEDGER=0` to disable audit writes for perf/debug runs
+
 ### 6.2 Target Row Enforcement
 The system uses `PORTFOLIO_MIN_DAYS_FLOOR` to ensure that only assets with sufficient history (e.g., 320 days for a 500-day lookback) are allowed into the implementation universe, guaranteeing the integrity of long-duration backtests.
 

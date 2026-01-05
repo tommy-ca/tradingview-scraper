@@ -74,4 +74,8 @@ To make selection alpha reproducible and reviewable, every selection run must em
 - **Vetoes**: rejected symbols and veto reasons (ECI/entropy/efficiency/Hurst, etc.).
 - **Archival**: Persist `selection_audit.json` (or `.md`) in the run directory and link its hash in `audit.jsonl`.
 
-**Gap note**: Tournament `audit.jsonl` currently does not log explicit selection intents. Selection provenance is captured in `selection_audit.json`; the audit ledger must link to it for full traceability.
+**Update (Jan 2026)**: Tournament runs now log explicit per-window selection intents/outcomes in `audit.jsonl` via the `backtest_select` step. Continue to persist `selection_audit.json` for full selection provenance, but use `backtest_select` to confirm that Grand 4D selection-mode sweeps actually exercised dynamic selection (and did not silently skip due to symbol-format mismatches or all-veto winner collapse).
+
+## 5. Natural Selection Contract (Spec)
+For the concrete artifact contracts, audit expectations, and multi-venue expansion policy used by `scripts/natural_selection.py`, see:
+- `docs/specs/natural_selection_spec_v1.md`

@@ -28,6 +28,7 @@ To establish mathematical gates for evaluating the robustness, fidelity, and sta
     - **Stable (> 0.7)**: High structural persistence in selection factors.
     - **Dynamic (0.3 - 0.7)**: Regime-adaptive selection.
     - **Chasing Noise (< 0.3)**: Selection logic is unstable and likely overfitted to local window volatility.
+ - **Implementation note (Repo)**: the tournament scoreboard computes this from per-window `backtest_optimize` `data.weights` membership in `audit.jsonl`; see `docs/specs/selection_stability_jaccard_v1.md`.
 
 ### 2.4 Quantified Antifragility (Convexity + Crisis Response)
 Antifragility is measured at the **strategy** level using **out-of-sample (OOS)** daily returns, aggregated across all walk-forward windows. This avoids the noise of short per-window tails (e.g., 20d windows).
@@ -103,6 +104,9 @@ Antifragility is measured at the **strategy** level using **out-of-sample (OOS)*
 - **Metric**: Divergence between independent high-fidelity simulators.
 - **Standard**:
     - **Parity Gate**: Annualized return divergence between `cvxportfolio` and `nautilus` must be < 1.5% (when both are available).
+ - **Implementation note (Jan 2026)**:
+    - The repo’s current `nautilus` simulator is a **trade-based parity proxy** (not a full event-driven NautilusTrader integration yet). It is intentionally **not** CVXPortfolio, so `parity_ann_return_gap` is non-trivial and can be used to quantify the remaining simulator-fidelity gap.
+    - Expect parity failures (and therefore empty strict candidates) until the Nautilus integration is upgraded to a true independent high-fidelity simulator.
 
 ### 2.10 Regime Robustness (Stress Windows)
 - **Metric**: Worst-regime performance and crisis survivability.
@@ -120,15 +124,143 @@ Antifragility is measured at the **strategy** level using **out-of-sample (OOS)*
 5. **Guardrail Gate**: Configurations failing the **Institutional** or **Robust** thresholds are flagged in the `INDEX.md` and excluded from the "Production Candidate" list.
 
 ### 3.1 Operational Notes (Scoreboard Readiness)
-- **Audit ledger required**: Enable `feat_audit_ledger` so `audit.jsonl` contains `backtest_optimize` outcomes (weights) and `backtest_summary` outcomes (aggregates). Intent-only logging is insufficient for strict gating.
+- **Institutional gates vs research diagnostics**:
+  - **Strict gating**: `scripts/research/tournament_scoreboard.py` determines `is_candidate` using only the explicit scoreboard thresholds (friction/fragility/selection stability/antifragility/tail risk/simulator parity, etc.). This is the institutional eligibility decision.
+  - **Research-only diagnostics**: Additional signals (e.g., regime agreement rates, raw_pool_ew fragility distributions, detector internals) may be emitted for analysis and calibration, but must not silently veto/admit candidates unless a spec explicitly promotes them into thresholded gates.
+- **Metric definitions (canonical)**:
+  - For standardized strict-scoreboard metric definitions and provenance, see `docs/specs/strict_scoreboard_metrics_spec_v1.md`.
+- **Baseline policy (presence vs eligibility)**:
+  - Baseline rows are **required** to be present and audit-complete (no `missing:*` due to missing instrumentation).
+  - Baseline rows are **not guaranteed** to pass strict gates; they are reference anchors and may legitimately fail strict thresholds (and therefore not appear in `tournament_candidates.csv`).
+  - If a baseline row **does** pass strict gates, it is a valid strict candidate (not auto-excluded). In particular, `benchmark` is allowed to pass when it meets gates.
+  - `raw_pool_ew` is primarily a calibration signal for fragility/tail-risk, but if it passes strict gates it is valid (no structural exclusion).
+  - **Downstream ranking semantics (Jan 2026)**:
+    - Baselines remain in `tournament_candidates.csv`, but should be treated as **reference rows** (not “winner” rows) when selecting top strategies.
+    - The scoreboard report `reports/research/tournament_scoreboard.md` therefore separates **Top Candidates (Non-Baseline)** from a dedicated **Baseline Reference Rows** section.
+    - `data/tournament_scoreboard.csv` and `data/tournament_candidates.csv` include `is_baseline` and `baseline_role` (`anchor|baseline|calibration`) to make this behavior machine-readable.
+  - Policy reference: `docs/specs/iss003_iss004_policy_decisions_20260105.md`.
+- **Audit ledger required**: Keep `feat_audit_ledger` enabled so `audit.jsonl` contains `backtest_optimize` outcomes (weights) and `backtest_summary` outcomes (aggregates). Intent-only logging is insufficient for strict gating. The institutional `configs/manifest.json` defaults now enable this by default; override with `TV_FEATURES__FEAT_AUDIT_LEDGER=0` only for local perf/debug runs where audit artifacts are intentionally out of scope.
 - **Audit ledger completeness**: Verify there are no `backtest_optimize` intents without matching outcomes; missing outcomes reduce window coverage and can invalidate window-derived audits. Example: Run `20260104-005636` had 264 missing optimize outcomes, heavily concentrated in `barbell`.
   - **Validation focus**: Always audit `barbell` first, since it was the primary source of missing outcomes in prior sweeps.
 - **Audit ledger integrity**: Use `uv run scripts/archive/verify_ledger.py artifacts/summaries/runs/<RUN_ID>/audit.jsonl` to confirm the cryptographic hash chain before trusting downstream audits.
+- **Grand 4D run logs (required)**: `scripts/research/grand_4d_tournament.py` always writes a run-scoped log file at `artifacts/summaries/runs/<RUN_ID>/logs/grand_4d_tournament.log` (even during smoke runs). Treat missing/empty logs as a validation failure, since ledger-only triage is insufficient for root-cause debugging.
+- **Skfolio HRP defaults (suggested)**:
+  - **Risk measure**: `RiskMeasure.STANDARD_DEVIATION`
+  - **Distance estimator**: `DistanceCorrelation()`
+  - **Linkage**: `LinkageMethod.WARD` (via `HierarchicalClustering`)
+  - **Caps**: respect `cluster_cap` using `max_weights` when supported; otherwise cap is enforced downstream.
+  - **Small-n policy (default fallback)**: if `cluster_benchmarks` count `n < 3`, route HRP to the **custom HRP** implementation (do not attempt skfolio HRP for `n=2`).
+- **Skfolio HRP warnings policy**: Any `skfolio hrp ... fallback` warning indicates skfolio HRP was not exercised and is only acceptable during **smoke runs**. Treat these warnings as a validation failure for scale-up / production sweeps.
 - **Daily beta/corr requires returns pickles**: `scripts/backtest_engine.py --tournament` writes `data/returns/*.pkl`. Grand 4D sweeps should persist per-cell returns under `data/grand_4d/<rebalance>/<selection>/returns/*.pkl` (and the per-cell `tournament_results.json`).
 - **Grand sweep artifact parity**: `scripts/research/grand_4d_tournament.py` should persist per-cell artifacts using the same writer as `scripts/backtest_engine.py` so scoreboard gating can use daily series metrics.
 - **Window beta/corr requires enough windows**: If `data/returns/*.pkl` are missing, beta/corr are computed from per-window returns and require at least 10 windows.
-- **Selection stability requires optimize success**: Jaccard/HHI require `backtest_optimize` success outcomes (weights). `empty`/`error` outcomes will show up as missing selection metrics in the scoreboard.
+- **Overlapping windows can introduce duplicate timestamps**: For `test_window > step_size`, stitched daily returns can contain duplicate timestamps unless deduplicated. Scoreboard beta/corr and antifragility stress computations deduplicate by timestamp (keep last) before reindexing.
+- **Selection stability requires optimize success**: Jaccard/HHI require `backtest_optimize` success outcomes (weights). `empty`/`error` outcomes will show up as missing selection metrics in the scoreboard. See `docs/specs/selection_jaccard_v1.md`.
+- **Selection-mode sweeps require explicit selection logs**: Grand 4D runs that sweep `selection_mode` must produce `backtest_select` intents/outcomes in `audit.jsonl`. If `backtest_select` is missing (or always selects zero winners), the selection dimension is not being exercised (common causes: raw candidates are unqualified tickers while returns columns are qualified symbols; or candidates were not enriched and are vetoed for missing metadata).
 - **Simulator parity requires both simulators**: `parity_ann_return_gap` is only computed when both `cvxportfolio` and `nautilus` results exist for the same (selection, rebalance, engine, profile).
 - **Strict candidates require antifragility fields**: Runs created before `antifragility_dist` / `antifragility_stress` were added to tournament summaries will produce zero strict candidates unless `--allow-missing` is used (legacy/backfill only).
-- **Recommended invocation**: `make tournament-scoreboard` or `uv run scripts/research/tournament_scoreboard.py --run-id latest` (or pass an explicit run id). Use `--allow-missing` only for legacy runs.
-- **Grand sweep smoke test**: `TV_FEATURES__FEAT_AUDIT_LEDGER=1 TV_RUN_ID=<RUN_ID> uv run scripts/research/grand_4d_tournament.py --selection-modes v3.2 --rebalance-modes window --engines skfolio --profiles hrp --simulators custom,cvxportfolio,nautilus` then `uv run scripts/research/tournament_scoreboard.py --run-id <RUN_ID>`.
+- **Regime label semantics (decision vs realized)**: Tournament window payloads persist explicit regime fields per `docs/specs/regime_labeling_semantics_v1.md`.
+  - `decision_regime`, `decision_regime_score`, `decision_quadrant`: always present (decision-time, derived from training slice).
+  - `windows[].regime`: retained as a backward-compatible alias for `decision_regime`.
+  - `realized_regime`, `realized_regime_score`, `realized_quadrant`: optional, behind `TV_ENABLE_REALIZED_REGIME=1` (realized-time, derived from the test slice / realized series).
+  - Scoreboard worst-regime summaries prefer realized regime grouping when present; otherwise use decision regime.
+- **Reproducibility (Makefile overrides)**: `make port-test BACKTEST_TRAIN=... BACKTEST_TEST=... BACKTEST_STEP=...` propagates to `TV_*` settings so `get_settings()` consumers see the intended windowing (no silent fallback to manifest defaults).
+- **Antifragility distribution tail sufficiency (small smokes)**: For short/overlapping smokes, `n_obs` can be <200 (e.g., `test_window=40, step=20` yields ~160 unique daily obs). Tail requirements are therefore sized coherently with `(1-q) * n_obs` so `af_dist` remains available (the output includes `min_tail_required` for auditability).
+- **Antifragility distribution semantics (`af_dist`)**: `af_dist = skew + log(tail_asym)` is often **skew-dominated** for baseline-like return series; as a result, `min_af_dist = 0` is effectively a **positive-skew requirement**, not just a “right-tail beats left-tail” requirement.
+  - Deep dive and threshold sensitivity: `docs/specs/audit_iss002_af_dist_dominance_20260105.md` (Run `20260105-191332` shows barbell can fail `af_dist` even when `tail_asym > 1`).
+  - Institutional default (Jan 2026): `min_af_dist = -0.20` (see `docs/specs/iss002_policy_decision_20260105.md`).
+- **Recommended invocation**: Prefer `make tournament-scoreboard-run RUN_ID=<RUN_ID>` (explicit run) or `make tournament-scoreboard` (latest). Use `--allow-missing` only for legacy runs or intentionally-minimal smoke runs.
+- **Grand sweep smoke test**: `TV_RUN_ID=<RUN_ID> uv run scripts/research/grand_4d_tournament.py --selection-modes v3.2 --rebalance-modes window --engines skfolio --profiles hrp --simulators custom,cvxportfolio,nautilus` then `uv run scripts/research/tournament_scoreboard.py --run-id <RUN_ID>`. (If running outside the manifest defaults, set `TV_FEATURES__FEAT_AUDIT_LEDGER=1`.)
+
+### 3.2 Grand 4D Smoke Runbook (Makefile-First)
+This is the canonical “minutes-first” validation workflow to confirm **audit integrity**, **artifact persistence**, and **scoreboard readiness** before scaling up tournament dimensions.
+
+#### 3.2.1 Smoke Dimensions (Recommended)
+- Selection: `v3.2`
+- Rebalance: `window`
+- Engines: `custom,skfolio`
+- Profiles: `market,hrp,barbell`
+- Simulators: `custom` (fastest)
+- Windows: `train/test/step=60/10/10`
+- Universe sizing (production-parity): keep `selection.top_n` in parity with production (currently `top_n=5` via `configs/manifest.json`) so HRP typically has `n >= 3` clusters (validates skfolio HRP defaults, not only the fallback path).
+
+#### 3.2.2 Execution Commands
+1. Pre-flight (Makefile):
+   - `RUN_ID=<RUN_ID> make clean-run` (recommended: prevents stale `portfolio_candidates.json` / `portfolio_returns.pkl` from shrinking the universe)
+   - `RUN_ID=<RUN_ID> make env-sync`
+   - `RUN_ID=<RUN_ID> make env-check`
+   - `RUN_ID=<RUN_ID> make scan-run`
+   - `RUN_ID=<RUN_ID> make data-prep-raw` (builds `portfolio_candidates_raw.json` + `portfolio_returns_raw.pkl`)
+   - `RUN_ID=<RUN_ID> make port-select` (enrich + natural selection)
+   - `RUN_ID=<RUN_ID> make data-fetch LOOKBACK=200` (smoke-speed fetch for selected universe)
+   - `RUN_ID=<RUN_ID> make data-audit STRICT_HEALTH=1`
+2. Run smoke Grand 4D:
+   - `TV_RUN_ID=<RUN_ID> uv run scripts/research/grand_4d_tournament.py --selection-modes v3.2 --rebalance-modes window --engines custom,skfolio --profiles market,hrp,barbell --simulators custom --train-window 60 --test-window 10 --step-size 10`
+3. Scoreboard (strict):
+   - `RUN_ID=<RUN_ID> make tournament-scoreboard-run`
+
+#### 3.2.3 Smoke Acceptance Gates
+- **Ledger integrity**: `uv run scripts/archive/verify_ledger.py artifacts/summaries/runs/<RUN_ID>/audit.jsonl` passes.
+- **No silent gaps**: `backtest_optimize:intent` count equals `backtest_optimize:success + backtest_optimize:empty + backtest_optimize:error` (no intent→no-outcome gaps).
+- **No optimize errors (smoke standard)**: `backtest_optimize:error == 0` for the smoke run. If this fails, do not scale up; fix first.
+- **Logs exist and are non-empty**: `artifacts/summaries/runs/<RUN_ID>/logs/grand_4d_tournament.log` exists and contains run output (warnings and errors must be visible here).
+- **Selection sweep exercised**: `audit.jsonl` contains `backtest_select` outcomes and the run log does not contain `Dynamic selection produced no winners` (if present, selection is not being exercised; rerun after `make port-select`).
+- **Skfolio HRP exercised (n>=3)**: the smoke run should not contain `skfolio hrp: cluster_benchmarks n=2 < 3; using custom HRP fallback.` in the run log. If it does, increase universe size (e.g., raise `TV_TOP_N`) and rerun smoke before scaling.
+- **Artifacts exist**:
+  - `artifacts/summaries/runs/<RUN_ID>/grand_4d_tournament_results.json`
+  - `artifacts/summaries/runs/<RUN_ID>/data/grand_4d/window/v3.2/tournament_results.json`
+  - `artifacts/summaries/runs/<RUN_ID>/data/grand_4d/window/v3.2/returns/*.pkl`
+- **Scoreboard produced rows**: `artifacts/summaries/runs/<RUN_ID>/data/tournament_scoreboard.csv` is non-empty. (Candidates may be empty in smoke runs; that is acceptable.)
+
+#### 3.2.4 Learnings (Jan 2026)
+- **Failure mode**: Run `20260104-231020` showed `backtest_optimize:error=6` concentrated in `barbell` (skfolio: “argmax empty sequence”; custom: “empty distance matrix”). Ledger completeness was good (no intent→outcome gaps), but errors blocked smoke acceptance.
+- **Remediation**: Hardened risk engines to treat `n<=1` cluster-benchmark cases as valid degenerate inputs, and added a skfolio fallback path so optimize failures become non-fatal (logged + fallback weights) instead of producing `backtest_optimize:error`.
+- **Validation**: Run `20260104-233418` confirms `backtest_optimize:error=0` for the same smoke dimensions and writes a non-empty `logs/grand_4d_tournament.log` suitable for post-mortem correlation.
+
+### 3.3 Production-Parity Grand 4D Smoke (Mini Matrix)
+This is the canonical **production-parity** smoke for Grand 4D: it keeps production windows and non-dimension parameters identical to a full production tournament, while shrinking only the **dimension grid** so failures are attributable and fast to debug.
+
+#### 3.3.1 Parity Rules (Must Match Production)
+- **Profile/manifest parity**: run with `PROFILE=production` and `MANIFEST=configs/manifest.json` (or the currently validated production snapshot).
+- **Window parity**: keep production defaults (do not shrink windows for this smoke).
+  - Stability-default (current institutional default): `train/test/step = 180/40/20`.
+  - Fragility stress test (diagnostic probe): `train/test/step = 120/20/20` via overrides (`BACKTEST_TRAIN=120 BACKTEST_TEST=20 BACKTEST_STEP=20`).
+- **Risk parity**: use production `cluster_cap` and production backtest friction params (`backtest_slippage`, `backtest_commission`, `backtest_cash_asset`).
+- **Audit parity**: `feat_audit_ledger` enabled; `audit.jsonl` must be present and hash-chain verified.
+- **Logging parity**: Grand 4D must write a run-scoped log file at `artifacts/summaries/runs/<RUN_ID>/logs/grand_4d_tournament.log` and it must be non-empty.
+
+#### 3.3.2 Mini Matrix Dimensions (Recommended)
+- Selection: `v3.2`
+- Rebalance: `window`
+- Engines: `custom,skfolio`
+- Profiles: `market,hrp,barbell`
+- Simulators: `custom,cvxportfolio,nautilus` (**required** so `parity_ann_return_gap` is computable; parity requires `cvxportfolio` + `nautilus`)
+
+#### 3.3.3 Execution Commands (Makefile-First)
+1. Pre-flight (Makefile):
+   - `RUN_ID=<RUN_ID> make clean-run` (required: prevents stale `portfolio_candidates.json` / `portfolio_returns.pkl` from shrinking the universe)
+   - `RUN_ID=<RUN_ID> make env-sync`
+   - `RUN_ID=<RUN_ID> make env-check`
+   - `RUN_ID=<RUN_ID> make scan-run`
+   - `RUN_ID=<RUN_ID> make data-prep-raw` (builds `portfolio_candidates_raw.json` + `portfolio_returns_raw.pkl`)
+   - `RUN_ID=<RUN_ID> make port-select` (enrich + natural selection)
+   - `RUN_ID=<RUN_ID> make data-fetch LOOKBACK=500` (production-parity fetch for selected universe)
+   - `RUN_ID=<RUN_ID> make data-audit STRICT_HEALTH=1`
+2. Run production-parity Grand 4D smoke (do not override windows):
+   - `TV_RUN_ID=<RUN_ID> PROFILE=production MANIFEST=configs/manifest.json uv run scripts/research/grand_4d_tournament.py --selection-modes v3.2 --rebalance-modes window --engines custom,skfolio --profiles market,hrp,barbell --simulators custom,cvxportfolio,nautilus`
+3. Scoreboard (strict):
+   - `RUN_ID=<RUN_ID> make tournament-scoreboard-run`
+4. Ledger verify:
+   - `uv run scripts/archive/verify_ledger.py artifacts/summaries/runs/<RUN_ID>/audit.jsonl`
+
+#### 3.3.4 Acceptance Gates (Production-Parity Smoke)
+- **Ledger integrity**: `verify_ledger.py` passes.
+- **No optimize errors**: `backtest_optimize:error == 0`.
+- **No silent gaps**: `backtest_optimize:intent` equals `success + empty + error`.
+- **Logs non-empty**: `logs/grand_4d_tournament.log` exists and contains run output (warnings/errors must be visible here).
+- **Selection sweep exercised**: `audit.jsonl` contains `backtest_select` outcomes and the run log does not contain `Dynamic selection produced no winners`.
+- **Artifacts exist**:
+  - `artifacts/summaries/runs/<RUN_ID>/grand_4d_tournament_results.json`
+  - `artifacts/summaries/runs/<RUN_ID>/data/grand_4d/window/v3.2/tournament_results.json`
+  - `artifacts/summaries/runs/<RUN_ID>/data/grand_4d/window/v3.2/returns/*.pkl`
+- **Scoreboard produced rows**: `data/tournament_scoreboard.csv` is non-empty and generated alongside `tournament_candidates.csv` and `reports/research/tournament_scoreboard.md`.
