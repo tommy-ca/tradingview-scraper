@@ -9,7 +9,7 @@ static_symbols:
   # NOTE: In this repo’s TradingView history fetcher, US ETFs are typically
   # resolved under the `AMEX:` namespace (TradingView uses AMEX as the ETF
   # exchange alias for many NYSE Arca listings).
-  - "AMEX:PDBC" # Broad commodities (actively managed roll)
+  - "AMEX:DBC"  # Broad commodities (basket proxy)
   - "AMEX:GLD"  # Gold
   - "AMEX:SLV"  # Silver
   - "AMEX:USO"  # Oil (WTI proxy)
