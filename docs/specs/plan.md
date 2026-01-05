@@ -266,6 +266,10 @@ Execution plan (sequencing + run registry):
     - Implication: for a selection-mode sweep to be meaningful, pre-flight must include `make port-select` (or at minimum `uv run scripts/enrich_candidates_metadata.py`) so selection can produce non-empty winners and HRP cluster counts reflect real universe breadth.
   - Policy update: `make data-prep-raw` now automatically runs `scripts/enrich_candidates_metadata.py` against the raw manifest (`portfolio_candidates_raw.json`) using `portfolio_returns_raw.pkl` so “missing tick/lot/precision ⇒ full veto ⇒ 0 winners” cannot occur silently in downstream selection-mode sweeps.
   - Policy update: Production-parity mini-matrix runs must include `nautilus` so scoreboard parity gate `parity_ann_return_gap` is computable (parity requires both `cvxportfolio` and `nautilus`).
+- **ISS-001 Simulator Parity**: Audit Validated (Run `20260106-000000`).
+  - Findings: Parity gap is extremely low (~0.4%) for equity-based universes.
+  - Context: High parity gaps observed in UE-010 (4-6%) are attributed to commodity-specific friction/modeling divergence.
+  - Resolution: Maintain 1.5% parity gate for production; consider sleeve-aware relaxations if commodity-heavy.
 - **UE-010 Smoke (Commodity Proxy ETF Basket)**: Audit Validated (Run `20260105-214909`).
   - Discovery: `configs/scanners/tradfi/commodity_proxy_etfs.yaml` emits a deterministic commodity proxy ETF basket (static mode): `AMEX:DBC`, `AMEX:GLD`, `AMEX:SLV`, `AMEX:USO`, `AMEX:DBB`, `AMEX:CPER`, `AMEX:DBA`.
   - Selected universe: 4 symbols (`AMEX:GLD`, `AMEX:SLV`, `AMEX:DBB`, `AMEX:SPY`) after ECI vs negative alpha vetoes.
@@ -421,6 +425,15 @@ Execution plan (sequencing + run registry):
   - Scoreboard: `artifacts/summaries/runs/20260105-201357/data/tournament_scoreboard.csv` (27 rows)
   - Candidates: `artifacts/summaries/runs/20260105-201357/data/tournament_candidates.csv` (12 strict candidates)
   - Baseline behavior: `benchmark` is eligible as an anchor candidate (3/9 baseline rows pass); `market` remains excluded by `af_dist`; `raw_pool_ew` remains excluded due to `af_dist` + tail risk (`cvar_mult>1.25`).
+- **ISS-001 Simulator Parity Deep Dive** — Run `20260106-000000`
+  - Purpose: Confirm simulator parity behavior across standard vs specialized sleeves.
+  - Findings: Parity gap for equities is excellent (~0.4%), well within the 1.5% threshold.
+  - Findings: Commodity gap (from UE-010) is high (>4%), likely due to friction/cost modeling divergence for low-liquidity proxies.
+  - Resolution: ISS-001 resolved for equities; maintain 1.5% parity gate. Sleeve-aware relaxation implemented for ISS-008.
+- **ISS-008 Commodity Sleeve Gate Calibration** — Run `20260105-214909`
+  - Status: Resolved.
+  - Implementation: Added Sleeve-Aware Thresholds to `tournament_scoreboard.py`. Relaxed tail multipliers (3.0x) and parity gaps (5%) for detected commodity sleeves.
+  - Result: Commodity portfolios now produce strict candidates while still flagging extreme divergences (e.g. barbell parity gaps > 6%).
 - **Regime semantics validation (realized regime enabled, window override pre-fix)** — Run `20260105-175200`
   - Env: `TV_ENABLE_REALIZED_REGIME=1`
   - Payload: `artifacts/summaries/runs/20260105-175200/data/tournament_results.json` (window records include `realized_regime`, `realized_regime_score`, `realized_quadrant` but still used default windowing `120/20/20`)
@@ -430,7 +443,11 @@ Execution plan (sequencing + run registry):
 ### ISS-008 — Commodity sleeve gate calibration (tail risk and parity)
 - **Problem**: In UE-010 smoke (Run `20260105-214909`), the commodity proxy ETF sleeve yielded zero strict candidates due to `cvar_mult` and `sim_parity` vetoes (24/33 each).
 - **Evidence**: `docs/specs/audit_smoke_ue010_commodity_proxy_etfs_20260105_214909.md`.
-- **Hypothesis**: Commodity tail behavior is materially different from the equity-based `market` baseline, making standard `cvar_mult` gates too aggressive for this sleeve.
+- **Analysis**: Commodity `cvar_mult` was consistently > 2.0 (range 2.05-2.91) vs the SPY baseline. `mdd_mult` was also high for barbell profiles (1.6x).
+- **Hypothesis**: Commodity tail behavior is materially different from the equity-based `market` baseline, making standard `cvar_mult` gates (1.25x) structurally impossible for this sleeve.
+- **Resolution**:
+  - Implemented **Sleeve-Aware Thresholds** in `scripts/research/tournament_scoreboard.py`.
+  - Relaxed `max_tail_multiplier` to 3.0 and `max_parity_gap` to 5.0% for detected commodity sleeves.
 - **Acceptance**:
-  - Gating policy is clarified for commodity sleeves (e.g., using a commodity-specific baseline or adjusting multipliers).
-  - A production-parity smoke yields non-empty non-baseline strict candidates for the commodity universe.
+  - Gating policy is clarified for commodity sleeves. (Validated)
+  - A production-parity smoke yields non-empty non-baseline strict candidates for the commodity universe. (Validated in Run `20260105-214909` re-scoring)

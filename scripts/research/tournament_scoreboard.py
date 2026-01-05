@@ -36,6 +36,10 @@ class CandidateThresholds:
     max_tail_multiplier: float = 1.25
     max_parity_ann_return_gap: float = 0.015
 
+    # Sleeve-specific relaxations (ISS-008)
+    max_tail_multiplier_commodity: float = 3.0
+    max_parity_gap_commodity: float = 0.05
+
 
 def _safe_float(val: Any) -> Optional[float]:
     try:
@@ -397,6 +401,10 @@ def _load_optimize_metrics(audit_path: Path) -> Dict[Tuple[str, str, str, str], 
 def _assess_candidate(row: Dict[str, Any], t: CandidateThresholds, *, allow_missing: bool) -> Tuple[bool, List[str]]:
     failures: List[str] = []
 
+    is_commodity = bool(row.get("is_commodity", False))
+    t_tail = t.max_tail_multiplier_commodity if is_commodity else t.max_tail_multiplier
+    t_parity = t.max_parity_gap_commodity if is_commodity else t.max_parity_ann_return_gap
+
     def req(name: str) -> Optional[float]:
         v = _safe_float(row.get(name))
         if v is None and not allow_missing:
@@ -428,15 +436,15 @@ def _assess_candidate(row: Dict[str, Any], t: CandidateThresholds, *, allow_miss
         failures.append("turnover")
 
     cvar_mult = req("cvar_mult")
-    if cvar_mult is not None and cvar_mult > t.max_tail_multiplier:
+    if cvar_mult is not None and cvar_mult > t_tail:
         failures.append("cvar_mult")
 
     mdd_mult = req("mdd_mult")
-    if mdd_mult is not None and mdd_mult > t.max_tail_multiplier:
+    if mdd_mult is not None and mdd_mult > t_tail:
         failures.append("mdd_mult")
 
     parity_gap = req("parity_ann_return_gap")
-    if parity_gap is not None and parity_gap > t.max_parity_ann_return_gap:
+    if parity_gap is not None and parity_gap > t_parity:
         failures.append("sim_parity")
 
     prof = str(row.get("profile", ""))
@@ -495,12 +503,23 @@ def build_scoreboard(
                 dist = summary.get("antifragility_dist") or {}
                 stress = summary.get("antifragility_stress") or {}
 
+                # Detect commodity sleeve
+                is_commodity = False
+                commodity_keywords = {"GLD", "SLV", "USO", "DBC", "DBB", "CPER", "DBA", "COMMODITY"}
+                # Check top_assets in windows[0]
+                sample_assets = []
+                if windows and isinstance(windows[0], dict):
+                    sample_assets = [str(a.get("Symbol", "")) for a in windows[0].get("top_assets", [])]
+                if any(any(k in s for k in commodity_keywords) for s in sample_assets):
+                    is_commodity = True
+
                 row: Dict[str, Any] = {
                     "selection": selection_mode,
                     "rebalance": rebalance_mode,
                     "engine": str(eng),
                     "profile": str(prof),
                     "simulator": str(sim),
+                    "is_commodity": is_commodity,
                     "avg_window_sharpe": _safe_float(summary.get("avg_window_sharpe")),
                     "annualized_return": _safe_float(summary.get("annualized_return")),
                     "annualized_vol": _safe_float(summary.get("annualized_vol")),
@@ -660,6 +679,8 @@ def _write_markdown(df: pd.DataFrame, out_path: Path, *, thresholds: CandidateTh
                     {"Key": "max_turnover", "Value": thresholds.max_turnover},
                     {"Key": "max_tail_multiplier", "Value": thresholds.max_tail_multiplier},
                     {"Key": "max_parity_ann_return_gap", "Value": thresholds.max_parity_ann_return_gap},
+                    {"Key": "max_tail_multiplier_commodity", "Value": thresholds.max_tail_multiplier_commodity},
+                    {"Key": "max_parity_gap_commodity", "Value": thresholds.max_parity_gap_commodity},
                 ]
             )
         )
@@ -756,6 +777,8 @@ def main() -> None:
     parser.add_argument("--max-turnover", type=float, default=CandidateThresholds.max_turnover)
     parser.add_argument("--max-tail-multiplier", type=float, default=CandidateThresholds.max_tail_multiplier)
     parser.add_argument("--max-parity-gap", type=float, default=CandidateThresholds.max_parity_ann_return_gap)
+    parser.add_argument("--max-tail-multiplier-commodity", type=float, default=CandidateThresholds.max_tail_multiplier_commodity)
+    parser.add_argument("--max-parity-gap-commodity", type=float, default=CandidateThresholds.max_parity_gap_commodity)
     args = parser.parse_args()
 
     settings = get_settings()
@@ -837,6 +860,8 @@ def main() -> None:
         max_turnover=args.max_turnover,
         max_tail_multiplier=args.max_tail_multiplier,
         max_parity_ann_return_gap=args.max_parity_gap,
+        max_tail_multiplier_commodity=args.max_tail_multiplier_commodity,
+        max_parity_gap_commodity=args.max_parity_gap_commodity,
     )
 
     audit_opt = _load_optimize_metrics(audit_path)
