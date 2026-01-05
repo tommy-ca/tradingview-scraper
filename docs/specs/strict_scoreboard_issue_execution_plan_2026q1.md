@@ -73,3 +73,27 @@ A run is considered “scale-ready” (for a broader sweep) if:
 - no intent→no-outcome gaps for optimize/simulate
 - parity is computed only when meaningful (no fallback-mode parity)
 - strict candidates are non-empty under stability-default (`180/40/20`)
+
+### Active Investigations (Jan 6 2026)
+
+#### ISS-001: Simulator Parity Deep Dive
+**Run ID**: `20260106-000000` (Proposed)
+**Configuration**:
+- Windowing: `180/40/20` (Stability Default)
+- Matrix: Production-Parity Mini (Custom, Skfolio, CVXPortfolio, Nautilus)
+**Goals**:
+1. Confirm if "Nautilus" is running in fallback mode (equivalent to Custom) or native mode.
+2. If fallback (Custom), quantify the friction/cash drag gap vs CVXPortfolio.
+3. If native, identify specific daily return divergences for top offenders.
+
+#### ISS-008: Commodity Sleeve Calibration
+**Artifacts**: UE-010 Smoke (`20260105-214909`)
+**Analysis Plan**:
+1. Extract `cvar_mult` and `mdd_mult` for the commodity sleeve.
+2. Determine if the 1.25x threshold is structurally too low for this asset class.
+3. Propose a "Sleeve-Aware" gating multiplier (e.g., 1.5x for Commodities).
+
+#### ISS-006: HRP Cluster Breadth
+**Investigation**:
+- Check `audit.jsonl` from recent smokes to see if selection consistently yields < 3 assets despite `top_n=5`.
+- Root cause likely upstream selection strictness or data health vetoes reducing the pool.
