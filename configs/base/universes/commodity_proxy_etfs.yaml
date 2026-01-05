@@ -1,0 +1,31 @@
+# L0: Commodity Proxy ETFs (Canonical Basket, ETF-first)
+base_preset: ../hygiene/institutional.yaml
+markets: ["america"]
+
+# Ensure we only emit the canonical proxy basket (symbols are matched by base
+# symbol, so exchange aliases like AMEX/NYSEARCA are tolerated).
+include_symbols:
+  - "PDBC" # Broad commodities (actively managed roll)
+  - "GLD"  # Gold
+  - "SLV"  # Silver
+  - "USO"  # Oil (WTI proxy)
+  - "DBB"  # Industrial metals basket
+  - "CPER" # Copper proxy
+  - "DBA"  # Agriculture basket (optional diversifier)
+
+# Pull enough rows so the include_symbols are guaranteed to appear if TradingView
+# serves them (then we filter down).
+prefilter_limit: 2000
+
+filters:
+  - left: "type"
+    operation: "equal"
+    right: "etf"
+
+sort_by: "volume"
+sort_order: "desc"
+limit: 25
+
+export_metadata:
+  symbol: commodity_proxy_etf_universe
+  data_category: universe_foundation

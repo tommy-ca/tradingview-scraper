@@ -1,0 +1,17 @@
+# L4: Commodity Proxy ETF Basket (Universe Foundation)
+base_preset: ../../base/universes/commodity_proxy_etfs.yaml
+
+# Disable trend gating: this scanner is a deterministic basket emitter, not a
+# momentum strategy screen.
+trend:
+  direction: "long"
+  logic: "AND"
+  recommendation: {enabled: false}
+  adx: {enabled: false}
+  momentum: {enabled: false}
+  confirmation_momentum: {enabled: false}
+
+limit: 25
+export_metadata:
+  symbol: commodity_proxy_etfs
+  data_category: universe_foundation

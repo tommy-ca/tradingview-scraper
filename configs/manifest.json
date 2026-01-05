@@ -131,15 +131,16 @@
             "ingestion_depth": 500,
             "strict_health": true
           },
-          "candidate_discovery": {
-            "scanners": [
-              "scanners/crypto/vol_breakout",
-              "scanners/tradfi/global_macro",
-              "scanners/crypto/global_mtf_trend",
-              "scanners/tradfi/metals_trend",
-              "scanners/tradfi/forex_trend",
-              "scanners/tradfi/bond_trend"
-            ],
+      "candidate_discovery": {
+        "scanners": [
+          "scanners/crypto/vol_breakout",
+          "scanners/tradfi/global_macro",
+          "scanners/tradfi/commodity_proxy_etfs",
+          "scanners/crypto/global_mtf_trend",
+          "scanners/tradfi/metals_trend",
+          "scanners/tradfi/forex_trend",
+          "scanners/tradfi/bond_trend"
+        ],
             "interval": "1d",
             "ingestion_depth": 500,
             "strict_health": true
