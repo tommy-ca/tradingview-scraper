@@ -266,6 +266,13 @@ Execution plan (sequencing + run registry):
     - Implication: for a selection-mode sweep to be meaningful, pre-flight must include `make port-select` (or at minimum `uv run scripts/enrich_candidates_metadata.py`) so selection can produce non-empty winners and HRP cluster counts reflect real universe breadth.
   - Policy update: `make data-prep-raw` now automatically runs `scripts/enrich_candidates_metadata.py` against the raw manifest (`portfolio_candidates_raw.json`) using `portfolio_returns_raw.pkl` so “missing tick/lot/precision ⇒ full veto ⇒ 0 winners” cannot occur silently in downstream selection-mode sweeps.
   - Policy update: Production-parity mini-matrix runs must include `nautilus` so scoreboard parity gate `parity_ann_return_gap` is computable (parity requires both `cvxportfolio` and `nautilus`).
+- **UE-010 Smoke (Commodity Proxy ETF Basket)**: Audit Validated (Run `20260105-214909`).
+  - Discovery: `configs/scanners/tradfi/commodity_proxy_etfs.yaml` emits a deterministic commodity proxy ETF basket (static mode): `AMEX:DBC`, `AMEX:GLD`, `AMEX:SLV`, `AMEX:USO`, `AMEX:DBB`, `AMEX:CPER`, `AMEX:DBA`.
+  - Selected universe: 4 symbols (`AMEX:GLD`, `AMEX:SLV`, `AMEX:DBB`, `AMEX:SPY`) after ECI vs negative alpha vetoes.
+  - Health: `make data-audit STRICT_HEALTH=1` passes for raw (8/8 OK) and selected (4/4 OK).
+  - Scoreboard outputs: `artifacts/summaries/runs/20260105-214909/data/tournament_scoreboard.csv`, `artifacts/summaries/runs/20260105-214909/data/tournament_candidates.csv`, `artifacts/summaries/runs/20260105-214909/reports/research/tournament_scoreboard.md`.
+  - Strict candidates: empty (0/33); dominant vetoes are `cvar_mult` and `sim_parity` (24/33 each), indicating tail-risk multipliers and cross-simulator parity are binding in this commodity sleeve universe.
+  - Audit note: `docs/specs/audit_smoke_ue010_commodity_proxy_etfs_20260105_214909.md`.
 - **Artifact Reorganization**: Audit Validated (Run `20260103-235511`).
 - **Grand 4D Smoke Validation**: Audit Validated (Run `20260104-161534`). Verified per-cell persistence under `data/grand_4d/<rebalance>/<selection>/` and `backtest_summary` outcomes in `audit.jsonl`.
 - **Benchmark Scoreboard Validation**: Audit Validated (Run `20260104-163801`). Verified per-cell `data/grand_4d/window/v3.2/returns/*.pkl`, ledger integrity, and strict scoreboard generation (no silent `backtest_optimize` gaps; barbell empty/error outcomes are recorded).
@@ -419,3 +426,11 @@ Execution plan (sequencing + run registry):
   - Payload: `artifacts/summaries/runs/20260105-175200/data/tournament_results.json` (window records include `realized_regime`, `realized_regime_score`, `realized_quadrant` but still used default windowing `120/20/20`)
   - Scoreboard: `artifacts/summaries/runs/20260105-175200/data/tournament_scoreboard.csv` (worst-regime computed from realized regime fields when present)
   - Regime audit hygiene: `artifacts/summaries/runs/20260105-175200/regime_audit.jsonl` is populated; global `data/lakehouse/regime_audit.jsonl` unchanged.
+
+### ISS-008 — Commodity sleeve gate calibration (tail risk and parity)
+- **Problem**: In UE-010 smoke (Run `20260105-214909`), the commodity proxy ETF sleeve yielded zero strict candidates due to `cvar_mult` and `sim_parity` vetoes (24/33 each).
+- **Evidence**: `docs/specs/audit_smoke_ue010_commodity_proxy_etfs_20260105_214909.md`.
+- **Hypothesis**: Commodity tail behavior is materially different from the equity-based `market` baseline, making standard `cvar_mult` gates too aggressive for this sleeve.
+- **Acceptance**:
+  - Gating policy is clarified for commodity sleeves (e.g., using a commodity-specific baseline or adjusting multipliers).
+  - A production-parity smoke yields non-empty non-baseline strict candidates for the commodity universe.
