@@ -24,7 +24,7 @@
 - [x] **Q1 2026 Institutional Scoreboard**: Completed.
 - [x] **Engine Hardening**: Hardened `RiskfolioEngine` against $n < 3$ crashes.
 - [x] **Unified Order Generation**: Created `scripts/production/generate_orders_v3.py`.
-- [ ] **Replayable Orders**: Update `generate_orders_v3.py` to support `--source-run-id` for dynamic winner selection.
+- [x] **Replayable Orders**: Updated `generate_orders_v3.py` to support `--source-run-id` for dynamic winner selection.
 - [ ] **Downstream consumer migration**: Update forensics/reporting to use explicit `decision_*` regime keys.
 - [x] **Stabilization Audit**: Completed. See `docs/specs/audit_q1_2026_scoreboard_stabilization.md`.
 
