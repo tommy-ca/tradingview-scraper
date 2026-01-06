@@ -119,6 +119,26 @@ Antifragility is measured at the **strategy** level using **out-of-sample (OOS)*
 - **Standard**:
     - **Robust Candidate**: Avoids catastrophic worst-regime collapses and does not rely on a single regime for profitability.
 
+### 2.11 Risk Profile Implementation Standards
+To ensure parity between research tournaments and production execution, engines must adhere to these mathematical definitions:
+
+#### 2.11.1 Barbell (Regime-Adaptive Aggressor)
+- **Core Sleeve**: Low-turnover defensive allocation (HRP or Risk Parity).
+- **Aggressor Sleeve**: Top-N Antifragile assets (Momentum + Positive Skew).
+- **Dynamic Weighting**: The Aggressor sleeve total weight must scale inversely with market volatility (Regime Severity):
+    - **QUIET**: 15% Aggressor / 85% Core.
+    - **NORMAL**: 10% Aggressor / 90% Core.
+    - **TURBULENT**: 5% Aggressor / 95% Core.
+    - **CRISIS**: 3% Aggressor / 97% Core.
+
+#### 2.11.2 HRP (Hierarchical Risk Parity)
+- **Standard**: Must implement Lopez de Prado's **Recursive Bisection**.
+- **Prohibited**: Simple Risk Parity (ERC) must not be labeled as HRP in the scoreboard.
+
+#### 2.11.3 Small-N Robustness Policy
+- **Constraint**: Engines (notably Riskfolio) can crash when $N_{assets} < 3$ due to singular distance matrices.
+- **Requirement**: All engines must implement a **Small-N Guard**. If $N < 3$, they must fall back to a deterministic, robust method (e.g., Internal Recursive Bisection or Equal Weight) to ensure production continuity.
+
 ## 3. Implementation Workflow
 
 1. **Tournament Execution**: Run multi-window backtests across all configurations.

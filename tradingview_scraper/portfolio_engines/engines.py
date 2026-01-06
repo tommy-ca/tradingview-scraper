@@ -481,7 +481,7 @@ class CustomClusteredEngine(BaseRiskEngine):
             return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["no aggressors"]
         agg_total = float(request.aggressor_weight)
         if request.aggressor_weight == EngineRequest.aggressor_weight:
-            agg_total = {"QUIET": 0.15, "TURBULENT": 0.08, "CRISIS": 0.05}.get(request.regime, agg_total)
+            agg_total = {"QUIET": 0.15, "NORMAL": 0.10, "TURBULENT": 0.05, "CRISIS": 0.03}.get(request.regime, agg_total)
         agg_total = max(0.0, min(0.95, agg_total))
         agg_per = agg_total / len(aggressor_symbols)
         excluded = []
@@ -647,6 +647,17 @@ class RiskfolioEngine(CustomClusteredEngine):
         X = universe.cluster_benchmarks
         n = X.shape[1]
         cap = _effective_cap(request.cluster_cap, n)
+
+        if n <= 0:
+            return pd.Series(dtype=float, index=X.columns)
+        if n == 1:
+            return pd.Series([1.0], index=X.columns)
+
+        # Small-n policy: riskfolio can be brittle for tiny universes (n=2) or when the distance matrix is singular.
+        # Default to our custom HRP implementation to keep behavior deterministic.
+        if n < 3:
+            logger.warning("riskfolio engine: cluster_benchmarks n=%s < 3; using custom HRP fallback.", n)
+            return super()._optimize_cluster_weights(universe=universe, request=request)
 
         if request.profile == "hrp":
             port = rp.HCPortfolio(returns=X)

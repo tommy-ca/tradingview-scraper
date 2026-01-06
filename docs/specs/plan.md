@@ -22,9 +22,11 @@
 
 ### Now (Jan 2026): Production Operations
 - [x] **Q1 2026 Institutional Scoreboard**: Completed (Run `20260106-prod-q1`). 4 Strict Candidates emerged.
-- [ ] **Order Generation**: Generate rebalance orders for the Q1 winners.
-- [ ] **Downstream consumer migration**: Update forensics/reporting to use explicit `decision_*` regime keys (avoid implicit `windows[].regime`).
-- [x] **Stabilization Audit**: Completed the Q1 2026 strict-scoreboard issue backlog (ISS-001 to ISS-008). See `docs/specs/audit_q1_2026_scoreboard_stabilization.md` for resolution history.
+- [x] **Engine Hardening**: Harden `RiskfolioEngine` to handle $n < 3$ via internal fallback to Custom HRP (Fix Window 6 crash).
+- [x] **Unified Order Generation**: Created `scripts/production/generate_orders_v3.py` using `portfolio_engines` to eliminate the CVXPY divergence.
+- [x] **Order Generation**: Generated rebalance orders for the Q1 winners using the V3 generator.
+- [ ] **Downstream consumer migration**: Update forensics/reporting to use explicit `decision_*` regime keys.
+- [x] **Stabilization Audit**: Completed the Q1 2026 strict-scoreboard issue backlog. See `docs/specs/audit_q1_2026_scoreboard_stabilization.md`.
 
 ### Next (Feb 2026): Universe & Strategy Expansion
 - [ ] **Scanner expansion (breadth-first)**: Expand discovery universes by asset type (FX Majors, Crypto Top-50, Commodity Proxies).

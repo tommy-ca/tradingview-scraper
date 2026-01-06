@@ -18,18 +18,23 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("portfolio_state")
 
 STATE_FILE = "data/lakehouse/portfolio_actual_state.json"
-OPTIMIZED_FILE = "data/lakehouse/portfolio_optimized_v2.json"
+OPTIMIZED_FILE_V3 = "data/lakehouse/portfolio_optimized_v3.json"
+OPTIMIZED_FILE_V2 = "data/lakehouse/portfolio_optimized_v2.json"
 
 
 def _load_optimized_data() -> dict:
-    if not os.path.exists(OPTIMIZED_FILE):
-        raise FileNotFoundError(f"Optimized portfolio file missing: {OPTIMIZED_FILE}")
+    target_file = OPTIMIZED_FILE_V3 if os.path.exists(OPTIMIZED_FILE_V3) else OPTIMIZED_FILE_V2
+    if not os.path.exists(target_file):
+        raise FileNotFoundError("Optimized portfolio file missing (Checked V3 and V2)")
 
-    with open(OPTIMIZED_FILE, "r") as f:
+    with open(target_file, "r") as f:
         optimized_data = json.load(f)
 
-    if not isinstance(optimized_data, dict) or "profiles" not in optimized_data:
-        raise ValueError(f"Optimized portfolio file missing 'profiles': {OPTIMIZED_FILE}")
+    # V3 format has profile at root, V2 has 'profiles' dict
+    if "profiles" not in optimized_data:
+        # Wrap V3 single-profile into V2 structure for compatibility
+        profile_name = optimized_data.get("profile", "barbell")
+        optimized_data = {"profiles": {profile_name: optimized_data}}
 
     return optimized_data
 
