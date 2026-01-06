@@ -4,13 +4,16 @@ import pandas as pd
 import pytest
 
 try:
-    import nautilus_trader
-
     from tradingview_scraper.portfolio_engines.nautilus_adapter import run_nautilus_backtest
 
     HAS_NAUTILUS = True
+
 except ImportError:
     HAS_NAUTILUS = False
+
+    def run_nautilus_backtest(*args, **kwargs):
+        return {}
+
 
 from tradingview_scraper.portfolio_engines.backtest_simulators import ReturnsSimulator
 

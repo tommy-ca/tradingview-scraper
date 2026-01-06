@@ -23,14 +23,13 @@ USD: Any = None
 
 try:
     from nautilus_trader.model.currencies import USD
-    from nautilus_trader.model.data import Bar, BarSpecification, BarType
+    from nautilus_trader.model.data import BarSpecification, BarType
     from nautilus_trader.model.enums import BarAggregation, PriceType
     from nautilus_trader.model.enums import OrderSide as _OrderSide
     from nautilus_trader.model.enums import TimeInForce as _TimeInForce
     from nautilus_trader.model.identifiers import InstrumentId as _InstrumentId
-    from nautilus_trader.model.identifiers import Venue
-    from nautilus_trader.model.instruments import Instrument
     from nautilus_trader.model.objects import Quantity as _Quantity
+
     from nautilus_trader.trading.strategy import Strategy as _Strategy
 
     Strategy = _Strategy
@@ -145,7 +144,7 @@ class NautilusRebalanceStrategy(Strategy):
                             total_cash += val.float_value()
                         else:
                             total_cash += float(val)
-                    except:
+                    except Exception:
                         # Fallback to iteration if USD lookup fails
                         for balance in account.balances():
                             money_obj = None

@@ -11,9 +11,8 @@ from dataclasses import dataclass
 from typing import Any, Literal, Optional
 
 try:
-    from nautilus_trader.backtest.config import BacktestDataConfig, BacktestEngineConfig, BacktestVenueConfig
+    from nautilus_trader.backtest.config import BacktestEngineConfig
     from nautilus_trader.config import (
-        BacktestEngineConfig,
         LiveDataEngineConfig,
         LiveExecEngineConfig,
         LiveRiskEngineConfig,
@@ -22,33 +21,32 @@ try:
         TradingNodeConfig,
     )
     from nautilus_trader.live.config import LiveDataClientConfig, LiveExecClientConfig
-    from nautilus_trader.model.identifiers import Venue
 
     # Execution Clients
     try:
         from nautilus_trader.adapters.binance.config import BinanceDataClientConfig, BinanceExecClientConfig
     except ImportError:
-        BinanceExecClientConfig = None
-        BinanceDataClientConfig = None
+        BinanceExecClientConfig: Any = None
+        BinanceDataClientConfig: Any = None
 
     try:
         from nautilus_trader.adapters.interactive_brokers.config import InteractiveBrokersDataClientConfig, InteractiveBrokersExecClientConfig
     except ImportError:
-        InteractiveBrokersExecClientConfig = None
-        InteractiveBrokersDataClientConfig = None
+        InteractiveBrokersExecClientConfig: Any = None
+        InteractiveBrokersDataClientConfig: Any = None
 
     HAS_NAUTILUS = True
 except ImportError:
     HAS_NAUTILUS = False
     # Define dummy classes for static analysis / runtime safety when missing
-    TradingNodeConfig = None
-    LoggingConfig = None
-    RiskEngineConfig = None
-    LiveRiskEngineConfig = None
-    BinanceExecClientConfig = None
-    BinanceDataClientConfig = None
-    InteractiveBrokersExecClientConfig = None
-    InteractiveBrokersDataClientConfig = None
+    TradingNodeConfig: Any = None
+    LoggingConfig: Any = None
+    RiskEngineConfig: Any = None
+    LiveRiskEngineConfig: Any = None
+    BinanceExecClientConfig: Any = None
+    BinanceDataClientConfig: Any = None
+    InteractiveBrokersExecClientConfig: Any = None
+    InteractiveBrokersDataClientConfig: Any = None
 
 logger = logging.getLogger(__name__)
 

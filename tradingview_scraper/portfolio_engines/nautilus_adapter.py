@@ -22,10 +22,9 @@ try:
     from nautilus_trader.backtest.models.fill import FillModel
     from nautilus_trader.model import BookOrder
     from nautilus_trader.model.book import OrderBook
-    from nautilus_trader.model.currencies import USD
-    from nautilus_trader.model.enums import AccountType, BookType, OmsType, OrderSide
+    from nautilus_trader.model.enums import BookType, OrderSide
     from nautilus_trader.model.identifiers import Venue as _Venue
-    from nautilus_trader.model.objects import Money, Price, Quantity
+    from nautilus_trader.model.objects import Price, Quantity
 
     BacktestEngine = _BacktestEngine
     BacktestEngineConfig = _BacktestEngineConfig
@@ -173,7 +172,7 @@ def run_nautilus_backtest(
         if not w_row.empty:
             try:
                 val = w_row["Weight"].values[0]
-            except:
+            except Exception:
                 val = w_row["Weight"].iloc[0]
             target_weights[unified_key] = float(val)
         else:
@@ -193,12 +192,12 @@ def run_nautilus_backtest(
         # Try balance_total(USD) first, fallback to iteration if needed
         try:
             final_cash = acct.balance_total(USD).as_double()
-        except:
+        except Exception:
             for bal in acct.balances():
                 if hasattr(bal, "total"):
                     final_cash = float(bal.total)
                     break
-    except:
+    except Exception:
         pass  # Fallback safe
 
     invested_value = final_equity - final_cash
@@ -303,7 +302,7 @@ def extract_nautilus_metrics(engine: Any, index: pd.DatetimeIndex, strategy: Any
                             idx_loc = nav_series.index.get_indexer([date], method="nearest")[0]
                             if idx_loc != -1:
                                 nav = nav_series.iloc[idx_loc]
-                    except:
+                    except Exception:
                         pass
 
                     if nav > 0:

@@ -6,9 +6,9 @@ import pandas as pd
 
 try:
     import nautilus_trader.model.currencies as currencies_mod
-    from nautilus_trader.model.currencies import USD, Currency, register_currency
+    from nautilus_trader.model.currencies import USD, register_currency
     from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
-    from nautilus_trader.model.instruments import CurrencyPair, Equity, Instrument
+    from nautilus_trader.model.instruments import CurrencyPair, Equity
     from nautilus_trader.model.objects import Price, Quantity
 
     HAS_NAUTILUS = True
@@ -124,7 +124,7 @@ class NautilusInstrumentProvider:
             return getattr(currencies_mod, code)
         try:
             return register_currency(code, code, code, 0, 8)
-        except:
+        except Exception:
             return USD
 
     def _size_to_precision(self, size: float) -> int:
