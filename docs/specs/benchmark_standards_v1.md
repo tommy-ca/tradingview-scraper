@@ -139,6 +139,19 @@ To ensure parity between research tournaments and production execution, engines 
 - **Constraint**: Engines (notably Riskfolio) can crash when $N_{assets} < 3$ due to singular distance matrices.
 - **Requirement**: All engines must implement a **Small-N Guard**. If $N < 3$, they must fall back to a deterministic, robust method (e.g., Internal Recursive Bisection or Equal Weight) to ensure production continuity.
 
+### 2.12 Implementation Taxonomy (Atomic vs. Composite)
+To maintain clarity in institutional reporting, profiles are classified into two implementation types:
+
+#### 2.12.1 Atomic Profiles
+Delegated to the specific engine backend library. Fidelity depends on the library's solver implementation.
+- **Profiles**: `hrp`, `min_variance`, `max_sharpe`, `equal_weight`.
+- **Fidelity**: `RiskfolioEngine` uses `riskfolio-lib`; `SkfolioEngine` uses `skfolio-lib`.
+
+#### 2.12.2 Composite Profiles (Shared)
+Implemented as a **Shared Standard** across all engine namespaces using a unified mathematical construction (typically CVXPY-based).
+- **Profiles**: `barbell`.
+- **Rationale**: Ensures that complex multi-sleeve strategies remain structurally identical regardless of the organizational namespace (`riskfolio`, `skfolio`, `custom`). For `barbell`, the "Riskfolio" label indicates the organizational owner, but the solver construction is the Shared Standard.
+
 ## 3. Implementation Workflow
 
 1. **Tournament Execution**: Run multi-window backtests across all configurations.

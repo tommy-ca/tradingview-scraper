@@ -14,19 +14,19 @@
 - [x] **Friction Alignment Fix**: Resolved cash-leg cost double-counting in simple simulators.
 
 ## Current Focus
-- **Full Production Sweep (Q1 2026)**: Completed. Successfully generated the first official multi-dimensional tournament with sleeve-aware gating. (Run `20260106-prod-q1`)
-- **Institutional Reporting**: Finalizing the unified tearsheet and alpha audit for the Q1 candidate list.
-- **Order Generation**: Operationalizing the 4 winning candidates (`riskfolio/barbell`) into executable target weights.
+- **Full Production Sweep (Q1 2026)**: Completed (Run `20260106-prod-q1`). 4 Strict Candidates emerged.
+- **Architectural Alignment**: Formalized the **Shared Barbell** implementation standard to align research and production.
+- **Order Generation**: Operationalizing the 4 winning candidates into executable target weights using the unified V3 pipeline.
 
 ## Next Steps Tracker (Rescheduled Queue)
 
 ### Now (Jan 2026): Production Operations
-- [x] **Q1 2026 Institutional Scoreboard**: Completed (Run `20260106-prod-q1`). 4 Strict Candidates emerged.
-- [x] **Engine Hardening**: Harden `RiskfolioEngine` to handle $n < 3$ via internal fallback to Custom HRP (Fix Window 6 crash).
-- [x] **Unified Order Generation**: Created `scripts/production/generate_orders_v3.py` using `portfolio_engines` to eliminate the CVXPY divergence.
-- [x] **Order Generation**: Generated rebalance orders for the Q1 winners using the V3 generator.
+- [x] **Q1 2026 Institutional Scoreboard**: Completed.
+- [x] **Engine Hardening**: Hardened `RiskfolioEngine` against $n < 3$ crashes.
+- [x] **Unified Order Generation**: Created `scripts/production/generate_orders_v3.py`.
+- [ ] **Replayable Orders**: Update `generate_orders_v3.py` to support `--source-run-id` for dynamic winner selection.
 - [ ] **Downstream consumer migration**: Update forensics/reporting to use explicit `decision_*` regime keys.
-- [x] **Stabilization Audit**: Completed the Q1 2026 strict-scoreboard issue backlog. See `docs/specs/audit_q1_2026_scoreboard_stabilization.md`.
+- [x] **Stabilization Audit**: Completed. See `docs/specs/audit_q1_2026_scoreboard_stabilization.md`.
 
 ### Next (Feb 2026): Universe & Strategy Expansion
 - [ ] **Scanner expansion (breadth-first)**: Expand discovery universes by asset type (FX Majors, Crypto Top-50, Commodity Proxies).
