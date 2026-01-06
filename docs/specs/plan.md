@@ -28,6 +28,10 @@
 - [x] **Multi-Winner Order Generation**: Updated `generate_orders_v3.py` to support `--top-n` unique strategy generation.
 - [x] **Drift Monitor V3 Support**: Updated `track_portfolio_state.py` to support the Multi-Winner JSON schema.
 - [ ] **L5 Paper Trading Loop**: Execute drift analysis for Top 3 Q1 winners and verify order provenance.
+- [ ] **Execution Engine Build**: 
+    - [ ] **Metadata Service**: Fetch Lot Sizes/Min Notionals via CCXT for all winners.
+    - [ ] **Shadow Loop (L5.5)**: Automated Drift + Paper Fill Simulation.
+    - [ ] **Live Adapter**: First implementation (Binance or Alpaca).
 - [ ] **Downstream consumer migration**: Update forensics/reporting to use explicit `decision_*` regime keys.
 - [x] **Stabilization Audit**: Completed. See `docs/specs/audit_q1_2026_scoreboard_stabilization.md`.
 

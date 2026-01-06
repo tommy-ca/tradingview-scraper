@@ -12,7 +12,7 @@ Scope:
 - Separation between **production gates** and **research-only diagnostics**.
 
 Non-goals (v1):
-- Implementing broker/exchange-specific adapters (code); this is a spec/roadmap.
+- High-frequency / market-making logic (this is a portfolio-level pipeline).
 - Weakening strict-scoreboard gates to “force” candidates.
 
 ---
