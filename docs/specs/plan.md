@@ -25,7 +25,9 @@
 - [x] **Engine Hardening**: Hardened `RiskfolioEngine` against $n < 3$ crashes.
 - [x] **Unified Order Generation**: Created `scripts/production/generate_orders_v3.py`.
 - [x] **Replayable Orders**: Updated `generate_orders_v3.py` to support `--source-run-id` for dynamic winner selection.
-- [x] **Multi-Winner Order Generation**: Updated `generate_orders_v3.py` to support `--top-n` unique strategy generation with deduplication and full provenance.
+- [x] **Multi-Winner Order Generation**: Updated `generate_orders_v3.py` to support `--top-n` unique strategy generation.
+- [x] **Drift Monitor V3 Support**: Updated `track_portfolio_state.py` to support the Multi-Winner JSON schema.
+- [ ] **L5 Paper Trading Loop**: Execute drift analysis for Top 3 Q1 winners and verify order provenance.
 - [ ] **Downstream consumer migration**: Update forensics/reporting to use explicit `decision_*` regime keys.
 - [x] **Stabilization Audit**: Completed. See `docs/specs/audit_q1_2026_scoreboard_stabilization.md`.
 

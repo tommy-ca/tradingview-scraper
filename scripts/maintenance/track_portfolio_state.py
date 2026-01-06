@@ -30,13 +30,25 @@ def _load_optimized_data() -> dict:
     with open(target_file, "r") as f:
         optimized_data = json.load(f)
 
-    # V3 format has profile at root, V2 has 'profiles' dict
-    if "profiles" not in optimized_data:
-        # Wrap V3 single-profile into V2 structure for compatibility
-        profile_name = optimized_data.get("profile", "barbell")
-        optimized_data = {"profiles": {profile_name: optimized_data}}
+    # Multi-Winner V3 format has 'winners' list
+    if "winners" in optimized_data:
+        profiles = {}
+        for w in optimized_data["winners"]:
+            rank = w.get("rank", 1)
+            eng = w.get("engine", "unknown")
+            prof = w.get("profile", "unknown")
+            # Create a unique key for the drift report
+            key = f"Rank{rank}_{eng}_{prof}"
+            profiles[key] = w
+        return {"profiles": profiles}
 
-    return optimized_data
+    # V2 format has 'profiles' dict
+    if "profiles" in optimized_data:
+        return optimized_data
+
+    # Legacy/Single-Winner V3 format has profile at root
+    profile_name = optimized_data.get("profile", "barbell")
+    return {"profiles": {profile_name: optimized_data}}
 
 
 def _write_state_snapshot(profiles: dict, *, backup: bool = True) -> str:
