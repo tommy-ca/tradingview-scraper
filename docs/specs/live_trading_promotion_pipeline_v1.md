@@ -87,6 +87,20 @@ Hard gates (institutional):
 - ledger hash chain verifies (`scripts/archive/verify_ledger.py`).
 - selected universe passes strict health audit (`make data-audit STRICT_HEALTH=1`) for production promotion.
 
+### L4.5 — Order Generation (V3)
+Goal:
+- Translate the validated Top N candidates into executable target weights with full provenance.
+
+Tool:
+- `scripts/production/generate_orders_v3.py`
+
+Policy:
+- **Top N Winners**: Identify the top `N` (default 3) unique configurations (engine/profile pairs) from the strict scoreboard.
+- **De-duplication**: If the same strategy wins across multiple simulators (e.g., `riskfolio/barbell` on `custom`, `nautilus`, `cvxportfolio`), treat it as a single unique winner (Rank 1).
+- **Artifacts**: Generate a dedicated order file for each unique rank:
+    - `data/lakehouse/orders/target_weights_rank{i}_{engine}_{profile}_{date}.csv`
+- **Provenance**: Orders must include `Source_Run`, `Regime`, `Score`, and `Generated_At` columns.
+
 ### L5 — Paper Trading / Shadow Execution (Pre-Live)
 Goal:
 - Translate validated portfolios into executable orders and run in paper mode with full telemetry.
