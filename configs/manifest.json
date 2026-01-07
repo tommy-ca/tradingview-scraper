@@ -116,38 +116,6 @@
         }
       }
     },
-    "nautilus_parity": {
-      "description": "Specialized profile for Nautilus Parity Smoke Tests",
-      "data": {
-        "lookback_days": 300,
-        "min_days_floor": 150,
-        "max_symbols": 50
-      },
-      "selection": {
-        "top_n": 10,
-        "threshold": 0.1
-      },
-      "backtest": {
-        "train_window": 120,
-        "test_window": 30,
-        "step_size": 20,
-        "backtest_simulator": "nautilus"
-      },
-      "discovery": {
-        "enabled_markets": ["crypto", "america"],
-        "pipelines": {
-          "parity_check": {
-            "scanners": [
-              "scanners/crypto/binance_trend",
-              "scanners/tradfi/sp500_trend"
-            ],
-            "interval": "1d",
-            "ingestion_depth": 300,
-            "strict_health": true
-          }
-        }
-      }
-    },
     "institutional_etf": {
       "description": "Cross-Asset Institutional ETF Strategy (Equities, Bonds, Commodities)",
       "data": {
@@ -203,20 +171,6 @@
               "scanners/tradfi/nasdaq100_trend",
               "scanners/tradfi/dw30_trend"
             ],
-            "interval": "1d",
-            "ingestion_depth": 500,
-            "strict_health": true
-          },
-      "candidate_discovery": {
-        "scanners": [
-          "scanners/crypto/vol_breakout",
-          "scanners/tradfi/global_macro",
-          "scanners/tradfi/commodity_proxy_etfs",
-          "scanners/crypto/global_mtf_trend",
-          "scanners/tradfi/metals_trend",
-          "scanners/tradfi/forex_trend",
-          "scanners/tradfi/bond_trend"
-        ],
             "interval": "1d",
             "ingestion_depth": 500,
             "strict_health": true

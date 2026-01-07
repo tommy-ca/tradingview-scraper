@@ -268,6 +268,12 @@ class BacktestEngine:
         else:
             sim_names = [s.strip().lower() for s in simulators if s.strip()]
 
+        # Rebalance Mode Logic
+        reb_mode = settings.features.feat_rebalance_mode
+        if reb_mode == "daily":
+            logger.info("Rebalance mode is 'daily'. Forcing step_size=1.")
+            step_size = 1
+
         if not profiles:
             profiles = ["min_variance", "hrp", "max_sharpe", "barbell"]
         if not engines:
@@ -311,7 +317,10 @@ class BacktestEngine:
         run_dir = settings.prepare_summaries_run_dir()
         ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
         if ledger:
+            logger.info(f"Audit ledger enabled. Recording to {run_dir}")
             self._ensure_ledger_genesis(ledger, settings)
+        else:
+            logger.warning("Audit ledger is DISABLED (feat_audit_ledger=False)")
 
         baseline_engine = "market"
         baseline_profiles = ["market", "benchmark", "raw_pool_ew"]
@@ -324,6 +333,8 @@ class BacktestEngine:
             "step_size": step_size,
             "start_date": start_date,
             "end_date": end_date,
+            "run_id": settings.run_id,
+            "profile_manifest": settings.profile,
         }
 
         for s in sim_names:
@@ -583,7 +594,12 @@ class BacktestEngine:
                                 **window_context_base,
                                 "engine": eng,
                                 "profile": prof,
+                                "selection_mode": settings.features.selection_mode,
+                                "train_window": train_window,
+                                "test_window": test_window,
+                                "step_size": step_size,
                             }
+                            logger.info(f"Recording intent: backtest_optimize | Profile: {prof} | Window: {window_index}")
                             ledger.record_intent(
                                 step="backtest_optimize",
                                 params={"engine": eng, "profile": prof, "regime": regime},
@@ -608,6 +624,10 @@ class BacktestEngine:
                                 **window_context_base,
                                 "engine": eng,
                                 "profile": prof,
+                                "selection_mode": settings.features.selection_mode,
+                                "train_window": train_window,
+                                "test_window": test_window,
+                                "step_size": step_size,
                             }
                             weights_payload = {}
                             if not weights_df.empty:
@@ -615,6 +635,8 @@ class BacktestEngine:
                                     weights_payload = weights_df.set_index("Symbol")["Weight"].to_dict()
                                 except Exception:
                                     weights_payload = {}
+
+                            logger.info(f"Recording outcome: backtest_optimize | Profile: {prof} | Window: {window_index}")
                             ledger.record_outcome(
                                 step="backtest_optimize",
                                 status="success" if not weights_df.empty else "empty",
@@ -854,6 +876,7 @@ class BacktestEngine:
                                 "engine": eng,
                                 "profile": prof,
                                 "simulator": s_name,
+                                "selection_mode": settings.features.selection_mode,
                             }
                             if prof == "raw_pool_ew":
                                 if raw_pool_symbol_count:
@@ -875,6 +898,7 @@ class BacktestEngine:
                                 "engine": eng,
                                 "profile": prof,
                                 "simulator": s_name,
+                                "selection_mode": settings.features.selection_mode,
                             }
                             if prof == "raw_pool_ew":
                                 if raw_pool_symbol_count:
@@ -922,6 +946,7 @@ class BacktestEngine:
                                 "engine": eng,
                                 "profile": prof,
                                 "simulator": s,
+                                "selection_mode": settings.features.selection_mode,
                             }
                             dist = cast(Dict[str, Any], summary.get("antifragility_dist", {}))
                             stress = cast(Dict[str, Any], summary.get("antifragility_stress", {}))

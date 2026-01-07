@@ -70,6 +70,16 @@ def natural_selection(
     run_dir = settings.prepare_summaries_run_dir()
     ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
 
+    # Base Context
+    sel_context_base = {
+        "run_id": settings.run_id,
+        "profile_manifest": settings.profile,
+        "top_n": top_n,
+        "threshold": threshold,
+        "min_momentum_score": m_gate,
+        "selection_mode": mode or settings.features.selection_mode,
+    }
+
     if not os.path.exists(returns_path) or not os.path.exists(meta_path):
         logger.error("Data missing.")
         return
@@ -96,6 +106,7 @@ def natural_selection(
                 step="natural_selection",
                 params={"top_n": top_n, "threshold": threshold, "mode": current_mode},
                 input_hashes={"returns": get_df_hash(returns), "candidates_raw": meta_hash, "stats": get_df_hash(stats_df) if stats_df is not None else "none"},
+                context={**sel_context_base, "selection_mode": current_mode},
             )
 
         response = run_selection(returns, raw_candidates, stats_df, top_n, threshold, max_clusters, m_gate, mode=current_mode)
@@ -228,6 +239,7 @@ def natural_selection(
                 },
                 metrics=ledger_metrics,
                 data=audit_payload,
+                context={**sel_context_base, "selection_mode": current_mode},
             )
 
     logger.info(f"Natural Selection Complete for modes: {', '.join(modes)}")
