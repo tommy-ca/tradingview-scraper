@@ -12,28 +12,46 @@
 - [x] **Institutional Safety (Scoreboard)**: Implemented `tournament_scoreboard.py` with temporal fragility, friction alignment, and quantified antifragility gates.
 - [x] **Sleeve-Aware Gating**: Implemented detection and relaxation for commodity proxy ETFs (Tail 3.0x / Parity 5.0%).
 - [x] **Friction Alignment Fix**: Resolved cash-leg cost double-counting in simple simulators.
+- [x] **Full Production Sweep (Q1 2026)**: Completed (Run `20260106-prod-q1`). 4 Strict Candidates emerged.
+- [x] **Order Generation**: Operationalized the 4 winning candidates into executable target weights using the unified V3 pipeline.
+- [x] **Architectural Alignment**: Formalized the **Shared Barbell** implementation standard to align research and production.
 
 ## Current Focus
-- **Full Production Sweep (Q1 2026)**: Completed (Run `20260106-prod-q1`). 4 Strict Candidates emerged.
-- **Architectural Alignment**: Formalized the **Shared Barbell** implementation standard to align research and production.
-- **Order Generation**: Operationalizing the 4 winning candidates into executable target weights using the unified V3 pipeline.
+- **Tournament Orchestrator Consolidation**: Merging `grand_tournament.py` and `grand_4d_tournament.py` into a unified multidimensional production validation suite. (Active)
 
 ## Next Steps Tracker (Rescheduled Queue)
 
-### Now (Jan 2026): Production Operations
-- [x] **Q1 2026 Institutional Scoreboard**: Completed.
-- [x] **Engine Hardening**: Hardened `RiskfolioEngine` against $n < 3$ crashes.
-- [x] **Unified Order Generation**: Created `scripts/production/generate_orders_v3.py`.
-- [x] **Replayable Orders**: Updated `generate_orders_v3.py` to support `--source-run-id` for dynamic winner selection.
-- [x] **Multi-Winner Order Generation**: Updated `generate_orders_v3.py` to support `--top-n` unique strategy generation.
-- [x] **Drift Monitor V3 Support**: Updated `track_portfolio_state.py` to support the Multi-Winner JSON schema.
-- [ ] **L5 Paper Trading Loop**: Execute drift analysis for Top 3 Q1 winners and verify order provenance.
-- [ ] **Execution Engine Build**: 
-    - [ ] **Metadata Service**: Fetch Lot Sizes/Min Notionals via CCXT for all winners.
-    - [ ] **Shadow Loop (L5.5)**: Automated Drift + Paper Fill Simulation.
-    - [ ] **Live Adapter**: First implementation (Binance or Alpaca).
-- [ ] **Downstream consumer migration**: Update forensics/reporting to use explicit `decision_*` regime keys.
-- [x] **Stabilization Audit**: Completed. See `docs/specs/audit_q1_2026_scoreboard_stabilization.md`.
+### Now (Jan 2026): Execution & Forensic Audit
+- [x] **Live Adapter (Phase 1)**: Established read-only real-time connectivity to Binance Testnet. (Completed)
+- [ ] **Tournament Consolidation**: Merge research and production tournament scripts. (Active)
+- [ ] **Live Adapter (Phase 2)**: Implement Market/Limit order submission with execution fidelity.
+- [x] **Selection Alpha Parity Audit**: Completed. Certified `v3.2` (+2.97%) as the superior engine under fixed 300d baseline. (Completed)
+
+### Recently Completed: Pipeline Correctness & Backtest Parity
+- [x] **Nautilus Execution Engine (Research Phase)**: 
+    - [x] **Parity Smoke Test**: Automate validate_parity.py with failure gates.
+    - [x] **Parity Scale-Up**: Validated with 300d lookback and multi-asset classes.
+    - [x] **Metadata Service**: Fetch Lot Sizes/Min Notionals via CCXT for all winners.
+    - [x] **Shadow Loop (L5.5)**: Automated Drift + Paper Fill Simulation.
+- [x] **E2E Pipeline Audit (ETF Core)**: 
+    - [x] **Profile Definition**: Created `institutional_etf` profile.
+    - [x] **Robustness Fixes**: Resolved NaN alpha scores and missing metadata.
+    - [x] **Selection Reporting**: Fixed abnormal Selection Alpha logic (+1.86% verified).
+    - [x] **Dual Selection Audit**: Integrated `v2.1` (Stability Anchor) alongside `v3.2` (Champion).
+    - [x] **Risk-Parity Correctness**: Fixed HRP implementation (Ward linkage + Recursive Bisection).
+    - [x] **Tournament Correctness**: Verified HPO and cluster-aware allocation stability.
+- [x] **Workflow Optimization**:
+    - [x] **Manifest-Driven Configuration**: Standard production runs now strictly follow manifest defaults.
+    - [x] **Fast Production Flow**: Standardized `flow-production` to use fast vectorized simulators.
+    - [x] **Pre-Live Verification**: Introduced `flow-prelive` for full validation via Nautilus.
+- [x] **Grand Tournament Orchestration**:
+    - [x] **Grand Tournament Script**: Created `scripts/grand_tournament.py` for multi-pass production validation.
+    - [x] **Execution Completed**: Validated `v3.2` vs `v2.1` across the full institutional ETF pipeline.
+- [x] **Final Institutional ETF Validation (Audit Phase)**: Completed. Q1 2026 ETF strategy certified with **JNJ, LQD, and GOOG** as top winners.
+
+### Deferred Scopes
+- [ ] **Phase 4 (Native MT5 Adapter)**: Completed but execution path deferred in favor of Nautilus.
+- [ ] **Phase 5 (MT5 Deployment)**: Deployment of native MT5 bridge is on hold.
 
 ### Next (Feb 2026): Universe & Strategy Expansion
 - [ ] **Scanner expansion (breadth-first)**: Expand discovery universes by asset type (FX Majors, Crypto Top-50, Commodity Proxies).

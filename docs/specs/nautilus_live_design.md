@@ -1,5 +1,7 @@
 # Specification: Nautilus Live Execution (L6)
 
+**PRIMARY EXECUTION PATH**: This design supercedes the MT5 Native Adapter for the current roadmap.
+
 ## 1. Introduction
 This document defines the architecture for deploying the `NautilusTrader` simulator into a **Live Execution Environment**. This enables the platform to trade real capital on Binance (Crypto) and Interactive Brokers (TradFi) using the exact same strategy logic verified in backtesting.
 
@@ -43,7 +45,7 @@ This document defines the architecture for deploying the `NautilusTrader` simula
 ### D. Synthetic State Architecture (Shadow Mode)
 - **Problem**: Shadow execution requires valid instruments and account state even when live feeds are offline or unconfigured.
 - **Solution**:
-    - **Dummy Instruments**: The `_inject_dummy_instruments()` method in `LiveRebalanceStrategy` allows injecting dummy `TestInstrument` objects (e.g., `BTCUSDT.BINANCE`, `ETHUSDT.BINANCE`) directly into the cache if live instruments are unavailable.
+    - **Dummy Instruments**: The `_inject_dummy_instruments()` method (invoked during `on_start`) in `LiveRebalanceStrategy` allows injecting dummy `TestInstrument` objects (e.g., `BTCUSDT.BINANCE`, `ETHUSDT.BINANCE`) directly into the cache if live instruments are unavailable.
     - **Synthetic Cash**: The engine initializes a `Cash` balance (e.g., 100,000 USDT) via `trader.generate_order` logic or direct account injection to ensure the solver has a valid denominator for weight calculations.
     - **Offline Resilience**: The system logs warnings ("No price... skipping") instead of crashing when tick data is missing, allowing logic verification of the rebalancing loop without active market data.
 
