@@ -98,6 +98,12 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **Fix Applied**: Updated `engines.py` to force `linkage="ward"` (matching Custom/Skfolio) and added experimental warning.
 - [x] **Validation**: Verified API signature supports `linkage` parameter.
 
+### Phase 14: Validation & Rerun
+**Goal**: Execute the full production pipeline to validate the scanner expansion and Riskfolio remediation.
+- [x] **Execution**: Ran `make flow-production PROFILE=institutional_etf` (Run ID: `20260107-193807`).
+- [x] **Scanner Verification**: Confirmed discovery of new assets (`RKLX`, `SDIV`) and expanded raw pool (>100 candidates).
+- [x] **Riskfolio Audit**: Confirmed warning log presence in `12_validation.log`.
+
 ## Conclusion
 The **Institutional ETF Scanner Expansion** project is complete.
 The system now features 9 verified scanners, a robust "Liquid Winners" discovery architecture, and a validated multi-engine backtesting capability.
