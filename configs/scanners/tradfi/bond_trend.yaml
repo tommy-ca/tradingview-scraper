@@ -1,14 +1,20 @@
-# L4: Bond ETF Momentum
 base_preset: ../../base/universes/bond_etfs.yaml
-# Inherit institutional hygiene via Universe foundation (I should update L0 to inherit from hygiene)
+static_mode: true
+static_symbols:
+  - "AMEX:AGG"
+  - "NASDAQ:BND"
+  - "NASDAQ:TLT"
+  - "AMEX:LQD"
+  - "AMEX:HYG"
+  - "NASDAQ:IEF"
+  - "NASDAQ:SHY"
+volume:
+  value_traded_min: 0
 trend:
-  direction: "long"
-  logic: "AND"
-  adx: {enabled: true, min: 15} # Bonds are less trendy
-  momentum:
-    enabled: true
-    horizons: {Perf.W: 0.0, Perf.1M: 0.5}
-limit: 10
+  recommendation: {enabled: false}
+  adx: {enabled: false}
+  momentum: {enabled: false}
+limit: 15
 export_metadata:
   symbol: bond_etf_trend
   data_category: strategy_alpha
