@@ -1,6 +1,6 @@
 # L1: Institutional Technical & Liquidity Hygiene
 volume:
-  min_value_traded: 10000000  # $10M USD min daily turnover
+  value_traded_min: 10000000  # $10M USD min daily turnover
 trend:
   adx:
     enabled: true

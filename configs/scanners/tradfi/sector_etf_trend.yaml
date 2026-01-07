@@ -1,5 +1,5 @@
-# L4: Bond ETF Alpha (Foundation)
-base_preset: ../../base/universes/bond_etfs.yaml
+# L4: US Sector ETF Alpha (SPDR Foundation)
+base_preset: ../../base/universes/sector_etfs.yaml
 volume:
   value_traded_min: 0
 trend:
@@ -8,5 +8,5 @@ trend:
   momentum: {enabled: false}
 limit: 15
 export_metadata:
-  symbol: bond_etf_trend
+  symbol: sector_etf_alpha_trend
   data_category: strategy_alpha

@@ -1,8 +1,8 @@
 # L0: Liquid Bond ETFs
 base_preset: ../hygiene/institutional.yaml
 markets: ["america"]
-static_mode: false
-include_symbols:
+static_mode: true
+static_symbols:
   - "AMEX:AGG"
   - "NASDAQ:BND"
   - "NASDAQ:TLT"
