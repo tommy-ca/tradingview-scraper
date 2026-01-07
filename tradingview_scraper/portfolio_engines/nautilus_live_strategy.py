@@ -1,42 +1,91 @@
 import json
 import logging
+import math
 import os
 import threading
 import time
+from typing import Any, Dict, List, Optional, cast
+from unittest.mock import MagicMock
 
 import pandas as pd
 
+# Standard types
+Strategy: Any = object
+OrderSide: Any = object
+InstrumentId: Any = object
+Quantity: Any = object
+Venue: Any = object
+Symbol: Any = object
+Currency: Any = object
+CurrencyType: Any = object
+Price: Any = object
+CurrencyPair: Any = object
+register_currency: Any = lambda c: None
+
 try:
-    from nautilus_trader.model.currencies import register_currency
-    from nautilus_trader.model.enums import CurrencyType, OrderSide
-    from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
-    from nautilus_trader.model.instruments import CurrencyPair
-    from nautilus_trader.model.objects import Currency, Price, Quantity
+    from nautilus_trader.model.currencies import register_currency as _register_currency
+    from nautilus_trader.model.enums import CurrencyType as _CurrencyType
+    from nautilus_trader.model.enums import OrderSide as _OrderSide
+    from nautilus_trader.model.identifiers import InstrumentId as _InstrumentId
+    from nautilus_trader.model.identifiers import Symbol as _Symbol
+    from nautilus_trader.model.identifiers import Venue as _Venue
+    from nautilus_trader.model.instruments import CurrencyPair as _CurrencyPair
+    from nautilus_trader.model.objects import Currency as _Currency
+    from nautilus_trader.model.objects import Price as _Price
+    from nautilus_trader.model.objects import Quantity as _Quantity
+    from nautilus_trader.trading.strategy import Strategy as _Strategy
 
     from tradingview_scraper.portfolio_engines.nautilus_strategy import INITIAL_CASH_VAL, NautilusRebalanceStrategy
 
+    Strategy = _Strategy
+    OrderSide = _OrderSide
+    InstrumentId = _InstrumentId
+    Symbol = _Symbol
+    Venue = _Venue
+    Currency = _Currency
+    CurrencyType = _CurrencyType
+    Price = _Price
+    Quantity = _Quantity
+    CurrencyPair = _CurrencyPair
+    register_currency = _register_currency
     HAS_NAUTILUS = True
 except ImportError:
     HAS_NAUTILUS = False
-    NautilusRebalanceStrategy = object
+    INITIAL_CASH_VAL = 100_000.0
+
+    class NautilusRebalanceStrategy(object):  # type: ignore
+        def __init__(self, *args, **kwargs):
+            self.cache: Any = MagicMock()
+            self.portfolio: Any = MagicMock()
+            self.target_weights = pd.DataFrame()
+
+        def on_start(self):
+            pass
+
+        def on_stop(self):
+            pass
+
+        def _get_nav(self) -> float:
+            return 0.0
+
 
 logger = logging.getLogger(__name__)
 
 
-class LiveRebalanceStrategy(NautilusRebalanceStrategy):
+class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
     """
     Live execution strategy that watches a JSON file for target weight updates.
     """
 
-    def __init__(self, weights_file: str, venue_str: str = "BINANCE", *args, **kwargs):
-        super().__init__(pd.DataFrame(), *args, **kwargs)  # Start with empty weights
+    def __init__(self, weights_file: str, venue_str: str = "BINANCE", mode: str = "SHADOW", *args, **kwargs):
+        super().__init__(pd.DataFrame(), *args, **kwargs)
         self.weights_file = weights_file
         self.venue_str = venue_str
+        self.mode = mode.upper()
         self.last_mtime = 0
         self.running = False
 
     def on_start(self):
-        # 1. Shadow Mode Injection (If cache is empty)
         if HAS_NAUTILUS and not self.cache.instruments():
             logger.warning("Shadow Mode detected (Empty Instrument Cache). Injecting dummy instruments...")
             self._inject_dummy_instruments()
@@ -45,14 +94,10 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):
         self.running = True
         self.watcher_thread = threading.Thread(target=self._watch_file, daemon=True)
         self.watcher_thread.start()
-        logger.info(f"Started LiveRebalanceStrategy watching {self.weights_file}")
+        logger.info(f"Started LiveRebalanceStrategy watching {self.weights_file} [MODE={self.mode}]")
 
     def _inject_dummy_instruments(self):
         """Injects dummy CurrencyPair instruments for Shadow Mode."""
-        # We need to know WHICH symbols to inject.
-        # Ideally, we read the weights file immediately to get the universe.
-        # Or we just inject a few standard ones if we don't know yet.
-        # Better: Load weights now to get the symbol list.
         try:
             if os.path.exists(self.weights_file):
                 with open(self.weights_file, "r") as f:
@@ -60,55 +105,41 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):
                 weights_map = data.get("weights", data)
                 symbols = list(weights_map.keys())
             else:
-                logger.warning("Weights file not found for instrument injection. Injecting fallback BTC/ETH.")
                 symbols = ["BTCUSDT", "ETHUSDT"]
         except Exception:
             symbols = ["BTCUSDT", "ETHUSDT"]
 
         venue = Venue(self.venue_str)
 
-        def get_currency(code):
-            try:
-                return Currency.from_str(code)
-            except ValueError:
-                # Mock registration
-                # iso4217=999 is generic for user-defined
-                c = Currency(code, 8, 999, code, CurrencyType.CRYPTO)
-                register_currency(c)
-                return c
-
-        # Assume Quote Currency is USDT for Crypto
         quote_code = "USDT"
-        quote_curr = get_currency(quote_code)
+        try:
+            quote_curr = Currency.from_str(quote_code)
+        except Exception:
+            quote_curr = Currency(quote_code, 8, 999, quote_code, CurrencyType.CRYPTO)
+            register_currency(quote_curr)
 
         for raw_symbol in symbols:
-            # Handle suffix if present
-            if "." in raw_symbol:
-                base_code = raw_symbol.split(".")[0].replace(quote_code, "")
-                clean_symbol = raw_symbol.split(".")[0]
-            else:
-                base_code = raw_symbol.replace(quote_code, "")
-                clean_symbol = raw_symbol
+            clean_symbol = raw_symbol.split(".")[0] if "." in raw_symbol else raw_symbol
+            base_code = clean_symbol.replace(quote_code, "")
+            try:
+                base_curr = Currency.from_str(base_code)
+            except Exception:
+                base_curr = Currency(base_code, 8, 999, base_code, CurrencyType.CRYPTO)
+                register_currency(base_curr)
 
-            base_curr = get_currency(base_code)
+            sym_obj = Symbol(clean_symbol)
+            inst_id = InstrumentId(sym_obj, venue)
 
-            # Create InstrumentId
-            # If raw_symbol has no dot, we construct it: SYMBOL.VENUE
-            # Nautilus expects Symbol object, Venue object
-            sym = Symbol(clean_symbol)
-            inst_id = InstrumentId(sym, venue)
-
-            # Create CurrencyPair
             inst = CurrencyPair(
                 instrument_id=inst_id,
-                raw_symbol=Symbol(clean_symbol),
+                raw_symbol=sym_obj,
                 base_currency=base_curr,
                 quote_currency=quote_curr,
                 price_precision=2,
                 size_precision=5,
                 price_increment=Price.from_str("0.01"),
                 size_increment=Quantity.from_str("0.00001"),
-                lot_size=Quantity.from_str("0.00001"),  # Optional, but good for validation
+                lot_size=Quantity.from_str("0.00001"),
                 max_quantity=Quantity.from_str("1000000"),
                 min_quantity=Quantity.from_str("0.00001"),
                 max_price=Price.from_str("1000000"),
@@ -121,44 +152,59 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):
                 ts_init=0,
             )
 
-            # Inject
-            # In a Strategy, self.cache is usually read-only interface.
-            # We might need to access the underlying provider or engine?
-            # But wait, self.instrument_provider is usually available on the node, not strategy.
-            # Strategy has self.cache which is an InstrumentCache.
-            # Let's try adding to cache directly if method exists (it usually does on the concrete cache implementation).
-
-            # HACK: Access internal cache if public API forbids
-            # Typically strategy.cache is `InstrumentCache`.
-            # If it doesn't have `add_instrument`, we are stuck.
-            # But in Nautilus tests, one can add to cache.
-
             try:
                 if hasattr(self.cache, "add_instrument"):
                     self.cache.add_instrument(inst)
                 elif hasattr(self.cache, "_instruments"):
-                    self.cache._instruments[inst_id] = inst  # Very dirty hack
+                    self.cache._instruments[inst_id] = inst
                 logger.info(f"Injected dummy instrument: {inst_id}")
             except Exception as e:
                 logger.error(f"Failed to inject {inst_id}: {e}")
 
     def _get_live_equity(self) -> float:
-        """Returns Portfolio NAV, with fallback for Shadow/Disconnected mode."""
-        nav = self._get_nav()  # Base class method
+        nav = self._get_nav()
         if nav < 1.0:
-            # Assume Shadow Mode / Disconnected
             return 100_000.0
         return nav
 
-    def _rebalance_portfolio(self):
-        """Iterates through all known instruments and adjusts positions."""
+    def _get_nav(self) -> float:
+        """Robustly extracts total equity from portfolio."""
+        if not HAS_NAUTILUS:
+            return 0.0
+        total_cash = 0.0
+        try:
+            venue_id = Venue(self.venue_str)
+            account = self.portfolio.account(venue_id)
+            for balance in account.balances():
+                money_obj = getattr(balance, "total", balance)
+                if hasattr(money_obj, "as_double"):
+                    total_cash += money_obj.as_double()
+                elif hasattr(money_obj, "float_value"):
+                    total_cash += money_obj.float_value()
+                else:
+                    total_cash += float(money_obj)
+        except Exception as e:
+            logger.debug(f"Could not get cash balance: {e}")
+
+        pos_value = 0.0
+        for pos in self.portfolio.positions():
+            try:
+                last_quote = self.cache.quote_tick(pos.instrument_id)
+                if last_quote:
+                    price = float(last_quote.bid_price if pos.quantity > 0 else last_quote.ask_price)
+                else:
+                    last_bar = self.cache.bar(pos.instrument_id)
+                    price = float(last_bar.close) if last_bar else 0.0
+                pos_value += float(pos.quantity) * price
+            except Exception as e:
+                logger.debug(f"Failed to calc position value for {pos.instrument_id}: {e}")
+        return total_cash + pos_value
 
     def on_stop(self):
         super().on_stop()
         self.running = False
 
     def _watch_file(self):
-        """Polls the weights file for changes."""
         while self.running:
             try:
                 if os.path.exists(self.weights_file):
@@ -168,135 +214,74 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):
                         self._load_weights()
             except Exception as e:
                 logger.error(f"Error watching weights file: {e}")
-
-            time.sleep(5)  # Check every 5 seconds
+            time.sleep(5)
 
     def _load_weights(self):
-        """Loads weights from JSON and triggers rebalance."""
         try:
-            # Expected format: {"timestamp": "2025-01-01...", "weights": {"BTCUSDT": 0.5, ...}}
-            # Or just flat dict: {"BTCUSDT": 0.5}
             with open(self.weights_file, "r") as f:
                 data = json.load(f)
-
-            if "weights" in data:
-                weights_map = data["weights"]
-            else:
-                weights_map = data
-
-            # Convert to DataFrame expected by base class
-            # We treat this as the "Latest" weights, so index is effectively "Now"
-            # We replace the entire target_weights DF to avoid lookup issues
+            weights_map = data.get("weights", data)
             df = pd.DataFrame([weights_map])
             df.index = pd.to_datetime([pd.Timestamp.now(tz="UTC")])
-
             self.target_weights = df
             logger.info(f"Loaded new target weights: {weights_map}")
-
-            # Trigger Rebalance immediately
             self._rebalance_portfolio()
-
         except Exception as e:
             logger.error(f"Failed to load weights: {e}")
 
     def _rebalance_portfolio(self):
-        """Iterates through all known instruments and adjusts positions."""
-        if not HAS_NAUTILUS:
+        if not HAS_NAUTILUS or self.target_weights.empty:
             return
 
-        # We need to iterate over UNION of current holdings and new targets
-        # Nautilus 'portfolio.positions' gives current holdings.
-        # 'target_weights' gives new targets.
-
-        all_symbols = set(self.target_weights.columns)
-        # for pos in self.portfolio.positions():
-        #     all_symbols.add(str(pos.instrument_id))
+        targets = self.target_weights.iloc[0]
+        target_symbols = set(targets.index)
+        current_holdings = {str(pos.instrument_id) for pos in self.portfolio.positions()}
+        all_symbols = target_symbols | current_holdings
 
         logger.info(f"Rebalancing {len(all_symbols)} symbols...")
 
         for symbol_str in all_symbols:
-            # Robust Parsing: Append Venue if missing
-            if "." not in symbol_str and self.venue_str:
-                symbol_str = f"{symbol_str}.{self.venue_str}"
-
-            # We need the Instrument object to trade.
-            # If we hold it, we have it. If it's new target, we might need to find it.
+            nautilus_symbol = f"{symbol_str.split(':')[1]}.{symbol_str.split(':')[0]}" if ":" in symbol_str else symbol_str
             try:
-                instrument_id = InstrumentId.from_str(symbol_str)
+                instrument_id = InstrumentId.from_str(nautilus_symbol)
                 instrument = self.cache.instrument(instrument_id)
-
                 if not instrument:
-                    logger.warning(f"Instrument {symbol_str} not found in cache. Cannot trade.")
                     continue
 
-                # Get target weight (default 0.0)
-                # Since target_weights is 1-row DF of "latest", just take the value
-                if symbol_str in self.target_weights.columns:
-                    weight = self.target_weights.iloc[0][symbol_str]
-                else:
-                    weight = 0.0
-
-                # Calculate quantity
-                # We mock a 'bar' with latest price for the base class method?
-                # Or we override calculation.
-                # Let's get price from cache or last quote.
-
-                # Nautilus `cache.bar(bar_type)`?
-                # Or `portfolio.net_position` value?
-
+                weight = float(targets.get(symbol_str, targets.get(nautilus_symbol, 0.0)))
                 last_quote = self.cache.quote_tick(instrument_id)
                 if last_quote:
-                    price = last_quote.bid_price  # Conservative? Or mid?
+                    price = float(last_quote.bid_price if weight < 0 else last_quote.ask_price)
                 else:
-                    # Fallback to last bar?
-                    # For now, if no price, skip
-                    logger.warning(f"No price for {symbol_str}, skipping.")
-                    continue
-
-                # Use base class logic but inject price manually?
-                # Base class `_calculate_target_qty` expects a `bar`.
-                # Let's override `_calculate_target_qty` or write custom logic here.
-
-                # Custom logic for Live:
-                equity = self._get_live_equity()
-                target_value = equity * weight * 0.95  # Buffer
-
-                current_qty = float(self.portfolio.net_position(instrument_id))
+                    last_bar = self.cache.bar(instrument_id)
+                    price = float(last_bar.close) if last_bar else 0.0
 
                 if price <= 0:
                     continue
 
-                raw_qty = target_value / float(price)
+                equity = self._get_live_equity()
+                target_value = equity * weight * 0.98
+                current_qty = float(self.portfolio.net_position(instrument_id))
+                raw_qty = target_value / price
 
-                # Apply limits (Step Size, Min Notional)
-                # Reuse base class catalog logic if possible, or reimplement
-                # ... (Simplified for now)
-
-                qty = raw_qty  # TODO: Apply rounding
-
+                step_size = float(getattr(instrument, "size_increment", 0.00001))
+                qty = math.floor(raw_qty / step_size) * step_size if step_size > 0 else raw_qty
                 delta = qty - current_qty
 
-                # Execute
-                if abs(delta * float(price)) > 10.0:  # Min trade $10 (Binance limit approx)
+                if abs(delta * price) > max(10.0, equity * 0.001):
                     self._execute_rebalance_live(instrument, delta)
-
             except Exception as e:
                 logger.error(f"Error rebalancing {symbol_str}: {e}")
 
-    def _get_live_equity(self) -> float:
-        # Sum cash + positions using real account data
-        # Nautilus Portfolio should have this updated via data feed
-        return self._get_nav()  # Base class method
-
     def _execute_rebalance_live(self, instrument, delta):
-        # Similar to base class but logged specific for live
-
         side = OrderSide.BUY if delta > 0 else OrderSide.SELL
         qty = abs(delta)
-
-        # Rounding logic needed here based on Instrument spec
-        # instrument.size_precision, instrument.size_increment
-
-        logger.info(f"Submitting {side} {qty} {instrument.id}")
-        order = self.order_factory.market(instrument.id, side, Quantity.from_scalar(qty, instrument.size_precision))
-        self.submit_order(order)
+        if self.mode == "SHADOW":
+            logger.info(f"✨ [SHADOW ORDER] {side} {qty:.4f} {instrument.id}")
+            return
+        logger.info(f"🚀 [LIVE ORDER] Submitting {side} {qty:.4f} {instrument.id}")
+        try:
+            order = self.order_factory.market(instrument.id, side, Quantity.from_scalar(qty, instrument.size_precision))
+            self.submit_order(order)
+        except Exception as e:
+            logger.error(f"Failed to submit order for {instrument.id}: {e}")
