@@ -663,8 +663,10 @@ class RiskfolioEngine(CustomClusteredEngine):
             return super()._optimize_cluster_weights(universe=universe, request=request)
 
         if request.profile == "hrp":
+            logger.warning("Riskfolio HRP is currently flagged as experimental due to known divergence (-0.95 correlation) with standard implementations.")
             port = rp.HCPortfolio(returns=X)
-            w = port.optimization(model="HRP", codependence="pearson", rm="MV")
+            # Attempt to align with Custom/Skfolio by using Ward linkage
+            w = port.optimization(model="HRP", codependence="pearson", rm="MV", linkage="ward")
         elif request.profile == "risk_parity":
             port = rp.Portfolio(returns=X)
             port.assets_stats(method_mu="hist", method_cov="ledoit")

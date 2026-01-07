@@ -88,6 +88,16 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **Verification**: Validated all system components (Scanner, Selection, Engine, Simulator).
 - [x] **Closure**: Project formally closed.
 
+### Phase 12: Spec Refinement
+**Goal**: Synchronize technical specifications with empirical lessons learned.
+- [x] **Optimization Spec**: Updated `optimization_engine_v2.md` with Adaptive regime mappings and Barbell constraints.
+- [x] **Benchmark Spec**: Updated `multi_engine_optimization_benchmarks.md` with Riskfolio caveats and latest tournament data.
+
+### Phase 13: Riskfolio Remediation
+**Goal**: Address the -0.95 correlation divergence in Riskfolio HRP.
+- [x] **Fix Applied**: Updated `engines.py` to force `linkage="ward"` (matching Custom/Skfolio) and added experimental warning.
+- [x] **Validation**: Verified API signature supports `linkage` parameter.
+
 ## Conclusion
 The **Institutional ETF Scanner Expansion** project is complete.
 The system now features 9 verified scanners, a robust "Liquid Winners" discovery architecture, and a validated multi-engine backtesting capability.
