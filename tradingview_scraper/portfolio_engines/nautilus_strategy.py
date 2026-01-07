@@ -5,6 +5,8 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
+from tradingview_scraper.execution.metadata import ExecutionMetadataCatalog
+
 # Define mocks/types for linter
 Strategy: Any = MagicMock
 OrderSide: Any = MagicMock
@@ -18,30 +20,29 @@ BarSpecification: Any = None
 BarAggregation: Any = None
 PriceType: Any = None
 BarType: Any = None
-Venue: Any = None
-USD: Any = None
+_USD: Any = None
 
 try:
-    from nautilus_trader.model.currencies import USD
+    from nautilus_trader.model.currencies import USD as _nautilus_USD
     from nautilus_trader.model.data import BarSpecification, BarType
     from nautilus_trader.model.enums import BarAggregation, PriceType
     from nautilus_trader.model.enums import OrderSide as _OrderSide
     from nautilus_trader.model.enums import TimeInForce as _TimeInForce
     from nautilus_trader.model.identifiers import InstrumentId as _InstrumentId
+    from nautilus_trader.model.identifiers import Venue as _Venue
     from nautilus_trader.model.objects import Quantity as _Quantity
-
     from nautilus_trader.trading.strategy import Strategy as _Strategy
 
     Strategy = _Strategy
     OrderSide = _OrderSide
     TimeInForce = _TimeInForce
     InstrumentId = _InstrumentId
+    Venue = _Venue
     Quantity = _Quantity
+    _USD = _nautilus_USD
     HAS_NAUTILUS = True
 except ImportError:
     HAS_NAUTILUS = False
-
-from tradingview_scraper.execution.metadata import ExecutionMetadataCatalog
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +56,10 @@ class NautilusRebalanceStrategy(Strategy):
     Ensures 1:1 parity with portfolio target weights while respecting exchange limits.
     """
 
-    def __init__(self, target_weights: pd.DataFrame, catalog: Optional[ExecutionMetadataCatalog] = None, initial_cash: float = INITIAL_CASH_VAL):
+    def __init__(self, target_weights: pd.DataFrame, catalog: Optional[ExecutionMetadataCatalog] = None, initial_cash: float = INITIAL_CASH_VAL, venue_code: str = "BACKTEST"):
         super().__init__()
         self.target_weights = target_weights.copy()
+        self.venue_code = venue_code
         if not isinstance(self.target_weights.index, pd.DatetimeIndex):
             self.target_weights.index = pd.to_datetime(self.target_weights.index)
 
@@ -106,7 +108,6 @@ class NautilusRebalanceStrategy(Strategy):
 
     def on_order_filled(self, event: Any):
         """Record fill for turnover calculation."""
-        print(f"DEBUG: on_order_filled {event}")
         if not HAS_NAUTILUS:
             return
 
@@ -131,37 +132,39 @@ class NautilusRebalanceStrategy(Strategy):
         # 1. Cash Balance
         total_cash = 0.0
         if HAS_NAUTILUS:
-            # Iterate through all accounts instead of hardcoding venue
-            for account in self.portfolio.accounts():
-                try:
-                    # Try explicit USD balance first
-                    try:
-                        # CashAccount usually has balance_total(currency)
-                        val = account.balance_total(USD)
-                        if hasattr(val, "as_double"):
-                            total_cash += val.as_double()
-                        elif hasattr(val, "float_value"):
-                            total_cash += val.float_value()
-                        else:
-                            total_cash += float(val)
-                    except Exception:
-                        # Fallback to iteration if USD lookup fails
-                        for balance in account.balances():
-                            money_obj = None
-                            if hasattr(balance, "total"):
-                                money_obj = balance.total
-                            elif hasattr(balance, "as_double") or hasattr(balance, "float_value"):
-                                money_obj = balance
+            try:
+                # Use the configured venue
+                venue_id = Venue(self.venue_code)
+                account = self.portfolio.account(venue_id)
 
-                            if money_obj:
-                                if hasattr(money_obj, "as_double"):
-                                    total_cash += money_obj.as_double()
-                                elif hasattr(money_obj, "float_value"):
-                                    total_cash += money_obj.float_value()
-                                else:
-                                    total_cash += float(money_obj)
-                except Exception as e:
-                    logger.error(f"Failed to get cash balance from account {account.id}: {e}")
+                # Try explicit USD balance first
+                try:
+                    # CashAccount usually has balance_total(currency)
+                    val = account.balance_total(_USD)
+                    if hasattr(val, "as_double"):
+                        total_cash += val.as_double()
+                    elif hasattr(val, "float_value"):
+                        total_cash += val.float_value()
+                    else:
+                        total_cash += float(val)
+                except Exception:
+                    # Fallback to iteration if USD lookup fails
+                    for balance in account.balances():
+                        money_obj = None
+                        if hasattr(balance, "total"):
+                            money_obj = balance.total
+                        elif hasattr(balance, "as_double") or hasattr(balance, "float_value"):
+                            money_obj = balance
+
+                        if money_obj:
+                            if hasattr(money_obj, "as_double"):
+                                total_cash += money_obj.as_double()
+                            elif hasattr(money_obj, "float_value"):
+                                total_cash += money_obj.float_value()
+                            else:
+                                total_cash += float(money_obj)
+            except Exception as e:
+                logger.error(f"Failed to get cash balance from account for venue {self.venue_code}: {e}")
 
         # 2. Positions Market Value
 
@@ -188,9 +191,6 @@ class NautilusRebalanceStrategy(Strategy):
         return final_nav
 
     def on_bar(self, bar: Any):
-        # if not HAS_NAUTILUS:
-        #     return
-
         try:
             instrument_id = bar.bar_type.instrument_id
             id_str = str(instrument_id)
@@ -224,27 +224,19 @@ class NautilusRebalanceStrategy(Strategy):
                 else:
                     potential_idx = self.target_weights.index[self.target_weights.index <= ts]
                     if potential_idx.empty:
-                        # print(f"DEBUG: No weight found for {id_str} at {ts}")
                         return
                     lookup_ts = potential_idx[-1]
 
                 weight = self.target_weights.loc[lookup_ts, id_str]
-                # print(f"DEBUG: Weight for {id_str} at {lookup_ts} is {weight}")
 
                 instrument = self.cache.instrument(instrument_id)
                 if instrument:
                     target_qty = self._calculate_target_qty(instrument, bar, weight)
-                    # print(f"DEBUG: Target qty for {id_str}: {target_qty}")
                     if target_qty >= 0:
                         self._execute_rebalance(instrument, target_qty)
-                else:
-                    # print(f"DEBUG: Instrument not found in cache: {instrument_id}")
-                    pass
-            except Exception as e:
-                # print(f"DEBUG: Error in on_bar logic: {e}")
+            except Exception:
                 pass
-        except Exception as e:
-            # print(f"DEBUG: top level on_bar error: {e}")
+        except Exception:
             pass
 
     def _calculate_target_qty(self, instrument: Any, bar: Any, weight: float) -> float:
@@ -291,7 +283,7 @@ class NautilusRebalanceStrategy(Strategy):
                 try:
                     order = self.order_factory.market(instrument.id, side, Quantity(qty_to_order, instrument.size_precision))
                     self.submit_order(order)
-                except Exception as e:
+                except Exception:
                     pass
-        except Exception as e:
+        except Exception:
             pass

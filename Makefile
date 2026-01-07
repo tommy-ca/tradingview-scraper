@@ -15,7 +15,8 @@ ENV_OVERRIDES := \
 	$(if $(BACKTEST_STEP),TV_STEP_SIZE=$(BACKTEST_STEP)) \
 	$(if $(BACKTEST_SIMULATOR),TV_BACKTEST_SIMULATOR=$(BACKTEST_SIMULATOR)) \
 	$(if $(BACKTEST_SIMULATORS),TV_BACKTEST_SIMULATORS=$(BACKTEST_SIMULATORS)) \
-	$(if $(CLUSTER_CAP),TV_CLUSTER_CAP=$(CLUSTER_CAP))
+	$(if $(CLUSTER_CAP),TV_CLUSTER_CAP=$(CLUSTER_CAP)) \
+	$(if $(SELECTION_MODE),TV_FEATURES__SELECTION_MODE=$(SELECTION_MODE))
 ENV_VARS := $(shell TV_MANIFEST_PATH=$(MANIFEST) TV_PROFILE=$(PROFILE) $(ENV_OVERRIDES) $(PY) -m tradingview_scraper.settings --export-env | sed 's/export //')
 $(foreach var,$(ENV_VARS),$(eval $(var)))
 $(foreach var,$(ENV_VARS),$(eval export $(shell echo "$(var)" | cut -d= -f1)))
@@ -53,6 +54,9 @@ export TV_CLUSTER_CAP := $(CLUSTER_CAP)
 endif
 ifeq ($(origin TV_RAW_POOL_UNIVERSE), undefined)
 export TV_RAW_POOL_UNIVERSE := $(RAW_POOL_UNIVERSE)
+endif
+ifeq ($(origin TV_FEATURES__SELECTION_MODE), undefined)
+export TV_FEATURES__SELECTION_MODE := $(SELECTION_MODE)
 endif
 endif
 
@@ -101,6 +105,25 @@ env-sync: ## Synchronize dependencies using uv
 
 env-check: ## Validate manifest and configuration integrity
 	$(PY) scripts/validate_manifest.py
+
+# --- TEST Namespace ---
+test-parity: ## Run Nautilus parity validation gate
+	$(PY) scripts/validate_parity.py
+
+grand-tournament: ## Run multi-dimensional Grand Tournament (Production Mode)
+	$(PY) scripts/grand_tournament.py --profile $(PROFILE) --selection-modes "v3.2,v2.1" --mode production
+
+grand-4d: ## Run deep research sweep (Research Mode)
+	$(PY) scripts/grand_tournament.py --profile $(PROFILE) --selection-modes "v3.2,v2.1" --rebalance-modes "window,daily" --mode research
+
+live-shadow: ## Run Nautilus in SHADOW mode (Read-only real-time)
+	$(PY) scripts/live/run_nautilus_shadow.py --profile $(PROFILE)
+
+smoke-test-nautilus: ## End-to-End Nautilus Parity Smoke Test
+	@echo ">>> STAGE: NAUTILUS SMOKE TEST"
+	$(MAKE) clean-run
+	$(MAKE) flow-production PROFILE=nautilus_parity
+	$(MAKE) test-parity
 
 # --- SCAN Namespace ---
 scan-run: ## Execute composable discovery scanners
@@ -151,6 +174,11 @@ port-test: ## Execute 3D benchmarking tournament
 	@echo ">>> Running Multi-Engine Tournament Mode..."
 	$(PY) scripts/backtest_engine.py --tournament
 
+port-drift: ## Monitor portfolio drift vs last implemented state
+	$(PY) scripts/maintenance/track_portfolio_state.py
+
+port-shadow-fill: ## Simulate paper execution (Shadow Loop) to reconcile drift
+	$(PY) scripts/maintenance/shadow_loop_sim.py
 
 port-analyze: ## Factor, correlation, and regime analysis
 	$(PY) scripts/correlation_report.py --hrp --min-col-frac 0.2
@@ -198,6 +226,9 @@ report-sync: ## Synchronize artifacts to private Gist
 flow-production: ## Full institutional production lifecycle
 	$(PY) python -m scripts.run_production_pipeline --profile $(PROFILE) --manifest $(MANIFEST)
 
+flow-prelive: ## Production pre-live workflow (including slow Nautilus simulator)
+	$(MAKE) flow-production BACKTEST_SIMULATORS=custom,cvxportfolio,vectorbt,nautilus
+
 flow-dev: ## Rapid iteration development execution
 	$(MAKE) flow-production PROFILE=development
 
@@ -218,6 +249,9 @@ meta-refresh: ## Rebuild symbol metadata for current candidates
 
 meta-refresh-all: ## Rebuild entire symbol metadata catalog (Maintenance)
 	$(PY) scripts/build_metadata_catalog.py --from-catalog --catalog-path $(META_CATALOG_PATH)
+
+meta-fetch: ## Fetch execution metadata (lot sizes, min notionals) from exchanges via CCXT
+	$(PY) scripts/fetch_execution_metadata.py
 
 meta-audit: ## Verify metadata integrity and timezones
 	$(PY) scripts/audit_metadata_pit.py

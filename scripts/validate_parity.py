@@ -1,3 +1,5 @@
+from typing import Any, Dict, cast
+
 import pandas as pd
 
 from tradingview_scraper.portfolio_engines.backtest_simulators import ReturnsSimulator
@@ -19,8 +21,13 @@ def validate_parity():
         print(f"❌ Failed to load returns: {e}")
         return
 
-    # Take a slice for faster testing (last 60 days)
-    returns = returns.tail(60).fillna(0.0)
+    # Take a slice for faster testing (last 150 days to match new profile)
+    # Ensure we have enough data
+    lookback = 150
+    if len(returns) > lookback:
+        returns = returns.tail(lookback).fillna(0.0)
+    else:
+        returns = returns.fillna(0.0)
 
     # 2. Define Weights (Equal Weight of Top 5 assets)
     symbols = list(returns.columns[:5])
@@ -49,7 +56,8 @@ def validate_parity():
     import os
 
     os.makedirs("artifacts/audit", exist_ok=True)
-    audit_record = {"legacy": {m: legacy_res.get(m, 0.0) for m in metrics}, "nautilus": {m: nautilus_res.get(m, 0.0) for m in metrics}, "delta": {}, "pass": False}
+
+    audit_record: Dict[str, Any] = {"legacy": {m: legacy_res.get(m, 0.0) for m in metrics}, "nautilus": {m: nautilus_res.get(m, 0.0) for m in metrics}, "delta": {}, "success": False}
 
     print("\n" + "=" * 50)
     print(f"{'Metric':<15} | {'Legacy':<10} | {'Nautilus':<10} | {'Delta':<10}")
@@ -58,8 +66,8 @@ def validate_parity():
     for m in metrics:
         v_leg = legacy_res.get(m, 0.0)
         v_nau = nautilus_res.get(m, 0.0)
-        delta = v_nau - v_leg
-        audit_record["delta"][m] = delta
+        delta = float(v_nau) - float(v_leg)
+        cast(Dict[str, float], audit_record["delta"])[m] = delta
         print(f"{m:<15} | {v_leg:>10.4f} | {v_nau:>10.4f} | {delta:>10.4f}")
 
     print("=" * 50)
@@ -69,16 +77,31 @@ def validate_parity():
     audit_record["divergence"] = divergence
 
     nautilus_return = nautilus_res.get("total_return", 0.0)
+    engine_used = nautilus_res.get("engine", "unknown")
+
+    if engine_used != "nautilus":
+        audit_record["success"] = False
+        print(f"\n⚠️ SMOKE TEST FAIL: Nautilus engine was NOT used. Fallback detected: {engine_used}")
+        print("Ensure 'nautilus_trader' is installed and importable.")
+        import sys
+
+        sys.exit(1)
 
     if pd.isna(nautilus_return) or abs(nautilus_return) < 1e-6:
-        audit_record["pass"] = False
+        audit_record["success"] = False
         print(f"\n⚠️ PARITY FAIL: Nautilus return is invalid ({nautilus_return})")
+        import sys
+
+        sys.exit(1)
     elif divergence < 0.015:
-        audit_record["pass"] = True
+        audit_record["success"] = True
         print(f"\n✅ PARITY PASS (Divergence: {divergence:.4f} < 0.015)")
     else:
-        audit_record["pass"] = False
+        audit_record["success"] = False
         print(f"\n⚠️ PARITY AUDIT (Divergence: {divergence:.4f})")
+        import sys
+
+        sys.exit(1)
 
     with open("artifacts/audit/parity_audit.json", "w") as f:
         json.dump(audit_record, f, indent=2)
