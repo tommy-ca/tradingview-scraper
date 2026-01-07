@@ -142,6 +142,7 @@ def _weights_df_from_cluster_weights(
                     "Cluster_ID": str(c_id),
                     "Cluster_Weight": float(c_weight) * scale,
                     "Intra_Cluster_Weight": float(sym_w),
+                    "Type": "CORE",
                     "Description": m.get("description", "N/A"),
                     "Sector": m.get("sector", "N/A"),
                     "Market": m.get("market", "UNKNOWN"),
@@ -413,9 +414,11 @@ class CustomClusteredEngine(BaseRiskEngine):
 
         if request.profile == "hrp":
             # PURE CUSTOM HRP: Implementation of Lopez de Prado Recursive Bisection
+            # Optimized for Jan 2026: Using 'ward' linkage for more robust clusters
             corr = X.corr().values
             dist = np.sqrt(0.5 * (1 - corr.clip(-1, 1)))
-            link = linkage(squareform(dist, checks=False), method="single")
+            # Ward linkage tends to produce more balanced and significant clusters than single linkage
+            link = linkage(squareform(dist, checks=False), method="ward")
 
             # Quasi-diagonalization
             sort_ix = cast(List[int], pd.Series(sch.leaves_list(link)).tolist())
@@ -506,7 +509,7 @@ class CustomClusteredEngine(BaseRiskEngine):
                     "Net_Weight": agg_per * (1.0 if direction == "LONG" else -1.0),
                     "Direction": direction,
                     "Cluster_ID": str(universe.symbol_to_cluster.get(sym)),
-                    "Cluster_Label": "AGGRESSOR",
+                    "Type": "AGGRESSOR",
                     "Description": m.get("description", "N/A"),
                     "Sector": m.get("sector", "N/A"),
                     "Market": m.get("market", "UNKNOWN"),
