@@ -22,6 +22,7 @@
 
 ### Now (Jan 2026): Execution & Production Scaling
 - [x] **Dynamic ETF discovery**: Implemented `etf_equity_momentum`, `etf_bond_yield_trend`, and `etf_commodity_supercycle` scanners. (Completed)
+- [x] **Screener Research Guide**: Created `docs/guides/screener_research.md` documenting the reverse-engineering process for TV API fields.
 - [ ] **Live Adapter (Phase 4)**: Final production "Hard-Sleeve" deployment (Binance/Live). (Active)
 
 
