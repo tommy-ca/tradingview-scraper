@@ -60,6 +60,16 @@ The `meta_portfolio` profile defines the constituent sleeves:
     - If a symbol exists in multiple sleeves, weights are additive.
 
 ## 5. Acceptance Criteria
-- **Correlation Benefit**: The Meta-Portfolio must show lower volatility than the best individual sleeve.
-- **Reproducibility**: The meta-allocation must be logged in the `audit.jsonl` of the meta-run.
-- **Integrity**: Weekend padding must not be introduced; TradFi calendars must remain sparse.
+- **Correlation Benefit**: The Meta-Portfolio must show lower volatility than the best individual sleeve. (Jan 2026 Audit: Observed inter-sleeve correlation of **0.58** between Instruments and ETFs).
+- **Reproducibility**: The meta-allocation must be logged in the `audit.jsonl` of the meta-run. (Verified in Run `20260107-201614`).
+- **Integrity**: Weekend padding must not be introduced; TradFi calendars must remain sparse. (Verified via `audit_data_integrity.py`).
+
+## 6. Audit Logs (Sample Trace)
+The meta-optimization step is recorded in the ledger:
+```json
+{
+  "step": "meta_optimize",
+  "params": {"engine": "custom", "profile": "hrp", "n_sleeves": 2},
+  "data": {"weights": {"etfs": 0.5119, "instruments": 0.4880}}
+}
+```

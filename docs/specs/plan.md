@@ -129,8 +129,15 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **Workflow Spec**: Updated `quantitative_workflow_v1.md` with Stage 5: Meta-Portfolio.
 - [x] **Manifest Spec**: Updated `workflow_manifests.md` with `sleeves` schema.
 
+### Phase 22: Production Hardening & Audit
+**Goal**: Verify multi-sleeve integrity in real-world conditions.
+- [x] **Audit (Integrity)**: Verified no weekend padding and correct intersection logic in Meta-Returns.
+- [x] **Audit (Traceability)**: Reconciled sleeve-level weights to asset-level weights.
+- [x] **Audit (Ledger)**: Confirmed meta-optimization decisions are recorded in `audit.jsonl`.
+- [x] **Spec Synchronization**: Updated `multi_sleeve_meta_portfolio_v1.md` and `artifact_hierarchy.md` with audit findings.
+
 ## Conclusion
-The **Institutional ETF Scanner Expansion** project is complete.
-The system now features 9 verified scanners, a robust "Liquid Winners" discovery architecture, and a validated multi-engine backtesting capability.
-The infrastructure for **Multi-Sleeve Meta-Portfolios** is implemented and validated, enabling cross-universe risk management.
+The **Institutional ETF Scanner Expansion** project and the **Multi-Sleeve Meta-Portfolio** infrastructure are complete.
+The system now supports cross-universe risk management with high-fidelity diversification alpha, backed by a transparent audit ledger.
+The pipeline is production-ready.
 

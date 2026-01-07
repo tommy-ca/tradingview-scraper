@@ -50,6 +50,9 @@ Every production run directory (`artifacts/summaries/runs/<RUN_ID>/`) shall adhe
 | `tournament_results.json` | `data/tournament_results.json` | Master results blob |
 | `returns/*.pkl` | `data/returns/` | Backtest series data |
 | `*.log` | `logs/` | Execution traces |
+| `meta_returns.pkl` | `data/meta_returns.pkl` | (NEW) Multi-sleeve returns |
+| `meta_optimized.json` | `data/meta_optimized.json` | (NEW) Sleeve weights |
+| `meta_portfolio_report.md` | `reports/portfolio/meta_report.md` | (NEW) Meta-layer summary |
 
 ## 4. Navigation & INDEX.md
 
