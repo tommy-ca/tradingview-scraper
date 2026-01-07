@@ -1,0 +1,19 @@
+# L4: Equity ETF Momentum Aggressors
+base_preset: ../../base/universes/dynamic_etf_discovery.yaml
+filters:
+  - left: "category"
+    operation: "in_range"
+    right: ["26", "27"]
+trend:
+  direction: "long"
+  logic: "AND"
+  adx: {enabled: true, min: 20}
+  momentum:
+    enabled: true
+    horizons: {Perf.W: 0.0, Perf.1M: 1.0}
+sort_by: "Perf.1M"
+sort_order: "desc"
+limit: 20
+export_metadata:
+  symbol: etf_equity_momentum
+  data_category: strategy_alpha

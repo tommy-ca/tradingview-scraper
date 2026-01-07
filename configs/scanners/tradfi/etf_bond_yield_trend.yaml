@@ -1,0 +1,19 @@
+# L4: Bond ETF Yield/Duration Rotators
+base_preset: ../../base/universes/dynamic_etf_discovery.yaml
+filters:
+  - left: "category"
+    operation: "in_range"
+    right: ["61", "70", "68", "59", "58", "63", "62", "69", "64", "56", "57"]
+trend:
+  direction: "long"
+  logic: "AND"
+  adx: {enabled: true, min: 15} # Lowered for bonds as they are less trendy
+  momentum:
+    enabled: true
+    horizons: {Perf.W: 0.0}
+sort_by: "ADX"
+sort_order: "desc"
+limit: 15
+export_metadata:
+  symbol: etf_bond_yield_trend
+  data_category: strategy_alpha

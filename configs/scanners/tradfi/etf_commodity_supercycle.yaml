@@ -1,0 +1,19 @@
+# L4: Commodity ETF Supercycle Aggressors
+base_preset: ../../base/universes/dynamic_etf_discovery.yaml
+filters:
+  - left: "category"
+    operation: "in_range"
+    right: ["8", "6", "4", "7", "5"]
+trend:
+  direction: "long"
+  logic: "AND"
+  adx: {enabled: true, min: 20}
+  momentum:
+    enabled: true
+    horizons: {Perf.W: 0.0, Perf.1M: 1.0}
+sort_by: "Perf.3M"
+sort_order: "desc"
+limit: 15
+export_metadata:
+  symbol: etf_commodity_supercycle
+  data_category: strategy_alpha

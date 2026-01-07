@@ -17,3 +17,6 @@ columns:
   - "ADX"
   - "ATR"
   - "Recommend.All"
+  - "Perf.W"
+  - "Perf.1M"
+  - "Perf.3M"

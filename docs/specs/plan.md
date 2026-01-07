@@ -16,15 +16,13 @@
 - [x] **CVXPortfolio Simulator Fidelity**: Strictly aligned weight indices and cash modeling to prevent solver drift.
 
 ## Current Focus
-- **Live Adapter Phase 4**: Finalizing the production "Hard-Sleeve" deployment and operationalizing the Alpaca TradFi adapter. (Active)
+- **Dynamic ETF Expansion**: Implementing momentum and trend-based scanners to expand the institutional discovery pool. (Active)
 
 ## Next Steps Tracker (Rescheduled Queue)
 
 ### Now (Jan 2026): Execution & Production Scaling
+- [x] **Dynamic ETF discovery**: Implemented `etf_equity_momentum`, `etf_bond_yield_trend`, and `etf_commodity_supercycle` scanners. (Completed)
 - [ ] **Live Adapter (Phase 4)**: Final production "Hard-Sleeve" deployment (Binance/Live). (Active)
-- [ ] **Alpaca Adapter Integration**: Operationalize TradFi execution hub for certified ETF winners.
-- [ ] **Shadow Loop Robustness**: Extend `shadow_loop_sim.py` to support multi-profile reconciliation audit trails.
-- [ ] **Forensic Deep-Dive**: Investigate tail-risk structural triggers for `CPER` and `PLTR` in turbulent regimes.
 
 
 ### Recently Completed: Pipeline Correctness & Backtest Parity

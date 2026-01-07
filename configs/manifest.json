@@ -153,7 +153,7 @@
       "data": {
         "lookback_days": 300,
         "min_days_floor": 200,
-        "max_symbols": 50
+        "max_symbols": 100
       },
       "selection": {
         "top_n": 10,
@@ -179,7 +179,10 @@
               "scanners/tradfi/index_etf_trend",
               "scanners/tradfi/sector_etf_trend",
               "scanners/tradfi/bond_trend",
-              "scanners/tradfi/commodity_etf_trend"
+              "scanners/tradfi/commodity_etf_trend",
+              "scanners/tradfi/etf_equity_momentum",
+              "scanners/tradfi/etf_bond_yield_trend",
+              "scanners/tradfi/etf_commodity_supercycle"
             ],
             "interval": "1d",
             "ingestion_depth": 300,
