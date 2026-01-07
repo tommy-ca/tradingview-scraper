@@ -11,6 +11,8 @@
 - [x] **Live Adapter Phase 1-3**: Established real-time connectivity (Binance), implemented strict rebalance order submission, and verified position state persistence to lakehouse.
 - [x] **Rebalance Logic Alignment**: Unified backtest and live rebalance logic with strict lot-size, step-size, and minimum notional enforcement.
 - [x] **Full Institutional ETF Audit**: Certified Q1 2026 winners (**JNJ, LQD, GOOG**) and verified high-fragility outlier insulation (**PLTR, CPER**).
+- [x] **High-Fidelity Rebalancing**: Implemented `daily` rebalance mode in `BacktestEngine` for 1-day step-size validation.
+- [x] **Audit Ledger Transparency**: Expanded ledger context with selection mode, rebalance mode, and window parameters for forensic replay.
 - [x] **Baseline Taxonomy Decommissioning**: Standardized on `market`, `benchmark`, and `raw_pool_ew`.
 - [x] **Selection Metadata Enrichment**: Automated institutional metadata detection and gap-filling.
 - [x] **CVXPortfolio Simulator Fidelity**: Strictly aligned weight indices and cash modeling to prevent solver drift.
