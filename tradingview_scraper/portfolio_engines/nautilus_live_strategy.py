@@ -68,6 +68,51 @@ except ImportError:
         def _get_nav(self) -> float:
             return 0.0
 
+    # Dummy classes for types
+    class CurrencyType:
+        CRYPTO = 1
+
+    class OrderSide:
+        BUY = 1
+        SELL = 2
+
+    class InstrumentId:
+        @staticmethod
+        def from_str(s):
+            return MagicMock()
+
+    class Symbol:
+        pass
+
+    class Venue:
+        def __init__(self, s):
+            pass
+
+    class Currency:
+        @staticmethod
+        def from_str(s):
+            return MagicMock()
+
+    class Price:
+        @staticmethod
+        def from_str(s):
+            return 0.0
+
+    class Quantity:
+        @staticmethod
+        def from_str(s):
+            return 0.0
+
+        @staticmethod
+        def from_scalar(v, p):
+            return 0.0
+
+    class CurrencyPair:
+        pass
+
+    def register_currency(c):
+        pass
+
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +122,12 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
     Live execution strategy that watches a JSON file for target weight updates.
     """
 
-    def __init__(self, weights_file: str, venue_str: str = "BINANCE", mode: str = "SHADOW", *args, **kwargs):
+    def __init__(self, weights_file: str, venue_str: str = "BINANCE", mode: str = "SHADOW", state_file: str = "data/lakehouse/portfolio_actual_state.json", *args, **kwargs):
         super().__init__(pd.DataFrame(), *args, **kwargs)
         self.weights_file = weights_file
         self.venue_str = venue_str
         self.mode = mode.upper()
+        self.state_file = state_file
         self.last_mtime = 0
         self.running = False
 
@@ -102,15 +148,17 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
             if os.path.exists(self.weights_file):
                 with open(self.weights_file, "r") as f:
                     data = json.load(f)
-                weights_map = data.get("weights", data)
-                symbols = list(weights_map.keys())
+                if "winners" in data:
+                    symbols = [a["Symbol"] for a in data["winners"][0].get("assets", [])]
+                else:
+                    weights_map = data.get("weights", data)
+                    symbols = list(weights_map.keys())
             else:
                 symbols = ["BTCUSDT", "ETHUSDT"]
         except Exception:
             symbols = ["BTCUSDT", "ETHUSDT"]
 
         venue = Venue(self.venue_str)
-
         quote_code = "USDT"
         try:
             quote_curr = Currency.from_str(quote_code)
@@ -118,7 +166,8 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
             quote_curr = Currency(quote_code, 8, 999, quote_code, CurrencyType.CRYPTO)
             register_currency(quote_curr)
 
-        for raw_symbol in symbols:
+        for full_symbol in symbols:
+            raw_symbol = full_symbol.split(":")[-1] if ":" in full_symbol else full_symbol
             clean_symbol = raw_symbol.split(".")[0] if "." in raw_symbol else raw_symbol
             base_code = clean_symbol.replace(quote_code, "")
             try:
@@ -172,29 +221,34 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
         if not HAS_NAUTILUS:
             return 0.0
         total_cash = 0.0
+
         try:
-            venue_id = Venue(self.venue_str)
-            account = self.portfolio.account(venue_id)
-            for balance in account.balances():
-                money_obj = getattr(balance, "total", balance)
-                if hasattr(money_obj, "as_double"):
-                    total_cash += money_obj.as_double()
-                elif hasattr(money_obj, "float_value"):
-                    total_cash += money_obj.float_value()
-                else:
-                    total_cash += float(money_obj)
+            accounts = self.cache.accounts()
+            if not accounts and self.mode == "SHADOW":
+                total_cash = 100000.0
+            else:
+                for acct in accounts:
+                    if str(acct.venue) == self.venue_str:
+                        for balance in acct.balances():
+                            money_obj = getattr(balance, "total", balance)
+                            if hasattr(money_obj, "as_double"):
+                                total_cash += money_obj.as_double()
+                            elif hasattr(money_obj, "float_value"):
+                                total_cash += money_obj.float_value()
+                            else:
+                                total_cash += float(money_obj)
         except Exception as e:
-            logger.debug(f"Could not get cash balance: {e}")
+            logger.debug(f"Could not get cash balance from cache: {e}")
 
         pos_value = 0.0
-        for pos in self.portfolio.positions():
+        positions = self._get_positions()
+        for pos in positions:
             try:
                 last_quote = self.cache.quote_tick(pos.instrument_id)
                 if last_quote:
                     price = float(last_quote.bid_price if pos.quantity > 0 else last_quote.ask_price)
                 else:
-                    last_bar = self.cache.bar(pos.instrument_id)
-                    price = float(last_bar.close) if last_bar else 0.0
+                    price = 1.0 if self.mode == "SHADOW" else 0.0
                 pos_value += float(pos.quantity) * price
             except Exception as e:
                 logger.debug(f"Failed to calc position value for {pos.instrument_id}: {e}")
@@ -220,14 +274,31 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
         try:
             with open(self.weights_file, "r") as f:
                 data = json.load(f)
-            weights_map = data.get("weights", data)
+
+            if "winners" in data:
+                winner = data["winners"][0]
+                assets = winner.get("assets", [])
+                weights_map = {a["Symbol"]: a["Weight"] for a in assets}
+            elif "weights" in data:
+                weights_map = data["weights"]
+            else:
+                weights_map = data
+
             df = pd.DataFrame([weights_map])
             df.index = pd.to_datetime([pd.Timestamp.now(tz="UTC")])
             self.target_weights = df
-            logger.info(f"Loaded new target weights: {weights_map}")
+            logger.info(f"Loaded {len(weights_map)} target weights from {self.weights_file}")
             self._rebalance_portfolio()
         except Exception as e:
             logger.error(f"Failed to load weights: {e}")
+
+    def _get_positions(self) -> List[Any]:
+        """Robustly returns a list of current positions."""
+        if hasattr(self.cache, "positions"):
+            return self.cache.positions()
+        elif hasattr(self.portfolio, "positions"):
+            return self.portfolio.positions()
+        return []
 
     def _rebalance_portfolio(self):
         if not HAS_NAUTILUS or self.target_weights.empty:
@@ -235,13 +306,19 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
 
         targets = self.target_weights.iloc[0]
         target_symbols = set(targets.index)
-        current_holdings = {str(pos.instrument_id) for pos in self.portfolio.positions()}
+        positions = self._get_positions()
+        current_holdings = {str(pos.instrument_id) for pos in positions}
         all_symbols = target_symbols | current_holdings
 
         logger.info(f"Rebalancing {len(all_symbols)} symbols...")
 
         for symbol_str in all_symbols:
-            nautilus_symbol = f"{symbol_str.split(':')[1]}.{symbol_str.split(':')[0]}" if ":" in symbol_str else symbol_str
+            if ":" in symbol_str:
+                parts = symbol_str.split(":")
+                nautilus_symbol = f"{parts[1]}.{parts[0]}"
+            else:
+                nautilus_symbol = symbol_str
+
             try:
                 instrument_id = InstrumentId.from_str(nautilus_symbol)
                 instrument = self.cache.instrument(instrument_id)
@@ -253,8 +330,7 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
                 if last_quote:
                     price = float(last_quote.bid_price if weight < 0 else last_quote.ask_price)
                 else:
-                    last_bar = self.cache.bar(instrument_id)
-                    price = float(last_bar.close) if last_bar else 0.0
+                    price = 1.0 if self.mode == "SHADOW" else 0.0
 
                 if price <= 0:
                     continue
@@ -273,6 +349,8 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
             except Exception as e:
                 logger.error(f"Error rebalancing {symbol_str}: {e}")
 
+        self._persist_state()
+
     def _execute_rebalance_live(self, instrument, delta):
         side = OrderSide.BUY if delta > 0 else OrderSide.SELL
         qty = abs(delta)
@@ -285,3 +363,37 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
             self.submit_order(order)
         except Exception as e:
             logger.error(f"Failed to submit order for {instrument.id}: {e}")
+
+    def _persist_state(self):
+        """Syncs Nautilus portfolio positions to the lakehouse state file."""
+        if not HAS_NAUTILUS:
+            return
+        try:
+            equity = self._get_live_equity()
+            positions = self._get_positions()
+            assets = []
+            for pos in positions:
+                sym = self._from_nautilus_id_str(str(pos.instrument_id))
+                last_quote = self.cache.quote_tick(pos.instrument_id)
+                price = float(last_quote.bid_price if pos.quantity > 0 else last_quote.ask_price) if last_quote else 0.0
+                weight = (float(pos.quantity) * price) / equity if equity > 0 else 0.0
+                assets.append({"Symbol": sym, "Weight": weight, "Quantity": float(pos.quantity), "Price": price, "Venue": str(pos.instrument_id.venue)})
+
+            state = {}
+            if os.path.exists(self.state_file):
+                with open(self.state_file, "r") as f:
+                    state = json.load(f)
+
+            profile_key = f"LIVE_{self.venue_str}_{self.mode}"
+            state[profile_key] = {"assets": assets, "equity": equity, "updated_at": pd.Timestamp.now(tz="UTC").isoformat()}
+            with open(self.state_file, "w") as f:
+                json.dump(state, f, indent=2)
+            logger.info(f"Persisted live state to {self.state_file} [Profile: {profile_key}]")
+        except Exception as e:
+            logger.error(f"Failed to persist state: {e}")
+
+    def _from_nautilus_id_str(self, id_str: str) -> str:
+        if "." in id_str:
+            parts = id_str.split(".")
+            return f"{parts[1]}:{parts[0]}"
+        return id_str

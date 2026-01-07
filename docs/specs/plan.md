@@ -17,15 +17,15 @@
 - [x] **Architectural Alignment**: Formalized the **Shared Barbell** implementation standard to align research and production.
 
 ## Current Focus
-- **Tournament Orchestrator Consolidation**: Merging `grand_tournament.py` and `grand_4d_tournament.py` into a unified multidimensional production validation suite. (Active)
+- **Live Adapter Phase 4**: Finalizing the production "Hard-Sleeve" deployment and operationalizing the Alpaca TradFi adapter. (Active)
 
 ## Next Steps Tracker (Rescheduled Queue)
 
 ### Now (Jan 2026): Execution & Forensic Audit
-- [x] **Live Adapter (Phase 1)**: Established read-only real-time connectivity to Binance Testnet. (Completed)
-- [ ] **Tournament Consolidation**: Merge research and production tournament scripts. (Active)
-- [ ] **Live Adapter (Phase 2)**: Implement Market/Limit order submission with execution fidelity.
-- [x] **Selection Alpha Parity Audit**: Completed. Certified `v3.2` (+2.97%) as the superior engine under fixed 300d baseline. (Completed)
+- [x] **Institutional ETF Scanner Expansion**: Unified Index, Sector, Bond, and Commodity ETF scanners into a single high-fidelity discovery pipeline. (Completed)
+- [x] **Live Adapter (Phase 1, 2 & 3)**: Established real-time connectivity, implemented strict rebalance order submission, and verified position state persistence to lakehouse. (Completed)
+- [ ] **Live Adapter (Phase 4)**: Final production "Hard-Sleeve" deployment. (Active)
+
 
 ### Recently Completed: Pipeline Correctness & Backtest Parity
 - [x] **Nautilus Execution Engine (Research Phase)**: 
