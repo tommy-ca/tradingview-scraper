@@ -72,6 +72,7 @@ def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1)
     Calculates Permutation Entropy as a measure of structural randomness.
     Low values = ordered/trending, High values = noisy/random.
     """
+    x = x[~np.isnan(x)]
     if len(x) < order:
         return 1.0
 
@@ -98,6 +99,8 @@ def calculate_efficiency_ratio(returns: np.ndarray) -> float:
     Higher ER (approaching 1.0) indicates a more efficient trend.
     Lower ER (approaching 0.0) indicates high noise/chop.
     """
+    # Clean NaNs
+    returns = returns[~np.isnan(returns)]
     if len(returns) < 2:
         return 0.0
 
@@ -107,7 +110,7 @@ def calculate_efficiency_ratio(returns: np.ndarray) -> float:
     # Total path length (sum of absolute returns)
     path_length = np.sum(np.abs(returns))
 
-    if path_length == 0:
+    if path_length <= 1e-12:
         return 0.0
 
     return float(net_change / path_length)
@@ -118,6 +121,7 @@ def calculate_dwt_turbulence(returns: np.ndarray) -> float:
     Uses Discrete Wavelet Transform to measure high-frequency 'turbulence'.
     Returns a value in [0, 1] representing the fraction of energy in noise.
     """
+    returns = returns[~np.isnan(returns)]
     if len(returns) < 8:
         return 0.5
 

@@ -111,19 +111,19 @@ class SelectionEngineV2(BaseSelectionEngine):
             clusters[cid].append(str(sym))
 
         # 1. Component Extraction
-        mom_all = returns.mean() * 252
-        vol_all = returns.std() * np.sqrt(252)
-        stab_all = 1.0 / (vol_all + 1e-9)
-        liq_all = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
-        af_all = pd.Series(0.5, index=returns.columns)
-        frag_all = pd.Series(0.0, index=returns.columns)
-        regime_all = pd.Series(1.0, index=returns.columns)
+        mom_all: pd.Series = cast(pd.Series, returns.mean() * 252)
+        vol_all: pd.Series = cast(pd.Series, returns.std() * np.sqrt(252))
+        stab_all: pd.Series = cast(pd.Series, 1.0 / (vol_all + 1e-9))
+        liq_all: pd.Series = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
+        af_all: pd.Series = pd.Series(0.5, index=returns.columns)
+        frag_all: pd.Series = pd.Series(0.0, index=returns.columns)
+        regime_all: pd.Series = pd.Series(1.0, index=returns.columns)
 
         # Predictability Metrics
         lookback = min(len(returns), 64)
-        pe_all = pd.Series({s: calculate_permutation_entropy(returns[s].values[-lookback:]) for s in returns.columns})
-        er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].values[-lookback:]) for s in returns.columns})
-        hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].values) for s in returns.columns})
+        pe_all: pd.Series = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
+        er_all: pd.Series = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
+        hurst_all: pd.Series = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
 
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
@@ -205,8 +205,37 @@ class SelectionEngineV2(BaseSelectionEngine):
             selected_symbols.extend(c_selected)
             audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_selected}
 
-        winners = [candidate_map[s] if s in candidate_map else {"symbol": s, "direction": "LONG"} for s in selected_symbols]
-        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version=getattr(self, "spec_version", "2.0"), warnings=warnings, vetoes={}, metrics={})
+        winners = []
+        for s in selected_symbols:
+            if s in candidate_map:
+                cand = candidate_map[s].copy()
+                cand["alpha_score"] = float(alpha_scores[s])
+                winners.append(cand)
+            else:
+                winners.append({"symbol": s, "direction": "LONG", "alpha_score": float(alpha_scores[s])})
+
+        # Add metrics for auditing
+        metrics: Dict[str, Any] = {
+            "alpha_scores": {str(k): float(v) for k, v in cast(Any, alpha_scores).items()},
+            "predictability": {
+                "avg_pe": float(pe_all.mean()),
+                "avg_er": float(er_all.mean()),
+                "avg_hurst": float(hurst_all.mean()),
+            },
+            "raw_metrics": {
+                "momentum": {str(k): float(v) for k, v in cast(Any, mom_all).items()},
+                "stability": {str(k): float(v) for k, v in cast(Any, stab_all).items()},
+                "liquidity": {str(k): float(v) for k, v in cast(Any, liq_all).items()},
+                "antifragility": {str(k): float(v) for k, v in cast(Any, af_all).items()},
+                "survival": {str(k): float(v) for k, v in cast(Any, regime_all).items()},
+                "efficiency": {str(k): float(v) for k, v in cast(Any, er_all).items()},
+                "entropy": {str(k): float(v) for k, v in cast(Any, pe_all).items()},
+                "hurst": {str(k): float(v) for k, v in cast(Any, hurst_all).items()},
+                "fragility": {str(k): float(v) for k, v in cast(Any, frag_all).items()},
+            },
+        }
+
+        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version=getattr(self, "spec_version", "2.0"), warnings=warnings, vetoes={}, metrics=metrics)
 
 
 class SelectionEngineV2_1(SelectionEngineV2):
@@ -301,28 +330,28 @@ class SelectionEngineV3(BaseSelectionEngine):
             clusters[cid].append(str(sym))
 
         # 1. Component Extraction
-        mom_all = returns.mean() * 252
-        vol_all = returns.std() * np.sqrt(252)
-        stab_all = 1.0 / (vol_all + 1e-9)
-        liq_all = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
-        af_all = pd.Series(0.5, index=returns.columns)
-        frag_all = pd.Series(0.0, index=returns.columns)
-        regime_all = pd.Series(1.0, index=returns.columns)
+        mom_all: pd.Series = cast(pd.Series, returns.mean() * 252)
+        vol_all: pd.Series = cast(pd.Series, returns.std() * np.sqrt(252))
+        stab_all: pd.Series = cast(pd.Series, 1.0 / (vol_all + 1e-9))
+        liq_all: pd.Series = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
+        af_all: pd.Series = pd.Series(0.5, index=returns.columns)
+        frag_all: pd.Series = pd.Series(0.0, index=returns.columns)
+        regime_all: pd.Series = pd.Series(1.0, index=returns.columns)
 
         # Asset Predictability Metrics
         lookback = min(len(returns), 64)
-        pe_all = pd.Series({s: calculate_permutation_entropy(returns[s].values[-lookback:]) for s in returns.columns})
-        er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].values[-lookback:]) for s in returns.columns})
-        hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].values) for s in returns.columns})
+        pe_all: pd.Series = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
+        er_all: pd.Series = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
+        hurst_all: pd.Series = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
 
         from tradingview_scraper.utils.predictability import calculate_dwt_turbulence, calculate_stationarity_score
 
-        dwt_all = pd.Series({s: calculate_dwt_turbulence(returns[s].values[-lookback:]) for s in returns.columns})
-        adf_all = pd.Series({s: calculate_stationarity_score(returns[s].values[-lookback:]) for s in returns.columns})
+        dwt_all = pd.Series({s: calculate_dwt_turbulence(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
+        adf_all = pd.Series({s: calculate_stationarity_score(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
 
         # Higher-Order Moments
-        skew_all = returns.skew()
-        kurt_all = returns.kurtosis()
+        skew_all = cast(pd.Series, returns.skew())
+        kurt_all = cast(pd.Series, returns.kurtosis())
 
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
@@ -441,9 +470,9 @@ class SelectionEngineV3(BaseSelectionEngine):
             # Cap ECI in logs/metrics, but use raw ECI for veto decisions.
             eci = min(0.10, eci_raw)
 
-            annual_alpha = float(mom_all[s]) if s in mom_all.index else 0.0
-            if annual_alpha - eci_raw < self.eci_hurdle:
-                _record_veto(str(s), f"High ECI ({eci_raw:.4f}) relative to Alpha ({annual_alpha:.4f})")
+            annual_momentum = float(mom_all[s]) if s in mom_all.index else 0.0  # type: ignore
+            if annual_momentum - eci_raw < self.eci_hurdle:
+                _record_veto(str(s), f"High friction (ECI={eci_raw:.4f}) relative to Momentum ({annual_momentum:.4f})")
 
         for s in disqualified:
             alpha_scores.loc[s] = -1.0
@@ -451,7 +480,7 @@ class SelectionEngineV3(BaseSelectionEngine):
         # Additional Metrics for Response
         metrics["kappa"] = kappa
         metrics["n_disqualified"] = len(disqualified)
-        metrics["alpha_scores"] = alpha_scores.to_dict()
+        metrics["alpha_scores"] = {str(k): float(v) for k, v in cast(Any, alpha_scores).items()}
         metrics["predictability"] = {
             "avg_pe": float(pe_all.mean()),
             "avg_er": float(er_all.mean()),
@@ -460,19 +489,53 @@ class SelectionEngineV3(BaseSelectionEngine):
 
         # Raw Metrics for HPO (Phase 4 Normalization Audit)
         metrics["raw_metrics"] = {
-            "momentum": mom_all.to_dict(),
-            "stability": stab_all.to_dict(),
-            "liquidity": liq_all.to_dict(),
-            "antifragility": af_all.to_dict(),
-            "survival": regime_all.to_dict(),
-            "efficiency": er_all.to_dict(),
-            "entropy": pe_all.to_dict(),
-            "hurst": hurst_all.to_dict(),
-            "fragility": frag_all.to_dict(),
-            "skew": skew_all.to_dict(),
-            "kurtosis": kurt_all.to_dict(),
-            "dwt": dwt_all.to_dict(),
-            "adf": adf_all.to_dict(),
+            "momentum": {str(k): float(v) for k, v in cast(Any, mom_all).items()},
+            "stability": {str(k): float(v) for k, v in cast(Any, stab_all).items()},
+            "liquidity": {str(k): float(v) for k, v in cast(Any, liq_all).items()},
+            "antifragility": {str(k): float(v) for k, v in cast(Any, af_all).items()},
+            "survival": {str(k): float(v) for k, v in cast(Any, regime_all).items()},
+            "efficiency": {str(k): float(v) for k, v in cast(Any, er_all).items()},
+            "entropy": {str(k): float(v) for k, v in cast(Any, pe_all).items()},
+            "hurst": {str(k): float(v) for k, v in cast(Any, hurst_all).items()},
+            "fragility": {str(k): float(v) for k, v in cast(Any, frag_all).items()},
+            "skew": {str(k): float(v) for k, v in cast(Any, skew_all).items()},
+            "kurtosis": {str(k): float(v) for k, v in cast(Any, kurt_all).items()},
+            "dwt": {str(k): float(v) for k, v in cast(Any, dwt_all).items()},
+            "adf": {str(k): float(v) for k, v in cast(Any, adf_all).items()},
+        }
+
+        # Raw Metrics for HPO (Phase 4 Normalization Audit)
+        metrics["raw_metrics"] = {
+            "momentum": {str(k): float(v) for k, v in cast(Any, mom_all).items()},
+            "stability": {str(k): float(v) for k, v in cast(Any, stab_all).items()},
+            "liquidity": {str(k): float(v) for k, v in cast(Any, liq_all).items()},
+            "antifragility": {str(k): float(v) for k, v in cast(Any, af_all).items()},
+            "survival": {str(k): float(v) for k, v in cast(Any, regime_all).items()},
+            "efficiency": {str(k): float(v) for k, v in cast(Any, er_all).items()},
+            "entropy": {str(k): float(v) for k, v in cast(Any, pe_all).items()},
+            "hurst": {str(k): float(v) for k, v in cast(Any, hurst_all).items()},
+            "fragility": {str(k): float(v) for k, v in cast(Any, frag_all).items()},
+            "skew": {str(k): float(v) for k, v in cast(Any, skew_all).items()},
+            "kurtosis": {str(k): float(v) for k, v in cast(Any, kurt_all).items()},
+            "dwt": {str(k): float(v) for k, v in cast(Any, dwt_all).items()},
+            "adf": {str(k): float(v) for k, v in cast(Any, adf_all).items()},
+        }
+
+        # Raw Metrics for HPO (Phase 4 Normalization Audit)
+        metrics["raw_metrics"] = {
+            "momentum": mom_all.to_dict(),  # type: ignore
+            "stability": stab_all.to_dict(),  # type: ignore
+            "liquidity": liq_all.to_dict(),  # type: ignore
+            "antifragility": af_all.to_dict(),  # type: ignore
+            "survival": regime_all.to_dict(),  # type: ignore
+            "efficiency": er_all.to_dict(),  # type: ignore
+            "entropy": pe_all.to_dict(),  # type: ignore
+            "hurst": hurst_all.to_dict(),  # type: ignore
+            "fragility": frag_all.to_dict(),  # type: ignore
+            "skew": skew_all.to_dict(),  # type: ignore
+            "kurtosis": kurt_all.to_dict(),  # type: ignore
+            "dwt": dwt_all.to_dict(),  # type: ignore
+            "adf": adf_all.to_dict(),  # type: ignore
         }
 
         # HPO Support: Record raw component probabilities P_i
@@ -543,7 +606,14 @@ class SelectionEngineV3(BaseSelectionEngine):
             selected_symbols.extend(c_selected)
             audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_selected}
 
-        winners = [candidate_map[s] if s in candidate_map else {"symbol": s, "direction": "LONG"} for s in selected_symbols]
+        winners = []
+        for s in selected_symbols:
+            if s in candidate_map:
+                cand = candidate_map[s].copy()
+                cand["alpha_score"] = float(alpha_scores[s])
+                winners.append(cand)
+            else:
+                winners.append({"symbol": s, "direction": "LONG", "alpha_score": float(alpha_scores[s])})
 
         # Ensure JSON serializable audit_clusters
         serializable_clusters = {int(k): v for k, v in audit_clusters.items()}

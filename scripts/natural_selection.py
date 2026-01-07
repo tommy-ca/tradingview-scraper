@@ -59,6 +59,10 @@ def natural_selection(
     mode: Optional[str] = None,
 ):
     settings = get_settings()
+
+    # Handle multiple modes
+    modes = [m.strip() for m in (mode or settings.features.selection_mode).split(",") if m.strip()]
+
     top_n = top_n_per_cluster if top_n_per_cluster is not None else settings.top_n
     threshold = dist_threshold if dist_threshold is not None else settings.threshold
     m_gate = min_momentum_score if min_momentum_score is not None else settings.min_momentum_score
@@ -77,141 +81,156 @@ def natural_selection(
 
     meta_hash = hashlib.sha256(json.dumps(raw_candidates, sort_keys=True).encode()).hexdigest()
 
-    if ledger:
-        if not ledger.last_hash:
-            manifest_hash = hashlib.sha256(open(settings.manifest_path, "rb").read()).hexdigest() if settings.manifest_path.exists() else "unknown"
-            ledger.record_genesis(settings.run_id, settings.profile, manifest_hash)
+    if ledger and not ledger.last_hash:
+        manifest_hash = hashlib.sha256(open(settings.manifest_path, "rb").read()).hexdigest() if settings.manifest_path.exists() else "unknown"
+        ledger.record_genesis(settings.run_id, settings.profile, manifest_hash)
 
-        ledger.record_intent(
-            step="natural_selection",
-            params={"top_n": top_n, "threshold": threshold, "mode": mode},
-            input_hashes={"returns": get_df_hash(returns), "candidates_raw": meta_hash, "stats": get_df_hash(stats_df) if stats_df is not None else "none"},
-        )
+    # We will process each mode, but only the last one will be saved to output_path
+    # This maintains compatibility with downstream steps.
+    last_response = None
 
-    response = run_selection(returns, raw_candidates, stats_df, top_n, threshold, max_clusters, m_gate, mode=mode)
-    winners = response.winners
-    audit_clusters = response.audit_clusters
-    spec_version = response.spec_version
-    vetoes = response.vetoes
-    engine_metrics = response.metrics
+    for current_mode in modes:
+        logger.info(f"Running Natural Selection Mode: {current_mode}")
+        if ledger:
+            ledger.record_intent(
+                step="natural_selection",
+                params={"top_n": top_n, "threshold": threshold, "mode": current_mode},
+                input_hashes={"returns": get_df_hash(returns), "candidates_raw": meta_hash, "stats": get_df_hash(stats_df) if stats_df is not None else "none"},
+            )
 
-    # Atomic write for winners
-    with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(output_path), delete=False) as tf:
-        json.dump(winners, tf, indent=2)
-        temp_name = tf.name
-    os.replace(temp_name, output_path)
+        response = run_selection(returns, raw_candidates, stats_df, top_n, threshold, max_clusters, m_gate, mode=current_mode)
+        last_response = response
+        winners = response.winners
+        audit_clusters = response.audit_clusters
+        spec_version = response.spec_version
+        vetoes = response.vetoes
+        engine_metrics = response.metrics
 
-    def _sanitize(obj: Any) -> Any:
-        if isinstance(obj, dict):
-            return {str(k): _sanitize(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [_sanitize(x) for x in obj]
-        if hasattr(obj, "to_dict"):
-            return obj.to_dict()
-        if isinstance(obj, (np.integer, np.floating)):
-            return obj.item()
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return obj
+        # Atomic write for winners (will be overwritten if multiple modes, so the last one wins)
+        with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(output_path), delete=False) as tf:
+            json.dump(winners, tf, indent=2)
+            temp_name = tf.name
+        os.replace(temp_name, output_path)
 
-    sanitized_metrics = cast(Dict[str, Any], _sanitize(engine_metrics))
+        def _sanitize(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                return {str(k): _sanitize(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_sanitize(x) for x in obj]
+            if hasattr(obj, "to_dict"):
+                return obj.to_dict()
+            if isinstance(obj, (np.integer, np.floating)):
+                return obj.item()
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return obj
 
-    # Update Audit File with selection info (Atomic + Locked)
-    settings = get_settings()
-    run_audit_file = settings.run_config_dir / "selection_audit.json"
-    run_audit_file.parent.mkdir(parents=True, exist_ok=True)
-    lock_file = str(run_audit_file) + ".lock"
-    try:
-        with open(lock_file, "w") as lf:
-            fcntl.flock(lf, fcntl.LOCK_EX)
-            audit_data = {}
-            # Base data from shared lakehouse audit
-            if os.path.exists(AUDIT_FILE):
-                try:
-                    with open(AUDIT_FILE, "r") as f:
-                        content = f.read().strip()
-                        if content:
-                            audit_data = json.loads(content)
-                except Exception:
-                    pass
+        sanitized_metrics = cast(Dict[str, Any], _sanitize(engine_metrics))
 
-            audit_data["selection"] = {
-                "timestamp": datetime.now().isoformat(),
-                "total_raw_symbols": len(raw_candidates),
-                "total_selected": len(winners),
-                "lookbacks_used": [60, 120, 200],
-                "clusters": {str(k): v for k, v in audit_clusters.items()},
-                "spec_version": spec_version,
-                "vetoes": vetoes,
-                "metrics": sanitized_metrics,
-            }
+        # Update Audit File with selection info (Atomic + Locked)
+        run_audit_file = settings.run_config_dir / "selection_audit.json"
+        run_audit_file.parent.mkdir(parents=True, exist_ok=True)
+        lock_file = str(run_audit_file) + ".lock"
+        try:
+            with open(lock_file, "w") as lf:
+                fcntl.flock(lf, fcntl.LOCK_EX)
+                audit_data = {}
+                if os.path.exists(AUDIT_FILE):
+                    try:
+                        with open(AUDIT_FILE, "r") as f:
+                            content = f.read().strip()
+                            if content:
+                                audit_data = json.loads(content)
+                    except Exception:
+                        pass
 
-            # Write to run directory audit
-            with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(run_audit_file), delete=False) as tf:
-                json.dump(audit_data, tf, indent=2)
-                temp_name = tf.name
-            os.replace(temp_name, run_audit_file)
-
-            # Update shared lakehouse audit
-            os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
-            with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(AUDIT_FILE), delete=False) as tf:
-                json.dump(audit_data, tf, indent=2)
-                temp_name = tf.name
-            os.replace(temp_name, AUDIT_FILE)
-
-            # ALSO: Copy to run-specific directory for provenance
-            run_audit = run_dir / "selection_audit.json"
-            shutil.copy2(AUDIT_FILE, run_audit)
-
-            fcntl.flock(lf, fcntl.LOCK_UN)
-    except Exception as e:
-        logger.warning(f"Could not update audit file: {e}")
-
-    selection_audit_hash = None
-    if os.path.exists(run_dir / "selection_audit.json"):
-        selection_audit_hash = hashlib.sha256((run_dir / "selection_audit.json").read_bytes()).hexdigest()
-
-    if ledger:
-        audit_payload = cast(
-            Dict[str, Any],
-            _sanitize(
-                {
-                    "selection": {
-                        "total_raw_symbols": len(returns.columns),
-                        "total_selected": len(winners),
-                        "clusters": audit_clusters,
-                        "mode": mode,
-                        "spec_version": spec_version,
-                        "vetoes": vetoes,
-                        "engine_metrics": sanitized_metrics,
-                    },
-                    "portfolio_clusters": {str(c): d["selected"] for c, d in audit_clusters.items()},
-                    "winner_metadata": {w["symbol"]: {k: w.get(k) for k in ["exchange", "sector", "industry", "type", "identity"]} for w in winners},
+                current_selection_audit = {
+                    "timestamp": datetime.now().isoformat(),
+                    "selection_mode": current_mode,
+                    "total_raw_symbols": len(raw_candidates),
+                    "total_selected": len(winners),
+                    "lookbacks_used": [60, 120, 200],
+                    "clusters": {str(k): v for k, v in audit_clusters.items()},
+                    "spec_version": spec_version,
+                    "vetoes": vetoes,
+                    "metrics": sanitized_metrics,
                 }
-            ),
-        )
-        ledger_metrics: Dict[str, Any] = {
-            "n_winners": len(winners),
-            "n_vetoes": len(vetoes),
-            "spec_version": spec_version,
-            "raw_pool_count": len(returns.columns),
-            "selected_count": len(winners),
-        }
-        if isinstance(sanitized_metrics, dict):
-            ledger_metrics.update(sanitized_metrics)
-        ledger.record_outcome(
-            step="natural_selection",
-            status="success",
-            output_hashes={
-                "candidates": hashlib.sha256(json.dumps(winners).encode()).hexdigest(),
-                "candidates_raw": meta_hash,
-                "selection_audit": selection_audit_hash or "unknown",
-            },
-            metrics=ledger_metrics,
-            data=audit_payload,
-        )
 
-    logger.info(f"Natural Selection Complete ({mode or 'default'}): {len(winners)} candidates.")
+                # Update main selection key
+                audit_data["selection"] = current_selection_audit
+
+                # Update selection history
+                if "selection_history" not in audit_data:
+                    audit_data["selection_history"] = {}
+                audit_data["selection_history"][current_mode] = current_selection_audit
+
+                # Write to run directory audit
+                with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(run_audit_file), delete=False) as tf:
+                    json.dump(audit_data, tf, indent=2)
+                    temp_name = tf.name
+                os.replace(temp_name, run_audit_file)
+
+                # Update shared lakehouse audit
+                os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
+                with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(AUDIT_FILE), delete=False) as tf:
+                    json.dump(audit_data, tf, indent=2)
+                    temp_name = tf.name
+                os.replace(temp_name, AUDIT_FILE)
+
+                # ALSO: Copy to run-specific directory for provenance
+                run_audit = run_dir / "selection_audit.json"
+                shutil.copy2(AUDIT_FILE, run_audit)
+
+                fcntl.flock(lf, fcntl.LOCK_UN)
+        except Exception as e:
+            logger.warning(f"Could not update audit file: {e}")
+
+        selection_audit_hash = None
+        if os.path.exists(run_dir / "selection_audit.json"):
+            selection_audit_hash = hashlib.sha256((run_dir / "selection_audit.json").read_bytes()).hexdigest()
+
+        if ledger:
+            audit_payload = cast(
+                Dict[str, Any],
+                _sanitize(
+                    {
+                        "selection": {
+                            "total_raw_symbols": len(returns.columns),
+                            "total_selected": len(winners),
+                            "clusters": audit_clusters,
+                            "mode": current_mode,
+                            "spec_version": spec_version,
+                            "vetoes": vetoes,
+                            "engine_metrics": sanitized_metrics,
+                        },
+                        "portfolio_clusters": {str(c): d["selected"] for c, d in audit_clusters.items()},
+                        "winner_metadata": {w["symbol"]: {k: w.get(k) for k in ["exchange", "sector", "industry", "type", "identity"]} for w in winners},
+                    }
+                ),
+            )
+            ledger_metrics: Dict[str, Any] = {
+                "n_winners": len(winners),
+                "n_vetoes": len(vetoes),
+                "spec_version": spec_version,
+                "raw_pool_count": len(returns.columns),
+                "selected_count": len(winners),
+                "selection_mode": current_mode,
+            }
+            if isinstance(sanitized_metrics, dict):
+                ledger_metrics.update(sanitized_metrics)
+            ledger.record_outcome(
+                step="natural_selection",
+                status="success",
+                output_hashes={
+                    "candidates": hashlib.sha256(json.dumps(winners).encode()).hexdigest(),
+                    "candidates_raw": meta_hash,
+                    "selection_audit": selection_audit_hash or "unknown",
+                },
+                metrics=ledger_metrics,
+                data=audit_payload,
+            )
+
+    logger.info(f"Natural Selection Complete for modes: {', '.join(modes)}")
 
 
 if __name__ == "__main__":

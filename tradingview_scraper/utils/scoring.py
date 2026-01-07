@@ -56,6 +56,9 @@ def calculate_mps_score(metrics: Dict[str, pd.Series], weights: Optional[Dict[st
         # Ensure probability mapping [0, 1]
         p_series = map_to_probability(series, method=method)
 
+        # Ensure no NaNs propagate into the product
+        p_series = p_series.fillna(0.01)
+
         if weights and name in weights:
             mps *= p_series ** weights[name]
         else:

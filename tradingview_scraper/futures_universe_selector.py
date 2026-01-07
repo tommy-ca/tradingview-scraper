@@ -1572,7 +1572,32 @@ class FuturesUniverseSelector:
         errors: List[str] = []
 
         if self.config.static_mode:
-            aggregated = [{"symbol": str(s)} for s in (self.config.static_symbols or []) if str(s).strip()]
+            static_list = [str(s) for s in (self.config.static_symbols or []) if str(s).strip()]
+            if static_list:
+                # To maintain metadata consistency, we use the overview API to fetch fields
+                # for the static symbols.
+                logger.info("Static mode enabled. Fetching metadata for %d symbols...", len(static_list))
+                try:
+                    # We might need to split symbols by market if they are mixed
+                    # For now, assume they are mostly in the primary market or try 'america' as catch-all
+                    market = self.config.markets[0] if self.config.markets else "america"
+                    response = self.screener.screen(
+                        market=market, filters=[{"left": "name", "operation": "in_range", "right": [s.split(":")[-1] for s in static_list]}], columns=columns, limit=len(static_list)
+                    )
+                    if response and response.get("status") == "success":
+                        aggregated = response.get("data", [])
+                        # Cross-check symbols to ensure we got the right ones
+                        found_symbols = {r.get("symbol") for r in aggregated}
+                        for s in static_list:
+                            if s not in found_symbols:
+                                aggregated.append({"symbol": s})
+                    else:
+                        aggregated = [{"symbol": s} for s in static_list]
+                except Exception as e:
+                    logger.warning("Failed to fetch metadata for static symbols: %s", e)
+                    aggregated = [{"symbol": s} for s in static_list]
+            else:
+                aggregated = []
         else:
             for payload in payloads:
                 market_rows, market_errors = self._screen_market(
