@@ -181,22 +181,6 @@ class NautilusLiveEngine:
                 # Ensure internal components (clients) are built
                 self.node.build()
 
-                if self.mode == "SHADOW":
-                    try:
-                        from nautilus_trader.model.identifiers import AccountId, Venue
-                        from nautilus_trader.model.enums import AccountType
-                        from nautilus_trader.model.objects import Money
-                        from nautilus_trader.model.currencies import USD
-
-                        venue = Venue(self.venue.upper())
-                        account_id = AccountId(f"{self.venue.upper()}-SHADOW-001")
-
-                        # Add a Cash account with 100k USD balance for SHADOW simulation
-                        self.node.portfolio.add_account(account_id=account_id, venue=venue, account_type=AccountType.CASH, base_currency=USD, balances=[Money(100000.0, USD)])
-                        logger.info(f"Registered dummy SHADOW account for {venue}")
-                    except Exception as e:
-                        logger.warning(f"Failed to register dummy SHADOW account: {e}")
-
                 logger.info(f"Built TradingNode for {self.venue} ({self.mode})")
                 return self.node
             except Exception as e:

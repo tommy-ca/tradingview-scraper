@@ -9,7 +9,12 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-# Standard types
+from tradingview_scraper.execution.metadata import ExecutionMetadataCatalog
+
+# Global state for SHADOW mode position tracking
+_SHADOW_POSITIONS: Dict[str, float] = {}
+
+# Nautilus Types (using Any to handle conditional imports and mocking)
 Strategy: Any = object
 OrderSide: Any = object
 InstrumentId: Any = object
@@ -21,11 +26,19 @@ CurrencyType: Any = object
 Price: Any = object
 CurrencyPair: Any = object
 register_currency: Any = lambda c: None
+BarType: Any = object
+BarSpecification: Any = object
+BarAggregation: Any = object
+PriceType: Any = object
 
 try:
     from nautilus_trader.model.currencies import register_currency as _register_currency
+    from nautilus_trader.model.data import BarSpecification as _BarSpecification
+    from nautilus_trader.model.data import BarType as _BarType
+    from nautilus_trader.model.enums import BarAggregation as _BarAggregation
     from nautilus_trader.model.enums import CurrencyType as _CurrencyType
     from nautilus_trader.model.enums import OrderSide as _OrderSide
+    from nautilus_trader.model.enums import PriceType as _PriceType
     from nautilus_trader.model.identifiers import InstrumentId as _InstrumentId
     from nautilus_trader.model.identifiers import Symbol as _Symbol
     from nautilus_trader.model.identifiers import Venue as _Venue
@@ -48,6 +61,10 @@ try:
     Quantity = _Quantity
     CurrencyPair = _CurrencyPair
     register_currency = _register_currency
+    BarType = _BarType
+    BarSpecification = _BarSpecification
+    BarAggregation = _BarAggregation
+    PriceType = _PriceType
     HAS_NAUTILUS = True
 except ImportError:
     HAS_NAUTILUS = False
@@ -68,51 +85,6 @@ except ImportError:
         def _get_nav(self) -> float:
             return 0.0
 
-    # Dummy classes for types
-    class CurrencyType:
-        CRYPTO = 1
-
-    class OrderSide:
-        BUY = 1
-        SELL = 2
-
-    class InstrumentId:
-        @staticmethod
-        def from_str(s):
-            return MagicMock()
-
-    class Symbol:
-        pass
-
-    class Venue:
-        def __init__(self, s):
-            pass
-
-    class Currency:
-        @staticmethod
-        def from_str(s):
-            return MagicMock()
-
-    class Price:
-        @staticmethod
-        def from_str(s):
-            return 0.0
-
-    class Quantity:
-        @staticmethod
-        def from_str(s):
-            return 0.0
-
-        @staticmethod
-        def from_scalar(v, p):
-            return 0.0
-
-    class CurrencyPair:
-        pass
-
-    def register_currency(c):
-        pass
-
 
 logger = logging.getLogger(__name__)
 
@@ -122,12 +94,13 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
     Live execution strategy that watches a JSON file for target weight updates.
     """
 
-    def __init__(self, weights_file: str, venue_str: str = "BINANCE", mode: str = "SHADOW", state_file: str = "data/lakehouse/portfolio_actual_state.json", *args, **kwargs):
+    def __init__(self, weights_file: str, venue_str: str = "BINANCE", mode: str = "SHADOW", state_file: str = "data/lakehouse/portfolio_actual_state.json", catalog: Any = None, *args, **kwargs):
         super().__init__(pd.DataFrame(), *args, **kwargs)
         self.weights_file = weights_file
         self.venue_str = venue_str
         self.mode = mode.upper()
         self.state_file = state_file
+        self.catalog = catalog or ExecutionMetadataCatalog()
         self.last_mtime = 0
         self.running = False
 
@@ -223,7 +196,12 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
         total_cash = 0.0
 
         try:
-            accounts = self.cache.accounts()
+            accounts = []
+            try:
+                accounts = self.cache.accounts()
+            except Exception:
+                pass
+
             if not accounts and self.mode == "SHADOW":
                 total_cash = 100000.0
             else:
@@ -313,6 +291,7 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
         logger.info(f"Rebalancing {len(all_symbols)} symbols...")
 
         for symbol_str in all_symbols:
+            # Normalize symbol format
             if ":" in symbol_str:
                 parts = symbol_str.split(":")
                 nautilus_symbol = f"{parts[1]}.{parts[0]}"
@@ -326,22 +305,57 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
                     continue
 
                 weight = float(targets.get(symbol_str, targets.get(nautilus_symbol, 0.0)))
+
+                # Get current price
                 last_quote = self.cache.quote_tick(instrument_id)
                 if last_quote:
                     price = float(last_quote.bid_price if weight < 0 else last_quote.ask_price)
                 else:
-                    price = 1.0 if self.mode == "SHADOW" else 0.0
+                    # Robust bar lookup
+                    try:
+                        b_spec = BarSpecification(1, BarAggregation.DAY, PriceType.LAST)
+                        b_type = BarType(instrument_id, b_spec)
+                        last_bar = self.cache.bar(b_type)
+                        price = float(last_bar.close) if last_bar else 0.0
+                    except Exception:
+                        price = 0.0
 
                 if price <= 0:
-                    continue
+                    if self.mode == "SHADOW":
+                        price = 1.0  # Simulation floor
+                    else:
+                        continue
 
                 equity = self._get_live_equity()
                 target_value = equity * weight * 0.98
-                current_qty = float(self.portfolio.net_position(instrument_id))
+
+                # Robust current quantity lookup
+                current_qty = 0.0
+                if self.mode == "SHADOW":
+                    current_qty = _SHADOW_POSITIONS.get(nautilus_symbol, 0.0)
+                else:
+                    try:
+                        current_qty = float(self.portfolio.net_position(instrument_id))
+                    except Exception:
+                        pass
+
                 raw_qty = target_value / price
 
-                step_size = float(getattr(instrument, "size_increment", 0.00001))
-                qty = math.floor(raw_qty / step_size) * step_size if step_size > 0 else raw_qty
+                # Apply Metadata Limits
+                unified_symbol = self._from_nautilus_id_str(nautilus_symbol)
+                limits = self.catalog.get_limits(unified_symbol, self.venue_str)
+
+                step = float(getattr(instrument, "size_increment", 0.00001))
+                min_notional = 0.0
+                if limits:
+                    step = limits.step_size
+                    min_notional = limits.min_notional
+
+                qty = math.floor(raw_qty / step) * step if step > 0 else raw_qty
+
+                if abs(qty * price) < min_notional:
+                    qty = 0.0
+
                 delta = qty - current_qty
 
                 if abs(delta * price) > max(10.0, equity * 0.001):
@@ -354,9 +368,14 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
     def _execute_rebalance_live(self, instrument, delta):
         side = OrderSide.BUY if delta > 0 else OrderSide.SELL
         qty = abs(delta)
+        nautilus_symbol = str(instrument.id)
+
         if self.mode == "SHADOW":
             logger.info(f"✨ [SHADOW ORDER] {side} {qty:.4f} {instrument.id}")
+            old_qty = _SHADOW_POSITIONS.get(nautilus_symbol, 0.0)
+            _SHADOW_POSITIONS[nautilus_symbol] = old_qty + delta
             return
+
         logger.info(f"🚀 [LIVE ORDER] Submitting {side} {qty:.4f} {instrument.id}")
         try:
             order = self.order_factory.market(instrument.id, side, Quantity.from_scalar(qty, instrument.size_precision))
@@ -370,14 +389,24 @@ class LiveRebalanceStrategy(NautilusRebalanceStrategy):  # type: ignore
             return
         try:
             equity = self._get_live_equity()
-            positions = self._get_positions()
+
             assets = []
-            for pos in positions:
-                sym = self._from_nautilus_id_str(str(pos.instrument_id))
-                last_quote = self.cache.quote_tick(pos.instrument_id)
-                price = float(last_quote.bid_price if pos.quantity > 0 else last_quote.ask_price) if last_quote else 0.0
-                weight = (float(pos.quantity) * price) / equity if equity > 0 else 0.0
-                assets.append({"Symbol": sym, "Weight": weight, "Quantity": float(pos.quantity), "Price": price, "Venue": str(pos.instrument_id.venue)})
+            if self.mode == "SHADOW":
+                for sym, qty in _SHADOW_POSITIONS.items():
+                    if abs(qty) < 1e-8:
+                        continue
+                    last_quote = self.cache.quote_tick(InstrumentId.from_str(sym))
+                    price = float(last_quote.bid_price if qty > 0 else last_quote.ask_price) if last_quote else 1.0
+                    weight = (qty * price) / equity if equity > 0 else 0.0
+                    assets.append({"Symbol": self._from_nautilus_id_str(sym), "Weight": weight, "Quantity": qty, "Price": price, "Venue": sym.split(".")[-1]})
+            else:
+                positions = self._get_positions()
+                for pos in positions:
+                    sym = self._from_nautilus_id_str(str(pos.instrument_id))
+                    last_quote = self.cache.quote_tick(pos.instrument_id)
+                    price = float(last_quote.bid_price if pos.quantity > 0 else last_quote.ask_price) if last_quote else 0.0
+                    weight = (float(pos.quantity) * price) / equity if equity > 0 else 0.0
+                    assets.append({"Symbol": sym, "Weight": weight, "Quantity": float(pos.quantity), "Price": price, "Venue": str(pos.instrument_id.venue)})
 
             state = {}
             if os.path.exists(self.state_file):
