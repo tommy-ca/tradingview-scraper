@@ -1,84 +1,87 @@
-# Plan: Benchmark Baseline & Selection Specs
+# Plan: Institutional ETF Scanner Audit & Expansion
 
-## Objectives
-- **Baseline stability**: Ensure `market`, `benchmark`, and `raw_pool_ew` are deterministic and usable as backtest baselines for risk profiles.
-- **Selection specs alignment**: Keep selection-mode behavior isolated from baselines when the universe source is unchanged.
-- **Workflow guardrails**: Enforce metadata coverage, baseline invariance checks, and report integrity as first-class pipeline steps.
+## Objective
+Audit and expand the institutional ETF scanners to capture high-alpha niche/thematic opportunities currently filtered out by strict liquidity or category constraints. We aim to identify "Alpha Pockets" in thematic equities, high-yield bonds, and alternative strategies.
 
-## Context: Recently Completed
-- [x] **Grand Tournament Consolidation**: Merged research and production tournament orchestrators into a unified `grand_tournament.py` suite.
-- [x] **Selection Alpha Parity Audit**: Certified `v3.2` (+2.97%) as the superior precision engine over `v2.1` (+1.75%) under fixed institutional baseline.
-- [x] **Live Adapter Phase 1-3**: Established real-time connectivity (Binance), implemented strict rebalance order submission, and verified position state persistence to lakehouse.
-- [x] **Rebalance Logic Alignment**: Unified backtest and live rebalance logic with strict lot-size, step-size, and minimum notional enforcement.
-- [x] **Full Institutional ETF Audit**: Certified Q1 2026 winners (**JNJ, LQD, GOOG**) and verified high-fragility outlier insulation (**PLTR, CPER**).
-- [x] **High-Fidelity Rebalancing**: Implemented `daily` rebalance mode in `BacktestEngine` for 1-day step-size validation.
-- [x] **Audit Ledger Transparency**: Expanded ledger context with selection mode, rebalance mode, and window parameters for forensic replay.
-- [x] **Baseline Taxonomy Decommissioning**: Standardized on `market`, `benchmark`, and `raw_pool_ew`.
-- [x] **Selection Metadata Enrichment**: Automated institutional metadata detection and gap-filling.
-- [x] **CVXPortfolio Simulator Fidelity**: Strictly aligned weight indices and cash modeling to prevent solver drift.
+## Context
+Current scanners use a $10M liquidity floor and a limited set of TradingView category IDs. Initial research suggests we are missing categories (e.g., Buffer ETFs, Longevity, specific thematic buckets) and potentially filtering out high-quality niche ETFs that trade between $2M-$10M.
 
-## Current Focus
-- **Dynamic ETF Expansion**: Implementing momentum and trend-based scanners to expand the institutional discovery pool. (Active)
+## Execution Phases
 
-## Next Steps Tracker (Rescheduled Queue)
+### Phase 1: Deep Mapping (Research)
+**Goal**: Decode the TradingView "Category ID" map to understand the full spectrum of available assets.
+- [x] **Script Upgrade**: Modify `scripts/research_etf_params.py` to fetch a broad sample (N=500) without category filters.
+- [x] **Data Analysis**: Group results by `category` ID to generate a `ID -> Description` map.
+- [x] **Gap Analysis**: Identify high-performing categories (High `Perf.1M` + Acceptable Liquidity) not currently targeted by L4 scanners.
 
-### Now (Jan 2026): Execution & Production Scaling
-- [x] **Dynamic ETF discovery**: Implemented 7-scanner composite pipeline identifying 72 high-fidelity multi-asset candidates.
-- [x] **Consolidator Robustness**: Fixed `select_top_universe.py` to recognize `strategy_alpha_*.json` naming convention for cross-run aggregation.
-- [x] **Screener Research Guide**: Created `docs/guides/screener_research.md` documenting categorical ID mappings (e.g. `fund` type, `26/27` Equity).
-- [ ] **Live Adapter (Phase 4)**: Final production "Hard-Sleeve" deployment (Binance/Live). (Active)
+### Phase 2: Scanner Expansion (Implementation)
+**Goal**: Create new targeted scanners and relaxed-constraint universes to capture missed alpha.
+- [x] **New Scanner**: `etf_thematic_momentum` (Equities/Alternatives).
+- [x] **New Scanner**: `etf_yield_alpha` (Credit/Fixed Income).
+- [x] **New Base Universe**: `dynamic_etf_discovery_niche` ($2M Floor).
 
+### Phase 3: Validation (Audit)
+**Goal**: Ensure new sources are tradeable, distinct, and additive.
+- [x] **Run Scanners**: Execute the new scanners.
+- [x] **Overlap Check**: Ensure `etf_thematic_momentum` isn't just duplicating `etf_equity_momentum`.
+- [x] **Liquidity Audit**: Verify that the $2M-$10M cohort has sufficient liquidity.
+- [x] **Attribute Verification**: Validated new fields (`aum`, `expense_ratio`, `dividend_yield_recent`) and integrated them into columns.
+- [x] **Sorting Logic**: Implemented "Volume First, Alpha Second" logic with `prefilter_limit: 300` to solve selection starvation.
+- [x] **Documentation**: Update `docs/specs/institutional_etf_scanners.md`.
 
-### Recently Completed: Pipeline Correctness & Backtest Parity
-- [x] **Nautilus Execution Engine (Research Phase)**: 
-    - [x] **Parity Smoke Test**: Automate validate_parity.py with failure gates.
-    - [x] **Parity Scale-Up**: Validated with 300d lookback and multi-asset classes.
-    - [x] **Metadata Service**: Fetch Lot Sizes/Min Notionals via CCXT for all winners.
-    - [x] **Shadow Loop (L5.5)**: Automated Drift + Paper Fill Simulation.
-- [x] **E2E Pipeline Audit (ETF Core)**: 
-    - [x] **Profile Definition**: Created `institutional_etf` profile.
-    - [x] **Robustness Fixes**: Resolved NaN alpha scores and missing metadata.
-    - [x] **Selection Reporting**: Fixed abnormal Selection Alpha logic (+1.86% verified).
-    - [x] **Dual Selection Audit**: Integrated `v2.1` (Stability Anchor) alongside `v3.2` (Champion).
-    - [x] **Risk-Parity Correctness**: Fixed HRP implementation (Ward linkage + Recursive Bisection).
-    - [x] **Tournament Correctness**: Verified HPO and cluster-aware allocation stability.
-- [x] **Workflow Optimization**:
-    - [x] **Manifest-Driven Configuration**: Standard production runs now strictly follow manifest defaults.
-    - [x] **Fast Production Flow**: Standardized `flow-production` to use fast vectorized simulators.
-    - [x] **Pre-Live Verification**: Introduced `flow-prelive` for full validation via Nautilus.
-- [x] **Grand Tournament Orchestration**:
-    - [x] **Grand Tournament Script**: Created `scripts/grand_tournament.py` for multi-pass production validation.
-    - [x] **Execution Completed**: Validated `v3.2` vs `v2.1` across the full institutional ETF pipeline.
-- [x] **Final Institutional ETF Validation (Audit Phase)**: Completed. Q1 2026 ETF strategy certified with **JNJ, LQD, and GOOG** as top winners (Run `20260107-141839`).
+### Phase 4: Architecture & Audit Documentation
+**Goal**: Codify the "Liquid Winners" architecture and debugging tools.
+- [x] **Filter Architecture**: Documented the 3-layer split (API -> Client -> Rank) in `etf_dynamic_discovery.md`.
+- [x] **Audit Object**: Documented the `passes` object structure and interpretation in `institutional_etf_scanners.md`.
 
-### Deferred Scopes
-- [ ] **Phase 4 (Native MT5 Adapter)**: Completed but execution path deferred in favor of Nautilus.
-- [ ] **Phase 5 (MT5 Deployment)**: Deployment of native MT5 bridge is on hold.
+### Phase 5: Final Audit & Cleanup
+**Goal**: Ensure 1:1 parity between Specification and Configuration.
+- [x] **Core Audit**: Verified 9/9 scanners match specs (`filters`, `columns`, `logic`).
+- [x] **Pruning**: Removed orphan config `etf_alternative_alpha.yaml`.
+- [x] **Completion**: Project "Institutional ETF Scanner Expansion" is fully delivered.
 
-### Next (Feb 2026): Universe & Strategy Expansion
-- [ ] **Scanner expansion (breadth-first)**: Expand discovery universes by asset type (FX Majors, Crypto Top-50, Commodity Proxies).
-- [ ] **Promotion to live trading**: Define the gated path from validated portfolios → orders → paper trading → live execution.
+### Phase 6: Standardization (Layer B Upgrade)
+**Goal**: Upgrade Layer B scanners ($10M floor) to the "Liquid Winners" pattern to prevent API starvation and enrich metadata.
+- [x] **Commodity Upgrade**: Update `etf_commodity_supercycle.yaml`.
+    - Apply `sort_by: Value.Traded` / `final_sort_by: Perf.3M`.
+    - Add Context Columns (`Perf.Y`, `Volatility.M`).
+- [x] **Equity Upgrade**: Update `etf_equity_momentum.yaml`.
+    - Apply `sort_by: Value.Traded` / `final_sort_by: Perf.1M`.
+    - Add Context Columns.
+- [x] **Bond Upgrade**: Update `etf_bond_yield_trend.yaml`.
+    - Apply `sort_by: Value.Traded` / `final_sort_by: ADX`.
+    - Add Context Columns.
+- [x] **Validation**: Verify output for Layer B scanners.
 
-## Risk Profile Matrix
-| Profile | Category | Universe | Weighting / Optimization | Notes |
-| --- | --- | --- | --- | --- |
-| `market` | Baseline | Benchmark symbols | Equal-weight long-only; no optimizer | Institutional hurdle. |
-| `benchmark` | Baseline | Natural-selected | Asset-level equal weight over winners | Research baseline for alpha tracking. |
-| `raw_pool_ew` | Baseline | Canonical or selected | Asset-level equal weight across raw pool | Diagnostic signal for universe-level fragility. |
-| `equal_weight` | Risk profile | Natural-selected | Hierarchical equal weight (HE + HERC 2.0) | Neutral, low-friction comparison. |
-| `min_variance` | Risk profile | Natural-selected | Cluster-level minimum variance (solver) | Defensive target; beta-gated (< 0.5). |
-| `hrp` | Risk profile | Natural-selected | Hierarchical risk parity (HRP) | Structural robustness baseline. |
-| `max_sharpe` | Risk profile | Natural-selected | Cluster-level max Sharpe mean-variance | Growth regime focus; cluster-capped. |
-| `barbell` | Strategy | Natural-selected | Core HRP sleeve + aggressor sleeve | Convexity-seeking tail-risk capture. |
+### Phase 7: Final Production Verification
+**Goal**: Run the complete suite of 5 Dynamic Scanners to produce a verified "Alpha Basket" for user inspection.
+- [x] **Unified Execution**: Run all Layer B & C scanners in a single batch.
+- [x] **Consolidation Tool**: Create `scripts/inspect_etf_candidates.py` to aggregate JSON exports into a ranked Markdown report.
+- [x] **Alpha Report**: Generate a final table of "Top Picks" (High Perf/Yield) and "Warnings" (Low AUM).
 
-## Status Sync (Jan 2026)
+### Phase 8: Tournament Audit & Optimization
+**Goal**: Analyze backtest results to select the optimal engine configuration.
+- [x] **Deep Dive**: Analyzed `comparison.md` from Run `20260107-180738`.
+- [x] **Findings**:
+    - **Adaptive Engine** is superior (Sharpe 2.65 vs 2.54 static).
+    - **Dynamic Switching** correctly toggles between `hrp` (Turbulent) and `max_sharpe` (Normal).
+    - **Simulator Validity**: `cvxportfolio` confirmed as reliable.
+- [x] **Action**: (Reverted) Keep `engine: "skfolio"` for now to stabilize baselines.
+- [x] **Reporting**: Generated `benchmark_audit_summary.md`.
 
-### High-Integrity Validation (Resolved & Scale-Ready)
-- **Run 20260106-020000 (Beta & Antifragility)**: Confirmed `min_variance` beta stability (0.35) and benchmark antifragility (+0.8). Validated relaxation of `min_af_dist` to -0.20.
-- **Run 20260106-010000 (Friction Alignment)**: Verified near-zero friction decay for baselines after isolating non-cash trades.
-- **Run 20260106-000000 (Simulator Parity)**: Confirmed 0.4% equity parity gap and 4-6% commodity divergence (handled by sleeve-aware relaxation).
-- **Run 20260105-214909 (Commodity Gating)**: Implemented and validated sleeve-aware thresholds (Tail 3.0x / Parity 5.0%) for commodity proxy ETFs.
+### Phase 9: Selection Logic Audit
+**Goal**: Verify "Natural Selection" decisions for top portfolios.
+- [x] **Deep Dive**: Created `audit_deep_dive.md` analyzing Cluster Battles.
+- [x] **Verification**: Confirmed "One Bet Per Factor" logic correctly prioritized `SLV` over `AGQ` and `GDX` over `NUGT`.
+- [x] **Liquid Winners**: Validated that `RKLX`, `SHLD`, `SDIV` won their clusters.
+- [x] **Spec Finalization**: Promoted `universe_selection_v3_fp.md` to `universe_selection_v3.md` (Final Spec) incorporating Audit findings.
 
-## Issue Backlog (Strict Scoreboard)
-**Resolved & Archived**: The Q1 2026 strict-scoreboard issue backlog has been completed and moved to the historical log.
-- See `docs/specs/audit_q1_2026_scoreboard_stabilization.md`.
+### Phase 10: Documentation Synchronization
+**Goal**: Ensure high-level architecture docs reflect the new capabilities.
+- [x] **Workflow Spec**: Updated `quantitative_workflow_v1.md` with "Liquid Winners" logic.
+- [x] **Roadmap**: Updated `production_pipeline_status...md` marking ETF Expansion as COMPLETED.
+- [x] **Lessons Learned**: Created `lessons_learned_etf_expansion.md` synthesizing findings.
+
+## Conclusion
+The **Institutional ETF Scanner Expansion** project is complete.
+The system now features 9 verified scanners, a robust "Liquid Winners" discovery architecture, and a validated multi-engine backtesting capability.

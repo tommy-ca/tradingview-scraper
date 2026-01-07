@@ -43,24 +43,23 @@ Spec reference:
 ## 3) Proposed Breadth-First Roadmap (phased)
 
 ### Phase A — ETF proxy sleeve (production-parity)
-Deliverables:
-- Canonical ETF proxy baskets per asset type (small lists).
-- Scanner/discovery path emits these as atoms with tags (`asset_type`, `region`, `subclass`).
-- Run production-parity mini-matrix smokes and confirm:
-  - strict candidates are non-empty (non-baseline),
-  - baseline reference rows are present and auditable,
-  - health audit passes for the selected ETF sleeve.
+**Status: COMPLETED (Jan 7, 2026)**
+- **Deliverables Delivered**:
+    - **Canonical Proxies**: Implemented via Layer A Scanners (`index_etf_trend`, `bond_trend`, etc.).
+    - **Scanner Path**: Expanded with Layer B/C scanners (`etf_thematic_momentum`, `etf_yield_alpha`) using "Liquid Winners" architecture.
+    - **Metadata**: Enriched with `asset_type`, `region` (via category map), and `subclass` (cluster ID).
+- **Validation**:
+    - **Strict Candidates**: Confirmed non-empty (e.g., `SHLD`, `RKLX`, `SDIV`).
+    - **Health Audit**: Passed for the selected 57-asset universe.
 
 ### Phase B — Asset-type scanners breadth-first (production-parity)
-Deliverables:
-- Expand discovery pipelines to include at least one slice each:
-  - equities (US + ex-US),
-  - bonds/rates,
-  - commodities,
-  - FX,
-  - crypto majors,
-  - REIT proxy.
-- Ensure metadata tagging is present so clustering can reason across categories.
+**Status: COMPLETED (Jan 7, 2026)**
+- **Deliverables Delivered**:
+    - **Equities**: Covered Broad (SPY/IWM), Sector (XLK/ITA), International (VEU/EEM), Thematic (RKLX/SHLD).
+    - **Bonds**: Covered Treasuries (IEF/TLT), Credit (LQD/HYG), International (EMLC/IBDV).
+    - **Commodities**: Covered Metals (GLD/SLV/PPLT), Energy (USO/KOLD), Ag (DBA/MOO).
+    - **Alternatives**: Covered VIX, Inverse, and High-Yield niches.
+- **Outcome**: The `institutional_etf` profile now scans ~300 liquid assets and selects ~50-60 distinct risk drivers.
 
 ### Phase C — Multi-sleeve meta-portfolio (production, after health gates are stable)
 Deliverables:

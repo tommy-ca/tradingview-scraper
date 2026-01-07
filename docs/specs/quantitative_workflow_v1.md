@@ -7,9 +7,12 @@ The V1 Quantitative Workflow is a Python-native, asynchronous pipeline designed 
 
 ## 2. Pipeline Architecture
 
-### Stage 1: Async Discovery
-- **Engine**: `AsyncScreener`
-- **Mechanism**: Utilizes `aiohttp` to parallelize TradingView scanner requests across multiple exchanges (Binance, OKX, Bybit, Bitget) and asset classes (Crypto, Equities, Forex, Futures).
+### Stage 1: Async Discovery & Liquid Selection
+- **Engine**: `AsyncScreener` + `FuturesUniverseSelector`
+- **Mechanism**: "Liquid Winners" Filter Architecture.
+    1.  **API Fetch**: Sort by `Value.Traded` to fetch top 300 liquid assets (avoids API starvation).
+    2.  **Client Filter**: Apply strict Alpha/Trend gates (ADX > 15) and Hygiene gates locally.
+    3.  **Ranking**: Re-sort survivors by Alpha Signal (Perf/Yield).
 - **Latency**: Reduced by >60% compared to sequential processing.
 
 ### Stage 2: Alpha Generation & Post-Processing
