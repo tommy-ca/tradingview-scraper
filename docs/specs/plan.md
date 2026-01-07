@@ -93,22 +93,13 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **Optimization Spec**: Updated `optimization_engine_v2.md` with Adaptive regime mappings and Barbell constraints.
 - [x] **Benchmark Spec**: Updated `multi_engine_optimization_benchmarks.md` with Riskfolio caveats and latest tournament data.
 
-### Phase 13: Riskfolio Remediation
-**Goal**: Address the -0.95 correlation divergence in Riskfolio HRP.
-- [x] **Fix Applied**: Updated `engines.py` to force `linkage="ward"` (matching Custom/Skfolio) and added experimental warning.
-- [x] **Validation**: Verified API signature supports `linkage` parameter.
-
-### Phase 14: Validation & Rerun
-**Goal**: Execute the full production pipeline to validate the scanner expansion and Riskfolio remediation.
-- [x] **Execution**: Ran `make flow-production PROFILE=institutional_etf` (Run ID: `20260107-193807`).
-- [x] **Scanner Verification**: Confirmed discovery of new assets (`RKLX`, `SDIV`) and expanded raw pool (>100 candidates).
-- [x] **Riskfolio Audit**: Confirmed warning log presence in `12_validation.log`.
-
-### Phase 15: Final Deep Audit
-**Goal**: Forensic analysis of the final validation run to confirm all subsystems are synchronized.
-- [x] **Audit Report**: Created `docs/audit/audit_run_20260107_193807.md`.
-- [x] **Findings**: Validated `Liquid Winners` logic (ASTX, KOLD), `Cluster Battles` (SLV vs AGQ), and `Barbell` risk scaling.
+### Phase 16: Final Spec Synchronization
+**Goal**: Capture deep audit findings in long-term documentation.
+- [x] **Selection**: Documented `SLV` vs `AGQ` case study in `universe_selection_v3.md`.
+- [x] **Riskfolio**: Confirmed persistent divergence in `multi_engine_optimization_benchmarks.md`.
+- [x] **Extreme Momentum**: Documented `ASTX` case in `lessons_learned_etf_expansion.md`.
 
 ## Conclusion
 The **Institutional ETF Scanner Expansion** project is complete.
 The system now features 9 verified scanners, a robust "Liquid Winners" discovery architecture, and a validated multi-engine backtesting capability.
+

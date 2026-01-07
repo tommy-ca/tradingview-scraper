@@ -33,3 +33,14 @@
 ## 4. Metadata Integrity
 **Success**: We validated the availability of critical fields (`aum`, `expense_ratio`, `dividend_yield_recent`) across the entire ETF universe.
 **Action**: These are now standard columns in all `tradfi` scanners, enabling future "Smart Beta" filters (e.g., "Yield > 4% AND Expense < 0.20%").
+
+## 5. Extreme Momentum Discovery
+**Problem**: Can the system safely handle "Meme" or "Parabolic" assets without blowing up the risk model?
+
+**Finding**: The "Liquid Winners" architecture successfully identified **`CBOE:ASTX`** (Tradr 2X Long ASTS) with a **+300% 1M Return** and ADX of 27.0.
+-   **Handling**:
+    -   **Discovery**: Caught by `etf_thematic_momentum` scanner ($2M+ floor).
+    -   **Selection**: Passed filters but flagged as high volatility.
+    -   **Optimization**: The `Barbell` profile allocated exactly **2.00%** (Aggressor Cap) to it.
+-   **Lesson**: The system correctly treats extreme momentum as a "Satellite" bet, capping the downside while exposing the portfolio to the convexity.
+

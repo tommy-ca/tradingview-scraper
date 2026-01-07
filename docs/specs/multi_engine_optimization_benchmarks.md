@@ -44,16 +44,21 @@ Institutional baselines achieved **absolute parity (20.67%)** across all backend
 - **`cvxportfolio`**: High-fidelity execution with N+1 alignment.
 - **`nautilus` / `custom`**: Standardized with turnover-aware friction.
 
+### Engine Caveats
+- **Riskfolio-Lib**: Audit Run `20260107` revealed a **negative correlation (-0.92 to -0.95)** between Riskfolio's HRP implementation and standard SciPy/Skfolio implementations.
+    - **Status**: **Experimental Use Only**.
+    - **Note**: The alignment fix (`linkage="ward"`) applied in Phase 13 did *not* resolve the structural divergence. Users should prefer `skfolio` or `custom` engines for production HRP.
+
 ## 4. Performance-Churn Frontier (Jan 2026)
 
 Comparative audits have established a clear trade-off between risk control and execution efficiency:
 
-| Profile | Realized Sharpe (Avg) | Realized MDD (Avg) | Avg. Turnover |
-| :--- | :--- | :--- | :--- |
-| **`risk_parity`** | **8.10** | **-3.97%** | Moderate (22%) |
-| **`hrp`** | 6.62 | -2.20% | Moderate (27%) |
-| **`barbell`** | 7.81 | -1.10% | **Low (20%)** |
-| **`market`** | 1.85 | -2.98% | **Ultra-Low (12%)** |
+| Profile | Realized Sharpe (Avg) | Realized MDD (Avg) | Avg. Turnover | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **`adaptive`** | **2.65** | **-4.9%** | Moderate | **Champion** |
+| **`barbell`** | 2.65 | -4.9% | Low (20%) | **Production Default** |
+| **`risk_parity`** | 1.64 | -4.4% | Moderate | Turbulent Defense |
+| **`market`** | 0.74 | -5.1% | Ultra-Low | Benchmark |
 
 ### Key Secular Insights:
 - **Profile Independence**: The removal of the "Universal Fallback" trap revealed significant variance in native HRP solvers (e.g., `skfolio` vs `cvxportfolio`).

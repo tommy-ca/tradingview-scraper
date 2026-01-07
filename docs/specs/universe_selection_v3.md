@@ -61,7 +61,7 @@ The selection engine enforces "One Bet Per Factor" via **Cluster Battles**:
 - **Mechanism**: Assets are grouped by Hierarchical Clustering (Ward Linkage).
 - **Battle**: Assets within a cluster compete based on their LogMPS score.
 - **Outcome**: The winner takes all allocation for that factor; losers are cut.
-- **Example**: In the Silver Cluster, `AMEX:SLV` (Anchor) typically defeats `AMEX:AGQ` (Leveraged) due to stability scoring, unless AGQ's momentum is overwhelming.
+- **Example**: In the Silver Cluster (Run `20260107`), `AMEX:SLV` (Anchor, Score 0.0935) defeated `AMEX:AGQ` (2x Leveraged, Score 0.0264). The Stability component of the LogMPS score penalized the leveraged volatility, correctly prioritizing the core instrument for the selection phase. Leverage is reserved for the downstream Optimizer (Barbell Profile).
 
 ## 7. Profile Differentiation (Darwinian vs. Robust)
 

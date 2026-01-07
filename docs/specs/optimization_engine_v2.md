@@ -80,8 +80,8 @@ Note: `equal_weight` may still appear in backtest outputs under the baseline eng
 | `hrp` | Risk | Active universe | Cluster-level HRP (native per engine) | HERC 2.0 intra | Structural risk parity |
 | `risk_parity` | Risk | Active universe | Cluster-level equal risk contribution | HERC 2.0 intra | Turbulent/CRISIS defense |
 | `max_sharpe` | Risk | Active universe | Cluster-level max Sharpe / mean-variance | HERC 2.0 intra | Growth regime focus |
-| `barbell` | Strategy | Active universe | Aggressor sleeve + core HRP | HERC 2.0 intra (core) | Convexity + capital preservation |
-| `adaptive` | Meta | Active universe | Switches profile by market environment | HERC 2.0 per chosen profile | Audit `adaptive_profile` + `adaptive_base` |
+| `barbell` | Strategy | Active universe | Aggressor sleeve + core HRP | HERC 2.0 intra (core) | Convexity + capital preservation. **Requires explicit aggressor forcing** in the optimizer, as the V3 Selection Engine naturally prunes high-volatility assets (like `AGQ` or `ASTX`) in favor of stable anchors (`SLV`). |
+| `adaptive` | Meta | Active universe | Switches profile by market environment | HERC 2.0 per chosen profile | **Mappings**: TURBULENT -> `hrp`, QUIET/NORMAL -> `max_sharpe`. |
 
 Notes:
 - For cluster-based profiles, intra-cluster weights are produced by **HERC 2.0** (inverse variance) in the Custom engine and are applied downstream when expanding cluster weights to asset weights.
