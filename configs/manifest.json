@@ -33,11 +33,10 @@
       "report_mode": "full",
       "dynamic_universe": true
     },
-      "tournament": {
-        "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio,adaptive",
-        "profiles": "benchmark,equal_weight,hrp,risk_parity,max_sharpe,min_variance,barbell,adaptive"
-      },
-
+    "tournament": {
+      "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio,adaptive",
+      "profiles": "benchmark,equal_weight,hrp,risk_parity,max_sharpe,min_variance,barbell,adaptive"
+    },
     "features": {
       "feat_partial_rebalance": true,
       "feat_turnover_penalty": true,
@@ -121,7 +120,7 @@
       "data": {
         "lookback_days": 300,
         "min_days_floor": 200,
-        "max_symbols": 100
+        "max_symbols": 200
       },
       "selection": {
         "top_n": 10,
@@ -150,7 +149,9 @@
               "scanners/tradfi/commodity_etf_trend",
               "scanners/tradfi/etf_equity_momentum",
               "scanners/tradfi/etf_bond_yield_trend",
-              "scanners/tradfi/etf_commodity_supercycle"
+              "scanners/tradfi/etf_commodity_supercycle",
+              "scanners/tradfi/etf_thematic_momentum",
+              "scanners/tradfi/etf_yield_alpha"
             ],
             "interval": "1d",
             "ingestion_depth": 300,
