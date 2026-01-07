@@ -21,8 +21,9 @@
 ## Next Steps Tracker (Rescheduled Queue)
 
 ### Now (Jan 2026): Execution & Production Scaling
-- [x] **Dynamic ETF discovery**: Implemented `etf_equity_momentum`, `etf_bond_yield_trend`, and `etf_commodity_supercycle` scanners. (Completed)
-- [x] **Screener Research Guide**: Created `docs/guides/screener_research.md` documenting the reverse-engineering process for TV API fields.
+- [x] **Dynamic ETF discovery**: Implemented 7-scanner composite pipeline identifying 72 high-fidelity multi-asset candidates.
+- [x] **Consolidator Robustness**: Fixed `select_top_universe.py` to recognize `strategy_alpha_*.json` naming convention for cross-run aggregation.
+- [x] **Screener Research Guide**: Created `docs/guides/screener_research.md` documenting categorical ID mappings (e.g. `fund` type, `26/27` Equity).
 - [ ] **Live Adapter (Phase 4)**: Final production "Hard-Sleeve" deployment (Binance/Live). (Active)
 
 
@@ -46,7 +47,7 @@
 - [x] **Grand Tournament Orchestration**:
     - [x] **Grand Tournament Script**: Created `scripts/grand_tournament.py` for multi-pass production validation.
     - [x] **Execution Completed**: Validated `v3.2` vs `v2.1` across the full institutional ETF pipeline.
-- [x] **Final Institutional ETF Validation (Audit Phase)**: Completed. Q1 2026 ETF strategy certified with **JNJ, LQD, and GOOG** as top winners.
+- [x] **Final Institutional ETF Validation (Audit Phase)**: Completed. Q1 2026 ETF strategy certified with **JNJ, LQD, and GOOG** as top winners (Run `20260107-141839`).
 
 ### Deferred Scopes
 - [ ] **Phase 4 (Native MT5 Adapter)**: Completed but execution path deferred in favor of Nautilus.

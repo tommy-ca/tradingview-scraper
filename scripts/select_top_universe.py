@@ -28,7 +28,10 @@ def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
         for subdir in export_root.iterdir():
             if not subdir.is_dir():
                 continue
-            matches = list(subdir.glob("universe_selector_*.json"))
+            matches = []
+            for p in ["universe_selector_*.json", "strategy_alpha_*.json", "universe_foundation_*.json"]:
+                matches.extend(list(subdir.glob(p)))
+
             if not matches:
                 continue
             newest = max(p.stat().st_mtime for p in matches)

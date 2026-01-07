@@ -7,23 +7,18 @@ This document defines the requirements and design for expanding the institutiona
 
 ### 2.1 Liquidity Guardrails
 All dynamically discovered assets MUST meet the institutional hygiene floor to ensure executable capacity.
+- **Physical Type**: `fund` (Covers ETFs and Mutual Funds in the `america` market).
 - **Min Daily Turnover**: $10,000,000 USD (`Value.Traded`).
 - **Market Cap Floor**: $500,000,000 USD (where applicable for ETF AUM).
 
 ### 2.2 Momentum & Trend Quality
-To filter out "noisy" or "choppy" assets, discovery logic utilizes multi-horizon momentum and trend strength indicators.
-- **Trend Strength**: `ADX(14) > 20`.
-- **Moving Average Alignment**: `EMA(20) > EMA(50)` (Bullish alignment).
-- **Momentum Horizons**:
-    - Short-term: `Perf.W > 0`.
-    - Medium-term: `Perf.1M > 2%`.
-    - Secular: `Perf.3M > 5%`.
-
+...
 ### 2.3 Asset Class Diversity
-The expansion must cover three primary macro sleeves:
-1.  **Equity Aggressors**: Growth and factor-based equity ETFs.
-2.  **Bond Yield Rotators**: Dynamic duration and credit-spread seekers.
-3.  **Commodity Supercycle**: Hard assets and inflation proxies.
+The expansion utilizes numeric `category` IDs for robust asset class isolation:
+1.  **Equity Aggressors**: Categories `26`, `27`.
+2.  **Bond Yield Rotators**: Categories `61`, `70`, `68`, `59`, `58`, `63`, `62`, `69`, `64`, `56`, `57`.
+3.  **Commodity Supercycle**: Categories `8`, `6`, `4`, `7`, `5`.
+
 
 ## 3. Design: The "Anchor + Aggressor" Discovery Model
 
@@ -47,9 +42,9 @@ Inherits from `institutional.yaml` and enforces the $10M liquidity floor for all
 ### 4.2 Dynamic Scanners
 | Scanner ID | Logic | Target |
 | :--- | :--- | :--- |
-| `etf_equity_momentum` | `Perf.1M` Descending | All US Equity ETFs |
-| `etf_bond_yield_trend` | `ADX > 25` + `Perf.W > 0` | All US Bond ETFs |
-| `etf_commodity_supercycle`| `EMA(10) > EMA(30)` | All US Commodity ETFs |
+| `etf_equity_momentum` | `Perf.1M` Rank Top 20 | Category `26, 27` |
+| `etf_bond_yield_trend` | `ADX > 15` + `Perf.W > 0` | Category `61, 70, 68...` |
+| `etf_commodity_supercycle`| `Perf.3M` Rank Top 15 | Category `8, 6, 4...` |
 
 ## 5. Validation Plan
 1.  **Discovery Audit**: Verify total symbol count across all 4 scanners.
