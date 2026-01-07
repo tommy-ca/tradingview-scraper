@@ -6,25 +6,25 @@
 - **Workflow guardrails**: Enforce metadata coverage, baseline invariance checks, and report integrity as first-class pipeline steps.
 
 ## Context: Recently Completed
+- [x] **Grand Tournament Consolidation**: Merged research and production tournament orchestrators into a unified `grand_tournament.py` suite.
+- [x] **Selection Alpha Parity Audit**: Certified `v3.2` (+2.97%) as the superior precision engine over `v2.1` (+1.75%) under fixed institutional baseline.
+- [x] **Live Adapter Phase 1-3**: Established real-time connectivity (Binance), implemented strict rebalance order submission, and verified position state persistence to lakehouse.
+- [x] **Rebalance Logic Alignment**: Unified backtest and live rebalance logic with strict lot-size, step-size, and minimum notional enforcement.
+- [x] **Full Institutional ETF Audit**: Certified Q1 2026 winners (**JNJ, LQD, GOOG**) and verified high-fragility outlier insulation (**PLTR, CPER**).
 - [x] **Baseline Taxonomy Decommissioning**: Standardized on `market`, `benchmark`, and `raw_pool_ew`.
 - [x] **Selection Metadata Enrichment**: Automated institutional metadata detection and gap-filling.
 - [x] **CVXPortfolio Simulator Fidelity**: Strictly aligned weight indices and cash modeling to prevent solver drift.
-- [x] **Institutional Safety (Scoreboard)**: Implemented `tournament_scoreboard.py` with temporal fragility, friction alignment, and quantified antifragility gates.
-- [x] **Sleeve-Aware Gating**: Implemented detection and relaxation for commodity proxy ETFs (Tail 3.0x / Parity 5.0%).
-- [x] **Friction Alignment Fix**: Resolved cash-leg cost double-counting in simple simulators.
-- [x] **Full Production Sweep (Q1 2026)**: Completed (Run `20260106-prod-q1`). 4 Strict Candidates emerged.
-- [x] **Order Generation**: Operationalized the 4 winning candidates into executable target weights using the unified V3 pipeline.
-- [x] **Architectural Alignment**: Formalized the **Shared Barbell** implementation standard to align research and production.
 
 ## Current Focus
 - **Live Adapter Phase 4**: Finalizing the production "Hard-Sleeve" deployment and operationalizing the Alpaca TradFi adapter. (Active)
 
 ## Next Steps Tracker (Rescheduled Queue)
 
-### Now (Jan 2026): Execution & Forensic Audit
-- [x] **Institutional ETF Scanner Expansion**: Unified Index, Sector, Bond, and Commodity ETF scanners into a single high-fidelity discovery pipeline. (Completed)
-- [x] **Live Adapter (Phase 1, 2 & 3)**: Established real-time connectivity, implemented strict rebalance order submission, and verified position state persistence to lakehouse. (Completed)
-- [ ] **Live Adapter (Phase 4)**: Final production "Hard-Sleeve" deployment. (Active)
+### Now (Jan 2026): Execution & Production Scaling
+- [ ] **Live Adapter (Phase 4)**: Final production "Hard-Sleeve" deployment (Binance/Live). (Active)
+- [ ] **Alpaca Adapter Integration**: Operationalize TradFi execution hub for certified ETF winners.
+- [ ] **Shadow Loop Robustness**: Extend `shadow_loop_sim.py` to support multi-profile reconciliation audit trails.
+- [ ] **Forensic Deep-Dive**: Investigate tail-risk structural triggers for `CPER` and `PLTR` in turbulent regimes.
 
 
 ### Recently Completed: Pipeline Correctness & Backtest Parity

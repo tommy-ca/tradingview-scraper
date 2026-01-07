@@ -24,7 +24,23 @@ These assets were discovery candidates but were vetoed by the V3 engine.
 
 **Audit Note**: The ECI (Estimated Cost of Implementation) for `AMEX:DBA` (5.04%) correctly identifies the illiquidity risk, protecting the institutional portfolio from high-churn losses.
 
-## 4. Selection Alpha Parity Audit (Certified)
+## 3. Top Winners (Conviction Leaders)
+The following certified winners were identified across both selection architectures as the high-conviction core for Q1 2026.
+
+| Symbol | Alpha Score (v3.2) | Role | Context |
+| :--- | :--- | :--- | :--- |
+| `NYSE:JNJ` | **0.051** | Quality Core Anchor | High stability + consistent trend efficiency. |
+| `AMEX:LQD` | **0.007** | Fixed Income Core | Low volatility stabilizer for defensive sleeves. |
+| `NASDAQ:GOOG` | **0.049** | Alpha Growth | Technology leader with high regime survival score. |
+
+## 4. Alpha Explanation: Reaching Sharpe 4.0
+The portfolio achieved a **Sharpe Ratio of 4.04** through a double-gated alpha process:
+
+1.  **Selection Precision (+2.97%)**: Multiplicative scoring effectively filtered out "noisy" momentum, delivering a cleaner winner pool.
+2.  **Hierarchical Optimization (+21.67%)**: By partitioning the universe into 23 risk clusters, the engine isolated uncorrelated commodity alpha (**Silver/Gold**) from equity risk, allowing for high concentration without proportional volatility increases.
+3.  **Dynamic Regime Adaptation**: Successfully rotated from growth into defensive anchors during the transition to a **TURBULENT** regime.
+
+## 5. Selection Alpha Parity Audit (Certified)
 A side-by-side audit was performed using a fixed 300d lookback to resolve previous variance.
 
 | Spec | Selected | Raw Pool EW | Filtered EW | **Selection Alpha** |
