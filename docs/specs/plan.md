@@ -82,6 +82,12 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **Roadmap**: Updated `production_pipeline_status...md` marking ETF Expansion as COMPLETED.
 - [x] **Lessons Learned**: Created `lessons_learned_etf_expansion.md` synthesizing findings.
 
+### Phase 11: Deep Audit & Closure
+**Goal**: Final forensic audit and project closure.
+- [x] **Audit Report**: Created `docs/audit/audit_run_20260107_180738.md`.
+- [x] **Verification**: Validated all system components (Scanner, Selection, Engine, Simulator).
+- [x] **Closure**: Project formally closed.
+
 ## Conclusion
 The **Institutional ETF Scanner Expansion** project is complete.
 The system now features 9 verified scanners, a robust "Liquid Winners" discovery architecture, and a validated multi-engine backtesting capability.
