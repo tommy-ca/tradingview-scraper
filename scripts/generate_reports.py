@@ -411,7 +411,17 @@ class ReportGenerator:
         market_blob = self.all_results.get(sim_name, {}).get("market", {})
         md = ["# Alpha Isolation & Attribution Audit", f"Generated on: {pd.Timestamp.now()}", "\nThis report isolates the value added by **Pruning (Selection)** vs. **Weighting (Optimization)**.\n"]
         raw_ew = market_blob.get("raw_pool_ew", {}).get("summary")
-        filt_key = "equal_weight" if "equal_weight" in market_blob else next((k for k in market_blob.keys() if k not in ["_status", "raw_pool_ew"]), None)
+
+        # Explicitly look for 'benchmark' (Filtered EW) first, then fallback to others
+        filt_key = None
+        if "benchmark" in market_blob:
+            filt_key = "benchmark"
+        elif "equal_weight" in market_blob:
+            filt_key = "equal_weight"
+        else:
+            # Last resort fallback excluding statuses and raw_pool
+            filt_key = next((k for k in market_blob.keys() if k not in ["_status", "raw_pool_ew", "market"]), None)
+
         filt_ew = market_blob.get(str(filt_key), {}).get("summary") if filt_key else None
 
         if raw_ew and filt_ew:

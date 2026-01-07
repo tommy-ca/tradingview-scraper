@@ -261,15 +261,19 @@ class BacktestEngine:
         if step_size is None:
             step_size = int(settings.step_size)
         b_params = bayesian_params or {}
-        profiles = [p.strip().lower() for p in (profiles or ["min_variance", "hrp", "max_sharpe", "barbell"]) if (p or "").strip()]
-        engines = [e.strip().lower() for e in (engines or ["custom", "skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio"]) if (e or "").strip()]
-        sim_names = [s.strip().lower() for s in (simulators or ["custom", "cvxportfolio", "vectorbt", "nautilus"]) if (s or "").strip()]
+        profiles = [p.strip().lower() for p in (profiles or settings.profiles.split(",")) if (p or "").strip()]
+        engines = [e.strip().lower() for e in (engines or settings.engines.split(",")) if (e or "").strip()]
+        if simulators is None:
+            sim_names = [s.strip().lower() for s in settings.backtest_simulators.split(",") if s.strip()]
+        else:
+            sim_names = [s.strip().lower() for s in simulators if s.strip()]
+
         if not profiles:
             profiles = ["min_variance", "hrp", "max_sharpe", "barbell"]
         if not engines:
             engines = ["custom", "skfolio", "riskfolio", "pyportfolioopt", "cvxportfolio"]
         if not sim_names:
-            sim_names = ["custom", "cvxportfolio", "vectorbt", "nautilus"]
+            sim_names = ["custom", "cvxportfolio", "vectorbt"]
 
         raw_pool_universe = (settings.raw_pool_universe or "selected").strip().lower()
         if raw_pool_universe not in {"selected", "canonical"}:

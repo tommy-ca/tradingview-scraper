@@ -215,28 +215,37 @@ def main():
         "top_pairs": top_pairs,
     }
 
-    if args.hrp and rets.shape[1] > 1:
-        w_hrp = hrp_weights(rets, args.linkage)
-        report["hrp_weights"] = w_hrp.to_dict()
-
-        # Extract clusters using Robust Correlation
-        corr = shrunk_corr.values
-        dist = np.sqrt(0.5 * (1 - np.clip(corr, -1, 1)))
-        dist = (dist + dist.T) / 2
-        np.fill_diagonal(dist, 0)
-        condensed = squareform(dist, checks=False)
-        link = sch.linkage(condensed, method=args.linkage)
-
-        # Adaptive Clustering Threshold or Max Clusters
-        # If max-clusters is set, use it as the primary criterion
-        cluster_assignments = sch.fcluster(link, t=args.max_clusters, criterion="maxclust")
-
+    if args.hrp:
         clusters: Dict[int, List[str]] = {}
-        for sym, cluster_id in zip(rets.columns, cluster_assignments):
-            c_id = int(cluster_id)
-            if c_id not in clusters:
-                clusters[c_id] = []
-            clusters[c_id].append(str(sym))
+
+        if rets.shape[1] > 1:
+            w_hrp = hrp_weights(rets, args.linkage)
+            report["hrp_weights"] = w_hrp.to_dict()
+
+            # Extract clusters using Robust Correlation
+            corr = shrunk_corr.values
+            dist = np.sqrt(0.5 * (1 - np.clip(corr, -1, 1)))
+            dist = (dist + dist.T) / 2
+            np.fill_diagonal(dist, 0)
+            condensed = squareform(dist, checks=False)
+            link = sch.linkage(condensed, method=args.linkage)
+
+            # Adaptive Clustering Threshold or Max Clusters
+            # If max-clusters is set, use it as the primary criterion
+            cluster_assignments = sch.fcluster(link, t=args.max_clusters, criterion="maxclust")
+
+            for sym, cluster_id in zip(rets.columns, cluster_assignments):
+                c_id = int(cluster_id)
+                if c_id not in clusters:
+                    clusters[c_id] = []
+                clusters[c_id].append(str(sym))
+        elif rets.shape[1] == 1:
+            # Single asset case
+            clusters[1] = [str(rets.columns[0])]
+            report["hrp_weights"] = {str(rets.columns[0]): 1.0}
+        else:
+            # No assets
+            clusters[1] = []
 
         report["clusters"] = clusters
 

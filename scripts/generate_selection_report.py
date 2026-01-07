@@ -20,7 +20,15 @@ def generate_selection_report(
 
     try:
         with open(path, "r") as f:
-            data = json.load(f)
+            full_data = json.load(f)
+            # Handle nested 'selection' key if present
+            data = full_data.get("selection", full_data)
+            # Fallback for candidates if missing in 'selection' but present in root
+            if "candidates" not in data and "candidates" in full_data:
+                data["candidates"] = full_data["candidates"]
+            # Inject selection mode from root if missing
+            if "selection_mode" not in data and "final_selection" in full_data:
+                data["selection_mode"] = full_data["final_selection"].get("mode")
     except Exception as e:
         print(f"Failed to load selection audit: {e}")
         return
@@ -31,9 +39,9 @@ def generate_selection_report(
     md.append("## 1. Selection Context")
     md.append(f"- **Selection Mode**: {data.get('selection_mode', 'N/A')}")
     md.append(f"- **Lookback Days**: {data.get('lookback_days', 'N/A')}")
-    md.append(f"- **Lookback Windows**: {data.get('lookbacks', [])}")
-    md.append(f"- **Total Candidates**: {len(data.get('candidates', []))}")
-    md.append(f"- **Selected Winners**: {len(data.get('winners', []))}")
+    md.append(f"- **Lookback Windows**: {data.get('lookbacks_used', data.get('lookbacks', []))}")
+    md.append(f"- **Total Candidates**: {data.get('total_raw_symbols', len(data.get('candidates', [])))}")
+    md.append(f"- **Selected Winners**: {data.get('total_selected', len(data.get('winners', [])))}")
     md.append("")
 
     # 2. Winners Table
@@ -81,6 +89,32 @@ def generate_selection_report(
 
         else:
             md.append("No assets were vetoed.")
+        md.append("")
+
+    # 4. Comparison (if history exists)
+    history = full_data.get("selection_history", {})
+    if len(history) > 1:
+        md.append("## 4. Selection Spec Comparison")
+        comp_rows = []
+        all_syms = set()
+        for mode_name, mode_data in history.items():
+            all_syms.update(mode_data.get("metrics", {}).get("alpha_scores", {}).keys())
+
+        # Sort symbols for readability
+        sorted_syms = sorted(list(all_syms))
+
+        md.append("| Symbol | " + " | ".join([f"Score ({m})" for m in history.keys()]) + " |")
+        md.append("| :--- | " + " | ".join([":---:" for _ in history.keys()]) + " |")
+
+        for sym in sorted_syms:
+            scores = []
+            for mode_name in history.keys():
+                s = history[mode_name].get("metrics", {}).get("alpha_scores", {}).get(sym, "N/A")
+                if isinstance(s, float):
+                    scores.append(f"{s:.4f}")
+                else:
+                    scores.append(str(s))
+            md.append(f"| `{sym}` | " + " | ".join(scores) + " |")
         md.append("")
 
     # Write output

@@ -19,7 +19,7 @@ The entire production lifecycle is unified under the `make flow-production` targ
 10. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
 11. **Regime Detection**: Multi-factor state analysis.
 12. **Optimization**: Cluster-Aware allocation (`make port-optimize`).
-13. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`).
+13. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`). **Policy**: Production uses vectorized simulators for speed; Pre-live uses Nautilus for event-driven fidelity.
 14. **Reporting**: QuantStats Tear-sheets & Alpha Audit (`make port-report`).
 15. **Audit Verification**: Final cryptographic signature check.
 
@@ -61,7 +61,8 @@ Every step of the production sequence persists its full execution trace in the r
 
 | Command | Namespace | Purpose |
 | :--- | :--- | :--- |
-| `make flow-production` | **Flow** | Full institutional production lifecycle. |
+| `make flow-production` | **Flow** | Full institutional production lifecycle (Vectorized Simulators). |
+| `make flow-prelive` | **Flow** | High-fidelity pre-live verification (includes Nautilus). |
 | `make flow-dev` | **Flow** | Fast-path development execution. |
 | `make scan-run` | **Scan** | Execute composed discovery scanners. |
 | `make data-fetch` | **Data** | Ingest historical market data. |
