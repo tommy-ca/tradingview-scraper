@@ -104,7 +104,33 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **HRP Linkage**: Updated `hrp_implementation_parity.md` to reflect `Custom` engine's upgrade to **Ward Linkage** (matching Code).
 - [x] **Barbell**: Verified `cluster_adapter.py` forces Aggressors before Core HRP.
 
+### Phase 18: Multi-Sleeve Meta-Portfolio Design
+**Goal**: Design the architecture for cross-universe (Instruments + ETFs) meta-portfolios.
+- [x] **Requirement**: Defined the 2-layer optimization model (Intra-sleeve -> Inter-sleeve).
+- [x] **Specification**: Created `multi_sleeve_meta_portfolio_v1.md`.
+- [ ] **Implementation**: Build aggregation scripts and meta-allocation logic.
+
+### Phase 19: Meta-Portfolio Implementation (Sleeve Aggregation)
+**Goal**: Implement the scripts for building meta-return matrices.
+- [x] **Script**: `scripts/build_meta_returns.py` to join return series.
+- [x] **Validation**: Verified TradFi alignment and intersection logic.
+- [x] **Meta-Manifest**: Created `data/lakehouse/meta_manifest.json` to track sleeve runs.
+
+### Phase 20: Meta-Portfolio Optimization & Flattening
+**Goal**: Execute top-level HRP across sleeves and generate final asset weights.
+- [x] **Script**: `scripts/optimize_meta_portfolio.py` for sleeve-level HRP.
+- [x] **Script**: `scripts/flatten_meta_weights.py` for asset-level weight reconciliation.
+- [x] **Flow Integration**: Added `make flow-meta-production` to the Makefile.
+- [x] **Validation**: Successfully generated `portfolio_optimized_meta.json` (10 assets from 2 sleeves).
+- [x] **Reporting**: Created `scripts/generate_meta_report.py` for meta-layer visibility.
+
+### Phase 21: Meta-Portfolio Spec Finalization
+**Goal**: Formalize the multi-sleeve architecture in the system documentation.
+- [x] **Workflow Spec**: Updated `quantitative_workflow_v1.md` with Stage 5: Meta-Portfolio.
+- [x] **Manifest Spec**: Updated `workflow_manifests.md` with `sleeves` schema.
+
 ## Conclusion
 The **Institutional ETF Scanner Expansion** project is complete.
 The system now features 9 verified scanners, a robust "Liquid Winners" discovery architecture, and a validated multi-engine backtesting capability.
+The infrastructure for **Multi-Sleeve Meta-Portfolios** is implemented and validated, enabling cross-universe risk management.
 

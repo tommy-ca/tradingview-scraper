@@ -32,6 +32,13 @@ The V1 Quantitative Workflow is a Python-native, asynchronous pipeline designed 
 - **Persistence**: Symbols and execution parameters are upserted into the Parquet-based `MetadataCatalog`.
 - **Compliance**: Ensures all portfolio constituents have verified tick sizes and Point-in-Time versioning for backtest reliability.
 
+### Stage 5: Multi-Sleeve Meta-Portfolio (Inter-Sleeve HRP)
+- **Engine**: `InterSleeveOptimizer`
+- **Mechanism**: Aggregates return streams from independent sleeves (e.g., Crypto/Futures vs. TradFi ETFs).
+- **Allocation**: Applies **Hierarchical Risk Parity (HRP)** across sleeves to determine top-level weights.
+- **Flattening**: Reconciles sleeve weights with asset weights to produce a final, diversified execution manifest.
+- **Benefit**: Handles disparate trading calendars and liquidity regimes while maintaining orthogonal exposure.
+
 ## 3. Operations
 The full pipeline is executed via a single entry point:
 ```python

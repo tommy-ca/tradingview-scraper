@@ -178,6 +178,20 @@
           }
         }
       }
+    },
+    "meta_production": {
+      "description": "Multi-Sleeve Meta-Portfolio (Instruments + ETFs)",
+      "sleeves": [
+        {
+          "id": "instruments",
+          "profile": "production"
+        },
+        {
+          "id": "etfs",
+          "profile": "institutional_etf"
+        }
+      ],
+      "meta_allocation": "hrp"
     }
   }
 }

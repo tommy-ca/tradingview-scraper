@@ -232,6 +232,13 @@ flow-prelive: ## Production pre-live workflow (including slow Nautilus simulator
 flow-dev: ## Rapid iteration development execution
 	$(MAKE) flow-production PROFILE=development
 
+flow-meta-production: ## Run multi-sleeve meta-portfolio flow
+	@echo ">>> STAGE: META-PORTFOLIO (Multi-Sleeve)"
+	$(PY) scripts/build_meta_returns.py --profile meta_production
+	$(PY) scripts/optimize_meta_portfolio.py --returns data/lakehouse/meta_returns.pkl
+	$(PY) scripts/flatten_meta_weights.py --weights data/lakehouse/meta_optimized.json --manifest data/lakehouse/meta_manifest.json
+	$(PY) scripts/generate_meta_report.py
+
 # --- CLEAN Namespace ---
 clean-run: ## Wipe current run artifacts
 	rm -f summaries

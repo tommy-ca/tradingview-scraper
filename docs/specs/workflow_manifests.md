@@ -62,7 +62,7 @@ The manifest adheres to `configs/manifest.schema.json`. Key sections include:
 - **`risk`**: Hierarchical risk constraints (e.g., global cluster weight caps).
 - **`backtest`**: Walk-forward validation windows (Train/Test/Step) and simulator settings.
 - **`features`**: Gradual rollout feature gates for 2026 Quantitative roadmap features.
-
+- **`sleeves`**: (Optional) Definitions for multi-sleeve meta-portfolios, mapping sub-profiles to sleeve identifiers.
 
 ## 4. Usage
 
