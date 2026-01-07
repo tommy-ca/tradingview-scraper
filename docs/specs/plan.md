@@ -99,6 +99,11 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **Riskfolio**: Confirmed persistent divergence in `multi_engine_optimization_benchmarks.md`.
 - [x] **Extreme Momentum**: Documented `ASTX` case in `lessons_learned_etf_expansion.md`.
 
+### Phase 17: HRP & Risk Profile Audit
+**Goal**: Ensure spec parity for HRP Linkage and Barbell logic.
+- [x] **HRP Linkage**: Updated `hrp_implementation_parity.md` to reflect `Custom` engine's upgrade to **Ward Linkage** (matching Code).
+- [x] **Barbell**: Verified `cluster_adapter.py` forces Aggressors before Core HRP.
+
 ## Conclusion
 The **Institutional ETF Scanner Expansion** project is complete.
 The system now features 9 verified scanners, a robust "Liquid Winners" discovery architecture, and a validated multi-engine backtesting capability.

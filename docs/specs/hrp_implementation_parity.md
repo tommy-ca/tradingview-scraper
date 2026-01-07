@@ -13,7 +13,7 @@ Hierarchical Risk Parity (HRP) consists of three main stages:
 
 | Engine | Stage 1: Distance | Stage 1: Linkage | Stage 3: Bisection Logic |
 | :--- | :--- | :--- | :--- |
-| **Custom** | Pearson ($d = \sqrt{0.5(1-\rho)}$) | **Single** | **Pure Lopez de Prado (2016)** |
+| **Custom** | Pearson ($d = \sqrt{0.5(1-\rho)}$) | **Ward** | **Pure Lopez de Prado (2016)** |
 | **skfolio** | Distance Correlation | **Ward** | native `HierarchicalRiskParity` (Optimized) |
 | **riskfolio** | Pearson | **Ward** | native `HCPortfolio` |
 | **pypfopt** | Pearson | **Single** | native `HRPOpt` |
@@ -23,7 +23,7 @@ Hierarchical Risk Parity (HRP) consists of three main stages:
 
 ### A. Custom Engine (Internal Baseline)
 The custom engine implements the original HRP algorithm as defined by Lopez de Prado (2016).
-- **Linkage**: Single Linkage.
+- **Linkage**: Ward Linkage (Optimized Jan 2026 for robust clusters).
 - **Allocation**: Recursive inverse-variance weighting of cluster variances.
 - **Regularization**: Tikhonov ($10^{-6}$) applied to the covariance matrix for numerical stability.
 
