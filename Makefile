@@ -189,6 +189,9 @@ port-analyze: ## Factor, correlation, and regime analysis
 	$(PY) scripts/detect_hedge_anchors.py
 	$(PY) scripts/monitor_cluster_drift.py
 
+research-persistence: ## Analyze trend/MR persistence (Requires LOOKBACK=500)
+	$(PY) scripts/research/analyze_persistence.py
+
 # --- REPORT Namespace ---
 port-report: ## Generate unified quant reports and tear-sheets
 	$(PY) scripts/generate_reports.py
