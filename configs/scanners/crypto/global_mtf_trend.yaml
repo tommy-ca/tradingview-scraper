@@ -1,25 +1,37 @@
-# L4: Global Crypto MTF Trend
-base_preset: ../../base/templates/crypto_perp.yaml
-# Compose with Strategy
-base_preset_2: ../../base/strategies/mtf_alignment.yaml # Note: Current loader only supports one base_preset
-# I'll manually merge or use the fact that I'll create a better composer script if needed.
-# For now, I'll merge MTF logic into this file directly.
+# L4: Global Crypto MTF Trend (Perps, Long)
+base_preset: ../../base/universes/global_perp_top50.yaml
+
+# Primary trend gate (daily fields)
 trend:
   direction: "long"
   logic: "AND"
-  adx: {enabled: true, min: 20}
-trend_screen:
-  timeframe: "daily"
-  adx: {enabled: true, min: 20}
+  recommendation: {enabled: true, min: 0.0}
+  adx: {enabled: true, min: 10}
+  momentum:
+    enabled: true
+    horizons: {Perf.W: 0.0, Perf.1M: 0.0}
+
+# MTF confirmation screen (weekly)
 confirm_screen:
   timeframe: "weekly"
-  adx: {enabled: true, min: 20}
-execute_screen:
-  timeframe: "monthly"
-  adx: {enabled: true, min: 20}
+  direction: "long"
+  logic: "AND"
+  recommendation: {enabled: true, min: 0.0}
+  adx: {enabled: true, min: 10}
+  momentum: {enabled: true, horizons: {Perf.1M: 0.0}}
 
-exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
-limit: 100
+limit: 50
 export_metadata:
   symbol: global_crypto_mtf_trend
   data_category: strategy_alpha
+
+
+
+
+
+
+
+
+
+
+

@@ -1,5 +1,5 @@
-# L4: Crypto Volatility Breakout
-base_preset: ../../base/universes/binance_top50.yaml
+# L4: Crypto Volatility Breakout (Perps)
+base_preset: ../../base/universes/binance_perp_top50.yaml
 # Compose with Volatility Strategy
 volatility:
   min_d: 0.05 # Aggressive crypto volatility
@@ -8,5 +8,5 @@ filters:
     operation: "greater"
     right: 5.0
 export_metadata:
-  symbol: crypto_volatility_alpha
+  symbol: crypto_vol_breakout_perp
   data_category: strategy_alpha
