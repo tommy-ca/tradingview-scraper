@@ -3,6 +3,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import List, cast
 
 import pandas as pd
 
@@ -10,62 +11,68 @@ sys.path.append(os.getcwd())
 from tradingview_scraper.settings import get_settings
 
 
-def generate_meta_markdown_report(meta_optimized_path: str, meta_returns_path: str, output_path: str):
-    if not os.path.exists(meta_optimized_path):
-        print(f"Error: {meta_optimized_path} not found.")
-        return
-
-    with open(meta_optimized_path, "r") as f:
-        meta_data = json.load(f)
-
-    returns_df = None
-    if os.path.exists(meta_returns_path):
-        returns_df = pd.read_pickle(meta_returns_path)
-
+def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: List[str]):
     md = []
     md.append("# 🌐 Multi-Sleeve Meta-Portfolio Report")
     md.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    md.append(f"**Run ID:** {meta_data.get('metadata', {}).get('run_id', 'N/A')}")
     md.append("\n---")
 
-    # 1. SLEEVE ALLOCATION
-    md.append("## 🧩 Sleeve Allocation (Meta-HRP)")
-    md.append("Top-level allocation across strategy sleeves using Hierarchical Risk Parity.")
-    md.append("| Sleeve ID | Weight | Engine | Source Run |")
-    md.append("| :--- | :--- | :--- | :--- |")
+    for prof in profiles:
+        prof = prof.strip()
+        opt_path = meta_dir / f"meta_optimized_{prof}.json"
+        rets_path = meta_dir / f"meta_returns_{prof}.pkl"
+        flat_path = meta_dir / f"portfolio_optimized_meta_{prof}.json"
 
-    weights = sorted(meta_data.get("weights", []), key=lambda x: x["Weight"], reverse=True)
-    for w in weights:
-        s_id = w["Symbol"]
-        weight = w["Weight"]
-        md.append(f"| **{s_id}** | {weight:.2%} | Custom HRP | {meta_data['metadata'].get('run_id', 'N/A')} |")
+        if not opt_path.exists():
+            continue
 
-    # 2. SLEEVE CORRELATIONS
-    if returns_df is not None:
-        md.append("\n## 📊 Sleeve Correlations")
-        corr = returns_df.corr()
-        md.append("| Sleeve | " + " | ".join(corr.columns) + " |")
-        md.append("| :--- | " + " | ".join([":---:"] * len(corr.columns)) + " |")
-        for i, row in corr.iterrows():
-            md.append(f"| **{i}** | " + " | ".join([f"{v:.2f}" for v in row]) + " |")
+        with open(opt_path, "r") as f:
+            meta_data = json.load(f)
 
-    # 3. FINAL ASSET TOP 20
-    md.append("\n## 💎 Consolidated Top 20 Assets")
-    md.append("Aggregated weights across all sleeves after flattening.")
+        md.append(f"## 🏆 Risk Profile: {prof.upper()}")
+        md.append(f"**Meta Run ID:** {meta_data.get('metadata', {}).get('run_id', 'N/A')}")
 
-    flattened_path = "data/lakehouse/portfolio_optimized_meta.json"
-    if os.path.exists(flattened_path):
-        with open(flattened_path, "r") as f:
-            flat_data = json.load(f)
+        # 1. SLEEVE ALLOCATION
+        md.append("\n### 🧩 Sleeve Allocation")
+        md.append("| Sleeve ID | Weight | Engine |")
+        md.append("| :--- | :--- | :--- |")
 
-        md.append("| Rank | Symbol | Description | Total Weight | Market |")
-        md.append("| :--- | :--- | :--- | :--- | :--- |")
+        weights = sorted(meta_data.get("weights", []), key=lambda x: x["Weight"], reverse=True)
+        for w in weights:
+            s_id = w["Symbol"]
+            weight = w["Weight"]
+            md.append(f"| **{s_id}** | {weight:.2%} | Custom {prof} |")
 
-        flat_weights = flat_data.get("weights", [])
-        for i, w in enumerate(flat_weights[:20]):
-            md.append(f"| {i + 1} | `{w['Symbol']}` | {w.get('Description', 'N/A')} | **{w['Weight']:.2%}** | {w.get('Market', 'N/A')} |")
+        # 2. SLEEVE CORRELATIONS
+        if rets_path.exists():
+            returns_df = cast(pd.DataFrame, pd.read_pickle(rets_path))
+            md.append("\n### 📊 Sleeve Correlations")
+            corr = returns_df.corr()
+            cols = list(corr.columns)
+            md.append("| Sleeve | " + " | ".join(cols) + " |")
+            md.append("| :--- | " + " | ".join([":---:"] * len(cols)) + " |")
 
-    md.append("\n---")
+            for idx in corr.index:
+                row_vals = []
+                for c in cols:
+                    val = float(corr.loc[idx, c])
+                    row_vals.append(f"{val:.2f}")
+                md.append(f"| **{idx}** | " + " | ".join(row_vals) + " |")
+
+        # 3. FINAL ASSET TOP 10
+        if flat_path.exists():
+            md.append("\n### 💎 Consolidated Top 10 Assets")
+            with open(flat_path, "r") as f:
+                flat_data = json.load(f)
+
+            md.append("| Rank | Symbol | Description | Total Weight | Market |")
+            md.append("| :--- | :--- | :--- | :--- | :--- |")
+
+            flat_weights = flat_data.get("weights", [])
+            for i, w in enumerate(flat_weights[:10]):
+                md.append(f"| {i + 1} | `{w['Symbol']}` | {w.get('Description', 'N/A')} | **{w['Weight']:.2%}** | {w.get('Market', 'N/A')} |")
+
+        md.append("\n---\n")
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as f:
@@ -76,9 +83,10 @@ def generate_meta_markdown_report(meta_optimized_path: str, meta_returns_path: s
 
 if __name__ == "__main__":
     settings = get_settings()
-    # We want to save the report in the run directory if possible
-    # But for flow-meta-production, it might be in a dedicated meta run dir.
-    # For now, let's use the summaries/latest root.
+    lakehouse = Path("data/lakehouse")
     out_p = Path("artifacts/summaries/latest/meta_portfolio_report.md")
 
-    generate_meta_markdown_report("data/lakehouse/meta_optimized.json", "data/lakehouse/meta_returns.pkl", str(out_p))
+    # Standard profiles to report
+    target_profiles = ["barbell", "hrp", "min_variance", "equal_weight", "max_sharpe"]
+
+    generate_meta_markdown_report(lakehouse, str(out_p), target_profiles)

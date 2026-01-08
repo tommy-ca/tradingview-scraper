@@ -5,6 +5,7 @@ import os
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional
 
 sys.path.append(os.getcwd())
 
@@ -12,10 +13,34 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("flatten_meta_weights")
 
 
-def flatten_weights(meta_weights_path: str, meta_manifest_path: str, output_path: str):
+def flatten_weights(meta_weights_path: str, meta_manifest_path: str, output_path: str, profile: Optional[str] = None):
+    # Handle Profile Matrix
+    target_profile = profile or "barbell"  # Default legacy
+
+    # Resolve meta weights path based on profile
+    if profile:
+        p_weights_path = str(Path("data/lakehouse") / f"meta_optimized_{target_profile}.json")
+        if os.path.exists(p_weights_path):
+            meta_weights_path = p_weights_path
+
+    # Fallback if profile not found or not provided
+    if not os.path.exists(meta_weights_path):
+        fallback_path = str(Path("data/lakehouse") / f"meta_optimized_{target_profile}.json")
+        if os.path.exists(fallback_path):
+            meta_weights_path = fallback_path
+
     if not os.path.exists(meta_weights_path):
         logger.error(f"Meta-weights missing: {meta_weights_path}")
         return
+
+    logger.info(f"Loading meta-weights from: {meta_weights_path}")
+
+    # Try to find the specific manifest for the profile
+    if profile:
+        p_manifest_path = str(Path("data/lakehouse") / f"meta_manifest_{profile}.json")
+        if os.path.exists(p_manifest_path):
+            meta_manifest_path = p_manifest_path
+
     if not os.path.exists(meta_manifest_path):
         logger.error(f"Meta-manifest missing: {meta_manifest_path}")
         return
@@ -38,80 +63,51 @@ def flatten_weights(meta_weights_path: str, meta_manifest_path: str, output_path
             logger.warning(f"No run path found for sleeve {s_id}")
             continue
 
-        # Load the optimized portfolio for this sleeve
-        # Usually it's portfolio_optimized_v2.json in the data dir or root?
-        # In a run dir, it's typically artifacts/summaries/runs/<RUN_ID>/data/tournament_results.json
-        # or we look for the optimized weights in the lakehouse of that run.
+        logger.info(f"Extracting weights for sleeve {s_id} (profile: {target_profile}) from {run_path}")
 
-        # Actually, let's look for artifacts/summaries/runs/<RUN_ID>/tearsheets/cvxportfolio/skfolio/barbell/report.json (if exists)
-        # OR we look at data/lakehouse/portfolio_optimized_v2.json IF the run is recent.
-        # But we want the weights from THAT specific run.
+        # Fallback: check artifacts/summaries/runs/<RUN_ID>/data/metadata/portfolio_optimized_v2.json
+        opt_path = Path(run_path) / "data" / "metadata" / "portfolio_optimized_v2.json"
+        if not opt_path.exists():
+            opt_path = Path(run_path) / "portfolio_optimized_v2.json"
 
-        # Let's try to find weights in the tournament_results.json of that run
-        results_path = Path(run_path) / "data" / "tournament_results.json"
-        if not results_path.exists():
-            logger.warning(f"No tournament results found in {run_path}")
-            continue
+        found_weights = False
+        if opt_path.exists():
+            with open(opt_path, "r") as f:
+                opt_data = json.load(f)
 
-        with open(results_path, "r") as f:
-            results_data = json.load(f)
-
-        # Find the 'barbell' weights for 'skfolio' engine in 'cvxportfolio' simulator (standard production)
-        # We'll take the LAST window weights
-        try:
-            profile_data = results_data["results"]["cvxportfolio"]["skfolio"]["barbell"]
-            last_window = profile_data["windows"][-1]
-            top_assets = last_window["top_assets"]  # Note: this might only be top 5
-
-            # If top_assets is limited, we might need a better source.
-            # Usually, the full weights are in the audit logs or we need to extract from tournament_results.json deeper.
-            # Wait, tournament_results.json doesn't store FULL weights for all assets in all windows to save space?
-            # Actually, let's check.
-
-            logger.info(f"Extracting weights for sleeve {s_id} from {run_path}")
-
-            # Fallback: check artifacts/summaries/runs/<RUN_ID>/data/metadata/portfolio_optimized_v2.json
-            opt_path = Path(run_path) / "data" / "metadata" / "portfolio_optimized_v2.json"
-            if not opt_path.exists():
-                # Try lakehouse dir if it was archived
-                opt_path = Path(run_path) / "portfolio_optimized_v2.json"
-
-            if opt_path.exists():
-                with open(opt_path, "r") as f:
-                    opt_data = json.load(f)
-
-                # Different engines might have different formats
-                # If it's the new multi-winner manifest:
-                if "winners" in opt_data:
-                    # Find skfolio/barbell
-                    weights = None
-                    for w in opt_data["winners"]:
-                        if w["engine"] == "skfolio" and w["profile"] == "barbell":
-                            weights = w["weights"]
-                            break
-                    if weights:
-                        for asset in weights:
-                            sym = asset["Symbol"]
-                            w = asset["Weight"]
-                            final_assets[sym] += w * s_weight
-                            asset_details[sym] = asset
-                else:
-                    # Legacy format (single weights list)
-                    for asset in opt_data:
+            if "profiles" in opt_data:
+                # Target the EXACT fractal profile
+                p_data = opt_data["profiles"].get(target_profile)
+                if p_data and "assets" in p_data:
+                    for asset in p_data["assets"]:
                         sym = asset["Symbol"]
                         w = asset["Weight"]
                         final_assets[sym] += w * s_weight
                         asset_details[sym] = asset
-            else:
-                logger.warning(f"Could not find full weights for sleeve {s_id}. Using top_assets from last window.")
-                for asset in top_assets:
-                    sym = asset["Symbol"]
-                    w = asset["Weight"]
-                    final_assets[sym] += w * s_weight
-                    asset_details[sym] = asset
+                    found_weights = True
 
-        except Exception as e:
-            logger.error(f"Error processing sleeve {s_id}: {e}")
+        if not found_weights:
+            # Fallback to tournament results (Top 5)
+            results_path = Path(run_path) / "data" / "tournament_results.json"
+            if results_path.exists():
+                with open(results_path, "r") as f:
+                    results_data = json.load(f)
+                try:
+                    # Assume cvxportfolio/skfolio/target_profile
+                    profile_data = results_data["results"]["cvxportfolio"]["skfolio"][target_profile]
+                    last_window = profile_data["windows"][-1]
+                    top_assets = last_window["top_assets"]
+                    for asset in top_assets:
+                        sym = asset["Symbol"]
+                        w = asset["Weight"]
+                        final_assets[sym] += w * s_weight
+                        asset_details[sym] = asset
+                    found_weights = True
+                except Exception:
+                    pass
+
+        if not found_weights:
+            logger.warning(f"Could not find weights for profile {target_profile} in sleeve {s_id}")
 
     # Construct final portfolio
     output_weights = []
@@ -128,23 +124,31 @@ def flatten_weights(meta_weights_path: str, meta_manifest_path: str, output_path
             }
         )
 
-    result = {"metadata": {"meta_profile": meta_manifest["meta_profile"], "sleeve_weights": sleeve_weights, "generated_at": str(pd.Timestamp.now())}, "weights": output_weights}
+    result = {
+        "metadata": {"meta_profile": meta_manifest["meta_profile"], "risk_profile": target_profile, "sleeve_weights": sleeve_weights, "generated_at": str(pd.Timestamp.now())},
+        "weights": output_weights,
+    }
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
+    # Save profile-specific output
+    p_output_path = Path(output_path).parent / f"portfolio_optimized_meta_{target_profile}.json"
+    os.makedirs(os.path.dirname(p_output_path), exist_ok=True)
+    with open(p_output_path, "w") as f:
         json.dump(result, f, indent=2)
 
-    logger.info(f"Flattened meta-portfolio saved to {output_path}")
+    logger.info(f"Flattened meta-portfolio ({target_profile}) saved to {p_output_path}")
     logger.info(f"Total assets: {len(output_weights)}")
 
 
 if __name__ == "__main__":
+    from typing import Optional
+
     import pandas as pd
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", default="data/lakehouse/meta_optimized.json")
     parser.add_argument("--manifest", default="data/lakehouse/meta_manifest.json")
     parser.add_argument("--output", default="data/lakehouse/portfolio_optimized_meta.json")
+    parser.add_argument("--profile", help="Specific risk profile to flatten")
     args = parser.parse_args()
 
-    flatten_weights(args.weights, args.manifest, args.output)
+    flatten_weights(args.weights, args.manifest, args.output, args.profile)

@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import pandas as pd
 
@@ -37,7 +37,7 @@ def find_latest_run_for_profile(profile: str) -> Optional[Path]:
     return None
 
 
-def build_meta_returns(meta_profile: str, output_path: str):
+def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[List[str]] = None):
     settings = get_settings()
     manifest_path = Path("configs/manifest.json")
     if not manifest_path.exists():
@@ -57,80 +57,76 @@ def build_meta_returns(meta_profile: str, output_path: str):
         logger.error(f"No sleeves defined for profile {meta_profile}")
         return
 
-    meta_df = pd.DataFrame()
+    # Tournament profiles to iterate through
+    target_profiles = profiles or settings.profiles.split(",")
+    logger.info(f"Target Meta Profiles: {target_profiles}")
 
-    for sleeve in sleeves:
-        s_id = sleeve["id"]
-        s_profile = sleeve["profile"]
+    for prof in target_profiles:
+        prof = prof.strip()
+        meta_df = pd.DataFrame()
+        sleeve_metadata = []
 
-        logger.info(f"Processing sleeve: {s_id} (profile: {s_profile})")
+        logger.info(f"🔨 Building Meta-Matrix for profile: {prof}")
 
-        # Strategy: find the latest run of this profile
-        # Note: If no recent run exists, this sleeve will be missing.
-        run_path = find_latest_run_for_profile(s_profile)
-        if not run_path:
-            # Fallback: check if 'latest' symlink matches the profile
-            # (This is risky if 'latest' is a different profile)
-            logger.warning(f"Could not find a specific run for profile {s_profile}. Skipping.")
-            continue
+        for sleeve in sleeves:
+            s_id = sleeve["id"]
+            s_profile = sleeve["profile"]
 
-        # Try to load the 'champion' return series
-        # Priority: cvxportfolio_skfolio_barbell -> cvxportfolio_skfolio_hrp -> cvxportfolio_skfolio_benchmark
-        potential_files = ["cvxportfolio_skfolio_barbell.pkl", "cvxportfolio_skfolio_hrp.pkl", "cvxportfolio_skfolio_benchmark.pkl"]
+            run_path = find_latest_run_for_profile(s_profile)
+            if not run_path:
+                logger.warning(f"Could not find a specific run for profile {s_profile}. Skipping.")
+                continue
 
-        found_sleeve_rets = False
-        for f_name in potential_files:
+            # Target the specific profile's return stream
+            # Optimized filenames: cvxportfolio_skfolio_<prof>.pkl
+            f_name = f"cvxportfolio_skfolio_{prof}.pkl"
             p = run_path / "data" / "returns" / f_name
+
+            if not p.exists():
+                # Fallback to standard filename if the profile was different
+                p = run_path / "data" / "returns" / "cvxportfolio_skfolio_barbell.pkl"
+
             if p.exists():
-                logger.info(f"  Found returns: {p}")
+                logger.info(f"  [{s_id}] Found returns: {p.name}")
                 s_rets = pd.read_pickle(p)
                 if isinstance(s_rets, pd.Series):
                     s_rets = s_rets.to_frame(s_id)
                 else:
-                    # If it's a DF, take the first column
                     s_rets = s_rets.iloc[:, 0].to_frame(s_id)
 
                 if meta_df.empty:
                     meta_df = s_rets
                 else:
                     meta_df = meta_df.join(s_rets, how="inner")
-                found_sleeve_rets = True
-                break
 
-        if not found_sleeve_rets:
-            logger.warning(f"  No return series found for sleeve {s_id} in {run_path}")
+                sleeve_metadata.append({"id": s_id, "profile": s_profile, "run_id": run_path.name, "run_path": str(run_path)})
+            else:
+                logger.warning(f"  [{s_id}] No return series found for {prof} in {run_path}")
 
-    if meta_df.empty:
-        logger.error("No sleeve returns collected. Meta-Returns is empty.")
-        return
+        if not meta_df.empty:
+            # Save profile-specific meta returns
+            p_output_path = Path(output_path).parent / f"meta_returns_{prof}.pkl"
+            os.makedirs(p_output_path.parent, exist_ok=True)
+            meta_df.to_pickle(p_output_path)
+            logger.info(f"✅ Meta-Returns ({prof}) saved to {p_output_path}")
 
-    logger.info(f"Meta-Returns constructed. Shape: {meta_df.shape}")
-    logger.info(f"Columns: {list(meta_df.columns)}")
-    logger.info(f"Date Range: {meta_df.index[0]} to {meta_df.index[-1]}")
+            # Also output a manifest for this specific profile matrix
+            manifest_out = {"meta_profile": meta_profile, "risk_profile": prof, "sleeves": sleeve_metadata}
+            m_path = Path("data/lakehouse") / f"meta_manifest_{prof}.json"
+            with open(m_path, "w") as f:
+                json.dump(manifest_out, f, indent=2)
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    meta_df.to_pickle(output_path)
-    logger.info(f"Saved to {output_path}")
-
-    # Output manifest for flattening
-    manifest_out = {"meta_profile": meta_profile, "sleeves": []}
-    for sleeve in sleeves:
-        s_id = sleeve["id"]
-        s_profile = sleeve["profile"]
-        run_path = find_latest_run_for_profile(s_profile)
-        if run_path:
-            manifest_out["sleeves"].append({"id": s_id, "profile": s_profile, "run_id": run_path.name, "run_path": str(run_path)})
-
-    manifest_path = Path("data/lakehouse/meta_manifest.json")
-    with open(manifest_path, "w") as f:
-        json.dump(manifest_out, f, indent=2)
-    logger.info(f"Meta-Manifest saved to {manifest_path}")
+    # Maintain legacy output_path for compatibility with old scripts if needed
+    # but we now favor the profile-matrix outputs.
+    logger.info("Meta-Matrix construction complete.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", required=True, help="Meta portfolio profile name")
     parser.add_argument("--output", default="data/lakehouse/meta_returns.pkl")
+    parser.add_argument("--profiles", help="Comma-separated risk profiles to build")
     args = parser.parse_args()
 
-    build_meta_returns(args.profile, args.output)
+    target_profs = args.profiles.split(",") if args.profiles else None
+    build_meta_returns(args.profile, args.output, target_profs)
