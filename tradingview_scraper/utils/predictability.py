@@ -1,9 +1,11 @@
 import logging
 import math
+from typing import Dict
 
 import numpy as np
 import pywt
 from scipy.stats import entropy
+from sklearn.linear_model import LinearRegression
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.stattools import adfuller
 
@@ -180,6 +182,89 @@ def calculate_autocorrelation(x: np.ndarray, lag: int = 1) -> float:
         return float(np.nan_to_num(corr, nan=0.0))
     except Exception:
         return 0.0
+
+
+def calculate_correlation_structure(x: np.ndarray, max_lags: int = 5) -> Dict[int, float]:
+    """
+    Returns a dictionary of autocorrelation values for multiple lags.
+    """
+    return {lag: calculate_autocorrelation(x, lag=lag) for lag in range(1, max_lags + 1)}
+
+
+def calculate_memory_depth(x: np.ndarray, threshold: float = 0.02) -> int:
+    """
+    Calculates how many consecutive lags have an autocorrelation above the threshold.
+    Indicates the 'memory' of a trend.
+    """
+    depth = 0
+    for lag in range(1, 21):
+        ac = calculate_autocorrelation(x, lag=lag)
+        if ac > threshold:
+            depth += 1
+        else:
+            break
+    return depth
+
+
+def calculate_half_life(series: np.ndarray) -> float:
+    """
+    Calculates the Mean Reversion Half-Life using the Ornstein-Uhlenbeck process.
+    Models Δp = alpha + beta * p_{t-1} + epsilon.
+    Half-life = -ln(2) / beta.
+
+    Returns:
+        float: Expected bars to revert half-way. np.inf if not reverting.
+    """
+    series = series[~np.isnan(series)]
+    if len(series) < 30:
+        return np.inf
+
+    try:
+        # Lagged series
+        y = np.diff(series)
+        x = series[:-1]
+
+        model = LinearRegression().fit(x.reshape(-1, 1), y)
+        beta = float(model.coef_[0])
+
+        if beta >= 0:
+            return np.inf  # Not mean-reverting
+
+        half_life = -np.log(2) / beta
+        return float(np.clip(half_life, 0.5, 500.0))
+    except Exception:
+        return np.inf
+
+
+def calculate_trend_duration(series: np.ndarray, window: int = 50) -> int:
+    """
+    Calculates the current trend duration (age) based on price position vs EMA.
+    Returns the number of consecutive bars the current state has held.
+    """
+    series = series[~np.isnan(series)]
+    if len(series) < window + 10:
+        return 0
+
+    try:
+        import pandas as pd
+
+        s = pd.Series(series)
+        ema = s.ewm(span=window, adjust=False).mean()
+
+        # Above/Below state
+        state = (s > ema).astype(int)
+        current_state = state.iloc[-1]
+
+        # Count backwards
+        count = 0
+        for i in range(len(state) - 1, -1, -1):
+            if state.iloc[i] == current_state:
+                count += 1
+            else:
+                break
+        return count
+    except Exception:
+        return 0
 
 
 def calculate_ljungbox_pvalue(x: np.ndarray, lags: int = 5) -> float:
