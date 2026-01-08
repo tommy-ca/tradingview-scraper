@@ -53,7 +53,9 @@
       "feat_efficiency_scoring": true,
       "feat_selection_logmps": true,
       "selection_mode": "v3.2",
-      "entropy_max_threshold": 0.97
+      "entropy_max_threshold": 0.995,
+      "hurst_random_walk_min": 0.48,
+      "hurst_random_walk_max": 0.52
     }
   },
   "integrations": {
@@ -90,12 +92,28 @@
     },
     "crypto_production": {
       "description": "Institutional Crypto Alpha Strategy",
+      "backtest": {
+        "benchmark_symbols": ["BINANCE:BTCUSDT", "AMEX:SPY"]
+      },
+      "features": {
+        "selection_mode": "v3.2",
+        "feat_dynamic_selection": false,
+        "feat_short_direction": true,
+        "entropy_max_threshold": 0.999
+      },
+      "selection": {
+        "threshold": 0.0,
+        "top_n": 25,
+        "min_momentum_score": -1.0
+      },
       "discovery": {
         "enabled_markets": ["crypto"],
         "pipelines": {
           "crypto_alpha": {
             "scanners": [
               "scanners/crypto/binance_trend",
+              "scanners/crypto/binance_perp_trend",
+              "scanners/crypto/binance_perp_short",
               "scanners/crypto/global_mtf_trend",
               "scanners/crypto/vol_breakout"
             ],
