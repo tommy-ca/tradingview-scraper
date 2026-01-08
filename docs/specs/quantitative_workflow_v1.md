@@ -23,6 +23,8 @@ The V1 Quantitative Workflow is a Python-native, asynchronous pipeline designed 
 ### Stage 3: Robust Risk Management
 - **Regime Detection**: `MarketRegimeDetector` monitors cross-sectional volatility to classify market states into `QUIET`, `NORMAL`, or `CRISIS`.
 - **Covariance Estimation**: `ShrinkageCovariance` uses **Ledoit-Wolf Shrinkage** to stabilize risk matrices for short-lookback windows (preventing numerical singularity).
+- **Secular Alignment Standard**: All production-grade historical data must maintain a minimum **500-day lookback** to capture full volatility cycles across varied asset classes.
+- **Outlier Detection Protocol**: `port-analyze` calculates a **"Cluster Concentration Entropy"** score ($H$). If $H < 0.5$ (indicating single-asset dominance), the risk engine must trigger a weight-smearing pass to maintain diversity.
 - **Optimization**: `BarbellOptimizer` implements a Taleb-inspired split:
     - **Safe Core**: Optimized for Maximum Diversification Ratio.
     - **Convex Aggressor**: Exposure to high-antifragility (high-optionality) assets.
@@ -31,8 +33,10 @@ The V1 Quantitative Workflow is a Python-native, asynchronous pipeline designed 
 ### Stage 4: Metadata Lakehouse & PIT Integrity
 - **Persistence**: Symbols and execution parameters are upserted into the Parquet-based `MetadataCatalog`.
 - **Compliance**: Ensures all portfolio constituents have verified tick sizes and Point-in-Time versioning for backtest reliability.
+- **Resolver Integrity Standard**: All feature flags and the `selection_mode` must be explicitly defined in the profile-level `features` block to ensure deterministic override of global defaults.
+- **Stale-Tolerance Policy**: Strict zero-tolerance for stale production assets. Any asset with a data lag $>3$ market sessions relative to the universe benchmark (e.g., SPY) must be force-refreshed via targeted sync or auto-pruned before Factor Analysis to prevent volatility understatement.
 
-### Stage 5: Multi-Sleeve Meta-Portfolio (Inter-Sleeve HRP)
+### Stage 5: Multi-Sleeve Meta-Portfolio (Recursive HRP)
 - **Engine**: `InterSleeveOptimizer`
 - **Mechanism**: Aggregates return streams from independent sleeves (e.g., Crypto/Futures vs. TradFi ETFs).
 - **Allocation**: Applies **Hierarchical Risk Parity (HRP)** across sleeves to determine top-level weights.

@@ -136,8 +136,53 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **Audit (Ledger)**: Confirmed meta-optimization decisions are recorded in `audit.jsonl`.
 - [x] **Spec Synchronization**: Updated `multi_sleeve_meta_portfolio_v1.md` and `artifact_hierarchy.md` with audit findings.
 
+### Phase 23: Instruments Sleeve Isolation
+**Goal**: Decouple Crypto from the primary TradFi production sleeve to prepare for multi-sleeve meta-portfolio scaling.
+- [x] **Configuration**: Removed `crypto` markets and `binance_trend` scanner from the `production` profile.
+- [x] **Hygiene**: Filtered out 4 stale symbols (`AMD`, `CSCO`, `ISRG`, `LRCX`) to ensure high-integrity production returns.
+- [x] **Execution**: Rerun the production pipeline for the sanitized TradFi sleeve (Run `20260107-203840`).
+- [x] **Verification**: Confirmed zero crypto assets in the TradFi sleeve returns and candidates.
+
+### Phase 24: Institutional Parity Alignment
+**Goal**: Harmonize sub-sleeve execution parameters to ensure statistical validity in Meta-Portfolio allocation.
+- [x] **Alignment**: Updated `institutional_etf` and `production` manifests with 500d lookback and Selection v3.2 parity.
+- [x] **Execution**: Rerun both sleeves with aligned temporal and risk parameters.
+- [x] **Integration**: Execute meta-portfolio HRP across Instruments and ETF sleeves.
+
+### Phase 25: Total Parity Alignment & Resolver Hardening
+**Goal**: Eliminate "Resolution Drift" by locking selection modes in the features block and standardizing conviction parameters.
+- [x] **Hardening**: Moved `selection_mode` to `features` block in `manifest.json`.
+- [x] **Standardization**: Applied `threshold: 0.4`, `top_n: 10`, and `min_momentum: -0.1` to both Instrument and ETF sleeves.
+- [x] **Validation**: Verified identical `resolved_manifest.json` parameter blocks across sleeves.
+
+### Phase 26: Sleeve Hardening & Integrity Remediation
+**Goal**: Fix essential pipeline bugs discovered during the parity audit and focus on single-sleeve performance.
+- [x] **Fix (Resolver)**: Ensured `selection_mode` in `features` block correctly overrides global defaults.
+- [x] **Fix (Archival)**: Ensured `portfolio_optimized_v2.json` is archived in the run `data/metadata/` directory.
+- [x] **Uplift (Risk)**: Implemented a "Diversity Floor" (min 5 assets) in the custom risk engine.
+- [x] **Optimization (Sleeve)**: Executed `production` (Instruments) sleeve with optimized conviction parameters (`threshold: 0.35`).
+
+### Phase 27: Fractal Risk Architecture & Deep Audit
+**Goal**: Transition to a recursive risk multiverse where sleeves are treated as profile-matrices and meta-allocation is philosophy-consistent.
+- [x] **Spec Update**: Formalized Fractal Risk Architecture and Outlier Detection standards.
+- [x] **Recursive Flow**: Updated `build_meta_returns.py`, `optimize_meta_portfolio.py`, and `flatten_meta_weights.py` for profile-matrix support.
+- [x] **Deep Audit**: Executed `audit_meta_outliers.py` to verify top winner transitions, data integrity, and sleeve orthogonality.
+- [x] **Outlier Mitigation**: Implemented "Concentration Entropy" metrics in the audit ledger and risk optimization stage.
+
+### Phase 28: Stale Asset Remediation
+**Goal**: Close the 5-day data lag for `JNJ` and `LLY` to ensure high-fidelity volatility estimation.
+- [x] **Targeted Refresh**: Executed high-intensity targeted refresh for `JNJ` and `LLY`.
+- [x] **Verification**: Verified Parquet files reach `2026-01-07`.
+
+### Phase 29: Crypto Sleeve Integration & Meta-Tournament
+**Goal**: Integrate the dedicated Crypto sleeve into the Fractal Meta-Portfolio and evaluate the Grand Champion.
+- [x] **Crypto Profile**: Created `crypto_production` profile in `manifest.json`.
+- [x] **Parallel Execution**: Completed `instruments_hardened_v2`, `etf_hardened_v2`, and `crypto_hardened_v1`.
+- [x] **Fractal Build**: Executed the Meta-Matrix flow with 3 orthogonal sleeves.
+- [x] **Audit**: Confirmed high efficiency in TradFi/Crypto (High Entropy vetoes) leading to a high-conviction "Value/Gold" meta-portfolio.
+
 ## Conclusion
-The **Institutional ETF Scanner Expansion** project and the **Multi-Sleeve Meta-Portfolio** infrastructure are complete.
-The system now supports cross-universe risk management with high-fidelity diversification alpha, backed by a transparent audit ledger.
-The pipeline is production-ready.
+The **Institutional Multi-Sleeve Meta-Portfolio** infrastructure is now fully operational.
+The system successfully manages 3 orthogonal capital sleeves (Instruments, ETFs, Crypto) using a Fractal Risk Architecture that preserves risk philosophy from asset to meta-allocation.
+The platform is in a high-integrity, production-ready state.
 
