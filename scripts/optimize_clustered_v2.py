@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Optional, cast
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
 from tradingview_scraper.portfolio_engines.engines import build_engine
-from tradingview_scraper.portfolio_engines.base import EngineRequest
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import AuditLedger, get_df_hash  # type: ignore
 
@@ -16,6 +16,17 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("clustered_optimizer_v2")
 
 AUDIT_FILE = "data/lakehouse/selection_audit.json"
+
+
+def calculate_concentration_entropy(weights: List[float]) -> float:
+    """Calculates the normalized Shannon entropy of a weight distribution."""
+    w = np.array(weights)
+    w = w[w > 0]
+    if len(w) <= 1:
+        return 0.0
+    p = w / w.sum()
+    entropy = -np.sum(p * np.log(p))
+    return float(entropy / np.log(len(w)))
 
 
 class ClusteredOptimizerV2:
@@ -47,7 +58,7 @@ class ClusteredOptimizerV2:
             with open(stats_path, "r") as f:
                 self.stats = cast(pd.DataFrame, pd.read_json(f))
 
-    def run_profile(self, profile: str, engine_name: str = "custom", cluster_cap: float = 0.25) -> pd.DataFrame:
+    def run_profile(self, profile: ProfileName, engine_name: str = "custom", cluster_cap: float = 0.25) -> pd.DataFrame:
         """Entry point for standard risk profiles using the engine factory."""
         if self.ledger:
             self.ledger.record_intent(step=f"optimize_{profile}", params={"engine": engine_name, "cap": cluster_cap}, input_hashes={"returns": get_df_hash(self.returns)})
@@ -62,12 +73,17 @@ class ClusteredOptimizerV2:
             return pd.DataFrame()
 
         if self.ledger:
-            self.ledger.record_outcome(step=f"optimize_{profile}", status="success", output_hashes={"weights": get_df_hash(weights_df)}, metrics={"n_assets": len(weights_df)})
+            # Calculate concentration entropy for the ledger
+            weights_list = weights_df["Weight"].tolist() if not weights_df.empty else []
+            entropy = calculate_concentration_entropy(weights_list)
+            self.ledger.record_outcome(
+                step=f"optimize_{profile}", status="success", output_hashes={"weights": get_df_hash(weights_df)}, metrics={"n_assets": len(weights_df), "concentration_entropy": entropy}
+            )
         return weights_df
 
     def run_barbell(self, cluster_cap: float = 0.25, regime: str = "NORMAL") -> pd.DataFrame:
         """Entry point for the Antifragile Barbell profile using the custom engine."""
-        return self.run_profile("barbell", "custom", cluster_cap)
+        return self.run_profile(cast(ProfileName, "barbell"), "custom", cluster_cap)
 
 
 if __name__ == "__main__":
@@ -89,13 +105,13 @@ if __name__ == "__main__":
     # Generate results for each profile
     profiles = {}
     for p_name, method in [
-        ("min_variance", "min_variance"),
-        ("hrp", "hrp"),
-        ("max_sharpe", "max_sharpe"),
-        ("equal_weight", "equal_weight"),
+        ("min_variance", cast(ProfileName, "min_variance")),
+        ("hrp", cast(ProfileName, "hrp")),
+        ("max_sharpe", cast(ProfileName, "max_sharpe")),
+        ("equal_weight", cast(ProfileName, "equal_weight")),
     ]:
         logger.info(f"Optimizing profile: {p_name}")
-        weights_df = optimizer.run_profile(method, "custom", cap)
+        weights_df = optimizer.run_profile(cast(ProfileName, method), "custom", cap)
 
         if weights_df.empty:
             logger.warning(f"Optimization returned empty weights for {p_name}")
@@ -108,6 +124,10 @@ if __name__ == "__main__":
                 continue
             gross = sub["Weight"].sum()
             net = sub["Net_Weight"].sum()
+
+            # Fix type errors for unique
+            sectors_list = list(pd.unique(sub["Sector"])) if "Sector" in sub.columns else ["N/A"]
+
             cluster_summary.append(
                 {
                     "Cluster_Label": f"Cluster {c_id}",
@@ -116,7 +136,7 @@ if __name__ == "__main__":
                     "Lead_Asset": sub.iloc[0]["Symbol"],
                     "Asset_Count": len(sub),
                     "Type": "CORE",  # Placeholder
-                    "Sectors": list(sub["Sector"].unique()),
+                    "Sectors": sectors_list,
                 }
             )
 
@@ -136,6 +156,9 @@ if __name__ == "__main__":
                 continue
             gross = sub["Weight"].sum()
             net = sub["Net_Weight"].sum()
+
+            sectors_list = list(pd.unique(sub["Sector"])) if "Sector" in sub.columns else ["N/A"]
+
             barbell_summary.append(
                 {
                     "Cluster_Label": f"Cluster {c_id}",
@@ -144,7 +167,7 @@ if __name__ == "__main__":
                     "Lead_Asset": sub.iloc[0]["Symbol"],
                     "Asset_Count": len(sub),
                     "Type": sub.iloc[0]["Type"],
-                    "Sectors": list(sub["Sector"].unique()),
+                    "Sectors": sectors_list,
                 }
             )
         profiles["barbell"] = {
