@@ -11,10 +11,17 @@ Overview
 
 Current layered scanners (configs/scanners/crypto/)
 ---------------------------------------------------
-- ``configs/scanners/crypto/binance_trend.yaml``: Binance-only trend discovery (L4).
-- ``configs/scanners/crypto/vol_breakout.yaml``: Volatility breakout discovery (L4).
-- ``configs/scanners/crypto/global_mtf_trend.yaml``: Global MTF trend discovery (L4).
+- ``configs/scanners/crypto/binance_trend.yaml``: Binance-only spot trend discovery (L4) built on ``binance_spot_top50`` with ADX >= 10 and momentum gates (Perf.W >= 0, Perf.1M >= 0). No 3M/6M anchors.
+- ``configs/scanners/crypto/binance_perp_trend.yaml``: Binance-only perp trend discovery (L4) built on ``binance_perp_top50`` with ADX >= 10 and momentum gates (Perf.W >= 0, Perf.1M >= 0).
+- ``configs/scanners/crypto/binance_perp_short.yaml``: Binance-only perp inverse trend discovery (L4) for capture during bearish/turbulent regimes.
+- ``configs/scanners/crypto/vol_breakout.yaml``: Volatility breakout discovery (L4) built on ``binance_perp_top50``.
+- ``configs/scanners/crypto/global_mtf_trend.yaml``: MTF trend discovery (L4) rooted in ``global_perp_top50`` with ADX >= 10 on weekly/daily screens plus momentum gates (Perf.W >= 0, Perf.1M >= 0).
 - These scanners are composed from layered presets under ``configs/base/`` and orchestrated via manifest pipelines.
+
+Regime-Adaptive Exposure Policy
+-------------------------------
+- **Quiet/Normal Regimes**: Maximize capture of high-alpha momentum. Primary allocation to ``binance_perp_trend`` and ``global_mtf_trend``.
+- **Turbulent/Bearish Regimes**: Enable ``binance_perp_short`` to capture alpha from deleveraging events. Tighten entropy thresholds to prioritize "Flight to Quality" (e.g., Gold-pegged tokens).
 
 Legacy presets (paths under configs/legacy/)
 --------------------------------------------
@@ -46,9 +53,10 @@ Base universes (legacy paths under configs/legacy/)
 - Perps: ``crypto_cex_base_top50_perp.yaml`` – `include_perps_only: true`, excludes dated, Value.Traded >= 7.5M, volume >= 2M, Vol.D <= 20% or ATR/close <= 15%, dedupe by base, prefer perps, limit 50, sorted by Value.Traded; majors ensured via `.P` symbols.
 - Dated futures: ``crypto_cex_base_top50_dated.yaml`` – `include_dated_futures_only: true`, excludes perps, quote whitelist, Value.Traded >= 5M, Vol.D <= 25% or ATR/close <= 20%, dedupe by base, limit 50, sorted by Value.Traded (currently yields 0 under these floors).
 - Per-exchange splits for spot/perps/dated: ``crypto_cex_base_top50_<exchange>.yaml``, ``..._<exchange>_perp.yaml``, ``..._<exchange>_dated.yaml`` (BINANCE/OKX/BYBIT/BITGET). Spot floors per exchange: BINANCE/OKX/BYBIT Value.Traded >= 1.5M; BITGET >= 1.0M (volume >= 2M, same vol caps as multi-spot). Perps use Value.Traded >= 7.5M (volume >= 2M). Dated use Value.Traded >= 5M.
-- **Binance Top 50 (layered presets)**:
-    - **Spot**: ``configs/presets/crypto_cex_preset_binance_top50_spot.yaml`` (export symbol `binance_top50_spot_base`).
-    - **Perps**: ``configs/presets/crypto_cex_preset_binance_top50_perp.yaml`` (export symbol `binance_top50_perp_base`).
+- **Binance Top 50 (Active L1 Bases)**:
+    - **Spot**: ``configs/base/universes/binance_spot_top50.yaml``. Logic: Fetch Top 200 by Market Cap (pre-filter), then select Top 50 by Daily Volume (Value.Traded). Strict quote whitelist (USDT/USDC/USD/FDUSD/BUSD).
+    - **Perps**: ``configs/base/universes/binance_perp_top50.yaml``. Logic: Same two-stage funnel (Top 200 Mcap -> Top 50 Vol), restricted to perp contracts.
+- **Global Perp Top 50 (Multi-Exchange)**: ``configs/base/universes/global_perp_top50.yaml``. Logic: Exchanges BINANCE/OKX/BYBIT/BITGET, prefilter 200 by Market Cap, then Top 50 by Value.Traded.
 - Merged views: ``outputs/crypto_trend_runs/merged_base_universe_spot.json`` and ``..._perp.json`` aggregate per-exchange spot/perp bases into normalized symbols with their tradable exchange symbols; dated is empty at current floors.
 
 Usage
@@ -71,21 +79,46 @@ Indicator Field Categories (crypto overview availability)
 - Oscillators: ``RSI``, ``Stoch.K``
 - Liquidity/size: ``volume``, ``Value.Traded``, ``market_cap_calc`` (and basic/diluted variants)
 
+Selection & Gating Strategy (2026-01-08 Uplift)
+-----------------------------------------------
+- Discovery uses a two-stage funnel: Top 500 Mcap -> Top 50 Volume (Value.Traded).
+- **Short-Cycle Momentum**: Scanners prioritize Daily (change), Weekly (Perf.W), and Monthly (Perf.1M) velocity. Lookbacks > 1 month (Perf.3M/6M) are excluded to ensure early entry into rapid crypto rotations.
+- Trend scanners (L4) use relaxed ADX floors (10 for Spot/Perps) and neutral-to-positive Recommendation (>= 0).
+- **Natural Selection (Noise Floor)**: Log-MPS v3.2 is tuned for maximum breadth (top_n=25) with relaxed entropy (0.999). It acts as a statistical noise floor rather than an alpha filter.
+- Institutional diversity floor (min 5 assets) is enforced via lowered clustering distance thresholds and disabling dynamic redundancy pruning for crypto sleeves.
+
+Gold Peg Fidelity & Tracking Quality
+-------------------------------------
+- **Policy**: Assets pegged to physical commodities (e.g. Gold) must demonstrate high-fidelity tracking.
+- **Audit Findings**: ``OKX:XAUTUSDT.P`` maintains high correlation (>0.98) with direct gold (``XAUUSDT.P``). ``BINANCE:PAXGUSDT.P`` has detached (correlation < 0.45) and provides misleading "Noise Alpha."
+- **Institutional Standard**: Blacklist ``BINANCE:PAXGUSDT.P``. Prioritize ``XAUT`` or direct ``XAU`` perps for safe-haven anchors.
+
+High Entropy in Crypto Markets
+------------------------------
+- Entropy (specifically Permutation Entropy) measures the complexity and statistical "unpredictability" of a return series.
+- A score of 1.0 represents a pure random walk (white noise). Institutional TradFi assets typically range from 0.85 to 0.95.
+- Crypto assets frequently exhibit high entropy (0.98–0.99) due to:
+    - **Microstructure Noise**: Fragmented liquidity and high-frequency retail flow.
+    - **Efficiency Paradox**: Extremely rapid pricing of sentiment-driven information.
+    - **Speculative Volatility**: Leverage liquidations causing erratic jumps that break traditional trend models.
+- **Policy**: We accept higher entropy baseline (up to 0.995) for crypto to avoid excessive vetoes of genuine high-alpha momentum, while still rejecting pure noise components.
+
 Screener vs. Overview field availability
 ----------------------------------------
 - Screener (crypto) fields are limited: ``name``, ``symbol``, ``close``, ``change``, ``change_abs``, ``volume``, ``market_cap_calc``, ``Recommend.All``. Use these for server-side filters.
 - Overview provides richer fields used in presets: ``Perf.W``, ``Perf.1M``, ``Perf.3M``, ``Perf.6M``, ``ADX``, ``Volatility.*``, ``ATR``, ``RSI``, ``Stoch.K``, and liquidity proxies like ``Value.Traded``. (Fundamental fields may be present but are often not meaningful for crypto.)
 
 Multi-Timeframe (MTF) crypto notes
-----------------------------------
+-----------------------------------
 - Intraday fields (e.g., ``change|1h``, ``Perf.4H``) are not available via Screener/Overview; MTF must use daily/weekly/monthly fields.
-- Recommended MTF sets given constraints: (A) monthly → weekly → daily, (B) weekly → daily → daily. Trend: Perf.1M/3M/6M (or Perf.W/Perf.1M); Confirm: Perf.W/Perf.1M; Execute: daily change/Perf.W plus oscillators (RSI/Stoch.K) and volatility guard.
-- Sample configs:
+- Current global MTF long (``configs/scanners/crypto/global_mtf_trend.yaml``): daily trend gate (Rec>=0.1, ADX>=20, Perf.W/Perf.1M/Perf.3M > {0,0.5,1.0}), plus a weekly confirmation screen (Rec|1W>=0.1, ADX|1W>=20, Perf.1M>0). Monthly screen removed for execution relevance (4h–15m downstream horizon).
+- Legacy sample configs remain for reference:
   - Spot long: ``configs/legacy/crypto_cex_mtf_monthly_weekly_daily.yaml``, ``configs/legacy/crypto_cex_mtf_weekly_daily_daily.yaml``.
   - Spot short: ``configs/legacy/crypto_cex_mtf_monthly_weekly_daily_short.yaml``, ``configs/legacy/crypto_cex_mtf_weekly_daily_daily_short.yaml``.
   - Perps short: ``configs/legacy/crypto_cex_mtf_weekly_daily_daily_perps_short.yaml``.
   - Mixed trend/MR: ``configs/legacy/crypto_cex_mtf_trend_mr_trend.yaml`` (monthly trend → weekly MR → daily trend) and ``configs/legacy/crypto_cex_mtf_mr_trend_trend.yaml`` (monthly MR → weekly trend → daily trend).
-- All current runs returned 0 under bearish regime/thresholds; lower volume floors or relax Perf/RSI/Stoch gates to widen coverage.
+- If longs return empty under bearish regimes, relax momentum/Rec/ADX gates or lower Value.Traded floors (e.g., spot/perps 10–20M; dated 5–10M).
+
 
 Notes
 -----

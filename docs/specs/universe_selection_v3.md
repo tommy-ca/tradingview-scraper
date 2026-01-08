@@ -78,3 +78,29 @@ The V3 engine behavior is modulated by the selected profile:
 ## 8. Audit & Feedback
 - **Selection Alpha**: Measured by comparing the "Pruned" universe return vs the "Raw Pool" return.
 - **Veto Trace**: Every disqualification is logged with a reason (e.g., "High Friction", "Low Survival") in `selection_audit.json`.
+
+## 9. Spectral Predictability & Asset-Class Baseline
+The engine integrates spectral filters to disqualify random-walk noise from the portfolio candidates.
+
+### 9.1 Entropy & Random Walks
+- **Metric**: **Permutation Entropy ($P_{entropy}$)** and **Hurst Exponent ($P_{hurst}$)**.
+- **Principle**: We distinguish between "Informative Trends" and "Statistical Artifacts".
+- **Baseline Drift**:
+    - **TradFi Equities**: Typically score 0.85–0.95 entropy. Baseline threshold set at **0.97**.
+    - **Crypto Assets**: Exhibit significantly higher microstructure noise (unpredictability). Baseline threshold relaxed to **0.999** for crypto-centric sleeves to delegate alpha-filtering to the risk engines.
+- **Random Walk Zone**: Assets with Hurst values in the **0.48–0.52** range are flagged as random walks and vetoed.
+- **Tracking Quality (Fidelity Gate)**: Assets pegged to underlying commodities (e.g. Gold) must maintain a correlation > 0.90 with the underlying (e.g. `XAUUSDT.P`). Failure to track results in immediate veto (e.g. `BINANCE:PAXGUSDT.P` disqualification).
+
+### 10. Portfolio Engine Delegation (The "Noise Floor" Philosophy)
+As of 2026-01-08, the role of Natural Selection has shifted from a restrictive "Alpha Filter" to a permissive **"Noise Floor"**.
+
+### 10.1 Rationale
+Empirical benchmarking (Phase 33) demonstrates that strict selection (Top 5-10) often suffers from concentration risk and "Late Entry Drift." Expanding the selection universe to **Top 25-50** allows downstream **Portfolio Engines** (Barbell, HRP) to:
+1.  **Differentiate Risks**: Use full-rank covariance matrices to identify nuanced factor groups.
+2.  **Optimize Weights**: Penalize high-volatility/low-signal assets via weighting rather than binary exclusion.
+3.  **Improve Stability**: Achieve higher Sharpe ratios and lower drawdowns by exploiting a broader diversification base.
+
+### 10.2 Guidelines
+- **Thresholds**: Selection `threshold` should be kept low (0.0–0.1) or disabled for volatile asset classes like crypto.
+- **Top N**: For production sleeves, `top_n` should be set to at least **25 candidates** to ensure the risk engines have sufficient statistical degrees of freedom.
+- **Spectral Vetoes**: Maintain strict entropy (0.995) and Hurst (0.48-0.52) gates to ensure that while the universe is broad, it is free of mathematically broken random walks.

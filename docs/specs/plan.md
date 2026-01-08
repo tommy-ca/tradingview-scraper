@@ -3,6 +3,20 @@
 ## Objective
 Audit and expand the institutional ETF scanners to capture high-alpha niche/thematic opportunities currently filtered out by strict liquidity or category constraints. We aim to identify "Alpha Pockets" in thematic equities, high-yield bonds, and alternative strategies.
 
+## Crypto Scanner Standardization & Uplift (2026-01-08)
+- [x] **Base Universes**: Created `binance_spot_top50.yaml`, `binance_perp_top50.yaml`, and multi-exchange `global_perp_top50.yaml`.
+- [x] **Discovery Uplift**: Increased `prefilter_limit` to 200 and relaxed scanner gates (ADX 10-15, Rec >= 0) to ensure a larger candidate pool.
+- [x] **Hygiene**: Strict stablecoin quote whitelist implemented for Binance Spot (`USDT`, `USDC`, `USD`, `FDUSD`, `BUSD`).
+- [x] **Natural Selection (Path A)**: Relaxed `entropy_max_threshold` to **0.995** and narrowed Hurst random-walk zone (0.48-0.52) in Log-MPS v3.2.
+- [x] **Natural Selection (Path B)**: Verified `selection_mode: v2.1` availability as a rank-sum fallback.
+- [x] **Validation**: Run `20260108-130948` successfully identified 17 candidates and selected 5 high-conviction winners (XAUT, BCH, RIVER, PIEVERSE, PAXG).
+- [x] **Experiment A (Volume Funnel)**: Confirmed that `Stage 1: Value.Traded` surfaces high-momentum survivors (BCH, RIVER, PIEVERSE) effectively; recommended for "Dynamic Discovery" bases.
+- [x] **Experiment B (Category Discovery)**: Probed for sector-specific metadata; confirmed TV crypto screener fields are currently limited to `type`/`subtype`, making sector-based scanning dependent on external metadata enrichment.
+- [x] **Experiment C (Acceleration)**: Implemented `binance_acceleration_trend` targeting assets with strong intraday moves (>2% 24h change); successfully surfaced high-momentum candidates like `UBUSDT.P` (14% change).
+
+## High Entropy in Crypto
+Crypto markets exhibit high permutation entropy (typically 0.98–0.99) due to microstructure noise, fragmented liquidity, and rapid sentiment pricing. The system now adopts a 0.995 threshold for crypto to permit high-alpha momentum while still filtering absolute noise.
+
 ## Context
 Current scanners use a $10M liquidity floor and a limited set of TradingView category IDs. Initial research suggests we are missing categories (e.g., Buffer ETFs, Longevity, specific thematic buckets) and potentially filtering out high-quality niche ETFs that trade between $2M-$10M.
 
@@ -181,8 +195,36 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **Fractal Build**: Executed the Meta-Matrix flow with 3 orthogonal sleeves.
 - [x] **Audit**: Confirmed high efficiency in TradFi/Crypto (High Entropy vetoes) leading to a high-conviction "Value/Gold" meta-portfolio.
 
+### Phase 30: Short-Cycle Discovery Optimization (2026-01-08)
+**Goal**: Transition crypto scanners to a "Short-Cycle Momentum" framework to improve capture rates in high-velocity markets.
+- [x] **Philosophy**: Prioritize recency (Daily/Weekly/Monthly) over secular stability (3M/6M) to accommodate compressed market cycles.
+- [x] **Standardization**: Remove `Perf.3M` gates from all active crypto scanners.
+- [x] **Benchmarks**: Implement dual-benchmark tracking using `BINANCE:BTCUSDT` and `AMEX:SPY`.
+- [x] **Validation**: Run `20260108-150623` successfully identified 78 raw hits → 44 unique candidates → 5 final winners. Confirmed that removing 3M anchors surfaced high-velocity candidates like `UBUSDT.P` and `BROCCOLI714USDT.P` earlier in their respective trend cycles.
+- [x] **Audit**: Confirmed Log-MPS v3.2 correctly handles increased crypto entropy (0.995 threshold) while filtering random-walk Hurst values (0.48-0.52).
+
+### Phase 31: Forensic Selection & Risk Audit (2026-01-08)
+**Goal**: Deep analyze the selection funnel and risk profile metrics for crypto portfolios.
+- [x] **Veto Traceability**: Audited Run `20260108-150623`. Identified Entropy (0.995) and Hurst (0.50) as primary arbiters of crypto signal vs noise.
+- [x] **Risk Profile Analysis**: Verified that the **Barbell Profile** successfully de-risks the crypto sleeve (Vol 38%) by anchoring in Gold-pegged assets (`PAXG`, `XAUT`) while permitting 10% weight in high-momentum aggressors (`RIVER`, `PIEVERSE`).
+- [x] **HCA Audit**: Analyzed Ward Linkage clustering. Confirmed the system correctly identified orthogonal risk units and used "Gold Redundancy" to meet the Diversity Floor.
+- [x] **Validation**: Confirming that while "Short-Cycle" relaxation increased discovery hits (78), the risk engine (Log-MPS v3.2) remains the final arbiter of statistical integrity.
+
+### Phase 33: Multi-Candidate Scaling & Engine Trust Validation (2026-01-08)
+**Goal**: Expand the candidate universe by delegating alpha-filtering to portfolio risk engines.
+- [x] **Quantification**: Benchmarked selection tiers (Strict vs Broad vs Raw) over a 342-day lookback.
+- [x] **Findings**: **Broad Selection (Top 25)** outperformed Strict Selection (Top 5) in risk-adjusted terms (Sharpe 1.76 vs 1.47; Max DD -23% vs -35%).
+- [x] **Philosophy Shift**: Transitioned Natural Selection from an "Alpha Gate" to a **"Noise Floor"**. Selection now removes purely erratic noise (Entropy > 0.999), while the **Barbell/HRP** engines handle allocation across high-signal candidates.
+- [x] **Scaling**: Increased `top_n` to 25 for crypto production sleeves.
+
+### Phase 34: Gold Peg Fidelity & Anchor Hardening (2026-01-08)
+**Goal**: Audit the tracking quality of "Safe Haven" crypto anchors to prevent "Noise Alpha" contamination.
+- [x] **Audit**: Compared `BINANCE:PAXGUSDT.P` and `OKX:XAUTUSDT.P` against direct Gold (`XAUUSDT.P`).
+- [x] **Findings**: `OKX:XAUT` is a high-fidelity tracker (0.985 corr), whereas `BINANCE:PAXG` has detached (0.44 corr), providing misleadingly high returns (67% vs 39% for gold).
+- [x] **Action**: Blacklisted `BINANCE:PAXGUSDT.P` for institutional use-cases. Standardized the Barbell "Core" anchor to prioritize `XAUT` or direct `XAU` perps.
+
 ## Conclusion
+
 The **Institutional Multi-Sleeve Meta-Portfolio** infrastructure is now fully operational.
 The system successfully manages 3 orthogonal capital sleeves (Instruments, ETFs, Crypto) using a Fractal Risk Architecture that preserves risk philosophy from asset to meta-allocation.
 The platform is in a high-integrity, production-ready state.
-
