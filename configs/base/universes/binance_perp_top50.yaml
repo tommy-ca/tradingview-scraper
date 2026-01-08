@@ -1,0 +1,18 @@
+# L1: Binance Perp Top 50 (Mcap -> Vol)
+base_preset: ../templates/crypto_perp.yaml
+exchanges: ["BINANCE"]
+
+# Stage 1: Broadest Mcap Funnel
+prefilter_limit: 500
+sort_by: market_cap_calc
+sort_order: desc
+exclude_symbols: ["BINANCE:PAXGUSDT.P"]
+
+# Stage 2: Liquidity Selection
+limit: 50
+final_sort_by: Value.Traded
+final_sort_order: desc
+
+export_metadata:
+  symbol: binance_perp_top50
+  data_category: universe_base
