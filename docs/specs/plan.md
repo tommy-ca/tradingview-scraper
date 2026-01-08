@@ -229,6 +229,26 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [ ] **Cohesion**: Analyze intra-cluster cross-correlation to verify factor homogeneity.
 - [ ] **Lead-Lag**: Identify "Factor Leaders" within clusters to optimize entry/exit timing.
 
+### Phase 36: Crypto Deep History & Persistence Audit (2026-01-08)
+**Goal**: Prepare 500 days of high-integrity crypto data and execute persistence duration research.
+- [x] **Discovery**: Executed `scan-run` for the `crypto_production` profile.
+- [x] **Data Prep**: Built the raw pool and fetched historical bars (intersected at 341 days).
+- [x] **Research**: Executed `research-persistence` on the raw pool. Identified `BEATUSDT.P` and `BIANRENSHENGUSDT.P` as secular trenders and `BFUSDUSDT` as a fast mean-reverter ($\lambda \approx 4.7$ days).
+- [x] **Validation**: Updated `analyze_persistence.py` to support variable input paths for raw pool auditing.
+
+### Phase 37: AC-Enhanced Persistence Audit (2026-01-08)
+**Goal**: Integrate Autocorrelation (AC) analysis to validate Hurst-based regimes and measure memory depth.
+- [x] **Implementation**: Added `calculate_correlation_structure` and `calculate_memory_depth` to `predictability.py`.
+- [x] **Enhancement**: Updated `analyze_persistence.py` to classify `STRONG_TREND` and `STRONG_MR` using AC Lag-1 validation.
+- [x] **Documentation**: Updated specifications to version 2 (AC-aware).
+- [x] **Validation**: Verified AC metrics on the 341-day crypto raw pool. Identified `BINANCE:GIGGLEUSDT.P` as a high-inertia trend and `BINANCE:BFUSDUSDT` as a high-fidelity mean-reverter.
+
+### Phase 38: Persistence Engine Hardening (2026-01-08)
+**Goal**: Finalize and verify the persistence research engine for production use.
+- [x] **Rerun**: Executed the research on the 341-day crypto raw pool.
+- [x] **Verification**: Confirmed that `BEATUSDT.P` remains a secular trend leader and `BFUSDUSDT` is the most consistent mean-reverter ($\lambda \approx 4.7$ days, $AC(1) \approx -0.20$).
+- [x] **Hygiene**: Verified that requirements, specs, and design docs are fully synchronized with the v2 implementation.
+
 ## Conclusion
 
 The **Institutional Multi-Sleeve Meta-Portfolio** infrastructure is now fully operational.
