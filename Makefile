@@ -224,7 +224,7 @@ report-sync: ## Synchronize artifacts to private Gist
 
 # --- FLOW Namespace ---
 flow-production: ## Full institutional production lifecycle
-	$(PY) python -m scripts.run_production_pipeline --profile $(PROFILE) --manifest $(MANIFEST)
+	$(PY) python -m scripts.run_production_pipeline --profile $(PROFILE) --manifest $(MANIFEST) --run-id $(TV_RUN_ID)
 
 flow-prelive: ## Production pre-live workflow (including slow Nautilus simulator)
 	$(MAKE) flow-production BACKTEST_SIMULATORS=custom,cvxportfolio,vectorbt,nautilus
@@ -232,11 +232,13 @@ flow-prelive: ## Production pre-live workflow (including slow Nautilus simulator
 flow-dev: ## Rapid iteration development execution
 	$(MAKE) flow-production PROFILE=development
 
-flow-meta-production: ## Run multi-sleeve meta-portfolio flow
-	@echo ">>> STAGE: META-PORTFOLIO (Multi-Sleeve)"
+flow-meta-production: ## Run multi-sleeve meta-portfolio flow (Fractal Matrix)
+	@echo ">>> STAGE: META-PORTFOLIO (Fractal Matrix)"
 	$(PY) scripts/build_meta_returns.py --profile meta_production
-	$(PY) scripts/optimize_meta_portfolio.py --returns data/lakehouse/meta_returns.pkl
-	$(PY) scripts/flatten_meta_weights.py --weights data/lakehouse/meta_optimized.json --manifest data/lakehouse/meta_manifest.json
+	$(PY) scripts/optimize_meta_portfolio.py
+	@for prof in barbell hrp min_variance equal_weight; do \
+		$(PY) scripts/flatten_meta_weights.py --profile $$prof; \
+	done
 	$(PY) scripts/generate_meta_report.py
 
 # --- CLEAN Namespace ---
