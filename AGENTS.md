@@ -16,7 +16,8 @@ The entire production lifecycle is unified under the `make flow-production` targ
 7.  **High-Integrity Prep**: Fetch 500-day secular history (`make data-fetch LOOKBACK=500`).
 8.  **Health Audit**: Validate 100% gap-free alignment using Market-Day normalization (+4h shift). **Policy**: 1-session institutional gaps are ignored.
 9.  **Self-Healing**: Automated recovery loop if gaps found (`make data-repair`).
-10. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
+10. **Persistence Analysis**: Research trend and mean-reversion persistent duration (`make research-persistence`).
+11. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
 11. **Regime Detection**: Multi-factor state analysis.
 12. **Optimization**: Cluster-Aware allocation (`make port-optimize`).
 13. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`). **Policy**: Production uses vectorized simulators for speed; Pre-live uses Nautilus for event-driven fidelity.
@@ -68,6 +69,7 @@ Every step of the production sequence persists its full execution trace in the r
 | `make data-fetch` | **Data** | Ingest historical market data. |
 | `make data-repair` | **Data** | High-intensity gap repair for degraded assets. |
 | `make data-audit` | **Data** | Session-Aware health check. |
+| `make research-persistence` | **Data** | Research trend and mean-reversion persistent duration. |
 | `make port-optimize` | **Port** | Strategic asset allocation (Convex). |
 | `make port-test` | **Port** | Execute 3D benchmarking tournament. |
 | `make port-report` | **Port** | Generate unified quant reports. |
