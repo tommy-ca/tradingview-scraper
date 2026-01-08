@@ -223,6 +223,12 @@ Current scanners use a $10M liquidity floor and a limited set of TradingView cat
 - [x] **Findings**: `OKX:XAUT` is a high-fidelity tracker (0.985 corr), whereas `BINANCE:PAXG` has detached (0.44 corr), providing misleadingly high returns (67% vs 39% for gold).
 - [x] **Action**: Blacklisted `BINANCE:PAXGUSDT.P` for institutional use-cases. Standardized the Barbell "Core" anchor to prioritize `XAUT` or direct `XAU` perps.
 
+### Phase 35: Predictability & Cohesion Audit (2026-01-08)
+**Goal**: Integrate Autocorrelation and Lead-Lag analysis to detect self-predictability and cluster leaders.
+- [x] **Self-Predictability**: Implemented Ljung-Box and ACF utilities in `predictability.py`.
+- [ ] **Cohesion**: Analyze intra-cluster cross-correlation to verify factor homogeneity.
+- [ ] **Lead-Lag**: Identify "Factor Leaders" within clusters to optimize entry/exit timing.
+
 ## Conclusion
 
 The **Institutional Multi-Sleeve Meta-Portfolio** infrastructure is now fully operational.

@@ -104,3 +104,21 @@ Empirical benchmarking (Phase 33) demonstrates that strict selection (Top 5-10) 
 - **Thresholds**: Selection `threshold` should be kept low (0.0–0.1) or disabled for volatile asset classes like crypto.
 - **Top N**: For production sleeves, `top_n` should be set to at least **25 candidates** to ensure the risk engines have sufficient statistical degrees of freedom.
 - **Spectral Vetoes**: Maintain strict entropy (0.995) and Hurst (0.48-0.52) gates to ensure that while the universe is broad, it is free of mathematically broken random walks.
+
+## 11. Statistical Predictability (ACF & Ljung-Box)
+To further refine the "Noise Floor," we analyze the internal memory of return series.
+
+### 11.1 Self-Predictability Metrics
+1.  **Autocorrelation (ACF Lag-1)**: Measures the correlation of an asset with its own immediate past. 
+    - **Positive ACF**: Indicates trend persistence (momentum follows momentum).
+    - **Negative ACF**: Indicates mean-reversion (overextended moves tend to snap back).
+2.  **Ljung-Box Q-Test**: A statistical test for the "White Noise" null hypothesis.
+    - **Standard**: Assets must achieve a p-value < 0.05 to reject the white-noise hypothesis and be considered "Self-Predictable."
+
+## 12. Lead-Lag Cluster Verification
+Clusters must be audited for internal cohesion and leading relationships.
+
+### 12.1 Cluster Homogeneity
+- **Cross-Correlation**: Assets within a cluster should maintain a base correlation > 0.70 (except in extreme regimes where the Diversity Floor forces redundancy relaxation).
+- **Factor Leaders**: We identify the "Cluster Leader" by finding the asset with the highest lead-lag correlation: $Max(Corr(Asset_{i}, Asset_{j, t-1}))$.
+- **Policy**: If a clear leader exists (e.g., BTC leading BCH), the portfolio engine may prioritize the leader's signal for entry/exit timing while maintaining the follower for breadth.
