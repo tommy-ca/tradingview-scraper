@@ -468,7 +468,12 @@ class CustomClusteredEngine(BaseRiskEngine):
         best_per_cluster = stats_local.sort_values("Antifragility_Score", ascending=False).groupby("Cluster_ID").first()
         ranked = best_per_cluster.sort_values("Antifragility_Score", ascending=False)
 
-        max_aggressor_clusters = min(int(request.max_aggressor_clusters), max(0, len(ranked) - 1))
+        # Dynamic Aggressor Cap: Ensure we don't consume all clusters as aggressors.
+        # Goal: Keep at least 50% of clusters for CORE, but no more than request.max_aggressor_clusters.
+        n_clusters = len(ranked)
+        target_aggressor_count = min(int(request.max_aggressor_clusters), max(1, n_clusters // 2))
+
+        max_aggressor_clusters = min(target_aggressor_count, n_clusters - 1)
         if max_aggressor_clusters <= 0:
             fallback_weights = self._optimize_cluster_weights(
                 universe=universe,
@@ -493,10 +498,20 @@ class CustomClusteredEngine(BaseRiskEngine):
         core_symbols = [s for s in universe.returns.columns if s not in excluded]
         if len(core_symbols) < 1:
             return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["no core"]
+
+        # Diversity Floor: If core universe is too small, fallback to Equal Weight for the core layer
+        # to prevent HRP collapse into a single asset.
+        core_profile = "hrp"
+        if len(core_symbols) < 5:
+            logger.warning("Diversity Floor Triggered: core_symbols n=%s < 5; using Equal Weight for core.", len(core_symbols))
+            core_profile = "equal_weight"
+
         core_clusters = {c_id: [s for s in syms if s in core_symbols] for c_id, syms in universe.clusters.items() if str(c_id) not in aggressor_cluster_ids}
         core_clusters = {c_id: syms for c_id, syms in core_clusters.items() if syms}
         core_universe = build_clustered_universe(returns=universe.returns, clusters=core_clusters, meta=meta, stats=stats)
-        core_cluster_weights = self._optimize_cluster_weights(universe=core_universe, request=EngineRequest(profile="hrp", cluster_cap=request.cluster_cap, risk_free_rate=request.risk_free_rate))
+        core_cluster_weights = self._optimize_cluster_weights(
+            universe=core_universe, request=EngineRequest(profile=core_profile, cluster_cap=request.cluster_cap, risk_free_rate=request.risk_free_rate)
+        )
         core_weights_df = _weights_df_from_cluster_weights(universe=core_universe, cluster_weights=core_cluster_weights, meta=meta, scale=(1.0 - agg_total))
         agg_rows = []
         for sym in aggressor_symbols:

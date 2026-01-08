@@ -2,7 +2,7 @@
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -58,7 +58,7 @@ def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(corr_matrix, index=symbols, columns=symbols)
 
 
-def load_returns(path: Path, min_col_frac: float) -> pd.DataFrame:
+def load_returns(path: Path, min_col_frac: float, candidates_path: Optional[Path] = None) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Returns file not found: {path}")
     with open(path, "rb") as f:
@@ -68,6 +68,14 @@ def load_returns(path: Path, min_col_frac: float) -> pd.DataFrame:
         rets = pd.DataFrame(rets_raw)
     else:
         rets = rets_raw
+
+    # Filter by candidates if provided (Sync with Natural Selection)
+    if candidates_path and candidates_path.exists():
+        with open(candidates_path, "r") as f:
+            candidates = json.load(f)
+        selected_syms = [c["symbol"] for c in candidates]
+        common = [s for s in selected_syms if s in rets.columns]
+        rets = rets[common]
 
     # Drop columns with too many NaNs
     min_count = int(min_col_frac * len(rets))
@@ -166,6 +174,7 @@ def main():
     parser.add_argument("--hrp", action="store_true", help="Emit HRP weights")
     parser.add_argument("--max-clusters", type=int, default=25, help="Target maximum number of clusters")
     parser.add_argument("--out-clusters", default="data/lakehouse/portfolio_clusters.json", help="Path to save cluster JSON")
+    parser.add_argument("--candidates", default="data/lakehouse/portfolio_candidates.json", help="Path to selected candidates")
     args = parser.parse_args()
 
     if args.out_dir:
@@ -174,7 +183,7 @@ def main():
     else:
         out_dir = get_settings().prepare_summaries_run_dir()
 
-    rets = load_returns(Path(args.returns), args.min_col_frac)
+    rets = load_returns(Path(args.returns), args.min_col_frac, Path(args.candidates))
     if args.winsor_alpha > 0:
         rets = winsorize(rets, args.winsor_alpha)
 

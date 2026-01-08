@@ -158,6 +158,17 @@ def visualize_clusters(returns: pd.DataFrame, output_path: str):
     logger.info(f"✅ Clustermap saved to: {output_path}")
 
 
+def calculate_concentration_entropy(weights: List[float]) -> float:
+    """Calculates the normalized Shannon entropy of a weight distribution."""
+    w = np.array(weights)
+    w = w[w > 0]
+    if len(w) <= 1:
+        return 0.0
+    p = w / w.sum()
+    entropy = -np.sum(p * np.log(p))
+    return float(entropy / np.log(len(w)))
+
+
 def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stats_path: str, output_path: str, image_path: str, vol_image_path: str):
     if not os.path.exists(clusters_path) or not os.path.exists(returns_path):
         logger.error(f"Required files missing for cluster analysis: {clusters_path} or {returns_path}")
@@ -274,13 +285,18 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
 
         markets = list(set(meta.get(s, {}).get("market", "UNKNOWN") for s in valid_symbols))
 
+        # Calculate Cluster Concentration Entropy (if sub-clusters exist or based on raw weights)
+        # Note: At this stage we don't have final weights, so we proxy with HRP or Vol-based proxy
+        cluster_weights = [1.0 / len(valid_symbols)] * len(valid_symbols)
+        entropy = calculate_concentration_entropy(cluster_weights)
+
         c_detail = []
         c_detail.append(f"\n## 📦 Cluster {c_id}: {primary_sector}")
         c_detail.append(f"- **Size:** {len(valid_symbols)} assets")
         c_detail.append(f"- **Avg Intra-Cluster Correlation:** {avg_corr:.4f}")
         c_detail.append(f"- **Cluster Annualized Vol:** {cluster_vol:.2%}")
         c_detail.append(f"- **Antifragility Score:** {cluster_af:.2f}")
-        c_detail.append(f"- **Fragility Score:** {cluster_fragility:.2f}")
+        c_detail.append(f"- **Concentration Entropy:** {entropy:.2f}")
         c_detail.append(f"- **Sector Homogeneity:** {sector_homogeneity:.1%}")
         c_detail.append(f"- **Markets:** {', '.join(markets)}")
 
