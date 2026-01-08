@@ -249,11 +249,19 @@ class ProductionPipeline:
         if not path.exists():
             return {}
         try:
+            # Archival: Ensure the optimized portfolio is persisted in the run dir
+            import shutil
+
+            archive_path = self.run_dir / "data" / "metadata" / "portfolio_optimized_v2.json"
+            archive_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, archive_path)
+
             with open(path, "r") as f:
                 data = json.load(f)
             profiles = list(data.get("profiles", {}).keys())
             return {"metrics": {"optimized_profiles": profiles}}
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Optimization archival failed: {e}")
             return {}
 
     def snapshot_resolved_manifest(self):

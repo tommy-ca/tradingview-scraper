@@ -125,7 +125,12 @@ class ManifestSettingsSource(PydanticBaseSettingsSource):
                     elif isinstance(source[section], dict):
                         # Flatten standard sections
                         for k, v in source[section].items():
-                            target[k] = v
+                            if k == "selection_mode":
+                                if "features" not in target:
+                                    target["features"] = {}
+                                target["features"]["selection_mode"] = v
+                            else:
+                                target[k] = v
 
             # Merge Integrations
             if "integrations" in source:
