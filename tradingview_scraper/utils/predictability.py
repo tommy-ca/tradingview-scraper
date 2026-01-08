@@ -4,6 +4,7 @@ import math
 import numpy as np
 import pywt
 from scipy.stats import entropy
+from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.stattools import adfuller
 
 logger = logging.getLogger(__name__)
@@ -164,3 +165,36 @@ def calculate_stationarity_score(returns: np.ndarray) -> float:
     except Exception as e:
         logger.debug(f"ADF test failed: {e}")
         return 0.5
+
+
+def calculate_autocorrelation(x: np.ndarray, lag: int = 1) -> float:
+    """
+    Calculates serial correlation at a specific lag.
+    High absolute values indicate self-predictability (trend or mean-reversion).
+    """
+    x = x[~np.isnan(x)]
+    if len(x) <= lag:
+        return 0.0
+    try:
+        corr = np.corrcoef(x[:-lag], x[lag:])[0, 1]
+        return float(np.nan_to_num(corr, nan=0.0))
+    except Exception:
+        return 0.0
+
+
+def calculate_ljungbox_pvalue(x: np.ndarray, lags: int = 5) -> float:
+    """
+    Performs Ljung-Box Q-test for serial correlation.
+    Returns the minimum p-value across specified lags.
+    Small p-values (< 0.05) indicate significant self-predictability (not white noise).
+    """
+    x = x[~np.isnan(x)]
+    if len(x) < lags + 1:
+        return 1.0
+    try:
+        # lb_stat, p_value
+        res = acorr_ljungbox(x, lags=lags, return_df=True)
+        return float(res["lb_pvalue"].min())
+    except Exception as e:
+        logger.debug(f"Ljung-Box test failed: {e}")
+        return 1.0
