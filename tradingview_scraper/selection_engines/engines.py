@@ -344,10 +344,17 @@ class SelectionEngineV3(BaseSelectionEngine):
         er_all: pd.Series = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
         hurst_all: pd.Series = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
 
-        from tradingview_scraper.utils.predictability import calculate_dwt_turbulence, calculate_stationarity_score
+        from tradingview_scraper.utils.predictability import (
+            calculate_autocorrelation,
+            calculate_dwt_turbulence,
+            calculate_ljungbox_pvalue,
+            calculate_stationarity_score,
+        )
 
         dwt_all = pd.Series({s: calculate_dwt_turbulence(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
         adf_all = pd.Series({s: calculate_stationarity_score(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
+        acf_all = pd.Series({s: calculate_autocorrelation(returns[s].to_numpy(), lag=1) for s in returns.columns})
+        lb_all = pd.Series({s: calculate_ljungbox_pvalue(returns[s].to_numpy(), lags=5) for s in returns.columns})
 
         # Higher-Order Moments
         skew_all = cast(pd.Series, returns.skew())
@@ -485,43 +492,11 @@ class SelectionEngineV3(BaseSelectionEngine):
             "avg_pe": float(pe_all.mean()),
             "avg_er": float(er_all.mean()),
             "avg_hurst": float(hurst_all.mean()),
+            "avg_acf": float(acf_all.mean()),
+            "avg_lb_pvalue": float(lb_all.mean()),
         }
 
-        # Raw Metrics for HPO (Phase 4 Normalization Audit)
-        metrics["raw_metrics"] = {
-            "momentum": {str(k): float(v) for k, v in cast(Any, mom_all).items()},
-            "stability": {str(k): float(v) for k, v in cast(Any, stab_all).items()},
-            "liquidity": {str(k): float(v) for k, v in cast(Any, liq_all).items()},
-            "antifragility": {str(k): float(v) for k, v in cast(Any, af_all).items()},
-            "survival": {str(k): float(v) for k, v in cast(Any, regime_all).items()},
-            "efficiency": {str(k): float(v) for k, v in cast(Any, er_all).items()},
-            "entropy": {str(k): float(v) for k, v in cast(Any, pe_all).items()},
-            "hurst": {str(k): float(v) for k, v in cast(Any, hurst_all).items()},
-            "fragility": {str(k): float(v) for k, v in cast(Any, frag_all).items()},
-            "skew": {str(k): float(v) for k, v in cast(Any, skew_all).items()},
-            "kurtosis": {str(k): float(v) for k, v in cast(Any, kurt_all).items()},
-            "dwt": {str(k): float(v) for k, v in cast(Any, dwt_all).items()},
-            "adf": {str(k): float(v) for k, v in cast(Any, adf_all).items()},
-        }
-
-        # Raw Metrics for HPO (Phase 4 Normalization Audit)
-        metrics["raw_metrics"] = {
-            "momentum": {str(k): float(v) for k, v in cast(Any, mom_all).items()},
-            "stability": {str(k): float(v) for k, v in cast(Any, stab_all).items()},
-            "liquidity": {str(k): float(v) for k, v in cast(Any, liq_all).items()},
-            "antifragility": {str(k): float(v) for k, v in cast(Any, af_all).items()},
-            "survival": {str(k): float(v) for k, v in cast(Any, regime_all).items()},
-            "efficiency": {str(k): float(v) for k, v in cast(Any, er_all).items()},
-            "entropy": {str(k): float(v) for k, v in cast(Any, pe_all).items()},
-            "hurst": {str(k): float(v) for k, v in cast(Any, hurst_all).items()},
-            "fragility": {str(k): float(v) for k, v in cast(Any, frag_all).items()},
-            "skew": {str(k): float(v) for k, v in cast(Any, skew_all).items()},
-            "kurtosis": {str(k): float(v) for k, v in cast(Any, kurt_all).items()},
-            "dwt": {str(k): float(v) for k, v in cast(Any, dwt_all).items()},
-            "adf": {str(k): float(v) for k, v in cast(Any, adf_all).items()},
-        }
-
-        # Raw Metrics for HPO (Phase 4 Normalization Audit)
+        # Comprehensive Raw Metrics for Audit and HPO
         metrics["raw_metrics"] = {
             "momentum": mom_all.to_dict(),  # type: ignore
             "stability": stab_all.to_dict(),  # type: ignore
@@ -536,6 +511,8 @@ class SelectionEngineV3(BaseSelectionEngine):
             "kurtosis": kurt_all.to_dict(),  # type: ignore
             "dwt": dwt_all.to_dict(),  # type: ignore
             "adf": adf_all.to_dict(),  # type: ignore
+            "acf": acf_all.to_dict(),  # type: ignore
+            "lb_pvalue": lb_all.to_dict(),  # type: ignore
         }
 
         # HPO Support: Record raw component probabilities P_i
@@ -546,9 +523,11 @@ class SelectionEngineV3(BaseSelectionEngine):
             method = methods.get(name, "rank")
             component_probs[name] = map_to_probability(series, method=method).to_dict()
 
-        # Add PE, Hurst too
+        # Add PE, Hurst, ACF, LB too
         component_probs["entropy"] = (1.0 - pe_all).clip(0, 1).to_dict()
         component_probs["hurst_clean"] = (1.0 - abs(hurst_all - 0.5) * 2.0).clip(0, 1).to_dict()
+        component_probs["acf"] = acf_all.clip(-1, 1).to_dict()
+        component_probs["lb_pvalue"] = (1.0 - lb_all).clip(0, 1).to_dict()  # Low p-value = High score
         metrics["component_probs"] = component_probs
 
         # Calculate avg_eci safely
