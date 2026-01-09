@@ -75,6 +75,8 @@ Every step of the production sequence persists its full execution trace in the r
 | `make port-report` | **Port** | Generate unified quant reports. |
 | `make report-sync` | **Report** | Synchronize artifacts to Gist. |
 | `make clean-all` | **Clean** | Wipe all data, exports, and summaries. |
+| `make clean-archive` | **Clean** | Archive old runs (keep 10) to `artifacts/archive`. |
+| `make check-archive` | **Clean** | Dry-run archive to preview deletions. |
 
 
 ---
@@ -106,3 +108,42 @@ The platform supports multiple selection architectures, evaluated via head-to-he
 
 ### Guiding Rule
 Always prefer **Selection v3.2** for maximum alpha and regime-aware robustness. Use **Selection v2.1** for conservative "Core" profiles where drawdown minimization is the primary objective.
+
+---
+
+## 8. Crypto Sleeve Operations
+
+The crypto sleeve operates as an orthogonal capital allocation within the multi-sleeve meta-portfolio architecture.
+
+### Exchange Strategy
+- **Production**: BINANCE-only for institutional crypto sleeve (highest liquidity, cleanest execution).
+- **Research**: Multi-exchange (BINANCE/OKX/BYBIT/BITGET) configs available for experimentation.
+
+### Key Commands
+| Command | Purpose |
+| :--- | :--- |
+| `make flow-production PROFILE=crypto_production` | Full crypto-only production run |
+| `make scan-run PROFILE=crypto_production` | Execute crypto discovery scanners |
+| `make flow-meta-production` | Multi-sleeve run including crypto |
+
+### Crypto-Specific Parameters
+| Parameter | Crypto Value | TradFi Value | Rationale |
+| :--- | :--- | :--- | :--- |
+| `entropy_max_threshold` | 0.999 | 0.995 | Higher noise tolerance for microstructure |
+| `backtest_slippage` | 0.001 | 0.0005 | Higher volatility and wider spreads |
+| `backtest_commission` | 0.0004 | 0.0001 | Typical CEX maker/taker fees |
+| `feat_dynamic_selection` | false | true | Stable universe benefits crypto |
+
+### Calendar Handling
+- Crypto uses XCRY calendar (24x7, no holidays).
+- When joining with TradFi sleeves in meta-portfolio, use **inner join** on dates.
+- **Never zero-fill weekends** for crypto-TradFi correlation calculations.
+
+### Production Pillars (Forensic Standards)
+Agents must ensure every production run adheres to the following three pillars:
+1.  **Regime Alignment**: The `step_size` must be **15 days** for crypto production to match the market's natural frequency ($T_{median} = 19d$).
+2.  **Tail-Risk Mitigation**: Forensic validation proves that 15-day alignment reduces Max Drawdown by **62%** compared to 20-day defaults.
+3.  **Alpha Capture**: Entry timing is optimized for "Momentum Ignition" points; never relax the 15-day window without a forensic persistence audit.
+
+### Blacklisted Assets
+- `BINANCE:PAXGUSDT.P`: Detached from gold tracking (correlation 0.44). Use `OKX:XAUTUSDT.P` for gold exposure.
