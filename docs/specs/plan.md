@@ -100,7 +100,8 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Documentation**: All artifacts synchronized.
 
 ### Phase 76: Deployment & Monitoring (NEXT)
-- [ ] **Release**: Push `develop` to `main`.
-- [ ] **Cron**: Configure daily `make flow-production` schedule.
-- [ ] **Maintenance**: Enable `clean-archive` in monthly housekeeping.
+- [ ] **Release**: Push `develop` to `main` tag `v1.0.0-crypto`.
+- [ ] **Cron**: Configure daily `make flow-production` schedule (recommended: 00:05 UTC).
+- [ ] **Maintenance**: Enable `make clean-archive` in monthly housekeeping (e.g., 1st of month).
+- [ ] **Monitoring**: Set up alerts for `strict_health` failures in the production log.
 

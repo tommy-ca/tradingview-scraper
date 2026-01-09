@@ -90,3 +90,15 @@ The "Tournament" evaluates an `Engine x Simulator` matrix to quantify the perfor
 ### Implementation Guidelines
 - **Golden Artifact Selection**: Only the most critical ~32 reports are pushed to the Gist to maintain high signal-to-noise ratio.
 - **Fail-Fast**: Never implement a portfolio if `make audit` fails (Risk logic or Data health breach).
+
+---
+
+## 4. Maintenance & Operations
+
+### Key Developer Commands
+| Command | Purpose |
+| :--- | :--- |
+| `make clean-all` | **Clean** | Wipe all data, exports, and summaries. |
+| `make clean-archive` | **Clean** | Archive old runs (keep 10) to `artifacts/archive`. |
+| `make check-archive` | **Clean** | Dry-run archive to preview deletions. |
+| `make report-sync` | **Report** | Synchronize artifacts to Gist. |

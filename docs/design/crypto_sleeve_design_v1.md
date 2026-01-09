@@ -136,6 +136,13 @@ To maintain high-fidelity performance without storage bloat:
 
 ---
 
-**Version**: 2.7  
+### 20. Deployment Architecture
+- **Schedule**: Daily at **00:05 UTC** (post-close of traditional markets, aligned with crypto daily candles).
+- **Environment**: Containerized Python environment with `uv` dependency management.
+- **Output**: Git-versioned artifacts pushed to persistent storage; Summary reports synced to Gist.
+
+---
+
+**Version**: 2.8  
 **Status**: Production Ready  
 **Last Updated**: 2026-01-09
