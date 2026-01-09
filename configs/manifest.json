@@ -114,15 +114,20 @@
         "top_n": 25,
         "min_momentum_score": -1.0
       },
+      "data": {
+        "min_days_floor": 180
+      },
       "discovery": {
         "enabled_markets": ["crypto"],
         "pipelines": {
           "crypto_alpha": {
             "scanners": [
-              "scanners/crypto/binance_trend",
-              "scanners/crypto/binance_perp_trend",
-              "scanners/crypto/binance_perp_short",
-              "scanners/crypto/binance_mtf_trend",
+              "scanners/crypto/binance_spot_long_trend",
+              "scanners/crypto/binance_spot_short_trend",
+              "scanners/crypto/binance_perp_long_trend",
+              "scanners/crypto/binance_perp_short_trend",
+              "scanners/crypto/binance_perp_long_mtf",
+              "scanners/crypto/binance_perp_short_mtf",
               "scanners/crypto/vol_breakout"
             ],
             "interval": "1d",
@@ -152,7 +157,7 @@
         "pipelines": {
           "fast_alpha": {
             "scanners": [
-              "scanners/crypto/binance_trend",
+              "scanners/crypto/binance_spot_long_trend",
               "scanners/tradfi/sp500_trend"
             ],
             "interval": "1d",

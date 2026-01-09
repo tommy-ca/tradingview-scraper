@@ -231,13 +231,16 @@ class AntifragilityAuditor:
             tail_subset = res[res > threshold]
             tail_gain = float(tail_subset.mean()) if len(tail_subset) > 0 else 0.0
 
-            stats.append({"Symbol": symbol, "Vol": vol, "Skew": skew, "Kurtosis": kurt, "Tail_Gain": tail_gain})
+            stats.append({"Symbol": symbol, "Vol": vol, "Skew": skew, "Kurtosis": kurt, "Tail_Gain": tail_gain, "N": len(res.dropna())})
 
         df = pd.DataFrame(stats)
 
         # Antifragility Score: Favor Positive Skew and High Tail Gain
-        df["Antifragility_Score"] = (df["Skew"] - df["Skew"].min()) / (df["Skew"].max() - df["Skew"].min() + 1e-9) + (df["Tail_Gain"] - df["Tail_Gain"].min()) / (
-            df["Tail_Gain"].max() - df["Tail_Gain"].min() + 1e-9
-        )
+        # Significance Multiplier: Penalize assets with low history (< 252 days)
+        df["Significance"] = (df["N"] / 252.0).clip(0, 1.0)
+
+        df["Antifragility_Score"] = (
+            (df["Skew"] - df["Skew"].min()) / (df["Skew"].max() - df["Skew"].min() + 1e-9) + (df["Tail_Gain"] - df["Tail_Gain"].min()) / (df["Tail_Gain"].max() - df["Tail_Gain"].min() + 1e-9)
+        ) * df["Significance"]
 
         return df

@@ -212,6 +212,16 @@ def prepare_portfolio_universe():
         returns_df = returns_df.drop(columns=zero_vars)
         logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
 
+    # Apply History Floor (min_days_floor)
+    # Only enforce if we are fetching at least that much data (High Integrity pass)
+    min_days = int(active_settings.min_days_floor)
+    if min_days > 0 and lookback_days >= min_days:
+        counts = returns_df.count()
+        short_history = [str(c) for c, v in counts.items() if v < min_days]
+        if short_history:
+            returns_df = returns_df.drop(columns=short_history)
+            logger.info("Dropped %d symbols due to insufficient secular history (< %d days): %s", len(short_history), min_days, ", ".join(short_history))
+
     # Post-load Deduplication (Optional safety pass)
     dedupe_env = os.getenv("PORTFOLIO_DEDUPE_BASE")
     do_dedupe = dedupe_env == "1" if dedupe_env is not None else bool(active_settings.portfolio_dedupe_base)

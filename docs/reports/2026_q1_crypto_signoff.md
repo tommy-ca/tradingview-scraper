@@ -74,5 +74,15 @@ Comparison with stale runs reveals the alpha mechanism:
 -   **Conclusion**: The divergence is structural. The `Custom` HRP implementation (native SciPy/NumPy) is more robust for this specific asset class than `pypfopt`.
 **Action:** `manifest.json` tournament matrix remains open. `Custom` or `CVX` engine recommended for Production HRP.
 
+## 7. Statistical Grounding Audit (Antifragility)
+**Objective:** Prevent "Sample Size Bias" in the Barbell strategy's Aggressor sleeve.
+**Findings:**
+-   **Enforcement**: The `min_days_floor` (180 days for Production) is now strictly enforced during High-Integrity data preparation.
+-   **Significance Multiplier**: Antifragility scores are now weighted by $\min(1.0, N/252)$, where $N$ is the number of secular history days.
+-   **Verification**: 
+    -   `BINANCE:MYXUSDT.P` (140 days) was correctly dropped from the high-integrity universe.
+    -   `BINANCE:PIPPINUSDT.P` (240 days) survived but had its AF score adjusted by 0.95x.
+**Action:** No further changes required. The risk of over-allocating to "flash-in-the-pan" new listings is effectively mitigated.
+
 ---
 **Signed:** *Quantitative Systems Agent*

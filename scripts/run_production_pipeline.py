@@ -328,7 +328,7 @@ class ProductionPipeline:
             ("Environment Check", [*make_base, "env-check"], None),
             ("Discovery", [*make_base, "scan-run"], self.validate_discovery),
             ("Aggregation", [*make_base, "data-prep-raw"], None),
-            ("Lightweight Prep", [*make_base, "data-fetch", f"LOOKBACK={lightweight_lookback}", f"BATCH={lightweight_batch}"], None),
+            ("Lightweight Prep", [*make_base, "data-fetch", f"LOOKBACK={lightweight_lookback}", f"BATCH={lightweight_batch}", "CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json"], None),
             ("Natural Selection", [*make_base, "port-select"], self.validate_selection),
             ("Enrichment", [*make_base, "meta-refresh"], None),
             ("High-Integrity Preparation", [*make_base, "data-fetch", f"LOOKBACK={high_integrity_lookback}"], None),

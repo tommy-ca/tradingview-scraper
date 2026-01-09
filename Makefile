@@ -4,8 +4,11 @@ PY ?= uv run
 # Workflow Manifest (JSON)
 MANIFEST ?= configs/manifest.json
 PROFILE ?= production
+export PROFILE
+export TV_PROFILE := $(PROFILE)
 
 # Bridge JSON Manifest to Shell Environment
+
 ifneq ($(wildcard $(MANIFEST)),)
 ENV_OVERRIDES := \
 	$(if $(LOOKBACK),TV_LOOKBACK_DAYS=$(LOOKBACK)) \
@@ -16,8 +19,9 @@ ENV_OVERRIDES := \
 	$(if $(BACKTEST_SIMULATOR),TV_BACKTEST_SIMULATOR=$(BACKTEST_SIMULATOR)) \
 	$(if $(BACKTEST_SIMULATORS),TV_BACKTEST_SIMULATORS=$(BACKTEST_SIMULATORS)) \
 	$(if $(CLUSTER_CAP),TV_CLUSTER_CAP=$(CLUSTER_CAP)) \
-	$(if $(SELECTION_MODE),TV_FEATURES__SELECTION_MODE=$(SELECTION_MODE))
-ENV_VARS := $(shell TV_MANIFEST_PATH=$(MANIFEST) TV_PROFILE=$(PROFILE) $(ENV_OVERRIDES) $(PY) -m tradingview_scraper.settings --export-env | sed 's/export //')
+	$(if $(SELECTION_MODE),TV_FEATURES__SELECTION_MODE=$(SELECTION_MODE)) \
+	$(if $(MIN_DAYS_FLOOR),TV_MIN_DAYS_FLOOR=$(MIN_DAYS_FLOOR))
+ENV_VARS = $(shell TV_MANIFEST_PATH=$(MANIFEST) TV_PROFILE=$(PROFILE) $(ENV_OVERRIDES) $(PY) -m tradingview_scraper.settings --export-env | sed 's/export //')
 $(foreach var,$(ENV_VARS),$(eval $(var)))
 $(foreach var,$(ENV_VARS),$(eval export $(shell echo "$(var)" | cut -d= -f1)))
 
@@ -58,6 +62,22 @@ endif
 ifeq ($(origin TV_FEATURES__SELECTION_MODE), undefined)
 export TV_FEATURES__SELECTION_MODE := $(SELECTION_MODE)
 endif
+ifeq ($(origin TV_THRESHOLD), undefined)
+export TV_THRESHOLD := $(THRESHOLD)
+endif
+ifeq ($(origin TV_TOP_N), undefined)
+export TV_TOP_N := $(TOP_N)
+endif
+ifeq ($(origin TV_MIN_MOMENTUM_SCORE), undefined)
+export TV_MIN_MOMENTUM_SCORE := $(MIN_MOMENTUM_SCORE)
+endif
+ifeq ($(origin TV_MIN_DAYS_FLOOR), undefined)
+ifneq ($(PORTFOLIO_MIN_DAYS_FLOOR),)
+export TV_MIN_DAYS_FLOOR := $(PORTFOLIO_MIN_DAYS_FLOOR)
+else
+export TV_MIN_DAYS_FLOOR := $(MIN_DAYS_FLOOR)
+endif
+endif
 endif
 
 # Paths
@@ -83,8 +103,11 @@ export RUN_ID
 export TV_RUN_ID := $(RUN_ID)
 export TV_EXPORT_RUN_ID := $(RUN_ID)
 
-.PHONY: help
-help: ## Display this help screen
+debug-env: ## Print resolved environment variables
+	@echo "PROFILE: $(PROFILE)"
+	@echo "TV_DATA__MIN_DAYS_FLOOR: $$TV_DATA__MIN_DAYS_FLOOR"
+	@echo "TV_MIN_DAYS_FLOOR: $$TV_MIN_DAYS_FLOOR"
+	@$(PY) -m tradingview_scraper.settings --export-env | grep MIN_DAYS_FLOOR
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 # Feature Shortcuts
