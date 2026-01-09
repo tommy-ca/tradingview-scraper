@@ -41,6 +41,7 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-122 | MUST | ✅ | **Multi-Engine Benchmarking**: The validation tournament must include all available engines (`custom`, `skfolio`, `riskfolio`, `pyportfolioopt`, `cvxportfolio`) to build a statistical significance baseline for linkage sensitivity. |
 | CR-130 | MUST | ✅ | **Funnel Retention Baseline**: The Selection Engine must demonstrate a discovery-to-candidate retention rate of 15-25% to ensure sufficient noise filtering without over-constraining the universe. |
 | CR-131 | MUST | ✅ | **Friction Filter Dominance**: The primary veto mechanism must be the "High Friction" filter (ECI vs Momentum), accounting for >40% of all vetoes, to effectively remove speculative assets with poor trade execution profiles. |
+| CR-140 | MUST | ✅ | **Artifact Retention Policy**: The system must maintain a rolling window of 10 fully accessible production runs, with older runs automatically archived to compressed storage to balance auditability with storage efficiency. |
 
 ---
 

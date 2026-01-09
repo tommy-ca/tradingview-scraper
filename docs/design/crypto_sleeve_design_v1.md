@@ -128,6 +128,14 @@ This funnel ensures that the *inputs* to the Optimization Engine are already pre
 
 ---
 
-**Version**: 2.6  
+### 19. Data Lifecycle & Retention
+To maintain high-fidelity performance without storage bloat:
+-   **Active Window**: The system retains the last **10 production runs** in the active workspace for immediate audit and rollback.
+-   **Archival Policy**: Runs older than 10 iterations are automatically compressed (`tar.gz`) and moved to `artifacts/archive/` via the `make clean-archive` target.
+-   **Traceability**: Even archived runs retain their `audit.jsonl` integrity, ensuring full regulatory compliance capability.
+
+---
+
+**Version**: 2.7  
 **Status**: Production Ready  
 **Last Updated**: 2026-01-09
