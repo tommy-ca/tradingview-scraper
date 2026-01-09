@@ -37,18 +37,21 @@ def _get_annualization_factor(rets: pd.Series) -> int:
     return 252
 
 
-def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
+def calculate_performance_metrics(daily_returns: pd.Series, detailed: bool = False) -> Dict[str, Any]:
     """
-    Computes a standardized suite of performance metrics using QuantStats.
+    Computes a standardized suite of performance metrics.
+    By default, uses fast vectorized pandas/numpy logic for core metrics.
+    Set detailed=True to trigger heavy QuantStats analysis.
     """
     empty_res = {
         "total_return": 0.0,
         "annualized_return": 0.0,
         "realized_vol": 0.0,
+        "annualized_vol": 0.0,
         "sharpe": 0.0,
         "max_drawdown": 0.0,
-        "var_95": None,
-        "cvar_95": None,
+        "var_95": 0.0,
+        "cvar_95": 0.0,
         "sortino": 0.0,
         "calmar": 0.0,
         "omega": 0.0,
@@ -60,97 +63,73 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
     # Consistent Timezone Handling - Force Naive
     rets = daily_returns.dropna().copy()
     try:
-        new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in rets.index]
-        rets.index = pd.DatetimeIndex(new_idx)
-    except Exception as e_idx:
-        logger.debug(f"Metrics index forcing failed: {e_idx}")
-        if rets.index.tz is not None:
-            rets.index = rets.index.tz_convert(None).tz_localize(None)
-        else:
-            rets.index = rets.index.tz_localize(None)
+        rets.index = pd.to_datetime(rets.index).tz_localize(None)
+    except Exception:
+        pass
 
     n_obs = len(rets)
     if n_obs == 0:
         return empty_res
 
-    total_return = (1 + rets).prod() - 1
+    # 1. Fast Vectorized Core Metrics
+    total_return = float((1 + rets).prod() - 1)
     ann_factor = _get_annualization_factor(rets)
     annualized_return = float(rets.mean() * ann_factor)
 
-    vol_daily = rets.std()
-    realized_vol = vol_daily * math.sqrt(ann_factor)
+    vol_daily = float(rets.std())
+    realized_vol = float(vol_daily * math.sqrt(ann_factor))
 
     cum_ret = (1 + rets).cumprod()
     running_max = cum_ret.cummax()
     drawdown = (cum_ret - running_max) / (running_max + 1e-12)
     max_drawdown = float(drawdown.min())
 
-    if n_obs < MIN_OBSERVATIONS:
-        res = empty_res.copy()
-        res.update(
-            {
-                "total_return": float(total_return),
-                "annualized_return": float(annualized_return),
-                "realized_vol": float(realized_vol),
-                "max_drawdown": float(max_drawdown),
-            }
-        )
+    sharpe = float(annualized_return / (realized_vol + 1e-9))
+    calmar = float(annualized_return / (abs(max_drawdown) + 1e-12))
+
+    res = empty_res.copy()
+    res.update(
+        {
+            "total_return": total_return,
+            "annualized_return": annualized_return,
+            "realized_vol": realized_vol,
+            "annualized_vol": realized_vol,
+            "sharpe": sharpe,
+            "max_drawdown": max_drawdown,
+            "calmar": calmar,
+            "var_95": float(rets.quantile(0.05)),
+        }
+    )
+
+    if not detailed or n_obs < MIN_OBSERVATIONS:
         return res
 
+    # 2. Detailed Heavy Metrics (Lazy Import)
     try:
         import quantstats as qs
 
         rets_j = _apply_jitter(rets)
+        # Use getattr to avoid static analysis errors on dynamic module
+        qs_stats = getattr(qs, "stats", None)
+        if qs_stats is None:
+            return res
 
-        # QuantStats metrics
-        realized_vol_qs = float(qs.stats.volatility(rets, periods=ann_factor))
-        sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
-        max_drawdown_qs = float(qs.stats.max_drawdown(rets))
-        var_95 = float(qs.stats.value_at_risk(rets_j, sigma=1, confidence=0.95))
+        res["var_95"] = float(qs_stats.value_at_risk(rets_j, sigma=1, confidence=0.95))
 
-        # Guard for CVaR calculation to avoid Mean of empty slice warning
         try:
-            if any(rets_j < var_95):
-                cvar_95 = float(qs.stats.expected_shortfall(rets_j, sigma=1, confidence=0.95))
+            if any(rets_j < res["var_95"]):
+                res["cvar_95"] = float(qs_stats.expected_shortfall(rets_j, sigma=1, confidence=0.95))
             else:
-                cvar_95 = var_95
+                res["cvar_95"] = res["var_95"]
         except Exception:
-            cvar_95 = var_95
+            res["cvar_95"] = res["var_95"]
 
-        sortino = float(qs.stats.sortino(rets, rf=0, periods=ann_factor))
-        # Avoid division-by-zero RuntimeWarning inside QuantStats when max drawdown is 0.
-        calmar = float(annualized_return) / (abs(max_drawdown_qs) + 1e-12)
-        omega = float(qs.stats.omega(rets))
-
-        return {
-            "total_return": float(total_return),
-            "annualized_return": float(annualized_return),
-            "realized_vol": float(realized_vol_qs),
-            "annualized_vol": float(realized_vol_qs),
-            "sharpe": float(sharpe),
-            "max_drawdown": float(max_drawdown_qs),
-            "var_95": float(var_95),
-            "cvar_95": float(cvar_95),
-            "sortino": sortino,
-            "calmar": calmar,
-            "omega": omega,
-        }
+        res["sortino"] = float(qs_stats.sortino(rets, rf=0, periods=ann_factor))
+        res["omega"] = float(qs_stats.omega(rets))
+        return res
     except Exception as e:
-        logger.debug(f"QuantStats failed: {e}")
-        sharpe = (rets.mean() * ann_factor) / (realized_vol + 1e-9)
-        return {
-            "total_return": float(total_return),
-            "annualized_return": float(annualized_return),
-            "realized_vol": float(realized_vol),
-            "annualized_vol": float(realized_vol),
-            "sharpe": float(sharpe),
-            "max_drawdown": float(max_drawdown),
-            "var_95": float(rets.quantile(0.05)),
-            "cvar_95": float(rets[rets <= rets.quantile(0.05)].mean() if len(rets[rets <= rets.quantile(0.05)]) > 0 else rets.quantile(0.05)),
-            "sortino": 0.0,
-            "calmar": 0.0,
-            "omega": 0.0,
-        }
+        logger.debug(f"QuantStats detailed metrics failed: {e}")
+        return res
 
 
 def get_metrics_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Series] = None) -> str:
@@ -173,24 +152,16 @@ def get_full_report_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Se
 
         # Consistent Timezone Handling - Force Naive
         try:
-            new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in rets.index]
-            rets.index = pd.DatetimeIndex(new_idx)
+            rets.index = pd.to_datetime(rets.index).tz_localize(None)
         except Exception:
-            if rets.index.tz is not None:
-                rets.index = rets.index.tz_convert(None).tz_localize(None)
-            else:
-                rets.index = rets.index.tz_localize(None)
+            pass
 
         if benchmark is not None:
             benchmark = benchmark.copy()
             try:
-                new_b_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in benchmark.index]
-                benchmark.index = pd.DatetimeIndex(new_b_idx)
+                benchmark.index = pd.to_datetime(benchmark.index).tz_localize(None)
             except Exception:
-                if benchmark.index.tz is not None:
-                    benchmark.index = benchmark.index.tz_convert(None).tz_localize(None)
-                else:
-                    benchmark.index = benchmark.index.tz_localize(None)
+                pass
 
             idx = rets.index.union(benchmark.index)
             benchmark = benchmark.reindex(idx).fillna(0.0)
