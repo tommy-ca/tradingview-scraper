@@ -45,9 +45,13 @@ For tactical runs, use environment variables or Makefile shortcuts instead of ed
 | `LOOKBACK=N` | `TV_LOOKBACK_DAYS=N` | Override secular history depth. |
 
 ### Execution
-Agents should prioritize namespace-prefixed targets:
+Agents should prioritize namespace-prefixed targets or the Prefect flow for orchestration:
 ```bash
+# Standard Make Flow
 make flow-production PROFILE=production
+
+# MLOps Prefect Flow (Enables Observability, Distributed Ray Compute & Retries)
+uv run flows/production_flow.py --profile production
 ```
 
 ### Logging & Visibility
