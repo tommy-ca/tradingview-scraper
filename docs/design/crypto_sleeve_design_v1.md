@@ -143,6 +143,30 @@ To maintain high-fidelity performance without storage bloat:
 
 ---
 
-**Version**: 2.8  
+### 21. Scanner Matrix Architecture
+To ensure regime-agnostic performance, the Discovery Layer implements a symmetric matrix of scanners covering Spot/Perp venues and Long/Short directions.
+
+| Venue | Direction | Timeframe | Config ID | Logic |
+| :--- | :--- | :--- | :--- | :--- |
+| **Spot** | Long | Daily | `binance_spot_long_trend` | Rec ≥ 0, Perf > 0 |
+| **Spot** | Short | Daily | `binance_spot_short_trend` | Rec ≤ 0, Perf < 0 |
+| **Perp** | Long | Daily | `binance_perp_long_trend` | Rec ≥ 0, Perf > 0 |
+| **Perp** | Long | MTF (D+W) | `binance_perp_long_mtf` | Rec ≥ 0, Perf > 0 (D+W) |
+| **Perp** | Short | Daily | `binance_perp_short_trend` | Rec ≤ 0, Perf < 0 |
+| **Perp** | Short | MTF (D+W) | `binance_perp_short_mtf` | Rec ≤ 0, Perf < 0 (D+W) |
+
+**Symmetry Rule**: Short scanners use `Recommendation <= 0.0` (Neutral/Sell) to mirror Long scanners' `Recommendation >= 0.0` (Neutral/Buy), expanding the candidate pool for defensive profiles like `min_variance`.
+
+---
+
+### 22. Intra-Cluster Selection & Robustness
+The Log-MPS 3.2 engine implements advanced robustness features to handle the highly dynamic crypto environment:
+-   **Top-N per Direction**: The system avoids "Starvation" of risk clusters by selecting up to the top 3 candidates per direction (Long/Short). This ensures factor diversification even if one asset dominates the cluster score.
+-   **NaN-Tolerance**: Component probabilities ($P_i$) are calculated with a `fillna(floor)` strategy. This prevents "Missing-Stat Vetoes" where a single failed test (e.g., non-stationary series) would otherwise zero-out the entire multiplicative probability score.
+-   **Dynamic History Support**: By setting the `min_days_floor` to 30, the selection funnel captures "Momentum Ignition" in newly listed assets, while the standard 15-day rebalancing window provides the necessary exit speed should the momentum decay.
+
+---
+
+**Version**: 3.0  
 **Status**: Production Ready  
 **Last Updated**: 2026-01-09

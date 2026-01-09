@@ -36,12 +36,15 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-111 | MUST | ✅ | **Dynamic Capping**: Adjust optimization cluster caps based on regime: Normal (0.25), Turbulent (0.20), Crisis (0.15). |
 | CR-112 | MUST | ✅ | **Persistence-Driven Rebalancing**: Automatically calculate optimal window using Nyquist-sampling of trend durations. |
 | CR-113 | MUST | ✅ | **Data Freshness Primitive**: Selection logic must prioritize assets with < 24h lag to ensure "Blue Chip" momentum anchors are correctly evaluated against speculative "Meme" discovery. |
+| CR-114 | MUST | ✅ | **Alpha Immersion Floor**: The history floor for crypto assets is set to 30 days to allow participation of high-momentum new listings (PIPPIN, MYX) while maintaining a minimum statistical baseline. |
+| CR-115 | MUST | ✅ | **Cluster Diversification standard**: The selection engine must pick up to the Top 3 assets per direction (Long/Short) within each cluster to prevent single-asset factor concentration. |
 | CR-120 | MUST | ✅ | **Risk Profile Diversification Floor**: Every optimized profile must contain at least 5 orthogonal risk units (clusters) to prevent idiosyncratic tail-risk. |
 | CR-121 | MUST | ✅ | **Profile Fidelity Check**: Optimization engines must validate that the realized volatility of the `min_variance` profile is at least 30% lower than the `equal_weight` baseline. |
 | CR-122 | MUST | ✅ | **Multi-Engine Benchmarking**: The validation tournament must include all available engines (`custom`, `skfolio`, `riskfolio`, `pyportfolioopt`, `cvxportfolio`) to build a statistical significance baseline for linkage sensitivity. |
 | CR-130 | MUST | ✅ | **Funnel Retention Baseline**: The Selection Engine must demonstrate a discovery-to-candidate retention rate of 15-25% to ensure sufficient noise filtering without over-constraining the universe. |
 | CR-131 | MUST | ✅ | **Friction Filter Dominance**: The primary veto mechanism must be the "High Friction" filter (ECI vs Momentum), accounting for >40% of all vetoes, to effectively remove speculative assets with poor trade execution profiles. |
 | CR-140 | MUST | ✅ | **Artifact Retention Policy**: The system must maintain a rolling window of 10 fully accessible production runs, with older runs automatically archived to compressed storage to balance auditability with storage efficiency. |
+| CR-150 | MUST | ⏳ | **Symmetric Signal Generation**: To support market-neutral and hedging strategies (MinVar, Barbell), the discovery layer must produce symmetric Long and Short candidate pools across both Spot and Perpetual execution venues. |
 
 ---
 

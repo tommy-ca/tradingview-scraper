@@ -99,9 +99,26 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Verification**: All TDD tests passed (7/7).
 - [x] **Documentation**: All artifacts synchronized.
 
-### Phase 76: Deployment & Monitoring (NEXT)
-- [ ] **Release**: Push `develop` to `main` tag `v1.0.0-crypto`.
-- [ ] **Cron**: Configure daily `make flow-production` schedule (recommended: 00:05 UTC).
-- [ ] **Maintenance**: Enable `make clean-archive` in monthly housekeeping (e.g., 1st of month).
-- [ ] **Monitoring**: Set up alerts for `strict_health` failures in the production log.
+### Phase 76: Deployment & Monitoring (COMPLETED)
+- [x] **Release**: Push `develop` to `main` tag `v1.0.0-crypto`.
+- [x] **Cron**: Configure daily `make flow-production` schedule (recommended: 00:05 UTC).
+- [x] **Maintenance**: Enable `make clean-archive` in monthly housekeeping (e.g., 1st of month).
+- [x] **Monitoring**: Set up alerts for `strict_health` failures in the production log.
+
+### Phase 77: Scanner Matrix Expansion (COMPLETED)
+- [x] **Specs**: Updated Requirements (CR-150) and Design (Matrix).
+- [x] **Config**: Created symmetric Spot/Perp Long/Short configuration matrix.
+- [x] **Refactor**: Renamed all scanners to `binance_[asset]_[direction]_[strategy].yaml` for consistency.
+
+### Phase 78: Robust Selection Upgrade (COMPLETED)
+- [x] **Logic**: Implemented **Top-3 per direction** intra-cluster selection.
+- [x] **Robustness**: Added **NaN-safe scoring** to Log-MPS 3.2 engine.
+- [x] **Hygiene**: Relaxed `min_days_floor` to 30 days to capture new alpha (PIPPIN, MYX).
+- [x] **Verification**: Confirmed funnel retention (18%) and veto integrity (Operation Darwin).
+
+### Phase 79: Final Deployment & Audit
+- [ ] **Workflow**: Execute final `make flow-crypto` with validated matrix.
+- [ ] **Audit**: Generate unified Sign-Off report for the new architecture.
+- [ ] **Freeze**: Final system state synchronization.
+
 
