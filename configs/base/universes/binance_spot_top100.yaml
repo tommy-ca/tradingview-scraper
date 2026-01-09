@@ -1,0 +1,29 @@
+# L1: Binance Spot Top 50 Liquid / Top 100 Mcap
+base_preset: ../templates/crypto_spot.yaml
+exchanges: ["BINANCE"]
+allowed_spot_quotes: ["USDT", "USDC", "USD", "FDUSD", "BUSD"]
+
+# Disable trend gates for pure universe selection
+trend:
+  adx: {enabled: false}
+  recommendation: {enabled: false}
+  momentum: {enabled: false}
+
+# Stage 1: Market Cap Pool (Broad fetch to handle quote fragmentation)
+prefilter_limit: 1000
+sort_by: market_cap_calc
+sort_order: desc
+exclude_symbols: ["BINANCE:PAXGUSDT"]
+
+# Stage 2: Base Universe Constraint (Top 100 unique bases by Mcap)
+base_universe_limit: 100
+base_universe_sort_by: market_cap_calc
+
+# Stage 3: Final Liquidity Selection
+final_sort_by: Value.Traded
+final_sort_order: desc
+limit: 50
+
+export_metadata:
+  symbol: binance_spot_top100
+  data_category: universe_base

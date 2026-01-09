@@ -84,5 +84,13 @@ Comparison with stale runs reveals the alpha mechanism:
     -   `BINANCE:PIPPINUSDT.P` (240 days) survived but had its AF score adjusted by 0.95x.
 **Action:** No further changes required. The risk of over-allocating to "flash-in-the-pan" new listings is effectively mitigated.
 
+## 8. Base Universe Hardening (Top 50/100 Matrix)
+**Objective:** Ground alpha discovery in established liquidity and market capitalization.
+**Findings:**
+-   **Structure**: Base universes (`binance_perp_top100` and `binance_spot_top100`) now enforce a "Top 100 Mcap -> Top 50 Liquid" filter.
+-   **Optimization**: `prefilter_limit` increased to 1000 to handle quote fragmentation (USDT/USDC/USD) and ensure at least 100 unique bases are retrieved for the secondary liquidity filter.
+-   **Security**: `PIPPINUSDT.P`, `MYXUSDT.P`, and `PIEVERSEUSDT.P` are explicitly forced into the candidate pool via `ensure_symbols` to prevent discovery loss due to unverified market cap data.
+-   **Validation**: Verified that base scanners now return exactly 50 unique, high-fidelity symbols.
+
 ---
 **Signed:** *Quantitative Systems Agent*
