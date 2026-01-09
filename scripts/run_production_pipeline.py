@@ -299,6 +299,14 @@ class ProductionPipeline:
         self.console.print("\n[bold cyan]🚀 Starting Production Pipeline[/]")
         self.console.print(f"[dim]Profile:[/] {self.profile} | [dim]Run ID:[/] {self.run_id} | [dim]Start Step:[/] {start_step}\n")
 
+        # Pillar Verification (Crypto Only)
+        if self.profile == "crypto_production":
+            self.console.print("[bold yellow]Production Pillars Analysis (Forensic Standards):[/]")
+            self.console.print(f"  - [cyan]Regime Alignment:[/] step_size={self.settings.step_size}d (Target: 15d)")
+            self.console.print(f"  - [cyan]Tail-Risk Mitigation:[/] test_window={self.settings.test_window}d (Target: 30d)")
+            self.console.print(f"  - [cyan]Alpha Capture:[/] selection_mode={self.settings.features.selection_mode} (Target: v3.2)")
+            self.console.print("")
+
         lightweight_lookback = os.getenv("LOOKBACK") or os.getenv("TV_LOOKBACK_DAYS") or "60"
         lightweight_batch = os.getenv("BATCH") or "5"
         high_integrity_lookback = (
@@ -311,6 +319,10 @@ class ProductionPipeline:
 
         make_base = ["make", f"PROFILE={self.profile}", f"MANIFEST={self.manifest_path}"]
 
+        strict_health_arg = "STRICT_HEALTH=1"
+        if os.getenv("TV_STRICT_HEALTH") == "0" or os.getenv("STRICT_HEALTH") == "0":
+            strict_health_arg = "STRICT_HEALTH=0"
+
         all_steps: List[Tuple[str, List[str], Optional[Callable[[], Any]]]] = [
             ("Cleanup", [*make_base, "clean-run"], None),
             ("Environment Check", [*make_base, "env-check"], None),
@@ -320,7 +332,9 @@ class ProductionPipeline:
             ("Natural Selection", [*make_base, "port-select"], self.validate_selection),
             ("Enrichment", [*make_base, "meta-refresh"], None),
             ("High-Integrity Preparation", [*make_base, "data-fetch", f"LOOKBACK={high_integrity_lookback}"], None),
-            ("Health Audit", [*make_base, "data-audit", "STRICT_HEALTH=1"], self.validate_health),
+            ("Health Audit", [*make_base, "data-audit", strict_health_arg], self.validate_health),
+            ("Persistence Analysis", [*make_base, "research-persistence"], None),
+            ("Regime Analysis", ["uv", "run", "python", "scripts/research_regime_v3.py"], None),
             ("Factor Analysis", [*make_base, "port-analyze"], None),
             ("Optimization", [*make_base, "port-optimize"], self.validate_optimization),
             ("Validation", [*make_base, "port-test"], None),

@@ -3,20 +3,38 @@ Crypto CEX Screening Presets
 
 Overview
 --------
-- Base universes are now split by instrument type: spot, perps (.P suffix), and dated futures (expiry-coded). Exchange scope remains ``[BINANCE, OKX, BYBIT, BITGET]``.
+- **Production Strategy (2026-01-09)**: BINANCE-only focus for the institutional crypto sleeve. This provides highest liquidity and cleaner signals without multi-exchange deduplication complexity.
+- Base universes are split by instrument type: spot, perps (.P suffix), and dated futures (expiry-coded).
 - Spot presets enforce a quote whitelist (USDT/USD/USDC/FDUSD/BUSD) and exclude perps and dated futures; perps presets require ``include_perps_only: true``; dated presets require expiry-coded symbols.
-- Ordering: fetch with ``prefilter_limit`` (1500) sorted by ``market_cap_calc`` (spot) or ``Value.Traded`` (perps/dated), then final sort ``Value.Traded`` and cap at ``limit``.
+- Ordering: fetch with ``prefilter_limit`` (500) sorted by ``market_cap_calc``, then final sort ``Value.Traded`` and cap at ``limit`` (50).
 - Columns: ``name, close, volume, Value.Traded, market_cap_calc, change, Recommend.All, ADX, Volatility.D/W/M, Perf.W/1M/3M, ATR``.
-- Liquidity/volatility guard (current presets): ``Value.Traded >= 50M``; ``Volatility.D <= 8%`` or ``ATR/close <= 12%``. Adjust per instrument if needed.
+- Liquidity guard: ``Value.Traded >= $10M`` (institutional floor).
+
+Production Exchange Strategy
+----------------------------
+- **BINANCE-Only (Recommended)**: The ``crypto_production`` profile uses BINANCE as the sole exchange for production allocations.
+- **Rationale**: 
+    - Highest global liquidity concentration
+    - Cleanest order book depth for institutional execution
+    - Eliminates multi-exchange deduplication complexity
+    - Reduces cross-exchange arbitrage noise in signal generation
+- **Global Aggregation (Research Only)**: Multi-exchange configs (``global_perp_top50.yaml``) remain available for research but are not used in production flows.
 
 Current layered scanners (configs/scanners/crypto/)
 ---------------------------------------------------
-- ``configs/scanners/crypto/binance_trend.yaml``: Binance-only spot trend discovery (L4) built on ``binance_spot_top50`` with ADX >= 10 and momentum gates (Perf.W >= 0, Perf.1M >= 0). No 3M/6M anchors.
-- ``configs/scanners/crypto/binance_perp_trend.yaml``: Binance-only perp trend discovery (L4) built on ``binance_perp_top50`` with ADX >= 10 and momentum gates (Perf.W >= 0, Perf.1M >= 0).
-- ``configs/scanners/crypto/binance_perp_short.yaml``: Binance-only perp inverse trend discovery (L4) for capture during bearish/turbulent regimes.
-- ``configs/scanners/crypto/vol_breakout.yaml``: Volatility breakout discovery (L4) built on ``binance_perp_top50``.
-- ``configs/scanners/crypto/global_mtf_trend.yaml``: MTF trend discovery (L4) rooted in ``global_perp_top50`` with ADX >= 10 on weekly/daily screens plus momentum gates (Perf.W >= 0, Perf.1M >= 0).
-- These scanners are composed from layered presets under ``configs/base/`` and orchestrated via manifest pipelines.
+**Production Set (BINANCE-only)**:
+
+- ``configs/scanners/crypto/binance_trend.yaml``: Binance spot trend discovery (L4) built on ``binance_spot_top50`` with ADX >= 10 and momentum gates (Perf.W >= 0, Perf.1M >= 0). No 3M/6M anchors.
+- ``configs/scanners/crypto/binance_perp_trend.yaml``: Binance perp trend discovery (L4) built on ``binance_perp_top50`` with ADX >= 10 and momentum gates (Perf.W >= 0, Perf.1M >= 0).
+- ``configs/scanners/crypto/binance_perp_short.yaml``: Binance perp inverse trend discovery (L4) for capture during bearish/turbulent regimes.
+- ``configs/scanners/crypto/binance_mtf_trend.yaml`` (**PLANNED**): Binance MTF trend discovery with daily + weekly confirmation screens.
+
+**Research/Deprecated**:
+
+- ``configs/scanners/crypto/vol_breakout.yaml``: Volatility breakout discovery (L4) - to be scoped to BINANCE-only.
+- ``configs/scanners/crypto/global_mtf_trend.yaml``: Multi-exchange MTF trend discovery - archived for research use only.
+
+These scanners are composed from layered presets under ``configs/base/`` and orchestrated via manifest pipelines.
 
 Regime-Adaptive Exposure Policy
 -------------------------------
@@ -126,3 +144,30 @@ Notes
 - Majors can still be filtered out under bearish regimes if Perf.W/1M/3M thresholds stay positive; relax momentum gates or add ``ensure_symbols`` per exchange to guarantee inclusion.
 - Dated futures are explicitly separated to avoid contaminating spot/perp runs; adjust ``value_traded_min`` downward if dated lists come back empty.
 - Quote whitelist and dated/perp flags are enforced in post-filtering; widen quotes or disable exclusions if you need broader coverage.
+
+Production Hardening Checklist (2026-01-09)
+-------------------------------------------
+**Scanner Consolidation**:
+
+- [PLANNED] Archive ``global_mtf_trend.yaml`` to ``configs/archive/``
+- [PLANNED] Create ``binance_mtf_trend.yaml`` with daily + weekly confirmation
+- [PLANNED] Scope ``vol_breakout.yaml`` to BINANCE-only
+- [PLANNED] Update ``scripts/run_crypto_scans.sh`` or deprecate
+
+**Predictability Gates**:
+
+- [PLANNED] Create ``configs/base/hygiene/institutional_crypto.yaml`` with entropy/Hurst filters
+- [PLANNED] Add ``predictability`` block to scanner YAML schema
+- [PLANNED] Implement post-scan filtering in ``FuturesUniverseSelector``
+
+**Backtesting Fidelity**:
+
+- [PLANNED] Increase ``backtest_slippage`` to 0.001 for crypto
+- [PLANNED] Increase ``backtest_commission`` to 0.0004 for CEX fees
+- [PLANNED] Document ``feat_dynamic_selection: false`` rationale
+
+**Meta-Portfolio Integration**:
+
+- [PLANNED] Verify crypto sleeve in ``flow-meta-production``
+- [PLANNED] Add calendar alignment guardrails (no weekend padding)
+- [PLANNED] Add sleeve weight bounds (5% min, 50% max)

@@ -1,117 +1,30 @@
 #!/bin/bash
+# DEPRECATED: This script is maintained for backwards compatibility.
+# Prefer using: make flow-crypto
+# Or directly: uv run python scripts/compose_pipeline.py --profile crypto_production
+
 set -e
 
-echo "Starting Crypto Exchange Trend Scans..."
+echo "=========================================="
+echo "Crypto Production Scan (BINANCE-only)"
+echo "=========================================="
+echo ""
+echo "NOTE: This script wraps the modern compose_pipeline.py orchestrator."
+echo "      For full production runs, use: make flow-crypto"
+echo ""
 
-# Check if PROFILE is set, and use it if manifest discovery is preferred.
-PROFILE_ARG=""
-if [ -n "$PROFILE" ]; then
-  PROFILE_ARG="--profile $PROFILE"
-fi
+# Use compose_pipeline with crypto_production profile
+PROFILE="${PROFILE:-crypto_production}"
 
-# Binance
-echo "----------------------------------------"
-echo "1. Binance Spot Long..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_binance_spot_long \
-  --config configs/crypto_cex_trend_binance_spot_daily_long.yaml \
-  --export json
+echo "Profile: $PROFILE"
+echo "------------------------------------------"
 
-echo "1b. Binance Spot Short..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_binance_spot_short \
-  --config configs/crypto_cex_trend_binance_spot_daily_short.yaml \
-  --export json
+uv run python scripts/compose_pipeline.py --profile "$PROFILE"
 
-echo "1c. Binance Perp Long..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_binance_perp_long \
-  --config configs/crypto_cex_trend_binance_perp_daily_long.yaml \
-  --export json
-
-echo "1d. Binance Perp Short..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_binance_perp_short \
-  --config configs/crypto_cex_trend_binance_perp_daily_short.yaml \
-  --export json
-
-# OKX
-echo "----------------------------------------"
-echo "2. OKX Spot Long..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_okx_spot_long \
-  --config configs/crypto_cex_trend_okx_spot_daily_long.yaml \
-  --export json
-
-echo "2b. OKX Spot Short..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_okx_spot_short \
-  --config configs/crypto_cex_trend_okx_spot_daily_short.yaml \
-  --export json
-
-echo "2c. OKX Perp Long..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_okx_perp_long \
-  --config configs/crypto_cex_trend_okx_perp_daily_long.yaml \
-  --export json
-
-echo "2d. OKX Perp Short..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_okx_perp_short \
-  --config configs/crypto_cex_trend_okx_perp_daily_short.yaml \
-  --export json
-
-# Bybit
-echo "----------------------------------------"
-echo "3. Bybit Spot Long..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_bybit_spot_long \
-  --config configs/crypto_cex_trend_bybit_spot_daily_long.yaml \
-  --export json
-
-echo "3b. Bybit Spot Short..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_bybit_spot_short \
-  --config configs/crypto_cex_trend_bybit_spot_daily_short.yaml \
-  --export json
-
-echo "3c. Bybit Perp Long..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_bybit_perp_long \
-  --config configs/crypto_cex_trend_bybit_perp_daily_long.yaml \
-  --export json
-
-echo "3d. Bybit Perp Short..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_bybit_perp_short \
-  --config configs/crypto_cex_trend_bybit_perp_daily_short.yaml \
-  --export json
-
-# Bitget
-echo "----------------------------------------"
-echo "4. Bitget Spot Long..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_bitget_spot_long \
-  --config configs/crypto_cex_trend_bitget_spot_daily_long.yaml \
-  --export json
-
-echo "4b. Bitget Spot Short..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_bitget_spot_short \
-  --config configs/crypto_cex_trend_bitget_spot_daily_short.yaml \
-  --export json
-
-echo "4c. Bitget Perp Long..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_bitget_perp_long \
-  --config configs/crypto_cex_trend_bitget_perp_daily_long.yaml \
-  --export json
-
-echo "4d. Bitget Perp Short..."
-uv run -m tradingview_scraper.futures_universe_selector \
-  $PROFILE_ARG --scanner-type crypto_bitget_perp_short \
-  --config configs/crypto_cex_trend_bitget_perp_daily_short.yaml \
-  --export json
-
-echo "----------------------------------------"
-echo "All crypto scans completed successfully. Results are in export/"
+echo "------------------------------------------"
+echo "Crypto scans completed. Results are in export/<run_id>/"
+echo ""
+echo "Next steps:"
+echo "  1. make data-prep-raw    # Aggregate scans into raw pool"
+echo "  2. make port-select      # Run natural selection"
+echo "  3. make flow-crypto      # Or run full pipeline"

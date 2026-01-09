@@ -1,5 +1,6 @@
 # L2: Crypto Spot Template
-base_preset: ../hygiene/institutional.yaml
+# Uses crypto-specific hygiene with relaxed entropy thresholds
+base_preset: ../hygiene/institutional_crypto.yaml
 markets: ["crypto"]
 include_perps_only: false
 exclude_perps: true

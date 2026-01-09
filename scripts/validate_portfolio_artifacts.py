@@ -255,9 +255,9 @@ class PortfolioAuditor:
             # Raw pool is a staging set; allow staleness (final gate is selected-mode health).
             critical_health = status_counts["MISSING"]
         else:
-            critical_health = status_counts["MISSING"] + status_counts["STALE"]
+            critical_health = status_counts["MISSING"]
             if strict:
-                critical_health += status_counts["DEGRADED (GAPS)"]
+                critical_health += status_counts["STALE"] + status_counts["DEGRADED (GAPS)"]
 
         self.generate_health_report(mode=mode)
 

@@ -37,6 +37,17 @@ def _get_annualization_factor(rets: pd.Series) -> int:
     return 252
 
 
+def calculate_max_drawdown(series: pd.Series | np.ndarray) -> float:
+    """Calculates Max Drawdown for a return series."""
+    if isinstance(series, np.ndarray):
+        series = pd.Series(series)
+
+    cum_ret = (1 + series).cumprod()
+    running_max = cum_ret.cummax()
+    drawdown = (cum_ret - running_max) / (running_max + 1e-12)
+    return float(drawdown.min())
+
+
 def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
     """
     Computes a standardized suite of performance metrics using QuantStats.
@@ -64,10 +75,22 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
         rets.index = pd.DatetimeIndex(new_idx)
     except Exception as e_idx:
         logger.debug(f"Metrics index forcing failed: {e_idx}")
-        if rets.index.tz is not None:
-            rets.index = rets.index.tz_convert(None).tz_localize(None)
+        # Fallback if attribute access fails
+        if hasattr(rets.index, "tz") and getattr(rets.index, "tz") is not None:
+            # For newer pandas versions or different index types
+            try:
+                # Type ignore because pyright complains about Index having no tz_convert
+                rets.index = cast(Any, rets.index).tz_convert(None)
+            except AttributeError:
+                # Fallback for some index types
+                rets.index = pd.to_datetime(rets.index).tz_convert(None)
         else:
-            rets.index = rets.index.tz_localize(None)
+            try:
+                # Type ignore because pyright complains about Index having no tz_localize
+                rets.index = cast(Any, rets.index).tz_localize(None)
+            except AttributeError:
+                # Fallback for some index types
+                rets.index = pd.to_datetime(rets.index).tz_localize(None)
 
     n_obs = len(rets)
     if n_obs == 0:
@@ -80,10 +103,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
     vol_daily = rets.std()
     realized_vol = vol_daily * math.sqrt(ann_factor)
 
-    cum_ret = (1 + rets).cumprod()
-    running_max = cum_ret.cummax()
-    drawdown = (cum_ret - running_max) / (running_max + 1e-12)
-    max_drawdown = float(drawdown.min())
+    max_drawdown = calculate_max_drawdown(rets)
 
     if n_obs < MIN_OBSERVATIONS:
         res = empty_res.copy()
