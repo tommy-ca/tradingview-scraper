@@ -65,7 +65,14 @@ class ClusteredOptimizerV2:
 
         try:
             engine = build_engine(engine_name)
-            request = EngineRequest(profile=profile, cluster_cap=cluster_cap)
+
+            # Inject advanced parameters via bayesian_params bucket
+            b_params = {}
+            if engine_name == "pyportfolioopt":
+                # Allow overriding linkage method via env var (default to single for backward compatibility)
+                b_params["hrp_linkage"] = os.getenv("TV_HRP_LINKAGE", "single")
+
+            request = EngineRequest(profile=profile, cluster_cap=cluster_cap, bayesian_params=b_params)
             response = engine.optimize(returns=self.returns, clusters=self.clusters, meta=self.meta, stats=self.stats, request=request)
             weights_df = response.weights
         except Exception as e:
@@ -100,7 +107,29 @@ if __name__ == "__main__":
     regime, score = detector.detect_regime(optimizer.returns)
     logger.info(f"Regime Detected for Optimization: {regime} (Score: {score:.2f})")
 
-    cap = float(os.getenv("CLUSTER_CAP", "0.25"))
+    # Load enhanced regime analysis if available (Phase 60 Update)
+    regime_analysis_path = "data/lakehouse/regime_analysis_v3.json"
+    regime_metrics = {}
+    recommended_window = 20
+    if os.path.exists(regime_analysis_path):
+        with open(regime_analysis_path, "r") as f:
+            regime_data = json.load(f)
+            regime_metrics = regime_data.get("tail_risk", {})
+            recommended_window = regime_data.get("persistence", {}).get("recommended_window", 20)
+            logger.info(f"Loaded enhanced regime metrics: MaxDD={regime_metrics.get('max_drawdown', 'N/A')}")
+            logger.info(f"Recommended Rebalance Window from Persistence: {recommended_window} days")
+
+    # Dynamic Cluster Cap Adjustment based on Regime
+    base_cap = float(os.getenv("CLUSTER_CAP", "0.25"))
+    cap = base_cap
+
+    if regime == "CRISIS":
+        # Tighten concentration limits in crisis
+        cap = min(base_cap, 0.15)
+        logger.info(f"Crisis Regime detected: Tightening cluster cap to {cap} (Tail-Risk Mitigation)")
+    elif regime == "TURBULENT":
+        cap = min(base_cap, 0.20)
+        logger.info(f"Turbulent Regime detected: Tightening cluster cap to {cap} (Regime Alignment)")
 
     # Generate results for each profile
     profiles = {}
@@ -193,7 +222,7 @@ if __name__ == "__main__":
     output = {
         "profiles": profiles,
         "cluster_registry": registry,
-        "optimization": {"regime": {"name": regime, "score": float(score)}},
+        "optimization": {"regime": {"name": regime, "score": float(score)}, "metrics": regime_metrics},
         "metadata": {"generated_at": datetime.now().isoformat(), "cluster_cap": cap},
     }
 

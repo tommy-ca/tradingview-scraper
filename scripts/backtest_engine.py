@@ -1113,6 +1113,13 @@ if __name__ == "__main__":
     if args.tournament:
         settings = get_settings()
         cluster_cap = float(args.cluster_cap) if args.cluster_cap is not None else float(settings.cluster_cap)
+
+        # Inject linkage method from env if present
+        b_params = {}
+        hrp_linkage = os.getenv("TV_HRP_LINKAGE")
+        if hrp_linkage:
+            b_params["hrp_linkage"] = hrp_linkage
+
         res = bt.run_tournament(
             train_window=args.train,
             test_window=args.test,
@@ -1123,6 +1130,7 @@ if __name__ == "__main__":
             simulators=_parse_list(args.simulators),
             start_date=args.start_date,
             end_date=args.end_date,
+            bayesian_params=b_params,
         )
         settings = get_settings()
         settings.prepare_summaries_run_dir()

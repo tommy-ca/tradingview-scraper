@@ -631,8 +631,13 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
         cap = _effective_cap(request.cluster_cap, n)
 
         if request.profile == "hrp":
-            hrp = HRPOpt(X)
-            weights = hrp.optimize()
+            # Pass shrunk covariance to HRPOpt to match Custom/CVX behavior
+            cov = _cov_shrunk(X)
+            # pypfopt expects a DataFrame for covariance if returns is a DataFrame
+            cov_df = pd.DataFrame(cov, index=X.columns, columns=X.columns)
+            hrp = HRPOpt(returns=X, cov_matrix=cov_df)
+            linkage = str(request.bayesian_params.get("hrp_linkage", "single"))
+            weights = hrp.optimize(linkage_method=linkage)
             w = np.array([float(cast(Dict[Any, Any], weights).get(str(k), 0.0)) for k in X.columns])
             s = _safe_series(w, X.columns)
         elif request.profile == "equal_weight":

@@ -133,6 +133,11 @@ scan-run: ## Execute composable discovery scanners
 scan-audit: ## Lint scanner configurations
 	$(PY) scripts/lint_universe_configs.py
 
+crypto-scan-audit: ## Validate crypto scanner configurations
+	$(PY) scripts/lint_universe_configs.py --path configs/scanners/crypto/
+	$(PY) scripts/lint_universe_configs.py --path configs/base/universes/binance*.yaml
+	$(PY) scripts/lint_universe_configs.py --path configs/base/templates/crypto*.yaml
+
 # --- DATA Namespace ---
 data-prep-raw: ## Aggregate scans and initialize raw pool
 	$(PY) scripts/select_top_universe.py --mode raw
@@ -229,6 +234,9 @@ report-sync: ## Synchronize artifacts to private Gist
 flow-production: ## Full institutional production lifecycle
 	$(PY) python -m scripts.run_production_pipeline --profile $(PROFILE) --manifest $(MANIFEST) --run-id $(TV_RUN_ID)
 
+flow-crypto: ## Full crypto-only production run (BINANCE-only)
+	$(MAKE) flow-production PROFILE=crypto_production
+
 flow-prelive: ## Production pre-live workflow (including slow Nautilus simulator)
 	$(MAKE) flow-production BACKTEST_SIMULATORS=custom,cvxportfolio,vectorbt,nautilus
 
@@ -250,6 +258,12 @@ clean-run: ## Wipe current run artifacts
 	rm -f data/lakehouse/portfolio_candidates*.json data/lakehouse/portfolio_returns.pkl data/lakehouse/portfolio_meta.json
 	rm -f data/lakehouse/portfolio_clusters*.json data/lakehouse/portfolio_optimized_v2.json
 	rm -f data/lakehouse/antifragility_stats.json data/lakehouse/selection_audit.json data/lakehouse/cluster_drift.json data/lakehouse/tmp_bt_*
+
+clean-archive: ## Archive old run artifacts (Keep 10 latest)
+	$(PY) scripts/maintenance/archive_runs.py --keep 10
+
+check-archive: ## Dry run archive to see what would be deleted
+	$(PY) scripts/maintenance/archive_runs.py --keep 10 --dry-run
 
 clean-all: clean-run ## Deep wipe including exports and all summaries
 	rm -rf export/*.csv export/*.json export/*/*.csv export/*/*.json
