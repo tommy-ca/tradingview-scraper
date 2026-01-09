@@ -79,6 +79,14 @@ analytics = [
     "nautilus_trader>=1.195.0",
 ]
 
+# MLOps Scaling and Orchestration
+mlops = [
+    "ray[default]>=2.9.0",
+    "prefect>=3.0.0",
+    "fsspec>=2024.2.0",
+    "s3fs>=2024.2.0",
+]
+
 # NOTE: `cvxportfolio` is GPL-3.0; keep isolated.
 engines-gpl = [
     "cvxportfolio",
