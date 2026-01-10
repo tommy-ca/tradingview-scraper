@@ -45,6 +45,7 @@ class FeatureFlags(BaseModel):
     efficiency_min_threshold: float = 0.1
     hurst_random_walk_min: float = 0.45
     hurst_random_walk_max: float = 0.55
+    eci_hurdle: float = 0.0
 
     # HPO Optimized Weights (Log-MPS 3.2)
     # Global Robust: Optimized across all 2025 regimes (Mean Alpha / Std Alpha)

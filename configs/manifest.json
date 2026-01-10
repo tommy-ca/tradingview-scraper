@@ -35,6 +35,7 @@
       "efficiency_min_threshold": 0.1,
       "hurst_random_walk_min": 0.48,
       "hurst_random_walk_max": 0.52,
+      "eci_hurdle": 0.0,
       "feat_audit_ledger": true
     }
   },
@@ -69,27 +70,19 @@
         "benchmark_symbols": ["BINANCE:BTCUSDT", "AMEX:SPY"],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
-        "test_window": 10,
-        "step_size": 5
-      },
-
-
-      "backtest": {
-        "benchmark_symbols": ["BINANCE:BTCUSDT", "AMEX:SPY"],
-        "backtest_slippage": 0.001,
-        "backtest_commission": 0.0004,
-        "test_window": 30,
-        "step_size": 15
+        "test_window": 40,
+        "step_size": 20
       },
       "features": {
         "selection_mode": "v3.2",
         "feat_dynamic_selection": false,
         "feat_short_direction": true,
         "entropy_max_threshold": 0.999,
-        "efficiency_min_threshold": 0.05
+        "efficiency_min_threshold": 0.05,
+        "eci_hurdle": -0.6
       },
       "data": {
-        "lookback_days": 300,
+        "lookback_days": 500,
         "min_days_floor": 90
       },
       "discovery": {
@@ -101,12 +94,13 @@
               "scanners/crypto/binance_spot_short_trend",
               "scanners/crypto/binance_perp_long_trend",
               "scanners/crypto/binance_perp_short_trend",
+              "scanners/crypto/binance_perp_secular_short",
               "scanners/crypto/binance_perp_long_mtf",
               "scanners/crypto/binance_perp_short_mtf",
               "scanners/crypto/vol_breakout"
             ],
             "interval": "1d",
-            "ingestion_depth": 300,
+            "ingestion_depth": 500,
             "strict_health": true
           }
         }
