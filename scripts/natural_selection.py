@@ -109,6 +109,7 @@ def natural_selection(
                 context={**sel_context_base, "selection_mode": current_mode},
             )
 
+        logger.info(f"Selection Request: top_n={top_n}, threshold={threshold}, m_gate={m_gate}, mode={current_mode}")
         response = run_selection(returns, raw_candidates, stats_df, top_n, threshold, max_clusters, m_gate, mode=current_mode)
         last_response = response
         winners = response.winners
@@ -117,7 +118,9 @@ def natural_selection(
         vetoes = response.vetoes
         engine_metrics = response.metrics
 
-        # Atomic write for winners (will be overwritten if multiple modes, so the last one wins)
+        logger.info(f"Selection Result: {len(winners)} winners picked.")
+
+        # Atomic write for winners
         with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(output_path), delete=False) as tf:
             json.dump(winners, tf, indent=2)
             temp_name = tf.name

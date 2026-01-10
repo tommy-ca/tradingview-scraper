@@ -169,7 +169,9 @@ class SelectionEngineV2(BaseSelectionEngine):
             if isinstance(sub_rets, pd.Series):
                 sub_rets = sub_rets.to_frame()
 
-            actual_top_n = request.top_n
+            # Intra-cluster Selection: Pick top N per direction
+            # Standard: Top 3 for Crypto to ensure sufficient diversification per factor
+            actual_top_n = max(3, request.top_n)
             if settings.features.feat_dynamic_selection and len(symbols) > 1:
                 c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
                 n_syms = len(symbols)
@@ -178,11 +180,12 @@ class SelectionEngineV2(BaseSelectionEngine):
                     mean_c = float(np.mean(c_corr.values[upper_indices]))
                     actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
 
-            # MOMENTUM GATE (Local window)
             window = min(60, len(sub_rets))
             sub_tail = sub_rets.tail(window)
-            cum_rets = (1 + sub_tail).prod() - 1
+            cum_rets = (1 + sub_tail.fillna(0.0)).prod() - 1
             m_winners = cum_rets[cum_rets >= request.min_momentum_score].index.tolist()
+
+            logger.info(f"Cluster {c_id}: {len(symbols)} symbols. m_winners: {len(m_winners)}. First 3 cum_rets: {cum_rets.head(3).to_dict()}")
 
             id_to_best: Dict[str, str] = {}
             for s in symbols:
@@ -192,12 +195,15 @@ class SelectionEngineV2(BaseSelectionEngine):
 
             uniques = list(id_to_best.values())
             longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and s in m_winners]
+            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
+
+            logger.info(f"Cluster {c_id}: {len(symbols)} symbols -> {len(uniques)} uniques -> {len(longs)} longs, {len(shorts)} shorts")
+
             c_selected = []
             if longs:
                 top = cast(pd.Series, alpha_scores.loc[longs]).sort_values(ascending=False).head(actual_top_n).index.tolist()
                 c_selected.extend([str(s) for s in top])
 
-            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
             if shorts:
                 top = cast(pd.Series, alpha_scores.loc[shorts]).sort_values(ascending=False).head(actual_top_n).index.tolist()
                 c_selected.extend([str(s) for s in top])
@@ -550,7 +556,10 @@ class SelectionEngineV3(BaseSelectionEngine):
             if isinstance(sub_rets, pd.Series):
                 sub_rets = sub_rets.to_frame()
 
-            actual_top_n = 1 if force_aggressive_pruning else request.top_n
+            # Intra-cluster Selection: Pick top N per direction
+            # Standard: Top 3 for Crypto to ensure sufficient diversification per factor
+            actual_top_n = max(3, request.top_n) if not force_aggressive_pruning else 1
+
             if not force_aggressive_pruning and settings.features.feat_dynamic_selection and len(symbols) > 1:
                 c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
                 n_syms = len(symbols)
@@ -561,8 +570,10 @@ class SelectionEngineV3(BaseSelectionEngine):
 
             window = min(60, len(sub_rets))
             sub_tail = sub_rets.tail(window)
-            cum_rets = (1 + sub_tail).prod() - 1
+            cum_rets = (1 + sub_tail.fillna(0.0)).prod() - 1
             m_winners = cum_rets[cum_rets >= request.min_momentum_score].index.tolist()
+
+            logger.info(f"Cluster {c_id}: {len(symbols)} symbols. m_winners: {len(m_winners)}. First 3 cum_rets: {cum_rets.head(3).to_dict()}")
 
             id_to_best: Dict[str, str] = {}
             for s in symbols:
@@ -572,12 +583,15 @@ class SelectionEngineV3(BaseSelectionEngine):
 
             uniques = list(id_to_best.values())
             longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and s in m_winners]
+            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
+
+            logger.info(f"Cluster {c_id}: {len(symbols)} symbols -> {len(uniques)} uniques -> {len(longs)} longs, {len(shorts)} shorts")
+
             c_selected = []
             if longs:
                 top = cast(pd.Series, alpha_scores.loc[longs]).sort_values(ascending=False).head(actual_top_n).index.tolist()
                 c_selected.extend([str(s) for s in top])
 
-            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
             if shorts:
                 top = cast(pd.Series, alpha_scores.loc[shorts]).sort_values(ascending=False).head(actual_top_n).index.tolist()
                 c_selected.extend([str(s) for s in top])
@@ -689,7 +703,8 @@ class SelectionEngineV3_2(SelectionEngineV3_1):
 
         for name, p_series in probs.items():
             omega = self.weights.get(name, 1.0)
-            log_score += omega * np.log(p_series.clip(lower=floor))
+            # Use fillna(floor) to ensure NaNs in components don't kill the entire alpha score
+            log_score += omega * np.log(p_series.fillna(floor).clip(lower=floor))
 
         # Log-based penalty: log(1 - penalty)
         penalty_factor = (1.0 - frag_penalty).clip(lower=floor)
@@ -738,7 +753,9 @@ class SelectionEngineV2_0(BaseSelectionEngine):
             if isinstance(sub_rets, pd.Series):
                 sub_rets = sub_rets.to_frame()
 
-            actual_top_n = request.top_n
+            # Intra-cluster Selection: Pick top N per direction
+            # Standard: Top 3 for Crypto to ensure sufficient diversification per factor
+            actual_top_n = max(3, request.top_n)
             if settings.features.feat_dynamic_selection and len(symbols) > 1:
                 c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
                 n_syms = len(symbols)
@@ -749,7 +766,7 @@ class SelectionEngineV2_0(BaseSelectionEngine):
 
             window = min(60, len(sub_rets))
             sub_tail = sub_rets.tail(window)
-            cum_rets = (1 + sub_tail).prod() - 1
+            cum_rets = (1 + sub_tail.fillna(0.0)).prod() - 1
             m_winners = cum_rets[cum_rets >= request.min_momentum_score].index.tolist()
 
             # V2.0: Local normalization within cluster
@@ -774,12 +791,15 @@ class SelectionEngineV2_0(BaseSelectionEngine):
 
             uniques = list(id_to_best.values())
             longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and s in m_winners]
+            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
+
+            logger.info(f"Cluster {c_id}: {len(symbols)} symbols -> {len(uniques)} uniques -> {len(longs)} longs, {len(shorts)} shorts")
+
             c_selected = []
             if longs:
                 top = cast(pd.Series, alpha_scores.loc[longs]).sort_values(ascending=False).head(actual_top_n).index.tolist()
                 c_selected.extend([str(s) for s in top])
 
-            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
             if shorts:
                 top = cast(pd.Series, alpha_scores.loc[shorts]).sort_values(ascending=False).head(actual_top_n).index.tolist()
                 c_selected.extend([str(s) for s in top])
