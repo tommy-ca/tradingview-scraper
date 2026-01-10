@@ -124,10 +124,11 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Infra**: Patched Makefile and Orchestrator for robust parameter promotion.
 
 ### Phase 80: Base Universe Hardening & Normalization (COMPLETED)
-- [x] **Specs**: Refined CR-151 to enforce three-stage "Prefetch -> Normalization -> Liquidity" filter.
-- [x] **Audit**: Identified non-normalized fiat volume (IDR, TRY) as a primary discovery bottleneck.
+- [x] **Specs**: Refined CR-151 to enforce four-stage "Prefetch -> Normalization -> Deduplication -> Selection" funnel.
+- [x] **Audit**: Confirmed Identity Deduplication as the primary driver of instrument pruning (Drop from 77 to 6).
 - [x] **Config**: Updated `binance_perp_top100.yaml` and `binance_spot_top100.yaml` with explicit USD-stable match filters and 5000-deep prefilters.
-- [x] **Validation**: Reached the Top 50 target for Perps and 9 institutional anchors for Spot.
+- [x] **Lookback**: Aligned secular history and floor to 180 days (CR-103).
+- [x] **Validation**: Verified the 140 -> 77 -> 6 -> 2 reduction as structurally intended for risk mitigation.
 - [x] **Infra**: Patched Makefile to ensure correct profile-based rebalancing and veto parameters.
 
 ### Phase 81: Robust Production Validation (COMPLETED)

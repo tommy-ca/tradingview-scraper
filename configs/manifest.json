@@ -107,7 +107,8 @@
         "selection_mode": "v3.2",
         "feat_dynamic_selection": false,
         "feat_short_direction": true,
-        "entropy_max_threshold": 0.999
+        "entropy_max_threshold": 0.999,
+        "efficiency_min_threshold": 0.05
       },
       "selection": {
         "threshold": 0.0,
@@ -115,6 +116,7 @@
         "min_momentum_score": -1.0
       },
       "data": {
+        "lookback_days": 180,
         "min_days_floor": 180
       },
       "discovery": {
@@ -131,7 +133,7 @@
               "scanners/crypto/vol_breakout"
             ],
             "interval": "1d",
-            "ingestion_depth": 500,
+            "ingestion_depth": 180,
             "strict_health": true
           }
         }

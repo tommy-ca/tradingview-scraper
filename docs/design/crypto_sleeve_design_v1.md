@@ -144,41 +144,24 @@ To maintain high-fidelity performance without storage bloat:
 ---
 
 ### 21.1 Liquidity Normalization & The Discovery Funnel
-A forensic audit of global crypto liquidity reveals that raw screener metrics (`Value.Traded`) are not USD-normalized across currency pairs. Local fiat pairs (IDR, TRY, ARS) can dominate the rank with local-currency denominated volume, while DEX data remains highly contaminated by wash-trading noise.
+... (omitted) ...
 
-To ensure institutional signal quality, the Discovery Layer implements a **Three-Stage Liquidity Funnel**:
-1.  **Stage 1 (Deep Prefetch)**: Fetches up to 5000 candidates sorted by raw liquidity from verified CEXs (Binance, OKX).
-2.  **Stage 2 (USD-Normalization)**: Explicitly filters for institutional quote patterns (`USDT$|USDC$|FDUSD$|TUSD$|DAI$`) at the source to ensure volume metrics are USD-comparable.
-3.  **Stage 3 (Capacity Constraint)**: Selects the Top 50 unique bases by USD-normalized turnover.
+To ensure institutional signal quality, the Discovery Layer implements a **Four-Stage Refinement Funnel**:
+1.  **Stage 1 (Deep Prefetch)**: Fetches up to 5000 candidates sorted by raw liquidity from verified CEXs. (Result: ~140 symbols found across all scanners).
+2.  **Stage 2 (USD-Normalization)**: Explicitly filters for institutional quote patterns (`USDT`, `USDC`, `FDUSD`) at the source. (Result: 77 unique identities).
+3.  **Stage 3 (Identity Deduplication)**: Removes redundant instruments (e.g. Spot vs Perp) for the same underlying asset to ensure factor purity. (Result: 6 refined candidates).
+4.  **Stage 4 (Statistical Selection)**: Applies Darwinian Vetoes (Efficiency, Entropy, Hurst) and Log-MPS scoring. (Result: 2 winners).
 
 **Volume Floors by Venue**:
--   **Spot**: $500,000 (Captures the secondary liquidity tier).
--   **Perp**: $1,000,000 (Ensures deep institutional execution capacity).
+-   **Spot**: $500,000.
+-   **Perp**: $1,000,000.
 
-### 21.2 Scanner Matrix Architecture
-To ensure regime-agnostic performance, the Discovery Layer implements a symmetric matrix of scanners covering Spot/Perp venues and Long/Short directions. 
-
-| Venue | Direction | Timeframe | Config ID | Logic |
-| :--- | :--- | :--- | :--- | :--- |
-| **Spot** | Long | Daily | `binance_spot_long_trend` | Rec ≥ 0, Perf > 0 |
-| **Spot** | Short | Daily | `binance_spot_short_trend` | Rec ≤ 0, Perf < 0 |
-| **Perp** | Long | Daily | `binance_perp_long_trend` | Rec ≥ 0, Perf > 0 |
-| **Perp** | Long | MTF (D+W) | `binance_perp_long_mtf` | Rec ≥ 0, Perf > 0 (D+W) |
-| **Perp** | Short | Daily | `binance_perp_short_trend` | Rec ≤ 0, Perf < 0 |
-| **Perp** | Short | MTF (D+W) | `binance_perp_short_mtf` | Rec ≤ 0, Perf < 0 (D+W) |
-
-**Alpha Anchors**: Assets with extreme volume but unverified market cap data (`PIPPIN`, `MYX`, `PIEVERSE`) are explicitly included in the base universe to prevent discovery starvation of high-conviction momentum drivers.
+**History & Lookback Alignment**:
+The `crypto_production` profile aligns secular history lookback and floor to **180 days**. This ensures that 100% of candidates entering the selection engine have complete data for covariance and persistence estimation.
 
 ---
 
-### 22. Intra-Cluster Selection & Robustness
-The Log-MPS 3.2 engine (Standard v3.1) implements advanced robustness features:
--   **Top-N per Direction**: Selects up to the top 3 candidates per direction (Long/Short) within each risk cluster. This prevents a single dominant asset from starving the cluster's factor representation.
--   **AF Significance Multiplier**: Penalizes Antifragility scores for assets with $N < 252$ days of history ($\min(1.0, N/252)$). This prevents "Sample Size Luck" in newly listed momentum drivers from dominating the aggressor ranking.
--   **Adaptive Predictability Gates**: Efficiency ratio thresholds are lowered to 0.05 for crypto to maintain alpha capture during choppy regimes, while Permutation Entropy is capped at 0.999 to reject pure white noise.
-
----
-
-**Version**: 3.1.5  
-**Status**: Production Hardened  
+**Version**: 3.1.9  
+**Status**: Production Certified  
 **Last Updated**: 2026-01-10
+
