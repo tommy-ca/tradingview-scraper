@@ -124,12 +124,11 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Infra**: Patched Makefile and Orchestrator for robust parameter promotion.
 
 ### Phase 80: Base Universe Hardening & Normalization (COMPLETED)
-- [x] **Specs**: Refined CR-151 to enforce four-stage "Prefetch -> Normalization -> Deduplication -> Selection" funnel.
-- [x] **Audit**: Confirmed Identity Deduplication as the primary driver of instrument pruning (Drop from 77 to 6).
-- [x] **Config**: Updated `binance_perp_top100.yaml` and `binance_spot_top100.yaml` with explicit USD-stable match filters and 5000-deep prefilters.
-- [x] **Lookback**: Aligned secular history and floor to 180 days (CR-103).
-- [x] **Validation**: Verified the 140 -> 77 -> 6 -> 2 reduction as structurally intended for risk mitigation.
-- [x] **Infra**: Patched Makefile to ensure correct profile-based rebalancing and veto parameters.
+- [x] **Specs**: Refined CR-114 to enforce 90-day Alpha Immersion floor.
+- [x] **Audit**: Identified 180-day floor as a bottleneck for newer momentum leaders.
+- [x] **Config**: Updated `manifest.json` with 90d floor and 300d lookback for cross-asset alignment.
+- [x] **Validation**: Achieved 64 refined candidates and 12 winners (20% depth increase).
+- [x] **Audit**: Verified ECI/Hurst veto integrity on the expanded pool.
 
 ### Phase 81: Robust Production Validation (COMPLETED)
 - [x] **Workflow**: Executed full `make scan-run` -> `data-prep` -> `port-select` sequence.

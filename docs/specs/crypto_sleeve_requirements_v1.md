@@ -1,4 +1,4 @@
-# Crypto Sleeve Requirements Specification v3.1.9
+# Crypto Sleeve Requirements Specification v3.2.0
 
 ## 1. Overview
 
@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment.
 
 ### 1.3 Status
-**Production Certified** (2026-01-10) - Funnel Integrity Validated (140 -> 77 -> 6 -> 2).
+**Production Certified** (2026-01-10) - Alpha Immersion Standard (90d Floor / 300d Lookback).
 
 ---
 
@@ -20,13 +20,11 @@ This specification covers the crypto asset discovery, selection, optimization, a
 |----------------|----------|--------|-------------|
 | CR-110 | MUST | ✅ | **Regime Analysis V3**: Analyze returns for Tail Risk (MaxDD, VaR) and Alpha Potential (Momentum, Dispersion). |
 | CR-111 | MUST | ✅ | **Dynamic Capping**: Adjust optimization cluster caps based on regime: Normal (0.25), Turbulent (0.20), Crisis (0.15). |
-| CR-114 | MUST | ✅ | **Alpha Immersion Floor**: The history floor for crypto assets is set to 30 days for research; production uses a 180-day floor aligned with secular lookback. |
-| CR-116 | MUST | ✅ | **Antifragility Significance**: Antifragility scores must be weighted by a significance multiplier ($\min(1.0, N/252)$) to prevent low-history assets from dominating the aggressor ranking. |
+| CR-114 | MUST | ✅ | **Alpha Immersion Floor**: The history floor for crypto assets is set to 90 days for production; this maximizes participation of high-momentum listings while maintaining statistical validity. |
+| CR-116 | MUST | ✅ | **Antifragility Significance**: Antifragility scores must be weighted by a significance multiplier ($\min(1.0, N/252)$) to prevent low-history assets from dominating the ranking. |
 | CR-115 | MUST | ✅ | **Cluster Diversification standard**: The selection engine must pick up to the Top 3 assets per direction (Long/Short) within each cluster to prevent single-asset factor concentration. |
-| CR-151 | MUST | ✅ | **Three-Stage Discovery Funnel**: Base universes must utilize: 1) 5000-deep Prefetch by raw liquidity; 2) Strict Institutional Quote matching (`USDT`, `USDC`, `FDUSD`); 3) Final Top 50 capture. |
-| CR-152 | MUST | ✅ | **USD-Normalization Enforcement**: Discovery layers must explicitly filter for institutional quote patterns at the source to prevent non-normalized local fiat pairs (IDR, TRY, ARS) from contaminating the rank. |
-| CR-153 | MUST | ✅ | **Adaptive Predictability Gates**: Selection must utilize a 0.05 Efficiency floor and 0.999 Entropy cap for crypto-specific noise tolerance. |
-| CR-154 | MUST | ✅ | **Identity-Based Deduplication**: The data preparation layer must enforce strict identity uniqueness to prevent redundant instrument allocation (e.g. Spot + Perp for BTC) within a single sleeve. |
+| CR-151 | MUST | ✅ | **Four-Stage Refinement Funnel**: Base universes must utilize: 1) 5000-deep Prefetch by raw liquidity; 2) USD-Normalization; 3) Identity Deduplication; 4) Statistical Selection. |
+| CR-154 | MUST | ✅ | **Cross-Asset Lookback Alignment**: Secular history lookback is set to 300 calendar days to ensure TradFi benchmarks (SPY) reach the required trading-day counts for covariance estimation. |
 
 
 ---

@@ -116,8 +116,8 @@
         "min_momentum_score": -1.0
       },
       "data": {
-        "lookback_days": 180,
-        "min_days_floor": 180
+        "lookback_days": 300,
+        "min_days_floor": 90
       },
       "discovery": {
         "enabled_markets": ["crypto"],
@@ -133,7 +133,7 @@
               "scanners/crypto/vol_breakout"
             ],
             "interval": "1d",
-            "ingestion_depth": 180,
+            "ingestion_depth": 300,
             "strict_health": true
           }
         }

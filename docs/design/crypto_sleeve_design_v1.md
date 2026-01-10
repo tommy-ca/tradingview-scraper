@@ -146,22 +146,19 @@ To maintain high-fidelity performance without storage bloat:
 ### 21.1 Liquidity Normalization & The Discovery Funnel
 ... (omitted) ...
 
-To ensure institutional signal quality, the Discovery Layer implements a **Four-Stage Refinement Funnel**:
-1.  **Stage 1 (Deep Prefetch)**: Fetches up to 5000 candidates sorted by raw liquidity from verified CEXs. (Result: ~140 symbols found across all scanners).
-2.  **Stage 2 (USD-Normalization)**: Explicitly filters for institutional quote patterns (`USDT`, `USDC`, `FDUSD`) at the source. (Result: 77 unique identities).
-3.  **Stage 3 (Identity Deduplication)**: Removes redundant instruments (e.g. Spot vs Perp) for the same underlying asset to ensure factor purity. (Result: 6 refined candidates).
-4.  **Stage 4 (Statistical Selection)**: Applies Darwinian Vetoes (Efficiency, Entropy, Hurst) and Log-MPS scoring. (Result: 2 winners).
+**The Alpha Immersion Standard (v3.2)**:
+To maximize the capture of "Momentum Ignition" points in high-volume new listings, the Discovery Layer implements an **Alpha-Immersion Funnel**:
+1.  **Stage 1 (Discovery)**: Fetches up to 5000 candidates by USD-equivalent turnover.
+2.  **Stage 2 (Identity Merging)**: Collapses symbols into unique factor identities (Result: ~78 identities).
+3.  **Stage 3 (History Hardening)**: Applies a **90-day secular floor** within a **300-day calendar lookback**. (Result: ~64 refined candidates).
+4.  **Stage 4 (Darwinian Selection)**: Executes Log-MPS 3.2 engine with ECI and Hurst vetoes. (Result: ~12 winners).
 
-**Volume Floors by Venue**:
--   **Spot**: $500,000.
--   **Perp**: $1,000,000.
-
-**History & Lookback Alignment**:
-The `crypto_production` profile aligns secular history lookback and floor to **180 days**. This ensures that 100% of candidates entering the selection engine have complete data for covariance and persistence estimation.
+**Cross-Asset Alignment**:
+The 300-day lookback is a structural requirement to ensure TradFi macro anchors (`SPY`) achieve sufficient trading-day counts for institutional covariance estimation.
 
 ---
 
-**Version**: 3.1.9  
+**Version**: 3.2.0  
 **Status**: Production Certified  
 **Last Updated**: 2026-01-10
 
