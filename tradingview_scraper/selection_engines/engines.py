@@ -375,6 +375,13 @@ class SelectionEngineV3(BaseSelectionEngine):
                 if "Regime_Survival_Score" in stats_df.columns:
                     regime_all.loc[common] = stats_df.loc[common, "Regime_Survival_Score"]
 
+        # AF Significance Multiplier: Linear penalty for history < 1 year (252 sessions)
+        # Prevents "Small Sample Bias" where new assets (PIPPIN, MYX) appear hyper-antifragile
+        history_counts = returns.count()
+        sig_multiplier = (history_counts / 252.0).clip(upper=1.0)
+        af_all = af_all * sig_multiplier
+        logger.info(f"Applied AF Significance Multiplier. Avg Penalty: {1.0 - sig_multiplier.mean():.2%}")
+
         # V3 Multiplicative Selection (Operation Darwin)
         mps_metrics = {
             "momentum": mom_all,
