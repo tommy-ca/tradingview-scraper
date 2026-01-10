@@ -1,11 +1,9 @@
-# L4: Binance Perp MTF Trend (Daily + Weekly Confirmation)
-# Production scanner for crypto_production profile
-# BINANCE-only for institutional execution quality
+# L4: Binance Perp MTF Trend (Short - Daily + Weekly Confirmation)
 base_preset: ../../base/universes/binance_perp_top100.yaml
 
-# Primary trend gate (daily fields)
+# Primary trend gate (daily)
 trend:
-  direction: "long"
+  direction: "short"
   logic: "AND"
   recommendation: {enabled: true, min: 0.0}
   adx: {enabled: true, min: 10}
@@ -16,7 +14,7 @@ trend:
 # MTF confirmation screen (weekly)
 confirm_screen:
   timeframe: "weekly"
-  direction: "long"
+  direction: "short"
   logic: "AND"
   recommendation: {enabled: true, min: 0.0}
   adx: {enabled: true, min: 10}
@@ -24,5 +22,5 @@ confirm_screen:
 
 limit: 50
 export_metadata:
-  symbol: binance_perp_long_mtf
+  symbol: binance_perp_short_mtf
   data_category: strategy_alpha

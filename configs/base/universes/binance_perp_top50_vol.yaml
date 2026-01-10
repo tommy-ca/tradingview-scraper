@@ -1,8 +1,0 @@
-base_preset: ../templates/crypto_perp.yaml
-exchanges: ["BINANCE"]
-limit: 50
-sort_by: Value.Traded
-sort_order: desc
-export_metadata:
-  symbol: binance_perp_top50_vol
-  data_category: universe_base
