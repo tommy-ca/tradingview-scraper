@@ -49,7 +49,7 @@ def run_selection(
 
 def natural_selection(
     returns_path: str = "data/lakehouse/portfolio_returns.pkl",
-    meta_path: str = "data/lakehouse/portfolio_candidates_raw.json",
+    meta_path: str = "data/lakehouse/portfolio_meta.json",
     stats_path: str = "data/lakehouse/antifragility_stats.json",
     output_path: str = "data/lakehouse/portfolio_candidates.json",
     top_n_per_cluster: Optional[int] = None,
@@ -86,7 +86,18 @@ def natural_selection(
 
     returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
     with open(meta_path, "r") as f_meta:
-        raw_candidates = json.load(f_meta)
+        meta_data = json.load(f_meta)
+
+    # Handle both list (raw candidates) and dict (refined meta) formats
+    if isinstance(meta_data, dict):
+        raw_candidates = []
+        for s, c in meta_data.items():
+            if "symbol" not in c:
+                c["symbol"] = s
+            raw_candidates.append(c)
+    else:
+        raw_candidates = meta_data
+
     stats_df = pd.read_json(stats_path).set_index("Symbol") if os.path.exists(stats_path) else None
 
     meta_hash = hashlib.sha256(json.dumps(raw_candidates, sort_keys=True).encode()).hexdigest()

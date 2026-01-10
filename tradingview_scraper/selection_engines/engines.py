@@ -339,7 +339,18 @@ class SelectionEngineV3(BaseSelectionEngine):
         mom_all: pd.Series = cast(pd.Series, returns.mean() * 252)
         vol_all: pd.Series = cast(pd.Series, returns.std() * np.sqrt(252))
         stab_all: pd.Series = cast(pd.Series, 1.0 / (vol_all + 1e-9))
-        liq_all: pd.Series = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
+
+        liq_all_dict = {}
+        for s in returns.columns:
+            s_str = str(s)
+            meta = candidate_map.get(s_str)
+            if not meta:
+                # Search by identity or unprefixed symbol
+                unprefixed = s_str.split(":")[-1] if ":" in s_str else s_str
+                meta = next((c for c in raw_candidates if c.get("identity") == s_str or c.get("symbol") == s_str or c.get("symbol") == unprefixed), {})
+            liq_all_dict[s] = calculate_liquidity_score(s_str, {s_str: meta} if meta else {})
+
+        liq_all: pd.Series = pd.Series(liq_all_dict)
         af_all: pd.Series = pd.Series(0.5, index=returns.columns)
         frag_all: pd.Series = pd.Series(0.0, index=returns.columns)
         regime_all: pd.Series = pd.Series(1.0, index=returns.columns)
@@ -457,9 +468,19 @@ class SelectionEngineV3(BaseSelectionEngine):
                     continue
 
                 h = float(hurst_all[s])
-                if settings.features.hurst_random_walk_min < h < settings.features.hurst_random_walk_max:
+                # CR-157: Benchmark Exemption for Random Walk
+                is_benchmark = candidate_map.get(str(s), {}).get("is_benchmark", False)
+                if not is_benchmark and settings.features.hurst_random_walk_min < h < settings.features.hurst_random_walk_max:
                     # Discard random walk zone
                     _record_veto(str(s), f"Random Walk zone (Hurst={h:.4f})")
+                    continue
+
+                # CR-156: Toxic Persistence Veto
+                # Disqualify assets in persistent downtrends (Hurst > 0.55 and Momentum < 0)
+                # These are "Falling Knives" that lack mean-reversion potential in the current window.
+                annual_momentum = float(mom_all[s]) if s in mom_all.index else 0.0
+                if h > 0.55 and annual_momentum < 0:
+                    _record_veto(str(s), f"Toxic Persistence (H={h:.4f}, M={annual_momentum:.4f})")
                     continue
         else:
             logger.debug("Predictability vetoes skipped (feature flag disabled)")
@@ -467,19 +488,34 @@ class SelectionEngineV3(BaseSelectionEngine):
         # Metadata Completeness
         required_meta = ["tick_size", "lot_size", "price_precision"]
         for s in returns.columns:
-            if str(s) in disqualified:
+            s_str = str(s)
+            if s_str in disqualified:
                 continue
-            meta = candidate_map.get(str(s), {})
+
+            # Robust Meta Lookup: Try direct symbol, then identity
+            meta = candidate_map.get(s_str)
+            if not meta:
+                # Search by identity or unprefixed symbol
+                unprefixed = s_str.split(":")[-1] if ":" in s_str else s_str
+                meta = next((c for c in raw_candidates if c.get("identity") == s_str or c.get("symbol") == s_str or c.get("symbol") == unprefixed), {})
+
             missing = [f for f in required_meta if f not in meta]
             if missing:
-                _record_veto(str(s), f"Missing metadata {missing}")
+                _record_veto(s_str, f"Missing metadata {missing}")
 
         # ECI (Estimated Cost of Implementation)
         order_size = 1e6
         for s in returns.columns:
-            if str(s) in disqualified:
+            s_str = str(s)
+            if s_str in disqualified:
                 continue
-            meta = candidate_map.get(str(s), {})
+
+            # Robust Meta Lookup
+            meta = candidate_map.get(s_str)
+            if not meta:
+                unprefixed = s_str.split(":")[-1] if ":" in s_str else s_str
+                meta = next((c for c in raw_candidates if c.get("identity") == s_str or c.get("symbol") == s_str or c.get("symbol") == unprefixed), {})
+
             # Use institutional floor if ADV is missing or near-zero
             adv = float(meta.get("value_traded") or meta.get("Value.Traded") or 1e8)
             if adv <= 0:

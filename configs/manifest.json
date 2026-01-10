@@ -65,6 +65,14 @@
         "min_momentum_score": -0.5,
         "selection_mode": "v3.2"
       },
+      "backtest": {
+        "benchmark_symbols": ["BINANCE:BTCUSDT", "AMEX:SPY"],
+        "backtest_slippage": 0.001,
+        "backtest_commission": 0.0004,
+        "test_window": 10,
+        "step_size": 5
+      },
+
 
       "backtest": {
         "benchmark_symbols": ["BINANCE:BTCUSDT", "AMEX:SPY"],

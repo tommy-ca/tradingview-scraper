@@ -163,6 +163,7 @@ def prepare_portfolio_universe():
                     "direction": candidate.get("direction", "LONG"),
                     "market": candidate.get("market", "UNKNOWN"),
                     "identity": candidate.get("identity", symbol),
+                    "is_benchmark": candidate.get("is_benchmark", False),
                 }
         except Exception as e:
             skipped_errors.append(symbol)

@@ -164,14 +164,19 @@ crypto-scan-audit: ## Validate crypto scanner configurations
 # --- DATA Namespace ---
 data-prep-raw: ## Aggregate scans and initialize raw pool
 	$(PY) scripts/select_top_universe.py --mode raw
-	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json $(PY) scripts/prepare_portfolio_data.py
-	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_candidates_raw.json
+	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json PORTFOLIO_RETURNS_PATH=data/lakehouse/portfolio_returns.pkl PORTFOLIO_META_PATH=data/lakehouse/portfolio_meta.json $(PY) scripts/prepare_portfolio_data.py
+	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_meta.json --returns data/lakehouse/portfolio_returns.pkl
 	-$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
 	$(PY) scripts/metadata_coverage_guardrail.py --target canonical:data/lakehouse/portfolio_candidates_raw.json:data/lakehouse/portfolio_returns.pkl
 
 data-fetch: ## Ingest historical market data
 	$(PY) scripts/prepare_portfolio_data.py
+	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_meta.json
 	@if [ "$(GAPFILL)" = "1" ] || [ "$(TV_GAPFILL)" = "1" ]; then \
+		echo "Running final aggressive repair pass..."; \
+		$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15; \
+	fi
+
 		echo "Running final aggressive repair pass..."; \
 		$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15; \
 	fi
@@ -191,7 +196,7 @@ data-audit: ## Session-Aware health audit (use STRICT_HEALTH=1)
 
 # --- PORT Namespace ---
 port-select: ## Natural selection and pruning
-	$(PY) scripts/enrich_candidates_metadata.py
+	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_meta.json
 	$(PY) scripts/natural_selection.py
 	$(PY) scripts/metadata_coverage_guardrail.py --target selected:data/lakehouse/portfolio_candidates.json:data/lakehouse/portfolio_returns.pkl
 

@@ -1,4 +1,4 @@
-# Crypto Sleeve Design Document v1.9
+# Crypto Sleeve Design Document v3.2.4
 
 ## 1. Architecture Overview
 
@@ -34,131 +34,36 @@ The crypto sleeve operates as an independent capital allocation unit within the 
 
 ---
 
-## 16. Optimization Pipeline Hardening
-
-### 16.1 Temporal Logic
-The optimization pipeline implements a **Double-Step Lookahead** strategy:
-- **Step Size**: 15 days.
-- **Test Window**: 30 days.
-- **Rationale**: Validating 2 consecutive steps per rebalance point ensures that momentum captures are not "flash-in-the-pan" anomalies but persistent regime transitions.
-
-### 16.2 Alpha Capture Governance
-The `SelectionEngineV32` is locked as the mandatory alpha core for crypto.
-- **Score Type**: Log-Multiplicative Probability.
-- **Filters**: Entropy (0.999), Hurst (0.48-0.52), Efficiency (0.15).
-
-### 16.3 Dynamic Regime Adaptation (Phase 60 Update)
-The optimization pipeline now features real-time adaptability via `optimize_clustered_v2.py`:
-- **Regime Sensing**: Ingests `regime_analysis_v3.json` to detect market state (NORMAL, TURBULENT, CRISIS).
-- **Cluster Cap Dynamic Scaling**:
-    - **NORMAL**: 25% (Base Cap) - Allows conviction.
-    - **TURBULENT**: 20% (Tightened) - Reduces idiosyncrasy.
-    - **CRISIS**: 15% (Defensive) - Max diversification.
-- **Metric Integration**: Embeds advanced Tail Risk (VaR, CVaR) and Alpha (Momentum, Dispersion) metrics into optimization metadata for auditability.
-
----
-
-## 17. Portfolio Trails and Replay Rationale
-
-### 17.1 The Nyquist Frequency of Rebalancing
-A deep audit of Run `20260109-164834` confirms that the **15-day rebalancing window** acts as the Nyquist-sampling frequency for the crypto momentum cycle. 
-- **Median Persistence**: $T_{median} = 19$ days.
-- **Signal Capture**: Rebalancing at $T < T_{median}$ (specifically 15d) ensures that the system rotates out of assets before their momentum decays into high-entropy noise.
-- **Friction-Alpha Parity**: Using 15 days provides sufficient alpha runway to overcome CEX commissions (4bps) and slippage (10bps) while maintaining a Sharpe > 2.0.
-
-### 17.2 Replay Dynamics (The "Golden Path")
-When replaying training and tests (Recursive Walk-Forward), the "trails" reveal a philosophy of **Philosophy-Consistent Diversification**:
-1.  **Selection Path**: Filters remove 70% of discovered assets based on ECI (Efficiency Capture Index) vetoes.
-2.  **Allocation Path**: HRP (Hierarchical Risk Parity) creates orthogonal risk units, ensuring that even if one cluster (e.g., Meme-Alts) collapses, the portfolio remains anchored in "Safe Haven" clusters (e.g., BTC/XMR).
-3.  **Result**: The "Portfolio Trails" show consistent upward drift during expansionary regimes and horizontal stability during turbulent regimes, thanks to the dynamic cluster capping (reduction to 20% in turbulence).
-
----
-
-### 17.3 Selection Evolution: The Freshness Factor
-Analysis of the Q1 2026 runs demonstrates that **Data Freshness** is a primary alpha driver. 
-- **Anchor Rotation**: When "Blue Chip" assets (BTC, SOL) are current, the Log-MPS v3.2 engine naturally favors them as low-entropy anchors.
-- **Meme Pruning**: Speculative assets with high volatility but high ECI (friction) are vetoed when high-fidelity anchors provide a more efficient risk-adjusted path.
-- **Structural Integrity**: The 15-day rebalancing window effectively "locks in" these rotations, preventing the portfolio from being stuck in stale discovery regimes.
-
----
-
-## 18. Regime & Engine Performance Matrix (Window Replay)
-
-### 18.1 Forensic Replay Analysis
-A deep audit of the 7-window backtest simulation reveals distinct performance characteristics across market regimes:
-
-| Regime Window | Characteristic | Winner | Loser | Rationale |
-| :--- | :--- | :--- | :--- | :--- |
-| **Window 0 (Bear)** | Crash (-1.7 Sharpe) | **MinVar** (-1.5) | Benchmark (-1.8) | Defensive allocation minimized drawdown. |
-| **Window 1 (Bull)** | Rally (+3.7 Sharpe) | **Market** (+3.7) | MinVar (+1.4) | High-beta exposure required for capture. |
-| **Window 3 (Crash)** | Crisis (-2.6 Sharpe) | **MinVar** (-0.3) | Barbell (-2.7) | **Critical Insight**: MinVar's short hedging capabilities prevented catastrophic loss. |
-| **Window 5 (Meme)** | Speculative (+3.3) | **Barbell** (+3.3) | Benchmark (+0.3) | Aggressor sleeve captured 1000x outliers. |
-| **Window 6 (Turbulent)** | Choppy (-1.9) | **HRP (CVX)** (+1.9) | Benchmark (-1.9) | Hierarchical clustering isolated toxic clusters. |
-
-### 18.2 Engine-Specific HRP Divergence
-In Turbulent Window 6, HRP performance varied significantly by implementation:
-- **CVXPortfolio**: **+1.98 Sharpe** (Superior covariance estimation).
-- **Skfolio**: **+0.62 Sharpe** (Robust).
-- **PyPortfolioOpt**: **-1.32 Sharpe** (Failed).
-
-**Design Decision**: The production system shall prioritize **CVXPortfolio** and **Skfolio** for HRP implementations due to their superior handling of turbulent covariance matrices.
-
----
-
-### 18.3 Engine Divergence Observation
-In Turbulent Window 6, a significant divergence was observed between HRP implementations:
--   **PyPortfolioOpt (Single Linkage)**: -1.32 Sharpe.
--   **Custom/CVX (Ward Linkage)**: +1.98 Sharpe.
-
-**Hypothesis**: Ward Linkage may be more robust to crypto noise.
-**Strategy**: Maintain an open tournament matrix including all engines to validate this hypothesis across a wider sample of regimes (N > 30 windows) before deprecating any implementation.
-
----
-
-### 18.4 Selection Funnel Dynamics
-Audit of the Q1 2026 Production Run confirms the "Natural Selection" funnel architecture:
--   **Discovery**: ~100 assets.
--   **Retention**: ~20% (21 assets).
--   **Veto Architecture**:
-    -   **High Friction (50%)**: Removes assets where ECI > 0.1 and Momentum < 0.
-    -   **Low Efficiency (32%)**: Removes assets with Efficiency Ratio < 0.05.
-    -   **Random Walk (18%)**: Removes assets with Hurst exponent ~0.5.
-
-This funnel ensures that the *inputs* to the Optimization Engine are already pre-qualified as "High Quality Alpha Candidates", allowing the optimizer to focus on correlation management rather than quality control.
-
----
-
-### 19. Data Lifecycle & Retention
-To maintain high-fidelity performance without storage bloat:
--   **Active Window**: The system retains the last **10 production runs** in the active workspace for immediate audit and rollback.
--   **Archival Policy**: Runs older than 10 iterations are automatically compressed (`tar.gz`) and moved to `artifacts/archive/` via the `make clean-archive` target.
--   **Traceability**: Even archived runs retain their `audit.jsonl` integrity, ensuring full regulatory compliance capability.
-
----
-
-### 20. Deployment Architecture
-- **Schedule**: Daily at **00:05 UTC** (post-close of traditional markets, aligned with crypto daily candles).
-- **Environment**: Containerized Python environment with `uv` dependency management.
-- **Output**: Git-versioned artifacts pushed to persistent storage; Summary reports synced to Gist.
-
----
+## 21. Refinement Funnel Architecture
 
 ### 21.1 Liquidity Normalization & The Discovery Funnel
-... (omitted) ...
+A forensic audit of global crypto liquidity reveals that raw screener metrics (`Value.Traded`) are not USD-normalized across currency pairs. Local fiat pairs (IDR, TRY, ARS) can dominate the rank with local-currency denominated volume, while DEX data remains highly contaminated by wash-trading noise.
 
-**The Alpha Immersion Standard (v3.2)**:
-To maximize the capture of "Momentum Ignition" points in high-volume new listings, the Discovery Layer implements an **Alpha-Immersion Funnel**:
-1.  **Stage 1 (Discovery)**: Fetches up to 5000 candidates by USD-equivalent turnover.
-2.  **Stage 2 (Identity Merging)**: Collapses symbols into unique factor identities (Result: ~78 identities).
-3.  **Stage 3 (History Hardening)**: Applies a **90-day secular floor** within a **300-day calendar lookback**. (Result: ~64 refined candidates).
-4.  **Stage 4 (Darwinian Selection)**: Executes Log-MPS 3.2 engine with ECI and Hurst vetoes. (Result: ~12 winners).
+To ensure institutional signal quality, the Discovery Layer implements a **Five-Stage Refinement Funnel**:
+1.  **Stage 1 (Discovery)**: Fetches up to 5000 candidates sorted by raw liquidity from verified CEXs.
+2.  **Stage 2 (USD-Normalization)**: Explicitly filters for institutional quote patterns (`USDT`, `USDC`, `FDUSD`) at the source. (Result: ~77 unique identities).
+3.  **Stage 3 (Metadata Enrichment)**: Injects institutional default execution metadata (`tick_size`, `lot_size`, `price_precision`) for all candidates. This ensures that new listings are not vetoed due to latent exchange metadata.
+4.  **Stage 4 (Identity Deduplication)**: Removes redundant instruments (e.g. Spot vs Perp) for the same underlying asset to ensure factor purity. (Result: ~64 refined candidates).
+5.  **Stage 5 (Statistical Selection)**: Executes Log-MPS 3.2 engine with ECI and Hurst vetoes. (Result: ~36 winners).
 
-**Cross-Asset Alignment**:
-The 300-day lookback is a structural requirement to ensure TradFi macro anchors (`SPY`) achieve sufficient trading-day counts for institutional covariance estimation.
+**Volume Floors by Venue**:
+-   **Spot**: $500,000.
+-   **Perp**: $1,000,000.
+
+**History & Lookback Alignment**:
+The `crypto_production` profile aligns secular history lookback to **300 days** with a **90-day floor**. This ensures that TradFi macro anchors (`SPY`) achieve sufficient trading-day counts for covariance estimation while allowing high-momentum new listings to participate.
+
+### 22. Balanced Alpha Selection & Factor Isolation
+The Log-MPS 3.2 engine (Standard v3.2.4) implements high-fidelity factor isolation:
+-   **High-Resolution Clustering (v3.2.4)**: The distance threshold for hierarchical clustering (Ward Linkage) is set to **0.50**. This isolates orthogonal risk units while maintaining semantic groupings (L1s, AI, Memes), allowing for a broader set of tradable candidates.
+-   **Adaptive Friction Gate (v3.2.4)**: Applies a **25% Friction Budget Buffer** for assets with extreme alpha (> 100%). Additionally, the ECI hurdle is dynamically adjusted for turnaround plays (momentum > -0.5) to prevent blanket vetoes of high-potential reversals.
+-   **Toxic Persistence Veto (v3.2.5)**: To protect against "Falling Knives," the engine disqualifies assets where $Hurst > 0.55$ and $Momentum < 0$. This ensures that assets with negative momentum are only included if they display mean-reverting characteristics ($H < 0.45$).
+-   **Benchmark Stability Anchor (v3.2.6)**: Macro anchors (e.g., SPY) are exempt from Random Walk (Hurst) vetoes. This preserves the portfolio's low-beta offset even when the global equity market is in a non-trending regime.
+-   **Rebalance Frequency**: Formally standardized to a **5-day rebalancing cycle** for the current regime, as recommended by the Forensic Persistence Audit ($T_{median}=5d$ for alpha drivers).
+-   **Cluster Diversification**: Selects up to the **top 5 assets** per direction per cluster, ensuring deep factor representation across the candidate pool.
 
 ---
 
-**Version**: 3.2.0  
+**Version**: 3.2.4  
 **Status**: Production Certified  
 **Last Updated**: 2026-01-10
-
