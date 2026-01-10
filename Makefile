@@ -164,10 +164,10 @@ crypto-scan-audit: ## Validate crypto scanner configurations
 # --- DATA Namespace ---
 data-prep-raw: ## Aggregate scans and initialize raw pool
 	$(PY) scripts/select_top_universe.py --mode raw
-	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json PORTFOLIO_RETURNS_PATH=data/lakehouse/portfolio_returns_raw.pkl PORTFOLIO_META_PATH=data/lakehouse/portfolio_meta_raw.json $(PY) scripts/prepare_portfolio_data.py
-	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_candidates_raw.json --returns data/lakehouse/portfolio_returns_raw.pkl
+	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json $(PY) scripts/prepare_portfolio_data.py
+	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_candidates_raw.json
 	-$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
-	$(PY) scripts/metadata_coverage_guardrail.py --target canonical:data/lakehouse/portfolio_candidates_raw.json:data/lakehouse/portfolio_returns_raw.pkl
+	$(PY) scripts/metadata_coverage_guardrail.py --target canonical:data/lakehouse/portfolio_candidates_raw.json:data/lakehouse/portfolio_returns.pkl
 
 data-fetch: ## Ingest historical market data
 	$(PY) scripts/prepare_portfolio_data.py

@@ -491,8 +491,19 @@ class SelectionEngineV3(BaseSelectionEngine):
             eci = min(0.10, eci_raw)
 
             annual_momentum = float(mom_all[s]) if s in mom_all.index else 0.0  # type: ignore
-            if annual_momentum - eci_raw < self.eci_hurdle:
-                _record_veto(str(s), f"High friction (ECI={eci_raw:.4f}) relative to Momentum ({annual_momentum:.4f})")
+            m_gain = annual_momentum - eci_raw
+
+            # Dynamic ECI Hurdle: If we allow negative momentum (turnaround plays),
+            # we must lower the ECI hurdle to prevent them from being blanket-vetoed.
+            # We enforce a 5% margin below the momentum floor.
+            current_hurdle = min(self.eci_hurdle, request.min_momentum_score - 0.05) if request.min_momentum_score < 0 else self.eci_hurdle
+
+            if m_gain < current_hurdle:
+                # If momentum is very high (> 100% ann.), we apply a 25% safety buffer to the hurdle
+                if annual_momentum > 1.0 and m_gain >= (current_hurdle * 1.25):
+                    logger.debug(f"Allowing {s} with high friction due to extreme Alpha dominance (M={annual_momentum:.2f})")
+                else:
+                    _record_veto(str(s), f"High friction (ECI={eci_raw:.4f}) relative to Momentum ({annual_momentum:.4f})")
 
         for s in disqualified:
             alpha_scores.loc[s] = -1.0
