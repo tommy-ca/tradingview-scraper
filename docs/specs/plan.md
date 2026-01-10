@@ -123,10 +123,12 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Grounding**: Confirmed `MYX` rejection ($N < 180$) and `PIPPIN` AF adjustment (0.95x).
 - [x] **Infra**: Patched Makefile and Orchestrator for robust parameter promotion.
 
-### Phase 80: Base Universe Hardening (COMPLETED)
-- [x] **Specs**: Refined CR-151 to enforce two-stage "Mcap -> Liquidity" filter.
-- [x] **Config**: Updated `binance_perp_top100.yaml` and `binance_spot_top100.yaml` with Mcap prefilter (100) and Liquidity selection (50).
-- [x] **Validation**: Confirmed `PIPPIN` survives the new filter; `MYX` and `PIEVERSE` ensured via `ensure_symbols`.
+### Phase 80: Base Universe Hardening & Normalization (COMPLETED)
+- [x] **Specs**: Refined CR-151 to enforce three-stage "Prefetch -> Normalization -> Liquidity" filter.
+- [x] **Audit**: Identified non-normalized fiat volume (IDR, TRY) as a primary discovery bottleneck.
+- [x] **Config**: Updated `binance_perp_top100.yaml` and `binance_spot_top100.yaml` with explicit USD-stable match filters and 5000-deep prefilters.
+- [x] **Validation**: Reached the Top 50 target for Perps and 9 institutional anchors for Spot.
+- [x] **Infra**: Patched Makefile to ensure correct profile-based rebalancing and veto parameters.
 
 ### Phase 81: Robust Production Validation (COMPLETED)
 - [x] **Workflow**: Executed full `make scan-run` -> `data-prep` -> `port-select` sequence.
@@ -134,7 +136,9 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Audit**: Confirmed institutional retention standard (20.7%) and veto integrity.
 - [x] **State**: System validated for high-fidelity Q1 2026 production.
 
-### Phase 82: System Freeze
-- [ ] **Final State**: Atomic commit of all validated configurations and research scripts.
+### Phase 82: System Sign-Off (COMPLETED)
+- [x] **Docs**: Updated Design, Requirements, and Plan for v3.1 Standards.
+- [x] **State**: System worktree cleaned and atomic commits applied.
+- [x] **Freeze**: Release tagged `v1.1.0-discovery-hardened`.
 
 

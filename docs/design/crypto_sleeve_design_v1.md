@@ -143,14 +143,20 @@ To maintain high-fidelity performance without storage bloat:
 
 ---
 
-### 21. Scanner Matrix Architecture
+### 21.1 Liquidity Normalization & The Discovery Funnel
+A forensic audit of global crypto liquidity reveals that raw screener metrics (`Value.Traded`) are not USD-normalized across currency pairs. Local fiat pairs (IDR, TRY, ARS) can dominate the rank with local-currency denominated volume, while DEX data remains highly contaminated by wash-trading noise.
+
+To ensure institutional signal quality, the Discovery Layer implements a **Three-Stage Liquidity Funnel**:
+1.  **Stage 1 (Deep Prefetch)**: Fetches up to 5000 candidates sorted by raw liquidity from verified CEXs (Binance, OKX).
+2.  **Stage 2 (USD-Normalization)**: Explicitly filters for institutional quote patterns (`USDT$|USDC$|FDUSD$|TUSD$|DAI$`) at the source to ensure volume metrics are USD-comparable.
+3.  **Stage 3 (Capacity Constraint)**: Selects the Top 50 unique bases by USD-normalized turnover.
+
+**Volume Floors by Venue**:
+-   **Spot**: $500,000 (Captures the secondary liquidity tier).
+-   **Perp**: $1,000,000 (Ensures deep institutional execution capacity).
+
+### 21.2 Scanner Matrix Architecture
 To ensure regime-agnostic performance, the Discovery Layer implements a symmetric matrix of scanners covering Spot/Perp venues and Long/Short directions. 
-
-**Liquidity Funnel**: The discovery process is grounded in a **Two-Stage Standard Base** (`binance_perp_top100` and `binance_spot_top100`):
-1.  **Stage 1 (Funnel)**: Top 100 assets by Market Cap (`market_cap_calc`).
-2.  **Stage 2 (Liquidity)**: Top 50 liquid assets by 24h turnover (`Value.Traded`) selected from the Stage 1 pool.
-
-This ensures that alpha candidates have sufficient depth for institutional execution while maintaining a baseline of established market capitalization.
 
 | Venue | Direction | Timeframe | Config ID | Logic |
 | :--- | :--- | :--- | :--- | :--- |
@@ -166,14 +172,13 @@ This ensures that alpha candidates have sufficient depth for institutional execu
 ---
 
 ### 22. Intra-Cluster Selection & Robustness
-The Log-MPS 3.2 engine implements advanced robustness features to handle the highly dynamic crypto environment:
--   **Top-N per Direction**: The system avoids "Starvation" of risk clusters by selecting up to the top 3 candidates per direction (Long/Short). This ensures factor diversification even if one asset dominates the cluster score.
--   **NaN-Tolerance**: Component probabilities ($P_i$) are calculated with a `fillna(floor)` strategy. This prevents "Missing-Stat Vetoes" where a single failed test (e.g., non-stationary series) would otherwise zero-out the entire multiplicative probability score.
--   **Dynamic History Support**: By setting the `min_days_floor` to 30, the selection funnel captures "Momentum Ignition" in newly listed assets, while the standard 15-day rebalancing window provides the necessary exit speed should the momentum decay.
--   **Antifragility Confidence**: To prevent "Sample Size Bias," Antifragility scores are penalized by a linear significance multiplier for assets with less than 252 days of secular history.
+The Log-MPS 3.2 engine (Standard v3.1) implements advanced robustness features:
+-   **Top-N per Direction**: Selects up to the top 3 candidates per direction (Long/Short) within each risk cluster. This prevents a single dominant asset from starving the cluster's factor representation.
+-   **AF Significance Multiplier**: Penalizes Antifragility scores for assets with $N < 252$ days of history ($\min(1.0, N/252)$). This prevents "Sample Size Luck" in newly listed momentum drivers from dominating the aggressor ranking.
+-   **Adaptive Predictability Gates**: Efficiency ratio thresholds are lowered to 0.05 for crypto to maintain alpha capture during choppy regimes, while Permutation Entropy is capped at 0.999 to reject pure white noise.
 
 ---
 
-**Version**: 3.1  
-**Status**: Production Ready  
-**Last Updated**: 2026-01-09
+**Version**: 3.1.5  
+**Status**: Production Hardened  
+**Last Updated**: 2026-01-10

@@ -1,4 +1,4 @@
-# Crypto Sleeve Requirements Specification v1.9
+# Crypto Sleeve Requirements Specification v3.1.7
 
 ## 1. Overview
 
@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment.
 
 ### 1.3 Status
-**Production Ready** (2026-01-09) - Final Optimization Pipeline Hardening.
+**Production Certified** (2026-01-10) - Discovery Layer Hardened (CR-151, CR-152).
 
 ---
 
@@ -29,25 +29,17 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-101 | MUST | ✅ | **Lookahead Standard**: Backtest test windows must be exactly 2x step size (30 days). |
 | CR-102 | MUST | ✅ | **Selection Mode Lock**: Crypto production must exclusively use `v3.2` (Log-MPS) for risk engines. |
 
-### 2.11 Dynamic Regime Adaptation (Phase 60)
+### 2.11 Dynamic Regime Adaptation
 | Requirement ID | Priority | Status | Description |
 |----------------|----------|--------|-------------|
 | CR-110 | MUST | ✅ | **Regime Analysis V3**: Analyze returns for Tail Risk (MaxDD, VaR) and Alpha Potential (Momentum, Dispersion). |
 | CR-111 | MUST | ✅ | **Dynamic Capping**: Adjust optimization cluster caps based on regime: Normal (0.25), Turbulent (0.20), Crisis (0.15). |
-| CR-112 | MUST | ✅ | **Persistence-Driven Rebalancing**: Automatically calculate optimal window using Nyquist-sampling of trend durations. |
-| CR-113 | MUST | ✅ | **Data Freshness Primitive**: Selection logic must prioritize assets with < 24h lag to ensure "Blue Chip" momentum anchors are correctly evaluated against speculative "Meme" discovery. |
-| CR-114 | MUST | ✅ | **Alpha Immersion Floor**: The history floor for crypto assets is set to 30 days to allow participation of high-momentum new listings while maintaining a minimum statistical baseline. |
+| CR-114 | MUST | ✅ | **Alpha Immersion Floor**: The history floor for crypto assets is set to 30 days; selection engine must apply linear significance weighting ($\min(1.0, N/252)$) to these assets. |
 | CR-116 | MUST | ✅ | **Antifragility Significance**: Antifragility scores must be weighted by a significance multiplier ($\min(1.0, N/252)$) to prevent low-history assets from dominating the aggressor ranking. |
 | CR-115 | MUST | ✅ | **Cluster Diversification standard**: The selection engine must pick up to the Top 3 assets per direction (Long/Short) within each cluster to prevent single-asset factor concentration. |
-| CR-120 | MUST | ✅ | **Risk Profile Diversification Floor**: Every optimized profile must contain at least 5 orthogonal risk units (clusters) to prevent idiosyncratic tail-risk. |
-| CR-121 | MUST | ✅ | **Profile Fidelity Check**: Optimization engines must validate that the realized volatility of the `min_variance` profile is at least 30% lower than the `equal_weight` baseline. |
-| CR-122 | MUST | ✅ | **Multi-Engine Benchmarking**: The validation tournament must include all available engines (`custom`, `skfolio`, `riskfolio`, `pyportfolioopt`, `cvxportfolio`) to build a statistical significance baseline for linkage sensitivity. |
-| CR-130 | MUST | ✅ | **Funnel Retention Baseline**: The Selection Engine must demonstrate a discovery-to-candidate retention rate of 15-25% to ensure sufficient noise filtering without over-constraining the universe. |
-| CR-131 | MUST | ✅ | **Friction Filter Dominance**: The primary veto mechanism must be the "High Friction" filter (ECI vs Momentum), accounting for >40% of all vetoes, to effectively remove speculative assets with poor trade execution profiles. |
-| CR-140 | MUST | ✅ | **Artifact Retention Policy**: The system must maintain a rolling window of 10 fully accessible production runs, with older runs automatically archived to compressed storage to balance auditability with storage efficiency. |
-| CR-150 | MUST | ✅ | **Symmetric Signal Generation**: To support market-neutral and hedging strategies (MinVar, Barbell), the discovery layer must produce symmetric Long and Short candidate pools across both Spot and Perpetual execution venues. |
-| CR-151 | MUST | ✅ | **Liquidity-Prioritized Funnel**: Base universes for scanners must utilize a two-stage filter: Top 100 by Market Cap, then Top 50 by Liquidity (Value.Traded), to ensure high-fidelity signal extraction from established assets. |
-| CR-152 | MUST | ✅ | **Key Alpha Anchors**: The system must ensure inclusion of high-volume alpha drivers (PIPPIN, MYX, PIEVERSE) in the base candidate pool regardless of unverified market cap status. |
+| CR-151 | MUST | ✅ | **Three-Stage Discovery Funnel**: Base universes must utilize: 1) 5000-deep Prefetch by raw liquidity; 2) Strict Institutional Quote matching (`USDT`, `USDC`, `FDUSD`); 3) Final Top 50 capture. |
+| CR-152 | MUST | ✅ | **USD-Normalization Enforcement**: Discovery layers must explicitly filter for institutional quote patterns at the source to prevent non-normalized local fiat pairs (IDR, TRY, ARS) from contaminating the rank. |
+| CR-153 | MUST | ✅ | **Adaptive Predictability Gates**: Selection must utilize a 0.05 Efficiency floor and 0.999 Entropy cap for crypto-specific noise tolerance. |
 
 ---
 
