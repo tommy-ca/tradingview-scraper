@@ -144,7 +144,13 @@ To maintain high-fidelity performance without storage bloat:
 ---
 
 ### 21. Scanner Matrix Architecture
-To ensure regime-agnostic performance, the Discovery Layer implements a symmetric matrix of scanners covering Spot/Perp venues and Long/Short directions.
+To ensure regime-agnostic performance, the Discovery Layer implements a symmetric matrix of scanners covering Spot/Perp venues and Long/Short directions. 
+
+**Liquidity Funnel**: The discovery process is grounded in a **Two-Stage Standard Base** (`binance_perp_top100` and `binance_spot_top100`):
+1.  **Stage 1 (Funnel)**: Top 100 assets by Market Cap (`market_cap_calc`).
+2.  **Stage 2 (Liquidity)**: Top 50 liquid assets by 24h turnover (`Value.Traded`) selected from the Stage 1 pool.
+
+This ensures that alpha candidates have sufficient depth for institutional execution while maintaining a baseline of established market capitalization.
 
 | Venue | Direction | Timeframe | Config ID | Logic |
 | :--- | :--- | :--- | :--- | :--- |
@@ -155,7 +161,7 @@ To ensure regime-agnostic performance, the Discovery Layer implements a symmetri
 | **Perp** | Short | Daily | `binance_perp_short_trend` | Rec ≤ 0, Perf < 0 |
 | **Perp** | Short | MTF (D+W) | `binance_perp_short_mtf` | Rec ≤ 0, Perf < 0 (D+W) |
 
-**Symmetry Rule**: Short scanners use `Recommendation <= 0.0` (Neutral/Sell) to mirror Long scanners' `Recommendation >= 0.0` (Neutral/Buy), expanding the candidate pool for defensive profiles like `min_variance`.
+**Alpha Anchors**: Assets with extreme volume but unverified market cap data (`PIPPIN`, `MYX`, `PIEVERSE`) are explicitly included in the base universe to prevent discovery starvation of high-conviction momentum drivers.
 
 ---
 
@@ -164,9 +170,10 @@ The Log-MPS 3.2 engine implements advanced robustness features to handle the hig
 -   **Top-N per Direction**: The system avoids "Starvation" of risk clusters by selecting up to the top 3 candidates per direction (Long/Short). This ensures factor diversification even if one asset dominates the cluster score.
 -   **NaN-Tolerance**: Component probabilities ($P_i$) are calculated with a `fillna(floor)` strategy. This prevents "Missing-Stat Vetoes" where a single failed test (e.g., non-stationary series) would otherwise zero-out the entire multiplicative probability score.
 -   **Dynamic History Support**: By setting the `min_days_floor` to 30, the selection funnel captures "Momentum Ignition" in newly listed assets, while the standard 15-day rebalancing window provides the necessary exit speed should the momentum decay.
+-   **Antifragility Confidence**: To prevent "Sample Size Bias," Antifragility scores are penalized by a linear significance multiplier for assets with less than 252 days of secular history.
 
 ---
 
-**Version**: 3.0  
+**Version**: 3.1  
 **Status**: Production Ready  
 **Last Updated**: 2026-01-09

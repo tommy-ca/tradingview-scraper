@@ -115,10 +115,26 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Robustness**: Added **NaN-safe scoring** to Log-MPS 3.2 engine.
 - [x] **Hygiene**: Relaxed `min_days_floor` to 30 days to capture new alpha (PIPPIN, MYX).
 - [x] **Verification**: Confirmed funnel retention (18%) and veto integrity (Operation Darwin).
+- [x] **Significance**: Implemented linear Significance Multiplier for Antifragility scores.
 
-### Phase 79: Final Deployment & Audit
-- [ ] **Workflow**: Execute final `make flow-crypto` with validated matrix.
-- [ ] **Audit**: Generate unified Sign-Off report for the new architecture.
-- [ ] **Freeze**: Final system state synchronization.
+### Phase 79: Final Deployment & Audit (COMPLETED)
+- [x] **Verification**: Confirmed `PIPPIN` (497M vol) inclusion in Top 100 universe.
+- [x] **Symmetry**: Verified 2L/4S selection from new symmetric matrix.
+- [x] **Grounding**: Confirmed `MYX` rejection ($N < 180$) and `PIPPIN` AF adjustment (0.95x).
+- [x] **Infra**: Patched Makefile and Orchestrator for robust parameter promotion.
+
+### Phase 80: Base Universe Hardening (COMPLETED)
+- [x] **Specs**: Refined CR-151 to enforce two-stage "Mcap -> Liquidity" filter.
+- [x] **Config**: Updated `binance_perp_top100.yaml` and `binance_spot_top100.yaml` with Mcap prefilter (100) and Liquidity selection (50).
+- [x] **Validation**: Confirmed `PIPPIN` survives the new filter; `MYX` and `PIEVERSE` ensured via `ensure_symbols`.
+
+### Phase 81: Robust Production Validation (COMPLETED)
+- [x] **Workflow**: Executed full `make scan-run` -> `data-prep` -> `port-select` sequence.
+- [x] **Symmetry**: Verified 15L/8S selection from finalized symmetric matrix build on hardened base.
+- [x] **Audit**: Confirmed institutional retention standard (20.7%) and veto integrity.
+- [x] **State**: System validated for high-fidelity Q1 2026 production.
+
+### Phase 82: System Freeze
+- [ ] **Final State**: Atomic commit of all validated configurations and research scripts.
 
 
