@@ -3,7 +3,7 @@ PY ?= uv run
 
 # Workflow Manifest (JSON)
 MANIFEST ?= configs/manifest.json
-PROFILE ?= production
+PROFILE ?= $(or $(TV_PROFILE),production)
 export PROFILE
 export TV_PROFILE := $(PROFILE)
 
