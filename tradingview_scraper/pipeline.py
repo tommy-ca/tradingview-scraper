@@ -149,8 +149,8 @@ class QuantitativePipeline:
             return {"status": "empty_returns", "data": signals}
 
         # 3. Risk Optimization
-        regime_name, regime_score = self.regime_detector.detect_regime(returns_df)
-        logger.info(f"Market Regime Detected: {regime_name} (Score: {regime_score:.2f})")
+        regime_name, regime_score, quadrant = self.regime_detector.detect_regime(returns_df)
+        logger.info(f"Market Regime Detected: {regime_name} (Score: {regime_score:.2f}) | Quadrant: {quadrant}")
         stats = self.antifragility_auditor.audit(returns_df)
         portfolio = self.optimizer.optimize(returns_df, stats, regime=regime_name)
 

@@ -55,8 +55,8 @@ def generate_production_orders(source_run_id: str = "20260106-prod-q1", top_n: i
 
     # 3. Detect Regime
     detector = MarketRegimeDetector()
-    regime, score = detector.detect_regime(returns)
-    logger.info(f"Current Market Regime: {regime} (Score: {score:.2f})")
+    regime, score, quadrant = detector.detect_regime(returns)
+    logger.info(f"Current Market Regime: {regime} (Score: {score:.2f}) | Quadrant: {quadrant}")
 
     all_orders = []
     ts_str = datetime.now().strftime("%Y%m%d")
@@ -84,7 +84,7 @@ def generate_production_orders(source_run_id: str = "20260106-prod-q1", top_n: i
             profile=cast(Any, profile_name),
             cluster_cap=0.25,
             regime=regime,
-            market_environment=regime,
+            market_environment=quadrant,
         )
 
         response = engine.optimize(returns=returns, clusters=clusters, meta=meta, stats=stats, request=request)

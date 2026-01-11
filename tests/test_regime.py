@@ -13,7 +13,7 @@ class TestMarketRegimeDetector(unittest.TestCase):
         returns = pd.DataFrame({"A": data, "B": data})
 
         detector = MarketRegimeDetector()
-        regime, score = detector.detect_regime(returns)
+        regime, score, quadrant = detector.detect_regime(returns)
         # With very low volatility and noise, it should be QUIET
         self.assertEqual(regime, "QUIET")
         self.assertLess(score, 0.7)
@@ -28,7 +28,7 @@ class TestMarketRegimeDetector(unittest.TestCase):
         returns = pd.concat([returns, pd.DataFrame({"A": spike, "B": spike})], ignore_index=True)
 
         detector = MarketRegimeDetector()
-        regime, score = detector.detect_regime(returns)
+        regime, score, quadrant = detector.detect_regime(returns)
         # Huge vol ratio should trigger CRISIS
         self.assertEqual(regime, "CRISIS")
         self.assertGreaterEqual(score, 1.5)

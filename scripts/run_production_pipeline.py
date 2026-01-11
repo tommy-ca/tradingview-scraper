@@ -302,8 +302,8 @@ class ProductionPipeline:
         # Pillar Verification (Crypto Only)
         if self.profile == "crypto_production":
             self.console.print("[bold yellow]Production Pillars Analysis (Forensic Standards):[/]")
-            self.console.print(f"  - [cyan]Regime Alignment:[/] step_size={self.settings.step_size}d (Target: 15d)")
-            self.console.print(f"  - [cyan]Tail-Risk Mitigation:[/] test_window={self.settings.test_window}d (Target: 30d)")
+            self.console.print(f"  - [cyan]Regime Alignment:[/] step_size={self.settings.step_size}d (Target: 20d)")
+            self.console.print(f"  - [cyan]Tail-Risk Mitigation:[/] test_window={self.settings.test_window}d (Target: 40d)")
             self.console.print(f"  - [cyan]Alpha Capture:[/] selection_mode={self.settings.features.selection_mode} (Target: v3.2)")
             self.console.print("")
 

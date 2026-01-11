@@ -81,8 +81,8 @@ def research_regime_v3():
     detector = MarketRegimeDetector()
 
     # 1. Regime Detection
-    regime, regime_score = detector.detect_regime(returns)
-    logger.info(f"Market Regime: {regime} (Score: {regime_score:.2f})")
+    regime, regime_score, quadrant = detector.detect_regime(returns)
+    logger.info(f"Market Regime: {regime} (Score: {regime_score:.2f}) | Quadrant: {quadrant}")
 
     # 2. Tail Risk Analysis
     tail_risk = calculate_tail_risk_metrics(returns)

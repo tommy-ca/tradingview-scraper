@@ -227,7 +227,8 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
             risk_type = cluster.get("Type", "CORE")
             sector = cluster.get("Sectors", "N/A")
             if isinstance(sector, list):
-                sector = ", ".join(sector)
+                # Filter out None values and convert to string
+                sector = ", ".join([str(s) for s in sector if s is not None])
 
             md.append(f"| {cluster['Cluster_Label']} | **{gross:.2%}** | {net:+.2%} | `{bar}` | {lead} | {count} | {risk_type} | {sector} |")
 
