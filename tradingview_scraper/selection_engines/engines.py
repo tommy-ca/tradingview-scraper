@@ -37,7 +37,8 @@ def get_hierarchical_clusters(returns: pd.DataFrame, threshold: float = 0.5, max
     if returns.empty:
         return np.array([]), np.array([])
 
-    lookbacks = [60, 120, 200]
+    settings = get_settings()
+    lookbacks = settings.cluster_lookbacks
     available_len = len(returns)
     valid_lookbacks = [l for l in lookbacks if l <= available_len] or [available_len]
 
@@ -526,7 +527,7 @@ class SelectionEngineV3(BaseSelectionEngine):
             # Cap ECI in logs/metrics, but use raw ECI for veto decisions.
             eci = min(0.10, eci_raw)
 
-            annual_momentum = float(mom_all[s]) if s in mom_all.index else 0.0  # type: ignore
+            annual_momentum = float(mom_all[s]) if s in mom_all.index else 0.0
             m_gain = annual_momentum - eci_raw
 
             # Dynamic ECI Hurdle: If we allow negative momentum (turnaround plays),
@@ -558,21 +559,21 @@ class SelectionEngineV3(BaseSelectionEngine):
 
         # Comprehensive Raw Metrics for Audit and HPO
         metrics["raw_metrics"] = {
-            "momentum": mom_all.to_dict(),  # type: ignore
-            "stability": stab_all.to_dict(),  # type: ignore
-            "liquidity": liq_all.to_dict(),  # type: ignore
-            "antifragility": af_all.to_dict(),  # type: ignore
-            "survival": regime_all.to_dict(),  # type: ignore
-            "efficiency": er_all.to_dict(),  # type: ignore
-            "entropy": pe_all.to_dict(),  # type: ignore
-            "hurst": hurst_all.to_dict(),  # type: ignore
-            "fragility": frag_all.to_dict(),  # type: ignore
-            "skew": skew_all.to_dict(),  # type: ignore
-            "kurtosis": kurt_all.to_dict(),  # type: ignore
-            "dwt": dwt_all.to_dict(),  # type: ignore
-            "adf": adf_all.to_dict(),  # type: ignore
-            "acf": acf_all.to_dict(),  # type: ignore
-            "lb_pvalue": lb_all.to_dict(),  # type: ignore
+            "momentum": mom_all.to_dict(),
+            "stability": stab_all.to_dict(),
+            "liquidity": liq_all.to_dict(),
+            "antifragility": af_all.to_dict(),
+            "survival": regime_all.to_dict(),
+            "efficiency": er_all.to_dict(),
+            "entropy": pe_all.to_dict(),
+            "hurst": hurst_all.to_dict(),
+            "fragility": frag_all.to_dict(),
+            "skew": skew_all.to_dict(),
+            "kurtosis": kurt_all.to_dict(),
+            "dwt": dwt_all.to_dict(),
+            "adf": adf_all.to_dict(),
+            "acf": acf_all.to_dict(),
+            "lb_pvalue": lb_all.to_dict(),
         }
 
         # HPO Support: Record raw component probabilities P_i

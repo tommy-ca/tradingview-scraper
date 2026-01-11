@@ -13,7 +13,8 @@
       "selection_mode": "v3.1"
     },
     "risk": {
-      "cluster_cap": 0.25
+      "cluster_cap": 0.25,
+      "cluster_lookbacks": [60, 120, 200]
     },
     "backtest": {
       "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
@@ -73,6 +74,9 @@
         "threshold": 0.35,
         "min_momentum_score": -0.5,
         "selection_mode": "v3.2"
+      },
+      "risk": {
+        "cluster_lookbacks": [5, 60, 120, 200]
       },
       "backtest": {
         "benchmark_symbols": ["BINANCE:BTCUSDT", "AMEX:SPY"],

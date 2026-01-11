@@ -74,8 +74,10 @@ This document codifies the institutional requirements and design specifications 
 ### Phase 92: Hierarchical Factor Stability Research (COMPLETED)
 - [x] **Research**: Explored linkage methods (Ward/Complete) and stability impact of window averaging.
 - [x] **Audit**: Measured cluster cohesion (0.61) vs single-window baseline (0.51).
+- [x] **Config**: Centralized `cluster_lookbacks` in `manifest.json` and Pydantic settings.
+- [x] **Consistency**: Aligned clustering windows ([5, 60, 120, 200]) with rebalance frequency.
 - [x] **Docs**: Codified CR-171 and updated Design Section 23 with the Stability Protocol.
-- [x] **Verification**: Confirmed 45% stability increase via multi-lookback distance matrices.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.11)
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.12)
+
