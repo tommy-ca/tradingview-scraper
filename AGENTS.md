@@ -10,17 +10,17 @@ The entire production lifecycle is unified under the `make flow-production` targ
 1.  **Cleanup**: Wipe incremental artifacts (`make clean-run`).
 2.  **Composition & Discovery**: Execute layered scanners (`make scan-run`).
 3.  **Aggregation**: Consolidate scans into Raw Pool (`make data-prep-raw`).
-4.  **Metadata Enrichment**: Synchronize with institutional catalogs and apply defaults to prevent technical vetoes.
-5.  **Natural Selection**: Darwinian filtering (Log-MPS 3.2) with **Benchmark Isolation** (Scanned Alpha only).
+4.  **Metadata Enrichment**: Synchronize with institutional catalogs and apply defaults.
+5.  **Natural Selection**: Darwinian filtering (Log-MPS 3.2) with **Synthetic Long Normalization**.
 6.  **High-Integrity Prep**: Fetch 500-day secular history.
 7.  **Health Audit**: Validate 100% gap-free alignment using Market-Day normalization (+4h shift).
 8.  **Self-Healing**: Automated recovery loop if gaps found (`make data-repair`).
 9.  **Persistence Analysis**: Research trend and mean-reversion persistent duration (`make research-persistence`).
 10. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
 11. **Regime Detection**: Multi-factor state analysis.
-12. **Optimization**: Cluster-Aware allocation (`make port-optimize`).
+12. **Optimization**: Direction-Blind allocation on synthetic longs (`make port-optimize`).
 13. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`).
-14. **Reporting**: QuantStats Tear-sheets & Alpha Audit (`make port-report`).
+14. **Reporting**: Deep Forensic Audit & QuantStats Tear-sheets (`make port-report`).
 15. **Audit Verification**: Final cryptographic signature check.
 
 ---
@@ -96,9 +96,10 @@ Every step of the production sequence persists its full execution trace in the r
 The platform supports multiple selection architectures, evaluated via head-to-head tournaments.
 
 ### Current Standards
-- **Selection v3.2 (New Champion)**: **Log-Multiplicative Probability Scoring (Log-MPS)**.
+- **Selection v3.3.1 (Deep Audit Standard)**: **Log-Multiplicative Probability Scoring (Log-MPS)**.
     - Uses additive log-probabilities for numerical stability and HPO optimization.
-    - **Global Robust**: Achieving the highest 2025 Annualized Return (29.2%) and Sharpe (2.35).
+    - **Entropy Resolution**: Order=5 (120 permutations) mandatory for noise differentiation.
+    - **Global Robust**: Achieving the highest 2025 Annualized Return and Sharpe.
     - Features integrated spectral predictability filters (Entropy, Hurst, Efficiency).
 - **Selection v2.1 (Stability Anchor)**: **Additive Rank-Sum (CARS 2.1)**. 
     - Uses **Multi-Method Normalization** (Logistic/Z-score/Rank).
@@ -140,9 +141,9 @@ The crypto sleeve operates as an orthogonal capital allocation within the multi-
 
 ### Production Pillars (Forensic Standards)
 Agents must ensure every production run adheres to the following five pillars:
-1.  **Regime Alignment**: The `step_size` must be **20 days** for crypto production to match the structural optimum identified via forensic audit (Sharpe 2.36).
-2.  **Tail-Risk Mitigation**: Forensic validation proves that 20-day alignment provides the best balance between momentum capture and drawdown protection (-15.9% MaxDD).
-3.  **Alpha Capture**: High-resolution factor isolation (threshold=0.35) ensures winners are orthogonal and high-conviction.
+1.  **Regime Alignment**: The `step_size` must be **20 days** for crypto production to match the structural optimum identified via forensic audit (Sharpe 1.88).
+2.  **Tail-Risk Mitigation**: Forensic validation proves that 20-day alignment provides the best balance between momentum capture and drawdown protection (-15.1% MaxDD). **Annualized Return Clipping (-99.99%)** is enforced to prevent mathematical divergence in high-drawdown scenarios.
+3.  **Alpha Capture**: High-resolution factor isolation (threshold=0.45) and **Entropy Resolution (Order=5)** ensure winners are orthogonal and high-conviction. **Selection Scarcity Protocol (SSP)** ensures robust multi-stage fallbacks (Max-Sharpe -> Min-Var -> EW) when the winner pool is sparse.
 4.  **Directional Purity**: SHORT candidate returns must be inverted ($R_{synthetic} = -1 \times R_{raw}$) before optimization to ensure risk-parity engines (HRP/MinVar) correctly reward stable downward drift.
 5.  **Late-Binding Trend Enforcement**: Final asset direction is dynamically recalculated at rebalance-time using a 20-day momentum signal to ensure portfolio-regime alignment.
 

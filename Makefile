@@ -228,6 +228,9 @@ port-report: ## Generate unified quant reports and tear-sheets
 	$(PY) scripts/generate_portfolio_report.py
 	$(PY) scripts/generate_audit_summary.py
 
+port-deep-audit: ## Generate deep forensic report (Run ID required)
+	$(PY) scripts/production/generate_deep_report.py $(RUN_ID)
+
 tournament-scoreboard: ## Generate tournament scoreboard (latest run)
 	$(PY) scripts/research/tournament_scoreboard.py --run-id latest
 
