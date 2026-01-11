@@ -131,9 +131,15 @@ def natural_selection(
 
         logger.info(f"Selection Result: {len(winners)} winners picked.")
 
+        # Benchmark Isolation: Ensure the final winners list exclusively contains scanner-discovered signals.
+        # Hardcoded benchmarks are isolated to baseline profiles.
+        final_winners = [w for w in winners if not w.get("is_benchmark", False)]
+        if len(final_winners) < len(winners):
+            logger.info(f"Isolated {len(winners) - len(final_winners)} benchmark symbols from selected candidates.")
+
         # Atomic write for winners
         with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(output_path), delete=False) as tf:
-            json.dump(winners, tf, indent=2)
+            json.dump(final_winners, tf, indent=2)
             temp_name = tf.name
         os.replace(temp_name, output_path)
 

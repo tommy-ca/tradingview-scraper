@@ -18,7 +18,7 @@
     },
     "backtest": {
       "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
-      "profiles": "min_variance,hrp,max_sharpe,barbell,benchmark,market",
+      "profiles": "min_variance,hrp,max_sharpe,barbell,equal_weight,risk_parity,market,benchmark",
       "backtest_simulator": "vectorbt",
       "backtest_slippage": 0.0005,
       "backtest_commission": 0.0001,
@@ -79,6 +79,8 @@
         "cluster_lookbacks": [5, 60, 120, 200]
       },
       "backtest": {
+        "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio,adaptive",
+        "profiles": "min_variance,hrp,max_sharpe,barbell,equal_weight,risk_parity,market,benchmark",
         "benchmark_symbols": ["BINANCE:BTCUSDT", "AMEX:SPY"],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
@@ -119,30 +121,6 @@
             "strict_health": true
           }
         }
-      }
-    },
-    "stability_audit": {
-      "description": "Full Matrix Stability Audit Profile",
-      "data": {
-        "lookback_days": 500,
-        "min_days_floor": 90
-      },
-      "backtest": {
-        "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio,adaptive",
-        "profiles": "min_variance,hrp,max_sharpe,barbell,equal_weight,risk_parity,market,benchmark",
-        "backtest_simulators": "custom,cvxportfolio,vectorbt",
-        "train_window": 252,
-        "test_window": 40,
-        "step_size": 20
-      },
-      "features": {
-        "selection_mode": "v3.2",
-        "feat_audit_ledger": true,
-        "min_col_frac": 0.05,
-        "use_robust_correlation": true
-      },
-      "discovery": {
-        "enabled_markets": ["america", "crypto"]
       }
     },
     "development": {

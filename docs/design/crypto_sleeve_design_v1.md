@@ -1,4 +1,4 @@
-# Crypto Sleeve Design Document v3.2.9
+# Crypto Sleeve Design Document v3.2.13
 
 ## 1. Architecture Overview
 
@@ -43,12 +43,12 @@ A critical forensic discovery revealed that standard multi-asset covariance engi
 - **The Guardrail**: To maintain significance, a `min_col_frac` of **0.05** (5% coverage) is enforced as a single source of truth in the `manifest.json`.
 
 ### 22. Balanced Alpha Selection & Factor Isolation
-... (omitted) ...
+The Log-MPS 3.2 engine (Standard v3.2.13) implements:
+-   **High-Resolution Clustering (v3.2.4)**: Ward Linkage distance threshold set to **0.50**.
+-   **Adaptive Friction Gate (v3.2.4)**: 25% Friction Budget Buffer for extreme alpha drivers.
+-   **Toxic Persistence Veto (v3.2.5)**: Disqualifies assets where $Hurst > 0.55$ and $Momentum < 0$ (unless identified as mean-reverting shorts).
+-   **Benchmark Stability Anchor (v3.2.6)**: Macro anchors (SPY) are exempt from Random Walk vetoes.
 -   **Forensic Rebalancing**: Standardized to **20 days** based on the Rebalance Sensitivity Audit (v3.2.7).
-
-### 22.1 Portfolio Matrix Audit & Stability
-... (omitted) ...
-- **Optimal Production Stack**: Standardized on **Skfolio** for risk-parity/stability and **PyPortfolioOpt** for alpha-weighted profiles.
 
 ### 23. Hierarchical Cluster Analysis (HRP Core)
 Hierarchical clustering (Ward Linkage on Robust Pairwise Correlation) serves as the structural foundation for both Selection and Allocation:
@@ -57,8 +57,14 @@ Hierarchical clustering (Ward Linkage on Robust Pairwise Correlation) serves as 
 2. **Allocation Integration**: The `Clustered Optimizer` uses the dendrogram to enforce **Factor-Level Risk Caps** (25% per cluster). Even if a single asset has superior Sharpe, the system restricts total factor exposure to maintain orthogonal risk units.
 3. **Stability Protocol (v3.2.10)**: To prevent cluster "jitter" during regime shifts, distance matrices are calculated across three horizons (60d, 120d, 200d) and averaged. Ward Linkage is then applied to the averaged matrix, prioritizing cluster cohesion and reducing sensitivity to short-term microstructural noise.
 
+### 24. Benchmark Isolation & Pure Alpha Selection (v3.2.13)
+To ensure that the "Selected Candidates" universe represents 100% scanner-discovered alpha, the platform implements **Benchmark Isolation**:
+1. **Selection Exclusion**: Macro benchmarks (e.g. SPY) are no longer automatically injected into the `Natural Selection` pool. 
+2. **Backtest Handling**: The `BacktestEngine` maintains benchmark data only for baseline profiles (`benchmark`, `market`). 
+3. **Alpha Inclusion**: A benchmark is only included in risk-optimized profiles if it was explicitly captured by a strategy scanner (e.g. `sp500_trend`), ensuring that "Stability Anchors" are active participants in the alpha lifecycle.
+
 ---
 
-**Version**: 3.2.11  
+**Version**: 3.2.13  
 **Status**: Production Certified  
 **Last Updated**: 2026-01-11

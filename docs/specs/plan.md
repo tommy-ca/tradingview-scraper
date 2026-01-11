@@ -39,38 +39,6 @@ This document codifies the institutional requirements and design specifications 
 
 ## 4. Development Plan (Current Sprint)
 
-### Phase 87: Forensic Hardening & Configuration Lock (COMPLETED)
-- [x] **Fix**: Resolved "Inner Join Trap" in clustering engine via Pairwise Correlation.
-- [x] **Logic**: Codified Toxic Persistence rationale and Benchmark Exemption (CR-156, CR-157).
-- [x] **Infra**: Consolidated all forensic parameters (`min_col_frac`, `eci_hurdle`) into single-source manifest and Pydantic-settings.
-- [x] **Docs**: Updated Requirements and Design specs to v3.2.9.
-- [x] **Verification**: Verified 35-winner universe representation in final optimization.
-
-### Phase 88: Risk Profile Matrix Expansion & Stability Audit (COMPLETED)
-- [x] **Config**: Enabled full matrix of engines and profiles in `manifest.json`.
-- [x] **Audit**: Executed double-blind tournament sweep across 153 combinations.
-- [x] **Findings**: Confirmed 100% solver determinism and identified Silent Fallback patterns.
-- [x] **Verification**: Standardized on Skfolio/PyPortfolioOpt and VectorBT for production.
-
-### Phase 89: Hierarchical Clustering & System Certification (COMPLETED)
-- [x] **Audit**: Traced cluster usage in `Selection` (Top-N per group) and `Allocation` (Cluster-level caps).
-- [x] **Verification**: Verified bit-perfect cluster hashes in Ledger Logs (Run C vs D).
-- [x] **Docs**: Codified CR-170 and added Design Section 23 on Factor Orthogonality.
-- [x] **Rationale**: Confirmed Ward Linkage + Robust Correlation as the gold standard for asynchronous listings.
-- [x] **Sync**: Synchronized Requirements, Design, and Plan docs to v3.2.10 standards.
-- [x] **Agents**: Updated AGENTS.md guide with 20-day rebalance and 5-stage funnel pillars.
-- [x] **Ledger**: Verified bit-perfect window traceability across high-fidelity tournament logs.
-
-### Phase 90: Final Pre-Live Production Rehearsal (COMPLETED)
-- [x] **Workflow**: Executed full 15-step institutional lifecycle with fresh discovery (Run ID: 20260111-103357).
-- [x] **Integrity**: Validated zero-gap status and metadata enrichment success.
-- [x] **Backtest**: Confirmed realized performance (+89% return, 2.37 Sharpe) aligns with standards.
-
-### Phase 91: System Freeze & Release (COMPLETED)
-- [x] **Artifacts**: Final archival of research and audit artifacts.
-- [x] **Release**: Created git tag `v3.2.10-certified`.
-- [x] **Sign-off**: Final cryptographic signature of the production manifest.
-
 ### Phase 92: Hierarchical Factor Stability Research (COMPLETED)
 - [x] **Research**: Explored linkage methods (Ward/Complete) and stability impact of window averaging.
 - [x] **Audit**: Measured cluster cohesion (0.61) vs single-window baseline (0.51).
@@ -78,6 +46,17 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Consistency**: Aligned clustering windows ([5, 60, 120, 200]) with rebalance frequency.
 - [x] **Docs**: Codified CR-171 and updated Design Section 23 with the Stability Protocol.
 
----
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.12)
+### Phase 93: High-Fidelity Crypto Tournament Validation (COMPLETED)
+- [x] **Tournament**: Rerun full crypto production sweep with v3.2.12 standards.
+- [x] **Audit**: Verified evolution of portfolio depth window-by-window (1 -> 17 assets).
+- [x] **Rationale**: Explained Early-Window sparsity (Window 0-2) as a natural effect of the 90-day Immersion floor.
+- [x] **Reports**: Generated comprehensive Risk Matrix Audit comparing all portfolio engines (Run ID: 20260111-120437).
 
+### Phase 94: Pure Alpha Selection & Benchmark Isolation (COMPLETED)
+- [x] **Logic**: Removed automated benchmark injection from `prepare_portfolio_data.py`.
+- [x] **Symmetry**: Updated `BacktestEngine` to utilize benchmarks only for baseline profiles or if explicitly selected.
+- [x] **Specs**: Updated Requirements (CR-172) and Design Section 24 to formalize Benchmark Isolation.
+- [x] **Verification**: Confirmed that `selected_candidates` universe represents 100% scanner-discovered assets.
+
+---
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.13)

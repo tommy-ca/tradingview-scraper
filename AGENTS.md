@@ -10,9 +10,9 @@ The entire production lifecycle is unified under the `make flow-production` targ
 1.  **Cleanup**: Wipe incremental artifacts (`make clean-run`).
 2.  **Composition & Discovery**: Execute layered scanners (`make scan-run`).
 3.  **Aggregation**: Consolidate scans into Raw Pool (`make data-prep-raw`).
-4.  **Metadata Enrichment**: Synchronize with institutional catalogs (`make data-prep-raw`).
-5.  **Natural Selection**: Hierarchical clustering & XS Ranking (`make port-select`).
-6.  **High-Integrity Prep**: Fetch 500-day secular history (`make data-fetch LOOKBACK=500`).
+4.  **Metadata Enrichment**: Synchronize with institutional catalogs and apply defaults to prevent technical vetoes.
+5.  **Natural Selection**: Darwinian filtering (Log-MPS 3.2) with **Benchmark Isolation** (Scanned Alpha only).
+6.  **High-Integrity Prep**: Fetch 500-day secular history.
 7.  **Health Audit**: Validate 100% gap-free alignment using Market-Day normalization (+4h shift).
 8.  **Self-Healing**: Automated recovery loop if gaps found (`make data-repair`).
 9.  **Persistence Analysis**: Research trend and mean-reversion persistent duration (`make research-persistence`).

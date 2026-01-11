@@ -66,6 +66,8 @@ def prepare_portfolio_universe():
         )
 
     # 2. Benchmark Enforcement
+    # We ensure benchmarks are fetched and included in the returns matrix for baseline comparisons,
+    # but they are tagged to be isolated from the scanner-only selected candidates.
     universe_symbols = {c["symbol"] for c in universe}
     for b_sym in active_settings.benchmark_symbols:
         if b_sym not in universe_symbols:
