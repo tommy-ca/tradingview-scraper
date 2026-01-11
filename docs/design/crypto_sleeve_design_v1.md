@@ -46,6 +46,12 @@ A critical forensic discovery revealed that standard multi-asset covariance engi
 ... (omitted) ...
 -   **Forensic Rebalancing**: Standardized to **20 days** based on the Rebalance Sensitivity Audit (v3.2.7).
 
+### 22.1 Portfolio Matrix Audit & Stability
+A forensic audit (v3.2.9) across 153 risk profile combinations confirmed that:
+- **Solver Determinism**: Engines are 100% deterministic, provided configuration and data remain static.
+- **Silent Fallbacks**: Convergence between engines (e.g. CVXPortfolio delegating HRP to Custom) can lead to perceived "instability" if users assume unique implementations for every profile/engine pair.
+- **Optimal Production Stack**: Standardized on **Skfolio** for risk-parity/stability and **PyPortfolioOpt** for alpha-weighted profiles.
+
 ---
 
 **Version**: 3.2.9  

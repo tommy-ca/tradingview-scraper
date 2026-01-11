@@ -87,3 +87,9 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Infra**: Consolidated all forensic parameters (`min_col_frac`, `eci_hurdle`) into single-source manifest and Pydantic-settings.
 - [x] **Docs**: Updated Requirements and Design specs to v3.2.9.
 - [x] **Verification**: Verified 35-winner universe representation in final optimization.
+
+### Phase 88: Risk Profile Matrix Expansion & Stability Audit (COMPLETED)
+- [x] **Config**: Enabled full matrix of engines and profiles in `manifest.json`.
+- [x] **Audit**: Executed double-blind tournament sweep across 153 combinations.
+- [x] **Findings**: Confirmed 100% solver determinism and identified Silent Fallback patterns.
+- [x] **Verification**: Standardized on Skfolio/PyPortfolioOpt and VectorBT for production.
