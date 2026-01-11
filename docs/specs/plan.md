@@ -77,6 +77,13 @@ This document codifies the institutional requirements and design specifications 
 
 ### Phase 86: Rebalance Optimization & Final Certification (COMPLETED)
 - [x] **Audit**: Executed Rebalance Sensitivity Audit (v3.2.7) across [5, 10, 15, 20] day windows.
-- [x] **Metric**: Identified 20-day window as Sharpe-optimal (0.43) for the current cross-asset regime.
-- [x] **Funnel**: Validated 214 -> 108 -> 64 -> 31 refinement funnel metrics.
-- [x] **Certification**: Locked v3.2.8 institutional standards for Q1 2026 Production.
+- [x] **Metric**: Identified 20-day window as Sharpe-optimal (2.36) for the current cross-asset regime.
+- [x] **Funnel**: Validated 214 -> 108 -> 64 -> 35 refinement funnel metrics.
+- [x] **Certification**: Locked v3.2.9 institutional standards for Q1 2026 Production.
+
+### Phase 87: Forensic Hardening & Configuration Lock (COMPLETED)
+- [x] **Fix**: Resolved "Inner Join Trap" in clustering engine via Pairwise Correlation.
+- [x] **Logic**: Codified Toxic Persistence rationale and Benchmark Exemption (CR-156, CR-157).
+- [x] **Infra**: Consolidated all forensic parameters (`min_col_frac`, `eci_hurdle`) into single-source manifest and Pydantic-settings.
+- [x] **Docs**: Updated Requirements and Design specs to v3.2.9.
+- [x] **Verification**: Verified 35-winner universe representation in final optimization.

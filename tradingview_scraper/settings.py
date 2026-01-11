@@ -47,6 +47,10 @@ class FeatureFlags(BaseModel):
     hurst_random_walk_max: float = 0.55
     eci_hurdle: float = 0.0
 
+    # Forensic Analysis Defaults
+    min_col_frac: float = 0.1
+    use_robust_correlation: bool = True
+
     # HPO Optimized Weights (Log-MPS 3.2)
     # Global Robust: Optimized across all 2025 regimes (Mean Alpha / Std Alpha)
     weights_global: Dict[str, float] = {
@@ -215,6 +219,7 @@ class TradingViewScraperSettings(BaseSettings):
 
     # Optimization
     cluster_cap: float = 0.25
+    max_clusters: int = 25
 
     # Backtest
     train_window: int = 180

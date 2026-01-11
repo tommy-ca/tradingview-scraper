@@ -2,8 +2,8 @@
   "default_profile": "production",
   "defaults": {
     "data": {
-      "lookback_days": 500,
-      "min_days_floor": 252,
+      "lookback_days": 252,
+      "min_days_floor": 320,
       "strict_health": false
     },
     "selection": {
@@ -36,6 +36,8 @@
       "hurst_random_walk_min": 0.48,
       "hurst_random_walk_max": 0.52,
       "eci_hurdle": 0.0,
+      "min_col_frac": 0.1,
+      "use_robust_correlation": true,
       "feat_audit_ledger": true
     }
   },
@@ -84,7 +86,9 @@
         "feat_short_direction": true,
         "entropy_max_threshold": 0.999,
         "efficiency_min_threshold": 0.05,
-        "eci_hurdle": -0.6
+        "eci_hurdle": -0.6,
+        "min_col_frac": 0.05,
+        "use_robust_correlation": true
       },
       "data": {
         "lookback_days": 500,

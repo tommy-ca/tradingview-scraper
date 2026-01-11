@@ -33,6 +33,7 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-158 | MUST | ✅ | **Persistence-Aligned Rebalancing**: Rebalancing window ($step\_size$) must be dynamically aligned to the median persistent trend duration (Optimized to 20 days for the current regime). |
 | CR-159 | MUST | ✅ | **Secular Shorting Capture**: The discovery layer must include dedicated scanners for structural weakness (`Perf.1M < 0`, `Hurst > 0.50`) to profit from persistent downward drift. |
 | CR-160 | MUST | ✅ | **Winner Pool Baseline**: The Selection Engine must target a 15-25% final retention rate (approx. 30 winners from 140 discovered symbols) to ensure sufficient factor representation. |
+| CR-161 | MUST | ✅ | **Robust Correlation Standard**: Discovery and clustering must utilize pairwise correlation (Robust Linkage) and a minimum 0.05 column-coverage fraction to prevent "Constituent Collapse" from asynchronous listing dates. |
 
 ---
 

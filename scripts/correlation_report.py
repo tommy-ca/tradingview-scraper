@@ -82,7 +82,9 @@ def load_returns(path: Path, min_col_frac: float, candidates_path: Optional[Path
     # CRITICAL: Do not drop rows (Inner Join) here, as it will truncate the matrix
     # to the shortest asset's listing day, dropping almost all assets in high-growth portfolios.
     # Clustering will use Robust (Pairwise) Correlation instead.
-    rets = rets.dropna(axis=1, thresh=min_count)
+    if min_count > 0:
+        counts = rets.count()
+        rets = rets.loc[:, counts >= min_count]
 
     # Fill remaining NaNs with 0 to allow standard matrix operations
     # while preserving the temporal variance profile of each asset.
@@ -168,18 +170,19 @@ def hrp_weights(rets: pd.DataFrame, linkage_method: str) -> pd.Series:
 
 
 def main():
+    settings = get_settings()
     parser = argparse.ArgumentParser(description="Generate correlation/HRP report")
     parser.add_argument("--returns", default="data/lakehouse/portfolio_returns.pkl")
     parser.add_argument("--out-dir", default=None)
     parser.add_argument("--pair-cap", type=float, default=0.85)
     parser.add_argument("--pair-limit", type=int, default=20)
     parser.add_argument("--winsor-alpha", type=float, default=0.0)
-    parser.add_argument("--min-col-frac", type=float, default=0.9)
+    parser.add_argument("--min-col-frac", type=float, default=settings.features.min_col_frac)
     parser.add_argument("--windows", default="20,60,180")
     parser.add_argument("--regime-z", type=float, default=1.5)
     parser.add_argument("--linkage", default="ward")
     parser.add_argument("--hrp", action="store_true", help="Emit HRP weights")
-    parser.add_argument("--max-clusters", type=int, default=25, help="Target maximum number of clusters")
+    parser.add_argument("--max-clusters", type=int, default=settings.max_clusters if hasattr(settings, "max_clusters") else 25, help="Target maximum number of clusters")
     parser.add_argument("--out-clusters", default="data/lakehouse/portfolio_clusters.json", help="Path to save cluster JSON")
     parser.add_argument("--candidates", default="data/lakehouse/portfolio_candidates.json", help="Path to selected candidates")
     args = parser.parse_args()

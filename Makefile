@@ -210,7 +210,7 @@ port-shadow-fill: ## Simulate paper execution (Shadow Loop) to reconcile drift
 	$(PY) scripts/maintenance/shadow_loop_sim.py
 
 port-analyze: ## Factor, correlation, and regime analysis
-	$(PY) scripts/correlation_report.py --hrp --min-col-frac 0.05
+	$(PY) scripts/correlation_report.py --hrp
 	$(PY) scripts/audit_antifragility.py
 	$(PY) scripts/analyze_clusters.py
 	$(PY) scripts/visualize_factor_map.py

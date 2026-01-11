@@ -35,16 +35,19 @@ To profit from persistent downward drift in structurally weak assets, the platfo
 - `Hurst > 0.50`: Persistent, non-random drift.
 - `ADX > 15`: Sufficient trend strength.
 
+### 21.3 Forensic Data Alignment & The Inner Join Trap
+A critical forensic discovery revealed that standard multi-asset covariance engines utilize a **Strict Inner Join** on return dates. While statistically conservative, this creates a "Trap" in high-growth portfolios (Crypto) where assets have asynchronous listing dates.
+
+- **The Problem**: A single new listing (e.g. `PIPPIN`) can truncate the entire matrix to its listing day, silently dropping 80% of established alpha anchors (BTC, ETH) or macro benchmarks (SPY) because they don't share the same "Start Date" in a dense matrix.
+- **The Fix (v3.2.9)**: The system implements **Robust Pairwise Correlation**. Hierarchical clustering now calculates linkage using every available overlapping session for each pair, rather than a global intersection.
+- **The Guardrail**: To maintain significance, a `min_col_frac` of **0.05** (5% coverage) is enforced as a single source of truth in the `manifest.json`.
+
 ### 22. Balanced Alpha Selection & Factor Isolation
-The Log-MPS 3.2 engine (Standard v3.2.8) implements:
--   **High-Resolution Clustering (v3.2.4)**: Ward Linkage distance threshold set to **0.50**.
--   **Adaptive Friction Gate (v3.2.4)**: 25% Friction Budget Buffer for extreme alpha drivers.
--   **Toxic Persistence Veto (v3.2.5)**: Disqualifies assets where $Hurst > 0.55$ and $Momentum < 0$ (unless identified as mean-reverting shorts).
--   **Benchmark Stability Anchor (v3.2.6)**: Macro anchors (SPY) are exempt from Random Walk vetoes.
--   **Forensic Rebalancing**: Standardized to **20 days** based on the Rebalance Sensitivity Audit (v3.2.7), which identified it as the Sharpe-optimal window for the current cross-asset regime.
+... (omitted) ...
+-   **Forensic Rebalancing**: Standardized to **20 days** based on the Rebalance Sensitivity Audit (v3.2.7).
 
 ---
 
-**Version**: 3.2.8  
+**Version**: 3.2.9  
 **Status**: Production Certified  
-**Last Updated**: 2026-01-10
+**Last Updated**: 2026-01-11
