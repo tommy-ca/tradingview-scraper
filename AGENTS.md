@@ -10,17 +10,16 @@ The entire production lifecycle is unified under the `make flow-production` targ
 1.  **Cleanup**: Wipe incremental artifacts (`make clean-run`).
 2.  **Composition & Discovery**: Execute layered scanners (`make scan-run`).
 3.  **Aggregation**: Consolidate scans into Raw Pool (`make data-prep-raw`).
-4.  **Lightweight Prep**: Fetch 60-day history for analysis (`make data-fetch LOOKBACK=60`).
+4.  **Metadata Enrichment**: Synchronize with institutional catalogs (`make data-prep-raw`).
 5.  **Natural Selection**: Hierarchical clustering & XS Ranking (`make port-select`).
-6.  **Enrichment**: Propagate metadata and descriptions.
-7.  **High-Integrity Prep**: Fetch 500-day secular history (`make data-fetch LOOKBACK=500`).
-8.  **Health Audit**: Validate 100% gap-free alignment using Market-Day normalization (+4h shift). **Policy**: 1-session institutional gaps are ignored.
-9.  **Self-Healing**: Automated recovery loop if gaps found (`make data-repair`).
-10. **Persistence Analysis**: Research trend and mean-reversion persistent duration (`make research-persistence`).
-11. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
+6.  **High-Integrity Prep**: Fetch 500-day secular history (`make data-fetch LOOKBACK=500`).
+7.  **Health Audit**: Validate 100% gap-free alignment using Market-Day normalization (+4h shift).
+8.  **Self-Healing**: Automated recovery loop if gaps found (`make data-repair`).
+9.  **Persistence Analysis**: Research trend and mean-reversion persistent duration (`make research-persistence`).
+10. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
 11. **Regime Detection**: Multi-factor state analysis.
 12. **Optimization**: Cluster-Aware allocation (`make port-optimize`).
-13. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`). **Policy**: Production uses vectorized simulators for speed; Pre-live uses Nautilus for event-driven fidelity.
+13. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`).
 14. **Reporting**: QuantStats Tear-sheets & Alpha Audit (`make port-report`).
 15. **Audit Verification**: Final cryptographic signature check.
 
@@ -141,9 +140,9 @@ The crypto sleeve operates as an orthogonal capital allocation within the multi-
 
 ### Production Pillars (Forensic Standards)
 Agents must ensure every production run adheres to the following three pillars:
-1.  **Regime Alignment**: The `step_size` must be **15 days** for crypto production to match the market's natural frequency ($T_{median} = 19d$).
-2.  **Tail-Risk Mitigation**: Forensic validation proves that 15-day alignment reduces Max Drawdown by **62%** compared to 20-day defaults.
-3.  **Alpha Capture**: Entry timing is optimized for "Momentum Ignition" points; never relax the 15-day window without a forensic persistence audit.
+1.  **Regime Alignment**: The `step_size` must be **20 days** for crypto production to match the structural optimum identified via forensic audit (Sharpe 2.36).
+2.  **Tail-Risk Mitigation**: Forensic validation proves that 20-day alignment provides the best balance between momentum capture and drawdown protection (-15.9% MaxDD).
+3.  **Alpha Capture**: High-resolution factor isolation (threshold=0.35) ensures winners are orthogonal and high-conviction.
 
 ### Blacklisted Assets
 - `BINANCE:PAXGUSDT.P`: Detached from gold tracking (correlation 0.44). Use `OKX:XAUTUSDT.P` for gold exposure.

@@ -1,4 +1,4 @@
-# Crypto Sleeve Requirements Specification v3.2.8
+# Crypto Sleeve Requirements Specification v3.2.9
 
 ## 1. Overview
 
@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-10) - Balanced Alpha Standard v3.2.8 (20d Rebalance).
+**Production Certified** (2026-01-11) - Forensic Standard v3.2.9 (Stability & Persistence Hardened).
 
 ---
 

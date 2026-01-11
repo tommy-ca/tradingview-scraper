@@ -1,4 +1,4 @@
-# Crypto Sleeve Design Document v3.2.8
+# Crypto Sleeve Design Document v3.2.9
 
 ## 1. Architecture Overview
 
