@@ -33,7 +33,8 @@ class VolatilityClusterer:
         # Suppress ddof warning for sparse early windows
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            vol_series = returns.rolling(window=self.window).std() * np.sqrt(252)
+            # Use ddof=0 to avoid "Degrees of freedom <= 0" warning
+            vol_series = returns.rolling(window=self.window).std(ddof=0) * np.sqrt(252)
 
         # Log-transform to handle outliers and normalize distribution
         # Add small epsilon to avoid log(0)
@@ -148,7 +149,8 @@ class BarbellOptimizer:
         # Pre-calculate volatilities and shrunk covariance matrix
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            volatilities = core_returns.std() * np.sqrt(252)
+            # Use ddof=0 to avoid warning on small core universes
+            volatilities = core_returns.std(ddof=0) * np.sqrt(252)
         cov_matrix = ShrinkageCovariance().estimate(cast(pd.DataFrame, core_returns))
 
         init_weights = np.array([1.0 / n_core] * n_core)
@@ -236,7 +238,8 @@ class AntifragilityAuditor:
             kurt = res.kurtosis()
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
-                vol = res.std() * np.sqrt(252)
+                # Use ddof=0 to avoid Degrees of Freedom warning
+                vol = res.std(ddof=0) * np.sqrt(252)
 
             threshold = float(res.quantile(0.95))
             tail_subset = res[res > threshold]

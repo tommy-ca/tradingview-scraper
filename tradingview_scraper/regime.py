@@ -133,8 +133,15 @@ class MarketRegimeDetector:
             # Use absolute returns to focus on volatility clusters
             obs = np.abs(x).reshape(-1, 1)
 
+            if len(obs) < 2:
+                return "NORMAL"
+
             # Robust scaling (Standardization)
-            obs = (obs - np.mean(obs)) / (np.std(obs) + 1e-12)
+            obs_std = np.std(obs)
+            if obs_std > 1e-12:
+                obs = (obs - np.mean(obs)) / (obs_std + 1e-12)
+            else:
+                obs = obs - np.mean(obs)
 
             # Initialize and fit HMM (2 states: High Vol vs Low Vol)
             model = GaussianHMM(n_components=2, covariance_type="diag", n_iter=50, random_state=42)
@@ -178,8 +185,9 @@ class MarketRegimeDetector:
         # Axis 2: Stress Axis (Volatility & Noise)
         # Handle cases where tail(10) has insufficient data for std()
         tail_slice = mean_rets.tail(10)
-        tail_std = float(tail_slice.std()) if len(tail_slice) > 1 else 0.0
-        vol_ratio = float(tail_std / (mean_rets.std() + 1e-12))
+        tail_std = float(tail_slice.std()) if len(tail_slice.dropna()) > 1 else 0.0
+        full_std = float(mean_rets.std()) if len(mean_rets.dropna()) > 1 else 1.0
+        vol_ratio = float(tail_std / (full_std + 1e-12))
 
         turbulence = calculate_dwt_turbulence(market_rets[-64:])
         stress_axis = (vol_ratio * 0.7) + (turbulence * 0.6)
@@ -228,9 +236,9 @@ class MarketRegimeDetector:
 
         # 1. Volatility Ratio (Shock)
         tail_slice = mean_rets_series.tail(10)
-        current_vol = float(tail_slice.std()) if len(tail_slice) > 1 else 0.0
-        baseline_vol = float(mean_rets_series.std())
-        vol_ratio = current_vol / baseline_vol if baseline_vol > 0 else 1.0
+        current_vol = float(tail_slice.std()) if len(tail_slice.dropna()) > 1 else 0.0
+        baseline_vol = float(mean_rets_series.std()) if len(mean_rets_series.dropna()) > 1 else 1.0
+        vol_ratio = current_vol / (baseline_vol + 1e-12)
 
         # 2. Entropy (Complexity)
         lookback = min(len(market_rets), 64)

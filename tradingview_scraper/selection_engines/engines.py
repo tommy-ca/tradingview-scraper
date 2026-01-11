@@ -1,5 +1,4 @@
 import logging
-import warnings
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
@@ -114,7 +113,14 @@ class SelectionEngineV2(BaseSelectionEngine):
 
         # 1. Component Extraction
         mom_all: pd.Series = cast(pd.Series, returns.mean() * 252)
-        vol_all: pd.Series = cast(pd.Series, returns.std() * np.sqrt(252))
+        # Use standard std() but with a guard to prevent RuntimeWarning on empty/single-element slices
+        vol_all = pd.Series(0.0, index=returns.columns)
+        for s in returns.columns:
+            s_rets = returns[s].dropna()
+            if len(s_rets) > 1:
+                vol_all[s] = float(s_rets.std() * np.sqrt(252))
+            else:
+                vol_all[s] = 0.0
         stab_all: pd.Series = cast(pd.Series, 1.0 / (vol_all + 1e-9))
         liq_all: pd.Series = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
         af_all: pd.Series = pd.Series(0.5, index=returns.columns)
@@ -122,8 +128,9 @@ class SelectionEngineV2(BaseSelectionEngine):
         regime_all: pd.Series = pd.Series(1.0, index=returns.columns)
 
         # Predictability Metrics
-        lookback = min(len(returns), 64)
-        pe_all: pd.Series = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
+        lookback = min(len(returns), 120)
+        # CR-201: Increased order to 5 (120 permutations) for better noise differentiation
+        pe_all: pd.Series = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy(), order=5) for s in returns.columns})
         er_all: pd.Series = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
         hurst_all: pd.Series = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
 
@@ -339,9 +346,14 @@ class SelectionEngineV3(BaseSelectionEngine):
 
         # 1. Component Extraction
         mom_all: pd.Series = cast(pd.Series, returns.mean() * 252)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            vol_all: pd.Series = cast(pd.Series, returns.std() * np.sqrt(252))
+        # Use standard std() but with a guard to prevent RuntimeWarning on empty/single-element slices
+        vol_all = pd.Series(0.0, index=returns.columns)
+        for s in returns.columns:
+            s_rets = returns[s].dropna()
+            if len(s_rets) > 1:
+                vol_all[s] = float(s_rets.std() * np.sqrt(252))
+            else:
+                vol_all[s] = 0.0
         stab_all: pd.Series = cast(pd.Series, 1.0 / (vol_all + 1e-9))
 
         liq_all_dict = {}
@@ -360,8 +372,9 @@ class SelectionEngineV3(BaseSelectionEngine):
         regime_all: pd.Series = pd.Series(1.0, index=returns.columns)
 
         # Asset Predictability Metrics
-        lookback = min(len(returns), 64)
-        pe_all: pd.Series = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
+        lookback = min(len(returns), 120)
+        # CR-201: Increased order to 5 (120 permutations) for better noise differentiation
+        pe_all: pd.Series = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy(), order=5) for s in returns.columns})
         er_all: pd.Series = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
         hurst_all: pd.Series = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
 
@@ -829,7 +842,13 @@ class SelectionEngineV2_0(BaseSelectionEngine):
 
             # V2.0: Local normalization within cluster
             mom_local = sub_rets.mean() * 252
-            vol_local = sub_rets.std() * np.sqrt(252)
+            vol_local = pd.Series(0.0, index=symbols)
+            for s in symbols:
+                s_rets = sub_rets[s].dropna()
+                if len(s_rets) > 1:
+                    vol_local[s] = float(s_rets.std() * np.sqrt(252))
+                else:
+                    vol_local[s] = 0.0
             stab_local = 1.0 / (vol_local + 1e-9)
             conv_local = pd.Series(0.0, index=symbols)
             if stats_df is not None:
@@ -838,7 +857,12 @@ class SelectionEngineV2_0(BaseSelectionEngine):
                     conv_local.loc[common_local] = stats_df.loc[common_local, "Antifragility_Score"]
             liq_local = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in symbols})
 
-            cluster_alpha = 0.3 * normalize_series(mom_local) + 0.2 * normalize_series(stab_local) + 0.2 * normalize_series(conv_local) + 0.3 * normalize_series(liq_local)
+            cluster_alpha = (
+                0.3 * normalize_series(cast(pd.Series, mom_local))
+                + 0.2 * normalize_series(cast(pd.Series, stab_local))
+                + 0.2 * normalize_series(cast(pd.Series, conv_local))
+                + 0.3 * normalize_series(cast(pd.Series, liq_local))
+            )
             alpha_scores.loc[symbols] = cluster_alpha
 
             id_to_best: Dict[str, str] = {}

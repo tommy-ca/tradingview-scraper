@@ -61,7 +61,14 @@ def build_clustered_universe(
         sub_rets = aligned_returns[valid_symbols]
 
         mom = cast(pd.Series, sub_rets.mean() * 252)
-        vols = cast(pd.Series, sub_rets.std() * np.sqrt(252))
+        # Handle cases where sub_rets has insufficient data for std()
+        vols = pd.Series(0.0, index=valid_symbols)
+        for s in valid_symbols:
+            s_rets = sub_rets[s].dropna()
+            if len(s_rets) > 1:
+                vols[s] = float(s_rets.std() * np.sqrt(252))
+            else:
+                vols[s] = 0.0
         stab = cast(pd.Series, 1.0 / (vols + 1e-9))
 
         conv = pd.Series(0.0, index=valid_symbols)
@@ -97,8 +104,9 @@ def build_clustered_universe(
 
         # 2. Cluster Benchmark Calculation
         # The benchmark return for this cluster is the risk-weighted average of its assets.
-        bench_rets = (sub_rets * w_intra).sum(axis=1)
-        if bench_rets.std() > 1e-12:
+        bench_rets = cast(pd.Series, (sub_rets * w_intra).sum(axis=1))
+        # Standard check with length guard
+        if len(bench_rets.dropna()) > 1 and bench_rets.std() > 1e-12:
             cluster_benchmarks[f"Cluster_{c_id}"] = bench_rets
             intra_cluster_weights[str(c_id)] = w_intra
         else:

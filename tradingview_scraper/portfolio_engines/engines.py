@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import inspect
 import logging
@@ -607,10 +608,17 @@ class SkfolioEngine(CustomClusteredEngine):
                     w = np.array([1.0 / n] * n)
             return _enforce_cap_series(pd.Series(w, index=X.columns).fillna(0.0), cap)
         except Exception as e:
+            # Selection Scarcity Protocol (SSP): Recursive fallback
+            if request.profile == "max_sharpe":
+                logger.warning("skfolio max_sharpe failed (n=%s): %s; falling back to min_variance (SSP Phase 1)", n, e)
+                fallback_req = dataclasses.replace(request, profile="min_variance") if hasattr(request, "replace") else request
+                return self._optimize_cluster_weights(universe=universe, request=fallback_req)
+
             if request.profile == "hrp":
-                logger.warning("skfolio hrp failed (n=%s): %s; using custom HRP fallback.", n, e)
+                logger.warning("skfolio hrp failed (n=%s): %s; using custom HRP fallback (SSP Phase 1)", n, e)
                 return super()._optimize_cluster_weights(universe=universe, request=request)
-            logger.warning("skfolio optimize failed (profile=%s, n=%s): %s; falling back to equal-weight.", request.profile, n, e)
+
+            logger.warning("skfolio optimize failed (profile=%s, n=%s): %s; falling back to equal-weight (SSP Phase 2)", request.profile, n, e)
             return _enforce_cap_series(pd.Series([1.0 / n] * n, index=X.columns), cap)
 
 
@@ -650,7 +658,9 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
             ef = EfficientFrontier(X.mean() * 252, pd.DataFrame(_cov_shrunk(X), index=X.columns, columns=X.columns), weight_bounds=(0.0, cap))
             ef.add_objective(objective_functions.L2_reg, gamma=float(request.l2_gamma))
             if request.profile == "max_sharpe":
-                ef.max_sharpe(risk_free_rate=request.risk_free_rate)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=UserWarning, message="max_sharpe transforms the optimization problem")
+                    ef.max_sharpe(risk_free_rate=request.risk_free_rate)
             else:
                 ef.min_volatility()
             weights = ef.clean_weights()
@@ -687,7 +697,7 @@ class RiskfolioEngine(CustomClusteredEngine):
             return super()._optimize_cluster_weights(universe=universe, request=request)
 
         if request.profile == "hrp":
-            logger.warning("Riskfolio HRP is currently flagged as experimental due to known divergence (-0.95 correlation) with standard implementations.")
+            logger.warning("Riskfolio HRP is DEPRECATED for production due to verified divergence (0.24 correlation) with standard implementations.")
             port = rp.HCPortfolio(returns=X)
             # Attempt to align with Custom/Skfolio by using Ward linkage
             w = port.optimization(model="HRP", codependence="pearson", rm="MV", linkage="ward")
@@ -735,8 +745,11 @@ class CVXPortfolioEngine(CustomClusteredEngine):
             return super()._optimize_cluster_weights(universe=universe, request=request)
 
         X = X.clip(lower=-0.5, upper=0.5)
-        vars = X.var()
-        min_var = float(np.min(vars)) if not X.empty else 0.0
+        if len(X) > 1:
+            vars = X.var()
+            min_var = float(np.min(vars)) if not X.empty else 0.0
+        else:
+            min_var = 0.0
         if min_var < 1e-10:
             rows, cols = X.shape
             jitter = 1e-6 * np.sin(np.add.outer(np.arange(rows), np.arange(cols)))
@@ -810,7 +823,7 @@ class AdaptiveMetaEngine(BaseRiskEngine):
         req_any = cast(Any, request)
         prof = mapping.get(req_any.market_environment, "benchmark")
         base = "skfolio" if req_any.engine == "adaptive" else req_any.engine
-        logger.info(f"Adaptive Engine: Switching to {prof} ({req_any.market_environment}) using backend: {base}")
+        logger.debug(f"Adaptive Engine: Switching to {prof} ({req_any.market_environment}) using backend: {base}")
         import dataclasses
 
         try:
