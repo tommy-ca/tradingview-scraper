@@ -128,9 +128,14 @@ class PortfolioAuditor:
         m_rets = combined.iloc[:, 1]
 
         correlation = float(p_rets.corr(m_rets))
-        cov = np.cov(p_rets, m_rets)[0, 1]
-        var_m = np.var(m_rets)
-        beta = float(cov / var_m) if var_m > 0 else 0.0
+        # Ensure row vectors are passed to np.cov for correct shape
+        if len(p_rets) > 1:
+            cov_matrix = np.cov(p_rets.values, m_rets.values)
+            cov = cov_matrix[0, 1]
+            var_m = np.var(m_rets.values, ddof=1)  # Sample variance
+            beta = float(cov / var_m) if var_m > 1e-12 else 0.0
+        else:
+            beta = 0.0
 
         return beta, correlation
 

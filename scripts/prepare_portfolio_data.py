@@ -226,8 +226,8 @@ def prepare_portfolio_universe():
             logger.info("Dropped %d symbols due to insufficient secular history (< %d days): %s", len(short_history), min_days, ", ".join(short_history))
 
     # Drop zero-variance noise
-    # Now safe to calculate variance without RuntimeWarning as all columns have sufficient history
-    variances = returns_df.var()
+    # Use ddof=0 to avoid "Degrees of freedom <= 0" warning
+    variances = returns_df.var(ddof=0)
     zero_vars = []
     if not isinstance(variances, (float, int)):
         zero_vars = [str(c) for c, v in variances.items() if v == 0]

@@ -85,9 +85,17 @@ def calculate_market_sensitivity(assets: List[Dict[str, Any]], returns_df: Optio
     correlation = float(p_rets.corr(m_rets))
 
     # Beta = Cov(p, m) / Var(m)
-    cov = np.cov(p_rets, m_rets)[0, 1]
-    var_m = np.var(m_rets)
-    beta = float(cov / var_m) if var_m > 0 else 0.0
+    # Ensure shapes are correct (1D arrays of same length > 1)
+    if len(p_rets) > 1 and len(m_rets) > 1:
+        cov_matrix = np.cov(p_rets, m_rets)
+        if cov_matrix.shape == (2, 2):
+            cov = cov_matrix[0, 1]
+            var_m = np.var(m_rets, ddof=1)  # Standard sample variance
+            beta = float(cov / var_m) if var_m > 1e-12 else 0.0
+        else:
+            beta = 0.0
+    else:
+        beta = 0.0
 
     return beta, correlation
 

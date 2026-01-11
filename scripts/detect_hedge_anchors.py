@@ -71,7 +71,8 @@ def detect_hedge_anchors():
             crypto_corr = float(s_rets.corr(target_cluster_rets))
 
         # Volatility
-        vol = float(s_rets.std() * np.sqrt(252))
+        # Use ddof=0 for numerical stability on short series
+        vol = float(s_rets.std(ddof=0) * np.sqrt(252))
 
         results.append(
             {
@@ -87,7 +88,7 @@ def detect_hedge_anchors():
     df = pd.DataFrame(results)
 
     # Filter for potential hedges (negative correlation or very low correlation)
-    hedges = df[df["Market_Correlation"] < 0.1].sort_values("Market_Correlation")
+    hedges = df[df["Market_Correlation"] < 0.1].sort_values(by="Market_Correlation")
 
     print("\n" + "=" * 100)
     print("HEDGE ANCHOR DISCOVERY (Insurance Layer)")
@@ -100,7 +101,7 @@ def detect_hedge_anchors():
 
     if crypto_cluster_key:
         print(f"\n[Top 10 Crypto-Specific Hedges (Neg. Correlation with {crypto_cluster_key})]")
-        crypto_hedges = df[df["Crypto_Correlation"] < 0.1].sort_values("Crypto_Correlation")
+        crypto_hedges = df[df["Crypto_Correlation"] < 0.1].sort_values(by="Crypto_Correlation")
         top_crypto_hedges = crypto_hedges.head(10)
         print(top_crypto_hedges[["Symbol", "Crypto_Correlation", "Volatility", "Market"]].to_string(index=False))
 

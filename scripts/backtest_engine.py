@@ -11,6 +11,8 @@ import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import warnings
+
 from tradingview_scraper.portfolio_engines.backtest_simulators import build_simulator
 from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
 from tradingview_scraper.portfolio_engines.engines import build_engine
@@ -19,6 +21,11 @@ from tradingview_scraper.risk import AntifragilityAuditor
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import AuditLedger, get_df_hash  # type: ignore
 
+# Suppress known RuntimeWarnings from external libraries (cvxportfolio, numpy)
+# specifically "Degrees of freedom <= 0 for slice" which is handled internally via robust guards.
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="Degrees of freedom <= 0 for slice")
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="Mean of empty slice")
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("backtest_engine")
 
@@ -26,18 +33,26 @@ logger = logging.getLogger("backtest_engine")
 def persist_tournament_artifacts(results: Dict[str, Any], output_dir: Path):
     """Saves tournament metrics and windows to disk for analysis."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    with open(output_dir / "tournament_results.json", "w") as f:
+    target_path = output_dir / "tournament_results.json"
+    print(f"DEBUG: Attempting to write JSON to {target_path}")
+    try:
+        with open(target_path, "w") as f:
 
-        def _default(obj):
-            if isinstance(obj, (pd.DataFrame, pd.Series)):
-                return {}
-            if isinstance(obj, (np.integer, np.floating)):
-                return obj.item()
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            return str(obj)
+            def _default(obj):
+                if isinstance(obj, (pd.DataFrame, pd.Series)):
+                    return {}
+                if isinstance(obj, (np.integer, np.floating)):
+                    return obj.item()
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return str(obj)
 
-        json.dump(results, f, indent=2, default=_default)
+            json.dump(results, f, indent=2, default=_default)
+            f.flush()
+            os.fsync(f.fileno())
+        print(f"DEBUG: Successfully wrote {target_path.stat().st_size} bytes")
+    except Exception as e:
+        print(f"ERROR: Failed to save tournament artifacts: {e}")
 
 
 class BacktestEngine:
@@ -75,19 +90,21 @@ class BacktestEngine:
         return matches[0] if matches else sym
 
     def run_tournament(self, **kwargs) -> Dict:
-        settings = get_settings()
-        train_window = kwargs.get("train_window") or int(settings.train_window)
-        test_window = kwargs.get("test_window") or int(settings.test_window)
-        step_size = kwargs.get("step_size") or int(settings.step_size)
-        profiles = kwargs.get("profiles") or [p.strip() for p in settings.profiles.split(",")]
-        engines = kwargs.get("engines") or [e.strip() for e in settings.engines.split(",")]
-        sim_names = kwargs.get("simulators") or [s.strip() for s in settings.backtest_simulators.split(",")]
+        from tradingview_scraper.settings import get_settings
+
+        config = get_settings()
+        train_window = kwargs.get("train_window") or int(config.train_window)
+        test_window = kwargs.get("test_window") or int(config.test_window)
+        step_size = kwargs.get("step_size") or int(config.step_size)
+        profiles = kwargs.get("profiles") or [p.strip() for p in config.profiles.split(",")]
+        engines = kwargs.get("engines") or [e.strip() for e in config.engines.split(",")]
+        sim_names = kwargs.get("simulators") or [s.strip() for s in config.backtest_simulators.split(",")]
 
         returns_to_use = self.returns.dropna(how="all")
         total_len = len(returns_to_use)
 
-        run_dir = settings.prepare_summaries_run_dir()
-        ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
+        run_dir = config.prepare_summaries_run_dir()
+        ledger = AuditLedger(run_dir) if config.features.feat_audit_ledger else None
 
         baseline_engine = "market"
         baseline_profiles = ["market", "benchmark", "raw_pool_ew"]
@@ -123,7 +140,7 @@ class BacktestEngine:
             if ledger:
                 ledger.record_intent(
                     step="backtest_select",
-                    params={"top_n": settings.top_n},
+                    params={"top_n": config.top_n},
                     input_hashes={"train_returns": get_df_hash(train_data_raw)},
                     context=sel_context,
                 )
@@ -133,8 +150,8 @@ class BacktestEngine:
                     train_data_raw,
                     raw_candidates_norm,
                     stats_df=stats_df,
-                    top_n=settings.top_n,
-                    threshold=settings.threshold,
+                    top_n=config.top_n,
+                    threshold=config.threshold,
                 )
                 winners_list = response.winners or []
             except Exception:
@@ -159,7 +176,7 @@ class BacktestEngine:
 
                 # CR-182: Dynamic Direction Assignment & CR-183: Secular Trend Guardrail
                 valid_alpha_symbols = []
-                if settings.features.feat_dynamic_direction:
+                if config.features.feat_dynamic_direction:
                     mom_lookback = 20
                     mom_20d = (1 + train_data_raw.tail(mom_lookback)).prod() - 1
 
@@ -184,7 +201,7 @@ class BacktestEngine:
 
             # CR-181: Directional Return Alignment
             opt_train_data = train_data.copy()
-            if settings.features.feat_directional_returns:
+            if config.features.feat_directional_returns:
                 for s in opt_train_data.columns:
                     if candidate_meta.get(s, {}).get("direction") == "SHORT":
                         opt_train_data[s] = -1.0 * opt_train_data[s]
@@ -257,7 +274,14 @@ class BacktestEngine:
                         d_rets = perf["daily_returns"].iloc[:test_window]
                         prev_weights[(s_name, eng, prof)] = perf.get("final_weights", w_df.set_index("Symbol")["Weight"])
                         results[s_name][eng][prof]["windows"].append(
-                            {"start_date": str(test_data_extended.index[0]), "sharpe": perf["sharpe"], "regime": regime, "quadrant": quadrant, "n_assets": len(w_df)}
+                            {
+                                "start_date": str(test_data_extended.index[0]),
+                                "sharpe": perf["sharpe"],
+                                "returns": perf["total_return"],
+                                "regime": regime,
+                                "quadrant": quadrant,
+                                "n_assets": len(w_df),
+                            }
                         )
                         cumulative[(s_name, eng, prof)].append(d_rets)
 
@@ -280,9 +304,31 @@ class BacktestEngine:
                 for prof, p_data in p_map.items():
                     if p_data.get("windows") and (s, eng, prof) in cumulative:
                         full_rets = pd.concat(cumulative[(s, eng, prof)])
-                        ann_ret = float(full_rets.mean() * 252)
-                        ann_vol = float(full_rets.std() * np.sqrt(252))
-                        p_data["summary"] = {"annualized_return": ann_ret, "sharpe": ann_ret / ann_vol if ann_vol > 0 else 0}
+                        print(f"DEBUG: {s}/{eng}/{prof} rets head: {full_rets.head(3).values}")
+                        print(f"DEBUG: {s}/{eng}/{prof} non-zero rets: {(full_rets != 0).sum()}")
+
+                        from tradingview_scraper.utils.metrics import calculate_performance_metrics
+
+                        perf = calculate_performance_metrics(full_rets)
+
+                        # CR-210: Optional full-series persistence for forensic audit
+                        if os.getenv("PERSIST_RETURNS") == "1":
+                            from tradingview_scraper.settings import get_settings
+
+                            s_settings = get_settings()
+                            ret_dir = s_settings.run_data_dir / "returns"
+                            ret_dir.mkdir(parents=True, exist_ok=True)
+                            ret_path = ret_dir / f"{s}_{eng}_{prof}.pkl"
+                            full_rets.to_pickle(ret_path)
+                            p_data["returns_path"] = str(ret_path)
+                            print(f"DEBUG: Saved returns to {ret_path}")
+
+                        p_data["summary"] = {
+                            "annualized_return": perf["annualized_return"],
+                            "sharpe": perf["sharpe"],
+                            "max_drawdown": perf["max_drawdown"],
+                            "annualized_volatility": perf["annualized_vol"],
+                        }
         return {"results": results}
 
     def _cluster_data(self, df: pd.DataFrame) -> Dict[str, List[str]]:
@@ -313,5 +359,21 @@ if __name__ == "__main__":
         os.environ["TV_PROFILE"] = args.profile
         os.environ["TV_FEATURES__SELECTION_MODE"] = args.selection_modes
         engine = BacktestEngine()
-        engine.run_tournament(train_window=args.train_window, test_window=args.test_window, step_size=args.step_size)
-        print(f"✅ Research Sweep Complete: {get_settings().run_id}")
+        results = engine.run_tournament(train_window=args.train_window, test_window=args.test_window, step_size=args.step_size)
+
+        # Force fresh settings to avoid cache issues
+        from tradingview_scraper.settings import TradingViewScraperSettings
+
+        settings = TradingViewScraperSettings()
+        output_dir = settings.summaries_run_dir / "data"
+
+        print(f"DEBUG: Saving results to {output_dir.absolute()}")
+        persist_tournament_artifacts(results, output_dir)
+
+        # ROOT DUMP FOR SAFETY
+        with open("tournament_results_ROOT.json", "w") as f_root:
+            json.dump(results, f_root, indent=2, default=str)
+        print("DEBUG: Wrote ROOT dump tournament_results_ROOT.json")
+
+        print(f"✅ Research Sweep Complete: {settings.run_id}")
+        print(f"Results saved to: {output_dir / 'tournament_results.json'}")
