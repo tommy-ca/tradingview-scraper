@@ -7,6 +7,9 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.execution.metadata import ExecutionMetadataCatalog
+from tradingview_scraper.symbols.stream.metadata import ExchangeCatalog, MetadataCatalog
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("metadata_enrichment")
 
@@ -71,14 +74,34 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
         return
 
     with open(candidates_path, "r") as f:
-        candidates = json.load(f)
+        data = json.load(f)
 
-    candidate_map = {c["symbol"]: c for c in candidates}
+    # Initialize Catalogs
+    exec_catalog = ExecutionMetadataCatalog()
+    sym_catalog = MetadataCatalog()
+    ex_catalog = ExchangeCatalog()
+
+    # Handle both list (raw candidates) and dict (refined meta)
+    if isinstance(data, list):
+        candidates = data
+        candidate_map = {c["symbol"]: c for c in candidates}
+    else:
+        # Dictionary format from prepare_portfolio_data
+        candidate_map = data
+        candidates = list(data.values())
+        # Ensure 'symbol' key exists in dictionaries if missing
+        for s, c in candidate_map.items():
+            if "symbol" not in c:
+                c["symbol"] = s
 
     # 1. Synchronize with Returns Universe
     if os.path.exists(returns_path):
-        returns = pd.read_pickle(returns_path)
-        active_symbols = returns.columns.tolist()
+        try:
+            returns = pd.read_pickle(returns_path)
+            active_symbols = returns.columns.tolist()
+        except Exception as e:
+            logger.error(f"Error loading returns matrix for enrichment: {e}")
+            active_symbols = []
 
         added_count = 0
         for symbol in active_symbols:
@@ -98,59 +121,83 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
         if added_count > 0:
             logger.info(f"➕ Added {added_count} missing symbols from returns matrix.")
 
-    # 2. Apply Institutional Defaults
+    # 2. Multi-Stage Enrichment (Catalog -> Defaults)
     enriched_count = 0
+    catalog_hits = 0
+
     for c in candidates:
         symbol = c.get("symbol", "UNKNOWN")
+        exchange = symbol.split(":")[0].upper() if ":" in symbol else "UNKNOWN"
         asset_class = c.get("asset_class") or get_asset_class(symbol)
         c["asset_class"] = asset_class
 
-        defaults = get_defaults(asset_class, symbol)
         is_enriched = False
 
+        # A. Try Symbol Catalog (Structural Meta)
+        sym_meta = sym_catalog.get_instrument(symbol)
+        if sym_meta:
+            for key in ["description", "sector", "industry", "country", "type"]:
+                if key in sym_meta and (c.get(key) is None or c.get(key) == "N/A" or c.get(key) == "UNKNOWN"):
+                    c[key] = sym_meta[key]
+                    is_enriched = True
+
+            # Use pricescale if tick_size is missing
+            if c.get("tick_size") is None and sym_meta.get("tick_size"):
+                c["tick_size"] = sym_meta["tick_size"]
+                is_enriched = True
+
+        # B. Try Execution Catalog (Venue Limits)
+        exec_limits = exec_catalog.get_limits(symbol, exchange)
+        if exec_limits:
+            catalog_hits += 1
+            for key in ["lot_size", "tick_size", "min_notional", "step_size", "maker_fee", "taker_fee"]:
+                val = getattr(exec_limits, key, None)
+                if val is not None and val > 0:
+                    c[key] = val
+                    is_enriched = True
+
+            # Map step_size to lot_size if lot_size is missing but step_size exists
+            if c.get("lot_size") is None and getattr(exec_limits, "step_size", 0) > 0:
+                c["lot_size"] = exec_limits.step_size
+                is_enriched = True
+
+        # C. Try Exchange Catalog
+        ex_meta = ex_catalog.get_exchange(exchange)
+        if ex_meta:
+            if c.get("timezone") is None:
+                c["timezone"] = ex_meta.get("timezone")
+                is_enriched = True
+
+        # D. Apply Institutional Defaults (Final Fallback)
+        defaults = get_defaults(asset_class, symbol)
         for key, val in defaults.items():
             current_val = c.get(key)
-            # Treat 0.0 or None or NaN as "missing" for liquidity fields
+
+            # Special handling for liquidity fields
             if key == "value_traded":
                 if current_val is None or (isinstance(current_val, float) and (np.isnan(current_val) or current_val <= 0.0)):
                     c[key] = val
                     is_enriched = True
+            # General missing check
             elif current_val is None or (isinstance(current_val, float) and np.isnan(current_val)):
                 c[key] = val
                 is_enriched = True
-
-        # 3. Pre-Selection ECI Estimator (Step 5.5 Audit)
-        # Prevents high-cost assets from consuming rate limits in Step 7
-        adv = float(c.get("value_traded") or c.get("Value.Traded") or 1e-9)
-        # Use a conservative 0.5% (0.005) for early estimation if real vol is missing
-        # TradingView Volatility.D is usually in percent (e.g., 1.5 for 1.5%)
-        raw_vol = c.get("Volatility.D")
-        if raw_vol is not None and not (isinstance(raw_vol, float) and np.isnan(raw_vol)):
-            vol_est = float(raw_vol) / 100.0
-        else:
-            vol_est = 0.005  # 0.5% daily default
-
-        eci_est = vol_est * np.sqrt(1e6 / adv)
-
-        # Capture Alpha Proxy from scanner (Perf.3M annualized)
-        p3m = float(c.get("Perf.3M") or 0.0)
-        annual_alpha_est = (1 + p3m / 100.0) ** 4 - 1
-
-        c["eci_estimate"] = float(eci_est)
-        c["eci_pre_veto"] = bool((annual_alpha_est - eci_est) < 0.005)
+            elif isinstance(current_val, str) and (current_val == "N/A" or current_val == ""):
+                c[key] = val
+                is_enriched = True
 
         if is_enriched:
             enriched_count += 1
 
-    # 3. Save Enriched Pool
+    # 3. Save back in original format
     with open(candidates_path, "w") as f:
-        json.dump(candidates, f, indent=2)
+        json.dump(data, f, indent=2)
 
-    logger.info(f"✅ Total candidates: {len(candidates)}. Enriched {enriched_count} with institutional defaults.")
+    logger.info(f"✅ Total candidates: {len(candidates)}. Enriched {enriched_count} ({catalog_hits} catalog hits).")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Enrich candidate manifests with liquidity metadata.")
+    parser = argparse.ArgumentParser(description="Enrich candidate manifests with catalog and default metadata.")
     parser.add_argument("--candidates", default="data/lakehouse/portfolio_candidates_raw.json", help="Path to the candidates JSON file to enrich")
     parser.add_argument("--returns", default="data/lakehouse/portfolio_returns.pkl", help="Optional returns matrix to align against")
     args = parser.parse_args()

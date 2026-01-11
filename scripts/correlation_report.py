@@ -79,8 +79,15 @@ def load_returns(path: Path, min_col_frac: float, candidates_path: Optional[Path
 
     # Drop columns with too many NaNs
     min_count = int(min_col_frac * len(rets))
+    # CRITICAL: Do not drop rows (Inner Join) here, as it will truncate the matrix
+    # to the shortest asset's listing day, dropping almost all assets in high-growth portfolios.
+    # Clustering will use Robust (Pairwise) Correlation instead.
     rets = rets.dropna(axis=1, thresh=min_count)
-    rets = rets.dropna(axis=0)
+
+    # Fill remaining NaNs with 0 to allow standard matrix operations
+    # while preserving the temporal variance profile of each asset.
+    rets = rets.fillna(0.0)
+
     # Drop zero-variance cols
     var = rets.var()
     rets = rets.loc[:, var > 0]
@@ -192,8 +199,8 @@ def main():
 
     # Multi-Factor Regime Detection
     detector = MarketRegimeDetector()
-    regime_name, regime_score = detector.detect_regime(rets)
-    print(f"Regime Detected: {regime_name} (Score: {regime_score:.2f})")
+    regime_name, regime_score, quadrant = detector.detect_regime(rets)
+    print(f"Regime Detected: {regime_name} (Score: {regime_score:.2f}) | Quadrant: {quadrant}")
 
     # Adaptive Clustering Threshold
     dist_threshold = 0.4

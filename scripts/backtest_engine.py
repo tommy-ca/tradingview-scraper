@@ -436,8 +436,7 @@ class BacktestEngine:
                 "universe_source": raw_pool_universe_resolved,
             }
 
-            decision_regime, decision_regime_score = self.detector.detect_regime(train_data_raw)
-            decision_quadrant, _ = cast(Any, self.detector).detect_quadrant_regime(train_data_raw)
+            decision_regime, decision_regime_score, decision_quadrant = self.detector.detect_regime(train_data_raw)
             regime = decision_regime
             market_env = decision_quadrant
             stats_df = self._audit_training_stats(train_data_raw)
@@ -447,8 +446,7 @@ class BacktestEngine:
             realized_quadrant = None
             if str(os.getenv("TV_ENABLE_REALIZED_REGIME", "")).strip() in {"1", "true", "TRUE", "yes", "YES"}:
                 try:
-                    realized_regime, realized_regime_score = self.detector.detect_regime(test_data)
-                    realized_quadrant, _ = cast(Any, self.detector).detect_quadrant_regime(test_data)
+                    realized_regime, realized_regime_score, realized_quadrant = self.detector.detect_regime(test_data)
                 except Exception:
                     realized_regime, realized_regime_score, realized_quadrant = None, None, None
 
@@ -602,10 +600,11 @@ class BacktestEngine:
                             logger.info(f"Recording intent: backtest_optimize | Profile: {prof} | Window: {window_index}")
                             ledger.record_intent(
                                 step="backtest_optimize",
-                                params={"engine": eng, "profile": prof, "regime": regime},
+                                params={"engine": eng, "profile": prof, "regime": regime, "quadrant": market_env},
                                 input_hashes={"train_returns": get_df_hash(train_data), "clusters": c_hash},
                                 context=opt_context,
                             )
+
                         weights_df = self._compute_weights(
                             train_data,
                             clusters,
@@ -684,10 +683,11 @@ class BacktestEngine:
                     }
                     ledger.record_intent(
                         step="backtest_optimize",
-                        params={"engine": baseline_engine, "profile": "market", "regime": regime, "baseline": True},
+                        params={"engine": baseline_engine, "profile": "market", "regime": regime, "quadrant": market_env, "baseline": True},
                         input_hashes={"train_returns": get_df_hash(train_data_raw), "clusters": baseline_clusters_hash or "unknown"},
                         context=opt_context,
                     )
+
                 w_market = baseline_opt.optimize(
                     returns=train_data_raw,
                     clusters=clusters,

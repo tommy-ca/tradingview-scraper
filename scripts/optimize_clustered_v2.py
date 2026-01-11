@@ -104,8 +104,8 @@ if __name__ == "__main__":
     )
 
     detector = MarketRegimeDetector()
-    regime, score = detector.detect_regime(optimizer.returns)
-    logger.info(f"Regime Detected for Optimization: {regime} (Score: {score:.2f})")
+    regime, score, quadrant = detector.detect_regime(optimizer.returns)
+    logger.info(f"Regime Detected for Optimization: {regime} (Score: {score:.2f}) | Quadrant: {quadrant}")
 
     # Load enhanced regime analysis if available (Phase 60 Update)
     regime_analysis_path = "data/lakehouse/regime_analysis_v3.json"
@@ -222,7 +222,7 @@ if __name__ == "__main__":
     output = {
         "profiles": profiles,
         "cluster_registry": registry,
-        "optimization": {"regime": {"name": regime, "score": float(score)}, "metrics": regime_metrics},
+        "optimization": {"regime": {"name": regime, "score": float(score), "quadrant": quadrant}, "metrics": regime_metrics},
         "metadata": {"generated_at": datetime.now().isoformat(), "cluster_cap": cap},
     }
 
