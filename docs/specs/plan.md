@@ -39,29 +39,40 @@ This document codifies the institutional requirements and design specifications 
 
 ## 4. Development Plan (Current Sprint)
 
-### Phase 98: Zero-Warning & Data Health Finalization (COMPLETED)
-- [x] **Data**: Perform final `GAPFILL=1` recovery for any lingering stale assets.
-- [x] **Logs**: Verify production execution is 100% free of `RuntimeWarning` and `UserWarning`.
-- [x] **Tournament**: Execute final pre-live tournament to confirm "Clean Boot" state.
-
-### Phase 99: Directional Purity & Allocation Alignment (COMPLETED)
-- [x] **Spec**: Codified CR-181 (Directional Return Alignment) and CR-182 (Dynamic Direction).
-- [x] **Rationale**: Formalized late-binding trend filter strategy in Design Section 22.1.
-- [x] **Logic**: Implemented synthetic return inversion in `BacktestEngine`.
-- [x] **Audit**: Verified HRP profit capture from persistent downtrends (Shorts) in forensic logs.
-- [x] **Report**: Final system certification with balanced long/short contribution analysis.
-
 ### Phase 100: TDD Hardening & Feature Flags (COMPLETED)
 - [x] **TDD**: Implemented unit tests for Directional Purity and Dynamic Direction logic.
 - [x] **Infra**: Gated experimental features behind feature flags in `TradingViewScraperSettings`.
 - [x] **Audit**: Window-by-window forensic audit of risk profiles with deep ledger tracking.
 - [x] **Analysis**: Comparative study of HRP failure modes (Crypto vs Institutional ETF).
 
-### Phase 101: Synthetic Long Normalization (IN_PROGRESS)
-- [ ] **Logic**: Move directional inversion to the data normalization layer prior to selection/allocation.
-- [ ] **Engine**: Audit portfolio engines to ensure they are direction-blind and operate purely on synthetic alpha.
-- [ ] **Backtest**: Verify that simulators correctly reconstruct `Net_Weight` from normalized outputs.
-- [ ] **Docs**: Updated Requirements (CR-181-184) and Design Section 22 to formalize the standard.
+### Phase 101: Synthetic Long Normalization & Logic Sync (COMPLETED)
+- [x] **Logic**: Moved directional inversion to the data normalization layer prior to selection/allocation.
+- [x] **Engine**: Audited `engines.py` to remove direction-aware code paths; models are now direction-naive.
+- [x] **Backtest**: Verified simulators correctly reconstruct `Net_Weight` from normalized outputs.
+- [x] **Docs**: Updated Requirements (v3.3.1) and Design Section 22.
+
+### Phase 102: Deep Forensic reporting & Full Matrix Audit (COMPLETED)
+- [x] **Report**: Developed `generate_deep_report.py` for human-readable window-by-window analysis.
+- [x] **Hardening**: Increased Permutation Entropy resolution (Order=5, 120 permutations) to fix false-positive noise vetoes.
+- [x] **Accuracy**: Fixed percentage scaling and restored missing risk metrics (Vol/DD) in tournament summaries.
+- [x] **Robustness**: Implemented Annualized Return Clipping (-99.99%) to prevent mathematical anomalies in high-drawdown regimes.
+- [x] **Traceability**: Enabled full return series persistence (`PERSIST_RETURNS=1`) for bit-perfect auditability.
+- [x] **Verification**: Confirmed bit-perfect replayability of all portfolios from ledger context.
+
+### Phase 103: System Sign-Off & Q1 2026 Freeze (COMPLETED)
+- [x] **Release**: Created git tag `v3.3.1-certified`.
+- [x] **Docs**: Final synchronization of Requirements, Design, and Agent Guide.
+- [x] **Ledger**: Verified zero-error status across the final audit chain.
+- [x] **Stability**: Hardened numerical pipelines (std/var) with `ddof=0` and explicit length guards. Suppressed residual 3rd-party RuntimeWarnings.
+- [x] **Hardening**: Implemented Annualized Return Clipping (-99.99%) for extreme regimes.
+- [x] **Protocol**: Implemented Selection Scarcity Protocol (SSP) for robust multi-stage fallbacks (Max-Sharpe -> Min-Var -> EW).
+
+### Phase 104: Optimization Engine Refinement (COMPLETED)
+- [x] **Riskfolio HRP**: Analyze divergence (-0.95 correlation). Result: **Deprecate for production**. Riskfolio engine now warns and falls back or is used only for research.
+- [x] **PyPortfolioOpt**: Investigate `max_sharpe` warning with L2 regularization. Action: **Suppressed warning** in engine wrapper to maintain consistent API behavior while acknowledging solver limitations.
+- [x] **Adaptive Logging**: Review `AdaptiveMetaEngine` logging verbosity. Action: **Reduced to DEBUG** level to eliminate log spam during backtests.
+- [x] **Engine Consolidation**: Evaluate redundancy. Result: `skfolio` and `custom` are primary; `riskfolio` is secondary/experimental.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.16)
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.3.1)
+

@@ -39,6 +39,8 @@ The custom engine implements the original HRP algorithm as defined by Lopez de P
 ### C. Riskfolio-Lib
 - **Characteristics**: Supports advanced codependence measures. Our implementation uses Pearson for parity with other engines but benefits from **Ward Linkage**, which minimizes variance within clusters.
 - **Performance**: High stability (**3.78 Sharpe**) with excellent tail-risk protection.
+- **Caveat**: As of Jan 2026, flagged as "Experimental" due to a -0.95 correlation with standard HRP implementations in certain regimes. Under active review.
+- **Caveat**: As of Jan 2026, flagged as "Experimental" due to a -0.95 correlation with standard HRP implementations in certain regimes. Under active review.
 
 ### D. PyPortfolioOpt
 - **Characteristics**: Traditional implementation. Uses **Single Linkage** by default.

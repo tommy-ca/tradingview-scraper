@@ -1,4 +1,4 @@
-# Crypto Sleeve Requirements Specification v3.3.0
+# Crypto Sleeve Requirements Specification v3.3.1
 
 ## 1. Overview
 
@@ -6,10 +6,10 @@
 Define the institutional requirements for the crypto production sleeve within the multi-sleeve meta-portfolio architecture.
 
 ### 1.2 Scope
-This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment.
+This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Hardened** (2026-01-11) - Directional Purity Standard v3.3.0.
+**Production Certified** (2026-01-11) - Deep Audit Standard v3.3.1.
 
 ---
 
@@ -26,7 +26,9 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-182 | MUST | ✅ | **Late-Binding Directional Assignment**: Asset direction must be dynamically determined at each rebalance window using recent momentum to ensure factor purity and protect against regime drift. |
 | CR-183 | MUST | ✅ | **Direction-Blind Portfolio Engines**: All allocation engines (HRP, MVO, Barbell) must operate on the normalized "Synthetic Long" matrix, ensuring consistent logic across all strategy types without direction-specific code paths. |
 | CR-184 | MUST | ✅ | **Simulator Reconstruction**: Backtest simulators must utilize the `Net_Weight` derived from synthetic weights and assigned directions ($W_{net} = W_{synthetic} \times \text{sign}(M)$) to execute trades correctly. |
-| CR-185 | MUST | ✅ | **Secular Trend Guardrail**: The selection-allocation bridge must disqualify assets fighting their structural trend by > 15% to mitigate "Falling Knife" risk in Longs and "Short Squeeze" risk in Shorts. |
+| CR-190 | MUST | ✅ | **TDD Hardening**: Critical risk components (inversion, direction assignment) are protected by unit tests to ensure logical integrity. |
+| CR-191 | MUST | ✅ | **Feature Flag Control**: Experimental risk features are gated behind specific toggles in `TradingViewScraperSettings` to allow for safe production rollouts. |
+| CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---
 

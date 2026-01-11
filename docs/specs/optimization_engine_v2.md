@@ -119,4 +119,6 @@ All profiles are validated across synchronized simulators:
 - **Canonical window constraint**: If canonical returns start after the selected index, no walk-forward window can satisfy `train + test + 1` coverage (example: run `20260103-160121` produced 0 windows). Use a canonical-aligned `start_date` or shorter windows to validate baselines.
 - **Audit completeness**: `raw_pool_symbol_count` and `raw_pool_returns_hash` are logged when `raw_pool_ew` windows exist; missing windows yield no audit entries.
 - **Market fallback**: The `market` profile returns empty weights if benchmark symbols are missing (no fallback by design).
+- **PyPortfolioOpt**: `max_sharpe` emits a warning when used with L2 regularization due to objective transformation.
+- **Riskfolio HRP**: Flagged as "Experimental" due to a -0.95 correlation with standard HRP implementations in certain regimes.
 - **Adaptive mapping**: `AdaptiveMetaEngine` currently maps `NORMAL` to `max_sharpe` (not `benchmark`).
