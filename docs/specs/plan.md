@@ -64,5 +64,12 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Optimization**: Reran HRP optimization on the healthy dataset.
 - [x] **Certification**: Generated final risk audit report with bit-perfect window traceability.
 
+### Phase 96: Metadata Hardening & Isolation Integrity (COMPLETED)
+- [x] **Fix**: Resolved `NameError` in `enrich_candidates_metadata.py` ensuring proper import of settings.
+- [x] **Logic**: Implemented robust asset class detection and default injection for new crypto listings.
+- [x] **Isolation**: Enforced benchmark stripping in `natural_selection.py` to guarantee 100% alpha purity.
+- [x] **Verification**: Confirmed 0 "Missing Metadata" vetoes in final selection run.
+- [x] **Specs**: Updated Requirements (CR-173) and Design Section 25.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.13)
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.14)

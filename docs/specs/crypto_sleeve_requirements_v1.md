@@ -1,4 +1,4 @@
-# Crypto Sleeve Requirements Specification v3.2.13
+# Crypto Sleeve Requirements Specification v3.2.14
 
 ## 1. Overview
 
@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-11) - Pure Alpha Standard v3.2.13 (Benchmark Isolation).
+**Production Certified** (2026-01-11) - Metadata Hardened Standard v3.2.14 (Enrichment Fix).
 
 ---
 
@@ -39,6 +39,7 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-170 | MUST | ✅ | **Hierarchical Factor Diversity**: The system must utilize Ward Linkage clustering across multiple lookbacks (60d, 120d, 200d) to ensure intra-cluster selection and cluster-level risk capping (25%) are based on stable factor identities. |
 | CR-171 | MUST | ✅ | **Cluster Stability Protocol**: Distance matrices must be averaged across windows to reduce sensitivity to transient regime noise, ensuring that orthogonal risk units represent structural market relationships. |
 | CR-172 | MUST | ✅ | **Pure Alpha Selection**: The selected candidates universe must exclusively contain assets discovered by scanners; hardcoded benchmarks (SPY) are isolated to baseline profiles unless explicitly selected via the alpha matrix. |
+| CR-173 | MUST | ✅ | **Isolation & Enrichment Integrity**: The pipeline must guarantee that metadata enrichment occurs before selection, and benchmark isolation occurs after selection, ensuring no technical vetoes affect valid alpha signals. |
 
 ---
 

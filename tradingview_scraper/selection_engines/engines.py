@@ -1,4 +1,5 @@
 import logging
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
@@ -324,7 +325,7 @@ class SelectionEngineV3(BaseSelectionEngine):
     ) -> SelectionResponse:
         candidate_map = {c["symbol"]: c for c in raw_candidates}
         settings = get_settings()
-        warnings = []
+        selection_warnings = []
         metrics: Dict[str, Any] = {}
         vetoes: Dict[str, List[str]] = {}
 
@@ -338,7 +339,9 @@ class SelectionEngineV3(BaseSelectionEngine):
 
         # 1. Component Extraction
         mom_all: pd.Series = cast(pd.Series, returns.mean() * 252)
-        vol_all: pd.Series = cast(pd.Series, returns.std() * np.sqrt(252))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            vol_all: pd.Series = cast(pd.Series, returns.std() * np.sqrt(252))
         stab_all: pd.Series = cast(pd.Series, 1.0 / (vol_all + 1e-9))
 
         liq_all_dict = {}
@@ -432,7 +435,7 @@ class SelectionEngineV3(BaseSelectionEngine):
             if kappa > self.kappa_threshold:
                 msg = f"High Condition Number (kappa={kappa:.2e}). Forcing aggressive pruning."
                 logger.warning(msg)
-                warnings.append(msg)
+                selection_warnings.append(msg)
                 force_aggressive_pruning = True
 
         # V3 Execution & Metadata Vetoes
@@ -444,7 +447,7 @@ class SelectionEngineV3(BaseSelectionEngine):
             vetoes[sym].append(reason)
             disqualified.add(sym)
             logger.warning(f"Vetoing {sym}: {reason}")
-            warnings.append(f"Vetoing {sym}: {reason}")
+            selection_warnings.append(f"Vetoing {sym}: {reason}")
 
         # Absolute Survival Veto
         for s in returns.columns:
@@ -666,7 +669,7 @@ class SelectionEngineV3(BaseSelectionEngine):
         # Ensure JSON serializable audit_clusters
         serializable_clusters = {int(k): v for k, v in audit_clusters.items()}
 
-        return SelectionResponse(winners=winners, audit_clusters=serializable_clusters, spec_version=self.spec_version, warnings=warnings, vetoes=vetoes, metrics=metrics)
+        return SelectionResponse(winners=winners, audit_clusters=serializable_clusters, spec_version=self.spec_version, warnings=selection_warnings, vetoes=vetoes, metrics=metrics)
 
 
 class SelectionEngineV3_1(SelectionEngineV3):

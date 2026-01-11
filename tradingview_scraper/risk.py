@@ -1,4 +1,5 @@
 import logging
+import warnings
 from typing import Dict, List, cast
 
 import numpy as np
@@ -25,8 +26,14 @@ class VolatilityClusterer:
         Calculates log-volatility series for clustering.
         Using log-volatility normalizes the distribution of risk spikes.
         """
+        if returns.empty or len(returns) < self.window:
+            return pd.DataFrame(index=returns.index, columns=returns.columns)
+
         # Rolling realized volatility
-        vol_series = returns.rolling(window=self.window).std() * np.sqrt(252)
+        # Suppress ddof warning for sparse early windows
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            vol_series = returns.rolling(window=self.window).std() * np.sqrt(252)
 
         # Log-transform to handle outliers and normalize distribution
         # Add small epsilon to avoid log(0)
@@ -139,7 +146,9 @@ class BarbellOptimizer:
         # 2. Optimize Core (Max Diversification)
         n_core = len(core_candidates)
         # Pre-calculate volatilities and shrunk covariance matrix
-        volatilities = core_returns.std() * np.sqrt(252)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            volatilities = core_returns.std() * np.sqrt(252)
         cov_matrix = ShrinkageCovariance().estimate(cast(pd.DataFrame, core_returns))
 
         init_weights = np.array([1.0 / n_core] * n_core)
@@ -225,7 +234,9 @@ class AntifragilityAuditor:
 
             skew = res.skew()
             kurt = res.kurtosis()
-            vol = res.std() * np.sqrt(252)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                vol = res.std() * np.sqrt(252)
 
             threshold = float(res.quantile(0.95))
             tail_subset = res[res > threshold]

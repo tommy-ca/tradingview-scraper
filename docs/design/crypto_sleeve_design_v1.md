@@ -50,14 +50,15 @@ Hierarchical clustering (Ward Linkage on Robust Pairwise Correlation) serves as 
 2. **Allocation Integration**: The `Clustered Optimizer` uses the dendrogram to enforce **Factor-Level Risk Caps** (25% per cluster). Even if a single asset has superior Sharpe, the system restricts total factor exposure to maintain orthogonal risk units.
 3. **Stability Protocol (v3.2.10)**: To prevent cluster "jitter" during regime shifts, distance matrices are calculated across three horizons (60d, 120d, 200d) and averaged. Ward Linkage is then applied to the averaged matrix, prioritizing cluster cohesion and reducing sensitivity to short-term microstructural noise.
 
-### 24. Benchmark Isolation & Pure Alpha Selection (v3.2.13)
-To ensure that the "Selected Candidates" universe represents 100% scanner-discovered alpha, the platform implements **Benchmark Isolation**:
-1. **Selection Exclusion**: Macro benchmarks (e.g. SPY) are no longer automatically injected into the `Natural Selection` pool. 
-2. **Backtest Handling**: The `BacktestEngine` maintains benchmark data only for baseline profiles (`benchmark`, `market`). 
-3. **Alpha Inclusion**: A benchmark is only included in risk-optimized profiles if it was explicitly captured by a strategy scanner (e.g. `sp500_trend`), ensuring that "Stability Anchors" are active participants in the alpha lifecycle.
+### 25. Metadata Enrichment & Isolation Integrity (v3.2.14)
+To eliminate technical vetoes and ensure pure alpha exposure, the pipeline enforces a strict enrichment and isolation sequence:
+
+1.  **Pre-Selection Enrichment**: All candidates are enriched with institutional metadata (e.g. `tick_size`, `lot_size`) immediately after ingestion. This guarantees that new listings without full exchange metadata are not rejected by the `SelectionEngine`.
+2.  **Selection Isolation**: During the selection phase, macro benchmarks (SPY) are explicitly removed from the winner's list to prevent "beta pollution" in the alpha universe.
+3.  **Post-Selection Integrity**: The `BacktestEngine` re-introduces benchmarks solely for comparative baselines (`market`, `benchmark` profiles) while keeping risk-optimized profiles (`max_sharpe`, `hrp`) pure.
 
 ---
 
-**Version**: 3.2.13  
+**Version**: 3.2.14  
 **Status**: Production Certified  
 **Last Updated**: 2026-01-11

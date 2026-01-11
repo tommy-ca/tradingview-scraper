@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import inspect
 import logging
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 import cvxpy as cp
@@ -593,7 +594,10 @@ class SkfolioEngine(CustomClusteredEngine):
             pass
 
         try:
-            model.fit(X)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=UserWarning)
+                model.fit(X)
+
             raw = cast(Dict[Any, Any], model.weights_)
             if isinstance(raw, dict):
                 w = np.array([float(raw.get(str(k), 0.0)) for k in X.columns])
@@ -755,14 +759,25 @@ class CVXPortfolioEngine(CustomClusteredEngine):
             constraints.append(cvx.MaxWeights(cap))
 
         try:
+            # CVXPortfolio requires timezone-aware indices (usually UTC).
+            X_cvx = X.copy()
+            if not isinstance(X_cvx.index, pd.DatetimeIndex):
+                X_cvx.index = pd.to_datetime(X_cvx.index)
+
+            # Cast to Any to bypass static analysis complaints about .tz on generic Index
+            idx = cast(Any, X_cvx.index)
+            if idx.tz is None:
+                X_cvx = X_cvx.tz_localize("UTC")
+
             weights = cvx.SinglePeriodOptimization(obj, constraints).values_in_time(
-                t=X.index[-1],
-                current_weights=pd.Series(1.0 / n, index=X.columns),
+                t=X_cvx.index[-1],
+                current_weights=pd.Series(1.0 / n, index=X_cvx.columns),
                 current_portfolio_value=1.0,
-                past_returns=X,
+                past_returns=X_cvx,
                 past_volumes=None,
-                current_prices=pd.Series(1.0, index=X.columns),
+                current_prices=pd.Series(1.0, index=X_cvx.columns),
             )
+
         except Exception:
             return super()._optimize_cluster_weights(universe=universe, request=request)
 
