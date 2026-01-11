@@ -87,12 +87,14 @@ def map_to_probability(series: pd.Series, method: str = "rank", sigma: float = 3
     elif method == "logistic":
         # S-curve mapping
         mu = series.mean()
-        s = series.std() + 1e-9
+        s_val = float(series.std()) if len(series.dropna()) > 1 else 0.0
+        s = s_val + 1e-9
         return 1 / (1 + np.exp(-(series - mu) / s))
 
     elif method == "zscore":
         mu = series.mean()
-        s = series.std() + 1e-9
+        s_val = float(series.std()) if len(series.dropna()) > 1 else 0.0
+        s = s_val + 1e-9
         z = (series - mu) / s
         z_clipped = z.clip(-sigma, sigma)
         return (z_clipped + sigma) / (2 * sigma)
@@ -112,7 +114,8 @@ def map_to_probability(series: pd.Series, method: str = "rank", sigma: float = 3
         from scipy.stats import norm
 
         mu = series.mean()
-        s = series.std() + 1e-9
+        s_val = float(series.std()) if len(series.dropna()) > 1 else 0.0
+        s = s_val + 1e-9
         z = (series - mu) / s
         return pd.Series(norm.cdf(z).clip(0.001, 1.0), index=series.index)
 

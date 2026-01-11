@@ -27,11 +27,13 @@ def calculate_hurst_exponent(x: np.ndarray) -> float:
 
         def get_rs(series):
             # Range / Standard Deviation
+            if len(series) < 2:
+                return 0.0
             m = np.mean(series)
             z = np.cumsum(series - m)
             r = np.max(z) - np.min(z)
             s = np.std(series)
-            return r / s if s > 0 else 0
+            return r / s if s > 1e-12 else 0.0
 
         # Divide into segments
         n_total = len(x)
@@ -48,13 +50,14 @@ def calculate_hurst_exponent(x: np.ndarray) -> float:
         valid_lags = []
 
         for l in lags:
-            n_segments = n_total // l
+            n_segments = max(1, n_total // l)
             rs_avg = []
             for i in range(n_segments):
                 segment = x[i * l : (i + 1) * l]
-                rs = get_rs(segment)
-                if rs > 0:
-                    rs_avg.append(rs)
+                if len(segment) > 0:
+                    rs = get_rs(segment)
+                    if rs > 0:
+                        rs_avg.append(rs)
             if rs_avg:
                 rs_values.append(np.mean(rs_avg))
                 valid_lags.append(l)
@@ -155,7 +158,7 @@ def calculate_stationarity_score(returns: np.ndarray) -> float:
         return 0.5
 
     try:
-        if float(np.nanstd(returns)) < 1e-12:
+        if len(returns) < 2 or float(np.nanstd(returns)) < 1e-12:
             return 0.5
 
         # p-value: probability that the process has a unit root (non-stationary)

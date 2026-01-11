@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Institutional Gates
 # Lowered significantly to allow metrics for short walk-forward windows (e.g. 20d)
-MIN_OBSERVATIONS = 5
+MIN_OBSERVATIONS = 2
 # Epsilon jitter to prevent empty slices in quantile-based risk metrics (returns < var)
 EPSILON_JITTER = 1e-12
 
@@ -97,10 +97,13 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
         return empty_res
 
     total_return = (1 + rets).prod() - 1
+    # CR-215: Standard annualization can produce nonsensical > -100% results if mean return is extremely negative.
+    # We clip to -0.9999 to represent near-total wipeout without breaking forensic audit scale.
     ann_factor = _get_annualization_factor(rets)
-    annualized_return = float(rets.mean() * ann_factor)
+    annualized_return = float(np.clip(rets.mean() * ann_factor, -0.9999, 100.0))
 
-    vol_daily = rets.std()
+    # Daily performance components
+    vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
     realized_vol = vol_daily * math.sqrt(ann_factor)
 
     max_drawdown = calculate_max_drawdown(rets)
@@ -196,10 +199,12 @@ def get_full_report_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Se
             new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in rets.index]
             rets.index = pd.DatetimeIndex(new_idx)
         except Exception:
-            if rets.index.tz is not None:
-                rets.index = rets.index.tz_convert(None).tz_localize(None)
+            # Fallback using safer casting
+            idx = pd.DatetimeIndex(rets.index)
+            if idx.tz is not None:
+                rets.index = idx.tz_convert(None).tz_localize(None)
             else:
-                rets.index = rets.index.tz_localize(None)
+                rets.index = idx.tz_localize(None)
 
         if benchmark is not None:
             benchmark = benchmark.copy()
@@ -207,10 +212,11 @@ def get_full_report_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Se
                 new_b_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in benchmark.index]
                 benchmark.index = pd.DatetimeIndex(new_b_idx)
             except Exception:
-                if benchmark.index.tz is not None:
-                    benchmark.index = benchmark.index.tz_convert(None).tz_localize(None)
+                b_idx = pd.DatetimeIndex(benchmark.index)
+                if b_idx.tz is not None:
+                    benchmark.index = b_idx.tz_convert(None).tz_localize(None)
                 else:
-                    benchmark.index = benchmark.index.tz_localize(None)
+                    benchmark.index = b_idx.tz_localize(None)
 
             idx = rets.index.union(benchmark.index)
             benchmark = benchmark.reindex(idx).fillna(0.0)
@@ -271,7 +277,7 @@ def calculate_temporal_fragility(sharpe_series: pd.Series) -> float:
     mean_sharpe = float(s.mean())
     if abs(mean_sharpe) < 1e-9:
         return 0.0
-    return float(s.std() / abs(mean_sharpe))
+    return float(s.std(ddof=0) / abs(mean_sharpe))
 
 
 def calculate_friction_alignment(sharpe_real: float, sharpe_ideal: float) -> float:
