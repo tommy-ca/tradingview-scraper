@@ -7,6 +7,7 @@ import threading
 import time
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta
+from typing import Any, cast
 
 import pandas as pd
 
@@ -146,8 +147,6 @@ def prepare_portfolio_universe():
             df = df.set_index("timestamp")["close"]
 
             returns = df.pct_change().dropna()
-            if candidate.get("direction") == "SHORT":
-                returns = -returns
 
             with lock:
                 price_data[symbol] = returns
@@ -188,10 +187,25 @@ def prepare_portfolio_universe():
                 logger.error(f"Batch timed out. {len(not_done)} tasks incomplete.")
 
     # 4. Aligned Matrix Creation
-    all_dates = sorted(set().union(*(rets.index for rets in price_data.values())))
-    returns_df = pd.DataFrame(index=pd.Index(all_dates))
+    all_dates_raw = sorted(set().union(*(rets.index for rets in price_data.values())))
+    # Ensure index is timezone-aware DatetimeIndex (UTC) to prevent downstream index errors
+    all_dates = pd.to_datetime(all_dates_raw, utc=True)
+    returns_df = pd.DataFrame(index=all_dates)
 
     for symbol, rets in price_data.items():
+        # Ensure index is timezone-aware DatetimeIndex (UTC) to prevent downstream index errors
+        if not isinstance(rets.index, pd.DatetimeIndex):
+            rets.index = pd.to_datetime(rets.index)
+
+        idx_check = cast(Any, rets.index)
+        if idx_check.tz is None:
+            rets.index = idx_check.tz_localize("UTC")
+        else:
+            rets.index = idx_check.tz_convert("UTC")
+
+        # CR-181: Directional Normalization (Data Layer)
+        # Store only RAW returns in the lakehouse.
+        # Sign inversion is now handled dynamically by the analysis/allocation engines.
         returns_df[symbol] = rets
 
     # Drop rows where ALL non-crypto assets are missing (e.g., weekends for TradFi)
@@ -201,17 +215,7 @@ def prepare_portfolio_universe():
         tradfi_all_nan = returns_df[tradfi_cols].isna().all(axis=1)
         returns_df = returns_df.loc[~tradfi_all_nan]
 
-    # Drop zero-variance noise
-    variances = returns_df.var()
-    zero_vars = []
-    if not isinstance(variances, (float, int)):
-        zero_vars = [str(c) for c, v in variances.items() if v == 0]
-
-    if zero_vars:
-        returns_df = returns_df.drop(columns=zero_vars)
-        logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
-
-    # Apply History Floor (min_days_floor)
+    # Apply History Floor (min_days_floor) first to prevent statistical errors on sparse data
     # Only enforce if we are fetching at least that much data (High Integrity pass)
     min_days = int(active_settings.min_days_floor)
     if min_days > 0 and lookback_days >= min_days:
@@ -220,6 +224,17 @@ def prepare_portfolio_universe():
         if short_history:
             returns_df = returns_df.drop(columns=short_history)
             logger.info("Dropped %d symbols due to insufficient secular history (< %d days): %s", len(short_history), min_days, ", ".join(short_history))
+
+    # Drop zero-variance noise
+    # Now safe to calculate variance without RuntimeWarning as all columns have sufficient history
+    variances = returns_df.var()
+    zero_vars = []
+    if not isinstance(variances, (float, int)):
+        zero_vars = [str(c) for c, v in variances.items() if v == 0]
+
+    if zero_vars:
+        returns_df = returns_df.drop(columns=zero_vars)
+        logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
 
     # Post-load Deduplication (Optional safety pass)
     dedupe_env = os.getenv("PORTFOLIO_DEDUPE_BASE")
@@ -237,7 +252,10 @@ def prepare_portfolio_universe():
             logger.info("Dedupe by identity kept %d of %d symbols", len(deduped_cols), len(returns_df.columns))
             returns_df = returns_df[deduped_cols]
 
+    logger.info(f"Alpha Meta keys: {list(alpha_meta.keys())[:5]}")
+    logger.info(f"Returns columns: {list(returns_df.columns)[:5]}")
     alpha_meta = {s: alpha_meta[s] for s in returns_df.columns if s in alpha_meta}
+    logger.info(f"Alpha Meta size after filter: {len(alpha_meta)}")
 
     returns_path = os.getenv("PORTFOLIO_RETURNS_PATH", "data/lakehouse/portfolio_returns.pkl")
     meta_path = os.getenv("PORTFOLIO_META_PATH", "data/lakehouse/portfolio_meta.json")

@@ -761,13 +761,17 @@ class CVXPortfolioEngine(CustomClusteredEngine):
         try:
             # CVXPortfolio requires timezone-aware indices (usually UTC).
             X_cvx = X.copy()
-            if not isinstance(X_cvx.index, pd.DatetimeIndex):
-                X_cvx.index = pd.to_datetime(X_cvx.index)
 
-            # Cast to Any to bypass static analysis complaints about .tz on generic Index
+            # Force conversion to UTC DatetimeIndex
+            if not isinstance(X_cvx.index, pd.DatetimeIndex):
+                X_cvx.index = pd.to_datetime(X_cvx.index, utc=True)
+
+            # Ensure timezone awareness if it was already DatetimeIndex but naive
             idx = cast(Any, X_cvx.index)
             if idx.tz is None:
                 X_cvx = X_cvx.tz_localize("UTC")
+            else:
+                X_cvx = X_cvx.tz_convert("UTC")
 
             weights = cvx.SinglePeriodOptimization(obj, constraints).values_in_time(
                 t=X_cvx.index[-1],
@@ -777,8 +781,8 @@ class CVXPortfolioEngine(CustomClusteredEngine):
                 past_volumes=None,
                 current_prices=pd.Series(1.0, index=X_cvx.columns),
             )
-
-        except Exception:
+        except Exception as e:
+            logger.error(f"cvxportfolio failed: {e}")
             return super()._optimize_cluster_weights(universe=universe, request=request)
 
         s = weights.reindex(X.columns).fillna(0.0).astype(float) if isinstance(weights, pd.Series) else pd.Series(weights, index=X.columns).fillna(0.0).astype(float)

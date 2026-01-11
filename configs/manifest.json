@@ -96,7 +96,9 @@
         "efficiency_min_threshold": 0.05,
         "eci_hurdle": -0.6,
         "min_col_frac": 0.05,
-        "use_robust_correlation": true
+        "use_robust_correlation": true,
+        "feat_directional_returns": true,
+        "feat_dynamic_direction": true
       },
       "data": {
         "lookback_days": 500,

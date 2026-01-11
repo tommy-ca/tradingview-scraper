@@ -39,37 +39,29 @@ This document codifies the institutional requirements and design specifications 
 
 ## 4. Development Plan (Current Sprint)
 
-### Phase 92: Hierarchical Factor Stability Research (COMPLETED)
-- [x] **Research**: Explored linkage methods (Ward/Complete) and stability impact of window averaging.
-- [x] **Audit**: Measured cluster cohesion (0.61) vs single-window baseline (0.51).
-- [x] **Config**: Centralized `cluster_lookbacks` in `manifest.json` and Pydantic settings.
-- [x] **Consistency**: Aligned clustering windows ([5, 60, 120, 200]) with rebalance frequency.
-- [x] **Docs**: Codified CR-171 and updated Design Section 23 with the Stability Protocol.
+### Phase 98: Zero-Warning & Data Health Finalization (COMPLETED)
+- [x] **Data**: Perform final `GAPFILL=1` recovery for any lingering stale assets.
+- [x] **Logs**: Verify production execution is 100% free of `RuntimeWarning` and `UserWarning`.
+- [x] **Tournament**: Execute final pre-live tournament to confirm "Clean Boot" state.
 
-### Phase 93: High-Fidelity Crypto Tournament Validation (COMPLETED)
-- [x] **Tournament**: Rerun full crypto production sweep with v3.2.12 standards.
-- [x] **Audit**: Verified evolution of portfolio depth window-by-window (1 -> 17 assets).
-- [x] **Rationale**: Explained Early-Window sparsity (Window 0-2) as a natural effect of the 90-day Immersion floor.
-- [x] **Reports**: Generated comprehensive Risk Matrix Audit comparing all portfolio engines (Run ID: 20260111-120437).
+### Phase 99: Directional Purity & Allocation Alignment (COMPLETED)
+- [x] **Spec**: Codified CR-181 (Directional Return Alignment) and CR-182 (Dynamic Direction).
+- [x] **Rationale**: Formalized late-binding trend filter strategy in Design Section 22.1.
+- [x] **Logic**: Implemented synthetic return inversion in `BacktestEngine`.
+- [x] **Audit**: Verified HRP profit capture from persistent downtrends (Shorts) in forensic logs.
+- [x] **Report**: Final system certification with balanced long/short contribution analysis.
 
-### Phase 94: Pure Alpha Selection & Benchmark Isolation (COMPLETED)
-- [x] **Logic**: Removed automated benchmark injection from `prepare_portfolio_data.py`.
-- [x] **Symmetry**: Updated `BacktestEngine` to utilize benchmarks only for baseline profiles or if explicitly selected.
-- [x] **Specs**: Updated Requirements (CR-172) and Design Section 24 to formalize Benchmark Isolation.
-- [x] **Verification**: Confirmed that `selected_candidates` universe represents 100% scanner-discovered assets.
+### Phase 100: TDD Hardening & Feature Flags (COMPLETED)
+- [x] **TDD**: Implemented unit tests for Directional Purity and Dynamic Direction logic.
+- [x] **Infra**: Gated experimental features behind feature flags in `TradingViewScraperSettings`.
+- [x] **Audit**: Window-by-window forensic audit of risk profiles with deep ledger tracking.
+- [x] **Analysis**: Comparative study of HRP failure modes (Crypto vs Institutional ETF).
 
-### Phase 95: Forensic Data Audit & Health Recovery (COMPLETED)
-- [x] **Audit**: Executed strict session-aware health audit for selected winners.
-- [x] **Recovery**: Implemented `GAPFILL=1` self-healing loop for stale winners.
-- [x] **Optimization**: Reran HRP optimization on the healthy dataset.
-- [x] **Certification**: Generated final risk audit report with bit-perfect window traceability.
-
-### Phase 96: Metadata Hardening & Isolation Integrity (COMPLETED)
-- [x] **Fix**: Resolved `NameError` in `enrich_candidates_metadata.py` ensuring proper import of settings.
-- [x] **Logic**: Implemented robust asset class detection and default injection for new crypto listings.
-- [x] **Isolation**: Enforced benchmark stripping in `natural_selection.py` to guarantee 100% alpha purity.
-- [x] **Verification**: Confirmed 0 "Missing Metadata" vetoes in final selection run.
-- [x] **Specs**: Updated Requirements (CR-173) and Design Section 25.
+### Phase 101: Synthetic Long Normalization (IN_PROGRESS)
+- [ ] **Logic**: Move directional inversion to the data normalization layer prior to selection/allocation.
+- [ ] **Engine**: Audit portfolio engines to ensure they are direction-blind and operate purely on synthetic alpha.
+- [ ] **Backtest**: Verify that simulators correctly reconstruct `Net_Weight` from normalized outputs.
+- [ ] **Docs**: Updated Requirements (CR-181-184) and Design Section 22 to formalize the standard.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.14)
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.16)

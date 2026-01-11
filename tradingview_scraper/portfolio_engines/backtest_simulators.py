@@ -90,12 +90,20 @@ class ReturnsSimulator(BaseSimulator):
         settings = get_settings()
         target_len = len(returns)
 
-        w_target = weights_df.set_index("Symbol")["Weight"].astype(float)
+        # Use Net_Weight to handle directional returns correctly (Long/Short).
+        # Fallback to Weight if Net_Weight is missing.
+        w_target = pd.Series(dtype=float)
+        if "Net_Weight" in weights_df.columns:
+            w_target = weights_df.set_index("Symbol")["Net_Weight"].astype(float)
+        else:
+            w_target = weights_df.set_index("Symbol")["Weight"].astype(float)
+
         if isinstance(w_target, pd.DataFrame):
             w_target = w_target.iloc[:, 0]
         w_target = cast(pd.Series, w_target)
+
         if "cash" not in w_target.index:
-            w_target["cash"] = max(0.0, 1.0 - w_target.sum())
+            w_target["cash"] = max(0.0, 1.0 - w_target.abs().sum())
 
         rebalance_mode = settings.features.feat_rebalance_mode
         tolerance_enabled = settings.features.feat_rebalance_tolerance
@@ -271,7 +279,13 @@ class VectorBTSimulator(BaseSimulator):
         settings = get_settings()
 
         rebalance_mode = settings.features.feat_rebalance_mode
-        w_series = weights_df.set_index("Symbol")["Weight"].astype(float)
+
+        # Use Net_Weight to handle directional returns correctly in VectorBT
+        if "Net_Weight" in weights_df.columns:
+            w_series = weights_df.set_index("Symbol")["Net_Weight"].astype(float)
+        else:
+            w_series = weights_df.set_index("Symbol")["Weight"].astype(float)
+
         if isinstance(w_series, pd.DataFrame):
             w_series = w_series.iloc[:, 0]
         w_series = cast(pd.Series, w_series)

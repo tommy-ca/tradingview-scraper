@@ -80,14 +80,14 @@ Every step of the production sequence persists its full execution trace in the r
 
 ---
 
-## 6. Strategic Guiding Principles for Agents
-
+### 6. Strategic Guiding Principles for Agents
 1.  **Alpha must survive friction**: Prioritize optimization engines that maintain Sharpe ratio stability in high-fidelity simulation. Use `feat_turnover_penalty` to minimize churn.
 2.  **Spectral Intelligence**: Prioritize spectral (DWT) and entropy metrics for regime detection over simple volatility ratios. Use `feat_spectral_regimes` for adaptive scaling.
 3.  **Execution Integrity**: Use `feat_partial_rebalance` to avoid noisy small trades. Generate implementation orders via `scripts/track_portfolio_state.py --orders`.
-4.  **Provenance First**: Always verify that the `manifest.json` has been archived in the run directory.
-5.  **Audit Integrity**: Every production decision must be backed by an entry in the `audit.jsonl` ledger. Never bypass the audit chain for manual weight overrides.
-6.  **No Padding**: Ensure the returns matrix preserves real trading calendars; never zero-fill weekends for TradFi assets.
+4.  **TDD & Feature Flags**: All new risk management features must be implemented via TDD and gated behind feature flags in `TradingViewScraperSettings` to ensure production stability.
+5.  **Provenance First**: Always verify that the `manifest.json` has been archived in the run directory.
+6.  **Audit Integrity**: Every production decision must be backed by an entry in the `audit.jsonl` ledger. Never bypass the audit chain for manual weight overrides.
+7.  **No Padding**: Ensure the returns matrix preserves real trading calendars; never zero-fill weekends for TradFi assets.
 
 ---
 
@@ -139,10 +139,12 @@ The crypto sleeve operates as an orthogonal capital allocation within the multi-
 - **Never zero-fill weekends** for crypto-TradFi correlation calculations.
 
 ### Production Pillars (Forensic Standards)
-Agents must ensure every production run adheres to the following three pillars:
+Agents must ensure every production run adheres to the following five pillars:
 1.  **Regime Alignment**: The `step_size` must be **20 days** for crypto production to match the structural optimum identified via forensic audit (Sharpe 2.36).
 2.  **Tail-Risk Mitigation**: Forensic validation proves that 20-day alignment provides the best balance between momentum capture and drawdown protection (-15.9% MaxDD).
 3.  **Alpha Capture**: High-resolution factor isolation (threshold=0.35) ensures winners are orthogonal and high-conviction.
+4.  **Directional Purity**: SHORT candidate returns must be inverted ($R_{synthetic} = -1 \times R_{raw}$) before optimization to ensure risk-parity engines (HRP/MinVar) correctly reward stable downward drift.
+5.  **Late-Binding Trend Enforcement**: Final asset direction is dynamically recalculated at rebalance-time using a 20-day momentum signal to ensure portfolio-regime alignment.
 
 ### Blacklisted Assets
 - `BINANCE:PAXGUSDT.P`: Detached from gold tracking (correlation 0.44). Use `OKX:XAUTUSDT.P` for gold exposure.

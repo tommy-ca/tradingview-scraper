@@ -1,18 +1,12 @@
 import argparse
-import hashlib
 import json
 import logging
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import List, Optional
 
-import numpy as np
-import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
@@ -185,13 +179,20 @@ def main():
     parser.add_argument("--step-size", type=int)
     parser.add_argument("--cluster-cap", type=float)
     parser.add_argument("--lookback", type=int)
+    parser.add_argument("--engines", help="Comma-separated list of engines")
+    parser.add_argument("--profiles", help="Comma-separated list of profiles")
+    parser.add_argument("--simulators", help="Comma-separated list of simulators")
 
     args, unknown = parser.parse_known_args()
     sel_modes = _parse_csv(args.selection_modes)
     reb_modes = _parse_csv(args.rebalance_modes)
+    engines = _parse_csv(args.engines)
+    profiles = _parse_csv(args.profiles)
+    simulators = _parse_csv(args.simulators)
+
     console = Console()
 
-    console.print(f"\n[bold gold1]🏟️ Grand Tournament Orchestrator[/]")
+    console.print("\n[bold gold1]🏟️ Grand Tournament Orchestrator[/]")
     console.print(f"[dim]Profile:[/] {args.profile} | [dim]Mode:[/] {args.mode.upper()}")
 
     if args.mode == "production":
@@ -224,6 +225,9 @@ def main():
             test_window=args.test_window,
             step_size=args.step_size,
             cluster_cap=args.cluster_cap,
+            engines=engines,
+            profiles=profiles,
+            simulators=simulators,
         )
         console.print(f"[bold green]✅ Research Sweep Complete:[/] {run_id}")
 

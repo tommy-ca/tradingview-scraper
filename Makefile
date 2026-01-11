@@ -169,6 +169,7 @@ data-prep-raw: ## Aggregate scans and initialize raw pool
 	-$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
 	$(PY) scripts/metadata_coverage_guardrail.py --target canonical:data/lakehouse/portfolio_candidates_raw.json:data/lakehouse/portfolio_returns.pkl
 
+
 data-fetch: ## Ingest historical market data
 	$(PY) scripts/prepare_portfolio_data.py
 	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_meta.json
