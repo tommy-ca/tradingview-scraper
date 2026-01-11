@@ -9,7 +9,7 @@ trend:
   adx: {enabled: true, min: 10}
   momentum:
     enabled: true
-    horizons: {Perf.W: 0.0, Perf.1M: 0.0}
+    horizons: {Perf.W: 0.0}
 
 # MTF confirmation screen (weekly)
 confirm_screen:

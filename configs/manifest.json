@@ -2,8 +2,8 @@
   "default_profile": "production",
   "defaults": {
     "data": {
-      "lookback_days": 252,
-      "min_days_floor": 320,
+      "lookback_days": 500,
+      "min_days_floor": 252,
       "strict_health": false
     },
     "selection": {
@@ -45,7 +45,7 @@
       "description": "Institutional 2026 Q1 Production Profile (Conservative)",
       "data": {
         "lookback_days": 500,
-        "min_days_floor": 320
+        "min_days_floor": 252
       },
       "selection": {
         "top_n": 2,
@@ -55,6 +55,10 @@
     },
     "canary": {
       "description": "Experimental Canary Profile (New Factor Weights)",
+      "data": {
+        "lookback_days": 500,
+        "min_days_floor": 252
+      },
       "features": {
         "selection_mode": "v3.2"
       }
@@ -70,6 +74,7 @@
         "benchmark_symbols": ["BINANCE:BTCUSDT", "AMEX:SPY"],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
+        "train_window": 90,
         "test_window": 40,
         "step_size": 20
       },
@@ -138,6 +143,10 @@
     },
     "institutional_etf": {
       "description": "Cross-Asset Institutional ETF Strategy (Equities, Bonds, Commodities)",
+      "data": {
+        "lookback_days": 500,
+        "min_days_floor": 252
+      },
       "discovery": {
         "enabled_markets": ["etf", "america"],
         "pipelines": {

@@ -164,8 +164,9 @@ class MarketRegimeDetector:
         if returns.empty or len(returns) < 20:
             return "STAGNATION", {"growth": 0.0, "stress": 0.0}
 
-        mean_rets = returns.mean(axis=1)
-        market_rets = mean_rets.values
+        mean_vals = returns.mean(axis=1)
+        mean_rets = cast(pd.Series, mean_vals)
+        market_rets = cast(np.ndarray, mean_rets.values)
 
         # Axis 1: Growth Axis (Annualized Return)
         ann_return = float(mean_rets.mean() * 252)
@@ -200,20 +201,20 @@ class MarketRegimeDetector:
 
         return regime, metrics
 
-    def detect_regime(self, returns: pd.DataFrame) -> Tuple[str, float]:
+    def detect_regime(self, returns: pd.DataFrame) -> Tuple[str, float, str]:
         """
         Analyzes the return matrix and classifies the current regime using a
         multi-factor weighted score.
 
         Returns:
-            Tuple[str, float]: ('QUIET'|'NORMAL'|'TURBULENT'|'CRISIS', weighted_score)
+            Tuple[str, float, str]: (regime_name, weighted_score, quadrant_name)
         """
         if returns.empty or len(returns) < 20:
-            return "NORMAL", 1.0
+            return "NORMAL", 1.0, "NORMAL"
 
         mean_vals = returns.mean(axis=1)
         if not isinstance(mean_vals, pd.Series):
-            return "NORMAL", 1.0
+            return "NORMAL", 1.0, "NORMAL"
 
         mean_rets_series = cast(pd.Series, mean_vals)
         market_rets = cast(np.ndarray, mean_rets_series.values)
@@ -286,4 +287,4 @@ class MarketRegimeDetector:
         self._save_audit_log(regime, regime_score, full_metrics, quadrant)
 
         logger.info(f"Regime: {regime} (Score: {regime_score:.2f}) | Quadrant: {quadrant} | HMM: {hmm_regime}")
-        return regime, float(regime_score)
+        return regime, float(regime_score), quadrant

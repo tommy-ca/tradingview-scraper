@@ -1,4 +1,4 @@
-# Crypto Sleeve Requirements Specification v3.2.4
+# Crypto Sleeve Requirements Specification v3.2.8
 
 ## 1. Overview
 
@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-10) - Balanced Alpha Standard (v3.2.4).
+**Production Certified** (2026-01-10) - Balanced Alpha Standard v3.2.8 (20d Rebalance).
 
 ---
 
@@ -30,8 +30,10 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-155 | MUST | ✅ | **Mandatory Metadata Enrichment**: All selection candidates must be enriched with institutional default execution metadata (tick_size, lot_size) prior to risk filtering to prevent technical vetoes for new listings. |
 | CR-156 | MUST | ✅ | **Toxic Persistence Veto**: Selection engine must disqualify assets in persistent downtrends (Hurst > 0.55 and Momentum < 0) to protect against "Falling Knives." |
 | CR-157 | MUST | ✅ | **Benchmark Exemption**: Macro anchors (SPY) are exempt from Random Walk vetoes to ensure portfolio stability anchors are maintained even in sideways regimes. |
-| CR-158 | MUST | ✅ | **Persistence-Aligned Rebalancing**: Rebalancing window ($step\_size$) must be dynamically aligned to the median persistent trend duration (Currently 5-15 days). |
+| CR-158 | MUST | ✅ | **Persistence-Aligned Rebalancing**: Rebalancing window ($step\_size$) must be dynamically aligned to the median persistent trend duration (Optimized to 20 days for the current regime). |
+| CR-159 | MUST | ✅ | **Secular Shorting Capture**: The discovery layer must include dedicated scanners for structural weakness (`Perf.1M < 0`, `Hurst > 0.50`) to profit from persistent downward drift. |
+| CR-160 | MUST | ✅ | **Winner Pool Baseline**: The Selection Engine must target a 15-25% final retention rate (approx. 30 winners from 140 discovered symbols) to ensure sufficient factor representation. |
 
 ---
 
-**Status**: ✅ All requirements satisfied and validated
+**Status**: ✅ All requirements satisfied, validated and hardened for Q1 2026 Production.

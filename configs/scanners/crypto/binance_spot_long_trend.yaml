@@ -7,7 +7,7 @@ trend:
   recommendation: {enabled: true, min: 0.0}
   momentum:
     enabled: true
-    horizons: {Perf.W: 0.0, Perf.1M: 0.0}
+    horizons: {Perf.W: 0.0}
 limit: 50
 export_metadata:
   symbol: binance_spot_long_trend
