@@ -36,6 +36,7 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-161 | MUST | ✅ | **Robust Correlation Standard**: Discovery and clustering must utilize pairwise correlation (Robust Linkage) and a minimum 0.05 column-coverage fraction to prevent "Constituent Collapse." |
 | CR-162 | MUST | ✅ | **Matrix Stability Standard**: All portfolio engines must demonstrate bit-perfect determinism across consecutive runs using standardized random seeds (e.g. state=42). |
 | CR-163 | MUST | ✅ | **Fallback Transparency**: Portfolio reports must explicitly disclose engine fallbacks when a requested profile (e.g. risk_parity) is not natively supported by the active engine. |
+| CR-170 | MUST | ✅ | **Hierarchical Factor Diversity**: The system must utilize Ward Linkage clustering across multiple lookbacks (60d, 120d, 200d) to ensure intra-cluster selection and cluster-level risk capping (25%) are based on stable factor identities. |
 
 ---
 

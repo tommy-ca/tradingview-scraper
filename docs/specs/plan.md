@@ -94,6 +94,12 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Findings**: Confirmed 100% solver determinism and identified Silent Fallback patterns.
 - [x] **Verification**: Standardized on Skfolio/PyPortfolioOpt and VectorBT for production.
 
+### Phase 89: Hierarchical Clustering Audit & Pipeline Integration (COMPLETED)
+- [x] **Audit**: Traced cluster usage in `Selection` (Top-N per group) and `Allocation` (Cluster-level caps).
+- [x] **Verification**: Verified bit-perfect cluster hashes in Ledger Logs (Run C vs D).
+- [x] **Docs**: Codified CR-170 and added Design Section 23 on Factor Orthogonality.
+- [x] **Rationale**: Confirmed Ward Linkage + Robust Correlation as the gold standard for asynchronous listings.
+
 ### Phase 89: System Certification & Documentation Sync (COMPLETED)
 - [x] **Docs**: Synchronized Requirements, Design, and Plan docs to v3.2.9 standards.
 - [x] **Agents**: Updated AGENTS.md guide with 20-day rebalance and 5-stage funnel pillars.

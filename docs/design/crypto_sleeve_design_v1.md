@@ -47,13 +47,18 @@ A critical forensic discovery revealed that standard multi-asset covariance engi
 -   **Forensic Rebalancing**: Standardized to **20 days** based on the Rebalance Sensitivity Audit (v3.2.7).
 
 ### 22.1 Portfolio Matrix Audit & Stability
-A forensic audit (v3.2.9) across 153 risk profile combinations confirmed that:
-- **Solver Determinism**: Engines are 100% deterministic, provided configuration and data remain static.
-- **Silent Fallbacks**: Convergence between engines (e.g. CVXPortfolio delegating HRP to Custom) can lead to perceived "instability" if users assume unique implementations for every profile/engine pair.
+... (omitted) ...
 - **Optimal Production Stack**: Standardized on **Skfolio** for risk-parity/stability and **PyPortfolioOpt** for alpha-weighted profiles.
+
+### 23. Hierarchical Cluster Analysis (HRP Core)
+Hierarchical clustering (Ward Linkage on Robust Pairwise Correlation) serves as the structural foundation for both Selection and Allocation:
+
+1. **Selection Integration**: The `Natural Selection` engine groups candidates by factor identity. It applies a **Top-N-per-Cluster** limit (Standard: 5) to prevent a single idiosyncratic factor from starving the rest of the portfolio's factor representation.
+2. **Allocation Integration**: The `Clustered Optimizer` uses the dendrogram to enforce **Factor-Level Risk Caps** (25% per cluster). Even if a single asset has superior Sharpe, the system restricts total factor exposure to maintain orthogonal risk units.
+3. **Stability**: Correlation is averaged across 60d, 120d, and 200d windows to ensure that factor groups reflect structural relationships rather than transient regime noise.
 
 ---
 
-**Version**: 3.2.9  
+**Version**: 3.2.10  
 **Status**: Production Certified  
 **Last Updated**: 2026-01-11
