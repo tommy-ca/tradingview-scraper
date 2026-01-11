@@ -55,10 +55,10 @@ Hierarchical clustering (Ward Linkage on Robust Pairwise Correlation) serves as 
 
 1. **Selection Integration**: The `Natural Selection` engine groups candidates by factor identity. It applies a **Top-N-per-Cluster** limit (Standard: 5) to prevent a single idiosyncratic factor from starving the rest of the portfolio's factor representation.
 2. **Allocation Integration**: The `Clustered Optimizer` uses the dendrogram to enforce **Factor-Level Risk Caps** (25% per cluster). Even if a single asset has superior Sharpe, the system restricts total factor exposure to maintain orthogonal risk units.
-3. **Stability**: Correlation is averaged across 60d, 120d, and 200d windows to ensure that factor groups reflect structural relationships rather than transient regime noise.
+3. **Stability Protocol (v3.2.10)**: To prevent cluster "jitter" during regime shifts, distance matrices are calculated across three horizons (60d, 120d, 200d) and averaged. Ward Linkage is then applied to the averaged matrix, prioritizing cluster cohesion and reducing sensitivity to short-term microstructural noise.
 
 ---
 
-**Version**: 3.2.10  
+**Version**: 3.2.11  
 **Status**: Production Certified  
 **Last Updated**: 2026-01-11
