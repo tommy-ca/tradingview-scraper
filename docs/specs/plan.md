@@ -58,5 +58,11 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Specs**: Updated Requirements (CR-172) and Design Section 24 to formalize Benchmark Isolation.
 - [x] **Verification**: Confirmed that `selected_candidates` universe represents 100% scanner-discovered assets.
 
+### Phase 95: Forensic Data Audit & Health Recovery (COMPLETED)
+- [x] **Audit**: Executed strict session-aware health audit for selected winners.
+- [x] **Recovery**: Implemented `GAPFILL=1` self-healing loop for stale winners.
+- [x] **Optimization**: Reran HRP optimization on the healthy dataset.
+- [x] **Certification**: Generated final risk audit report with bit-perfect window traceability.
+
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.2.13)

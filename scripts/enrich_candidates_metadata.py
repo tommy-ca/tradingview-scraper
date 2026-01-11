@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from tradingview_scraper.execution.metadata import ExecutionMetadataCatalog
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.stream.metadata import ExchangeCatalog, MetadataCatalog
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -73,6 +74,7 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
         logger.error(f"Candidates file not found: {candidates_path}")
         return
 
+    settings = get_settings()
     with open(candidates_path, "r") as f:
         data = json.load(f)
 
@@ -104,9 +106,11 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
             active_symbols = []
 
         added_count = 0
+        bench_set = set(settings.benchmark_symbols)
         for symbol in active_symbols:
             if symbol not in candidate_map:
                 asset_class = get_asset_class(symbol)
+                is_bench = symbol in bench_set
                 new_cand = {
                     "symbol": symbol,
                     "identity": symbol.split(":")[-1] if ":" in symbol else symbol,
@@ -114,6 +118,7 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
                     "value_traded": 1e9,
                     "sector": "Crypto" if asset_class == "CRYPTO" else "Financial",
                     "asset_class": asset_class,
+                    "is_benchmark": is_bench,
                 }
                 candidates.append(new_cand)
                 candidate_map[symbol] = new_cand

@@ -27,20 +27,13 @@ To ensure institutional signal quality, the Discovery Layer implements a **Five-
 2.  **Stage 2 (USD-Normalization)**: Explicitly filters for institutional quote patterns (`USDT`, `USDC`, `FDUSD`) at the source. (Result: ~108 symbols).
 3.  **Stage 3 (Metadata Enrichment)**: Injects institutional default execution metadata (`tick_size`, `lot_size`) for all candidates.
 4.  **Stage 4 (Identity Deduplication)**: Removes redundant instruments (e.g. Spot vs Perp) for the same underlying asset. (Result: ~64 symbols).
-5.  **Stage 5 (Statistical Selection)**: Executes Log-MPS 3.2 engine with ECI and Hurst vetoes. (Result: ~31 winners).
+5.  **Stage 5 (Statistical Selection)**: Executes Log-MPS 3.2 engine with ECI and Hurst vetoes. (Result: ~35 winners).
 
 ### 21.2 Secular Shorting Strategy
 To profit from persistent downward drift in structurally weak assets, the platform includes a **Secular Shorting** layer. This scanner targets assets with:
 - `Perf.1M < 0`: Confirmed monthly drawdown.
 - `Hurst > 0.50`: Persistent, non-random drift.
 - `ADX > 15`: Sufficient trend strength.
-
-### 21.3 Forensic Data Alignment & The Inner Join Trap
-A critical forensic discovery revealed that standard multi-asset covariance engines utilize a **Strict Inner Join** on return dates. While statistically conservative, this creates a "Trap" in high-growth portfolios (Crypto) where assets have asynchronous listing dates.
-
-- **The Problem**: A single new listing (e.g. `PIPPIN`) can truncate the entire matrix to its listing day, silently dropping 80% of established alpha anchors (BTC, ETH) or macro benchmarks (SPY) because they don't share the same "Start Date" in a dense matrix.
-- **The Fix (v3.2.9)**: The system implements **Robust Pairwise Correlation**. Hierarchical clustering now calculates linkage using every available overlapping session for each pair, rather than a global intersection.
-- **The Guardrail**: To maintain significance, a `min_col_frac` of **0.05** (5% coverage) is enforced as a single source of truth in the `manifest.json`.
 
 ### 22. Balanced Alpha Selection & Factor Isolation
 The Log-MPS 3.2 engine (Standard v3.2.13) implements:

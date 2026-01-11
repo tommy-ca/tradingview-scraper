@@ -201,7 +201,7 @@ port-optimize: ## Strategic asset allocation (Convex)
 
 port-test: ## Execute 3D benchmarking tournament
 	@echo ">>> Running Multi-Engine Tournament Mode..."
-	$(PY) scripts/backtest_engine.py --tournament
+	$(PY) scripts/backtest_engine.py --mode research
 
 port-drift: ## Monitor portfolio drift vs last implemented state
 	$(PY) scripts/maintenance/track_portfolio_state.py

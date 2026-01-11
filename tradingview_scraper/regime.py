@@ -165,7 +165,10 @@ class MarketRegimeDetector:
             return "STAGNATION", {"growth": 0.0, "stress": 0.0}
 
         mean_vals = returns.mean(axis=1)
-        mean_rets = cast(pd.Series, mean_vals)
+        mean_rets = cast(pd.Series, mean_vals).dropna()
+        if len(mean_rets) < 20:
+            return "STAGNATION", {"growth": 0.0, "stress": 0.0}
+
         market_rets = cast(np.ndarray, mean_rets.values)
 
         # Axis 1: Growth Axis (Annualized Return)
@@ -173,7 +176,11 @@ class MarketRegimeDetector:
         growth_axis = ann_return
 
         # Axis 2: Stress Axis (Volatility & Noise)
-        vol_ratio = float(mean_rets.tail(10).std() / (mean_rets.std() + 1e-12))
+        # Handle cases where tail(10) has insufficient data for std()
+        tail_slice = mean_rets.tail(10)
+        tail_std = float(tail_slice.std()) if len(tail_slice) > 1 else 0.0
+        vol_ratio = float(tail_std / (mean_rets.std() + 1e-12))
+
         turbulence = calculate_dwt_turbulence(market_rets[-64:])
         stress_axis = (vol_ratio * 0.7) + (turbulence * 0.6)
 
@@ -213,14 +220,15 @@ class MarketRegimeDetector:
             return "NORMAL", 1.0, "NORMAL"
 
         mean_vals = returns.mean(axis=1)
-        if not isinstance(mean_vals, pd.Series):
+        mean_rets_series = cast(pd.Series, mean_vals).dropna()
+        if len(mean_rets_series) < 20:
             return "NORMAL", 1.0, "NORMAL"
 
-        mean_rets_series = cast(pd.Series, mean_vals)
         market_rets = cast(np.ndarray, mean_rets_series.values)
 
         # 1. Volatility Ratio (Shock)
-        current_vol = float(mean_rets_series.tail(10).std())
+        tail_slice = mean_rets_series.tail(10)
+        current_vol = float(tail_slice.std()) if len(tail_slice) > 1 else 0.0
         baseline_vol = float(mean_rets_series.std())
         vol_ratio = current_vol / baseline_vol if baseline_vol > 0 else 1.0
 

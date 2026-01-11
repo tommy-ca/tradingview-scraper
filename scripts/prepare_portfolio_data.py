@@ -65,14 +65,10 @@ def prepare_portfolio_universe():
             input_hashes={"candidates_manifest": u_hash},
         )
 
-    # 2. Benchmark Enforcement
-    # We ensure benchmarks are fetched and included in the returns matrix for baseline comparisons,
-    # but they are tagged to be isolated from the scanner-only selected candidates.
-    universe_symbols = {c["symbol"] for c in universe}
-    for b_sym in active_settings.benchmark_symbols:
-        if b_sym not in universe_symbols:
-            universe.append({"symbol": b_sym, "direction": "LONG", "is_benchmark": True})
-
+    # 2. Historical Data Fetching
+    # The system now only prepares data for symbols actually discovered by scanners.
+    # Benchmarks like SPY are added to the matrix by the BacktestEngine during testing
+    # if they are needed for baseline profiles.
     logger.info(f"Portfolio Universe: {len(universe)} symbols.")
 
     # 3. Fetch Historical Data
