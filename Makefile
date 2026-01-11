@@ -177,10 +177,6 @@ data-fetch: ## Ingest historical market data
 		$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15; \
 	fi
 
-		echo "Running final aggressive repair pass..."; \
-		$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15; \
-	fi
-
 data-refresh-targeted: ## Force refresh for stale symbols listed in TARGETED_CANDIDATES
 	@echo ">>> Targeted refresh using $(TARGETED_CANDIDATES)"
 	CANDIDATES_FILE=$(TARGETED_CANDIDATES) PORTFOLIO_BACKFILL=1 PORTFOLIO_GAPFILL=1 PORTFOLIO_FORCE_SYNC=1 PORTFOLIO_LOOKBACK_DAYS=$(TARGETED_LOOKBACK) PORTFOLIO_BATCH_SIZE=$(TARGETED_BATCH) $(PY) scripts/prepare_portfolio_data.py
