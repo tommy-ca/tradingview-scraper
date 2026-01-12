@@ -20,7 +20,7 @@ from tradingview_scraper.portfolio_engines import build_engine
 from tradingview_scraper.regime import MarketRegimeDetector
 from tradingview_scraper.risk import AntifragilityAuditor
 from tradingview_scraper.selection_engines.base import SelectionRequest, SelectionResponse
-from tradingview_scraper.selection_engines.engines import SelectionEngineV3_4
+from tradingview_scraper.selection_engines import build_selection_engine
 from tradingview_scraper.utils.audit import AuditLedger
 
 logger = logging.getLogger("backtest_engine")
@@ -103,7 +103,8 @@ class BacktestEngine:
             logger.info(f"Window {i}: Regime: {regime_name}")
 
             # 3. Dynamic Selection (Operation Darwin - HTR v3.4)
-            selection_engine = SelectionEngineV3_4()
+            current_mode = str(config.features.selection_mode or "v3.4")
+            selection_engine = build_selection_engine(current_mode)
             raw_cands = [v for k, v in self.metadata.items() if k in train_rets.columns]
 
             # Record Selection Intent
@@ -141,7 +142,11 @@ class BacktestEngine:
 
             # 4. Optimization Tournament
             for engine_name in engines:
-                for profile in profiles:
+                # PERFORMANCE FIX: Adaptive engine only needs to run once per window
+                # because it ignores the 'profile' and maps to regime profile internally.
+                profiles_to_run = ["adaptive"] if engine_name == "adaptive" else profiles
+                
+                for profile in profiles_to_run:
                     opt_ctx = {"window_index": i, "engine": engine_name, "profile": profile, "regime": regime_name}
                     try:
                         engine = build_engine(engine_name)
@@ -152,6 +157,7 @@ class BacktestEngine:
 
                         req = EngineRequest(
                             profile=cast(ProfileName, profile),
+                            engine=engine_name, # CRITICAL: Pass engine name for sub-solver recruitment
                             regime=regime_name,
                             market_environment=regime_name,
                             cluster_cap=0.25,
@@ -186,27 +192,31 @@ class BacktestEngine:
 
                         # 5. Simulation
                         for sim_name in sim_names:
-                            simulator = build_simulator(sim_name)
                             sim_ctx = {"window_index": i, "engine": engine_name, "profile": profile, "simulator": sim_name}
+                            try:
+                                simulator = build_simulator(sim_name)
+                                if ledger:
+                                    ledger.record_intent("backtest_simulate", sim_ctx, input_hashes={})
 
-                            if ledger:
-                                ledger.record_intent("backtest_simulate", sim_ctx, input_hashes={})
+                                sim_results = simulator.simulate(weights_df=opt_resp.weights, returns=test_rets)
 
-                            sim_results = simulator.simulate(weights_df=opt_resp.weights, returns=test_rets)
+                                # Handle both dict and object responses from simulator
+                                metrics = {}
+                                if isinstance(sim_results, dict):
+                                    metrics = sim_results.get("metrics", sim_results)
+                                elif hasattr(sim_results, "metrics"):
+                                    metrics = getattr(sim_results, "metrics", {})
 
-                            # Handle both dict and object responses from simulator
-                            metrics = {}
-                            if isinstance(sim_results, dict):
-                                metrics = sim_results.get("metrics", sim_results)
-                            elif hasattr(sim_results, "metrics"):
-                                metrics = getattr(sim_results, "metrics", {})
+                                sanitized_metrics = {k: v for k, v in metrics.items() if isinstance(v, (int, float, str, bool, type(None)))}
 
-                            sanitized_metrics = {k: v for k, v in metrics.items() if isinstance(v, (int, float, str, bool, type(None)))}
+                                if ledger:
+                                    ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=sanitized_metrics, context=sim_ctx)
 
-                            if ledger:
-                                ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=sanitized_metrics, context=sim_ctx)
-
-                            results.append({"window": i, "engine": engine_name, "profile": profile, "simulator": sim_name, "metrics": sanitized_metrics})
+                                results.append({"window": i, "engine": engine_name, "profile": profile, "simulator": sim_name, "metrics": sanitized_metrics})
+                            except Exception as e_sim:
+                                logger.error(f"Error in simulation window {i}, engine {engine_name}, profile {profile}, simulator {sim_name}: {e_sim}")
+                                if ledger:
+                                    ledger.record_outcome(step="backtest_simulate", status="error", output_hashes={}, metrics={"error": str(e_sim)}, context=sim_ctx)
                     except Exception as e:
                         logger.error(f"Error in tournament window {i}, engine {engine_name}, profile {profile}: {e}")
                         if ledger:
