@@ -1,93 +1,62 @@
 import argparse
+import datetime
+import hashlib
 import json
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, cast
+from typing import Dict, cast
 
-import numpy as np
 import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import warnings
 
 from tradingview_scraper.portfolio_engines.backtest_simulators import build_simulator
 from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
 from tradingview_scraper.portfolio_engines.engines import build_engine
 from tradingview_scraper.regime import MarketRegimeDetector
 from tradingview_scraper.risk import AntifragilityAuditor
-from tradingview_scraper.settings import get_settings
-from tradingview_scraper.utils.audit import AuditLedger, get_df_hash  # type: ignore
+from tradingview_scraper.selection_engines.base import SelectionRequest
+from tradingview_scraper.selection_engines.engines import SelectionEngineV3_2
+from tradingview_scraper.utils.audit import AuditLedger
 
-# Suppress known RuntimeWarnings from external libraries (cvxportfolio, numpy)
-# specifically "Degrees of freedom <= 0 for slice" which is handled internally via robust guards.
-warnings.filterwarnings("ignore", category=RuntimeWarning, message="Degrees of freedom <= 0 for slice")
-warnings.filterwarnings("ignore", category=RuntimeWarning, message="Mean of empty slice")
-
-logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("backtest_engine")
 
 
-def persist_tournament_artifacts(results: Dict[str, Any], output_dir: Path):
-    """Saves tournament metrics and windows to disk for analysis."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    target_path = output_dir / "tournament_results.json"
-    print(f"DEBUG: Attempting to write JSON to {target_path}")
-    try:
-        with open(target_path, "w") as f:
-
-            def _default(obj):
-                if isinstance(obj, (pd.DataFrame, pd.Series)):
-                    return {}
-                if isinstance(obj, (np.integer, np.floating)):
-                    return obj.item()
-                if isinstance(obj, np.ndarray):
-                    return obj.tolist()
-                return str(obj)
-
-            json.dump(results, f, indent=2, default=_default)
-            f.flush()
-            os.fsync(f.fileno())
-        print(f"DEBUG: Successfully wrote {target_path.stat().st_size} bytes")
-    except Exception as e:
-        print(f"ERROR: Failed to save tournament artifacts: {e}")
-
-
 class BacktestEngine:
-    def __init__(self, returns_path: str = "data/lakehouse/portfolio_returns.pkl"):
-        if not os.path.exists(returns_path):
-            raise FileNotFoundError(f"Returns missing: {returns_path}")
-        self.returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
-        self.raw_candidates = []
-        raw_manifest = "data/lakehouse/portfolio_candidates_raw.json"
-        if os.path.exists(raw_manifest):
-            with open(raw_manifest, "r") as f:
-                self.raw_candidates = json.load(f)
+    """
+    Unified Backtest Engine for Research and Production validation.
+    Orchestrates selection, optimization, and simulation across windows.
+    """
+
+    def __init__(self, lakehouse_dir: str = "data/lakehouse"):
+        self.lakehouse = Path(lakehouse_dir)
+        self.returns = pd.DataFrame()
+        self.stats = pd.DataFrame()
+        self.metadata = {}
+        self.load_data()
+
+        from tradingview_scraper.settings import get_settings
+
         settings = get_settings()
         self.detector = MarketRegimeDetector(audit_path=settings.summaries_run_dir / "regime_audit.jsonl")
+        self.auditor = AntifragilityAuditor()
 
-    def _normalize_raw_candidates(self) -> List[Dict[str, Any]]:
-        normalized: List[Dict[str, Any]] = []
-        for c in self.raw_candidates:
-            if isinstance(c, dict):
-                sym = c.get("symbol")
-                if sym:
-                    normalized.append({**c, "symbol": str(sym)})
-                continue
-            sym = str(c).strip()
-            if sym:
-                normalized.append({"symbol": sym})
-        return normalized
+    def load_data(self):
+        rets_path = self.lakehouse / "returns_matrix.parquet"
+        stats_path = self.lakehouse / "antifragility_stats.parquet"
+        meta_path = self.lakehouse / "portfolio_candidates.json"
 
-    def _resolve_symbol_in_universe(self, symbol: str, universe_cols: List[str]) -> str:
-        sym = str(symbol).strip()
-        if sym in set(universe_cols):
-            return sym
-        ticker = sym.split(":", 1)[1] if ":" in sym else sym
-        matches = [col for col in universe_cols if str(col).endswith(f":{ticker}") or str(col) == ticker]
-        return matches[0] if matches else sym
+        if rets_path.exists():
+            self.returns = pd.read_parquet(rets_path)
+        if stats_path.exists():
+            self.stats = pd.read_parquet(stats_path)
+        if meta_path.exists():
+            with open(meta_path, "r") as f:
+                raw_meta = json.load(f)
+                self.metadata = {c["symbol"]: c for c in raw_meta}
 
     def run_tournament(self, **kwargs) -> Dict:
         from tradingview_scraper.settings import get_settings
@@ -106,274 +75,124 @@ class BacktestEngine:
         run_dir = config.prepare_summaries_run_dir()
         ledger = AuditLedger(run_dir) if config.features.feat_audit_ledger else None
 
-        baseline_engine = "market"
-        baseline_profiles = ["market", "benchmark", "raw_pool_ew"]
+        # Record Genesis if ledger is new
+        if ledger and not ledger.last_hash:
+            manifest_hash = hashlib.sha256(open(config.manifest_path, "rb").read()).hexdigest() if config.manifest_path.exists() else "unknown"
+            ledger.record_genesis(config.run_id, config.profile, manifest_hash)
 
-        results: Dict[str, Dict[str, Any]] = {
-            s: {e: {p: {"windows": [], "summary": None} for p in (profiles if e != baseline_engine else baseline_profiles)} for e in engines + [baseline_engine]} for s in sim_names
-        }
-        cumulative: Dict[tuple[str, str, str], List[pd.Series]] = {}
-        prev_weights: Dict[tuple[str, str, str], pd.Series] = {}
+        # 1. Rolling Windows
+        results = []
+        for i in range(train_window, total_len - test_window, step_size):
+            window_start = returns_to_use.index[i - train_window]
+            window_end = returns_to_use.index[i]
+            test_end = returns_to_use.index[i + test_window]
 
-        for s in sim_names:
-            for eng in engines + [baseline_engine]:
-                t_profs = profiles if eng != baseline_engine else baseline_profiles
-                for prof in t_profs:
-                    cumulative[(s, eng, prof)] = []
-                    prev_weights[(s, eng, prof)] = pd.Series(dtype=float)
+            train_rets = returns_to_use.loc[window_start:window_end]
+            test_rets = returns_to_use.loc[window_end:test_end]
 
-        from scripts.natural_selection import run_selection
+            # 2. Market Regime detection
+            # detector returns a MarketRegimeResponse (regime, score, quadrant)
+            regime_resp = self.detector.detect_regime(train_rets)
+            regime_name = regime_resp.regime
+            logger.info(f"Window {i}: Regime: {regime_name}")
 
-        raw_candidates_norm = self._normalize_raw_candidates()
+            # 3. Dynamic Selection (Operation Darwin)
+            selection_engine = SelectionEngineV3_2()
+            raw_cands = [v for k, v in self.metadata.items() if k in train_rets.columns]
 
-        for window_index, start_idx in enumerate(range(0, total_len - train_window - test_window + 1, step_size)):
-            train_end = start_idx + train_window
-            train_data_raw = returns_to_use.iloc[start_idx:train_end]
-            test_data = returns_to_use.iloc[train_end : train_end + test_window]
-            test_data_extended = returns_to_use.iloc[train_end : min(train_end + test_window + 1, total_len)]
-
-            regime, score, quadrant = self.detector.detect_regime(train_data_raw)
-            stats_df = AntifragilityAuditor().audit(train_data_raw)
-
-            # 1. Selection
-            sel_context = {"window_index": window_index, "test_start": str(test_data.index[0])}
+            # Record Selection Intent
             if ledger:
-                ledger.record_intent(
-                    step="backtest_select",
-                    params={"top_n": config.top_n},
-                    input_hashes={"train_returns": get_df_hash(train_data_raw)},
-                    context=sel_context,
-                )
+                ledger.record_intent("backtest_select", {"window_index": i, "engine": selection_engine.name}, input_hashes={})
 
-            try:
-                response = run_selection(
-                    train_data_raw,
-                    raw_candidates_norm,
-                    stats_df=stats_df,
-                    top_n=config.top_n,
-                    threshold=config.threshold,
-                )
-                winners_list = response.winners or []
-            except Exception:
-                winners_list = []
+            sel_req = SelectionRequest(
+                threshold=0.45,
+                top_n=int(config.top_n),
+                min_momentum_score=float(config.min_momentum_score),
+                max_clusters=25,
+            )
+            selection = selection_engine.select(train_rets, raw_cands, self.stats, sel_req)
+            winners = [w["symbol"] for w in selection.winners]
 
+            # Record Selection Outcome
             if ledger:
                 ledger.record_outcome(
                     step="backtest_select",
                     status="success",
-                    output_hashes={"winners": str(len(winners_list))},
-                    metrics={"n_winners": len(winners_list), "n_universe_symbols": len(train_data_raw.columns)},
-                    context=sel_context,
+                    output_hashes={},
+                    metrics={"n_winners": len(winners), "winners": winners, **selection.metrics},
                 )
 
-            # Benchmark Isolation
-            winner_symbols = [w.get("symbol") for w in winners_list if w.get("symbol") in train_data_raw.columns]
-            current_symbols = [s for s in winner_symbols if s]
-            if not current_symbols:
-                train_data, candidate_meta = train_data_raw, {}
-            else:
-                candidate_meta = {str(w.get("symbol")): w for w in winners_list if w.get("symbol")}
+            if not winners:
+                logger.warning(f"No winners selected for window {i}")
+                continue
 
-                # CR-182: Dynamic Direction Assignment & CR-183: Secular Trend Guardrail
-                valid_alpha_symbols = []
-                if config.features.feat_dynamic_direction:
-                    mom_lookback = 20
-                    mom_20d = (1 + train_data_raw.tail(mom_lookback)).prod() - 1
-
-                    for s in current_symbols:
-                        if s not in candidate_meta:
-                            candidate_meta[s] = {"symbol": s, "direction": "LONG"}
-
-                        m = mom_20d.get(s, 0.0)
-                        orig_dir = candidate_meta[s].get("direction", "LONG")
-
-                        if orig_dir == "LONG" and m < -0.15:
-                            continue
-                        if orig_dir == "SHORT" and m > 0.15:
-                            continue
-
-                        candidate_meta[s]["direction"] = "SHORT" if m < 0 else "LONG"
-                        valid_alpha_symbols.append(s)
-                else:
-                    valid_alpha_symbols = current_symbols
-
-                train_data = train_data_raw[valid_alpha_symbols] if valid_alpha_symbols else train_data_raw
-
-            # CR-181: Directional Return Alignment
-            opt_train_data = train_data.copy()
-            if config.features.feat_directional_returns:
-                for s in opt_train_data.columns:
-                    if candidate_meta.get(s, {}).get("direction") == "SHORT":
-                        opt_train_data[s] = -1.0 * opt_train_data[s]
-
-            clusters = self._cluster_data(opt_train_data)
-            cached_weights = {}
-            for eng in engines:
-                for prof in profiles:
-                    opt_context = {"window_index": window_index, "engine": eng, "profile": prof, "test_start": str(test_data.index[0])}
+            # 4. Optimization Tournament
+            for engine_name in engines:
+                for profile in profiles:
                     try:
-                        if ledger:
-                            ledger.record_intent(
-                                step="backtest_optimize",
-                                params={"regime": regime, "quadrant": quadrant},
-                                input_hashes={"train_data": get_df_hash(opt_train_data)},
-                                context=opt_context,
-                            )
+                        engine = build_engine(engine_name)
 
-                        optimizer = build_engine(eng)
+                        # Record Optimization Intent
+                        if ledger:
+                            ledger.record_intent("backtest_optimize", {"window_index": i, "engine": engine_name, "profile": profile, "regime": regime_name}, input_hashes={})
+
                         req = EngineRequest(
-                            profile=cast(ProfileName, prof),
-                            engine=eng,
+                            profile=cast(ProfileName, profile),
+                            regime=regime_name,
+                            market_environment=regime_name,
                             cluster_cap=0.25,
-                            prev_weights=prev_weights.get((sim_names[0], eng, prof)),
-                            regime=regime,
-                            market_environment=quadrant,
                         )
-                        w_df = optimizer.optimize(returns=opt_train_data, clusters=clusters, meta=candidate_meta, stats=stats_df, request=req).weights
-                        if not w_df.empty:
-                            cached_weights[(eng, prof)] = w_df
 
+                        # Ensure cluster IDs are strings for the engine
+                        stringified_clusters = {str(k): v for k, v in selection.audit_clusters.items()}
+
+                        opt_resp = engine.optimize(returns=train_rets[winners], clusters=stringified_clusters, meta=self.metadata, stats=self.stats, request=req)
+
+                        # Record Optimization Outcome
                         if ledger:
-                            weights_dict = w_df.set_index("Symbol")["Weight"].to_dict() if not w_df.empty else {}
-                            ledger.record_outcome(
-                                step="backtest_optimize",
-                                status="success",
-                                output_hashes={"weights": get_df_hash(w_df)},
-                                metrics={"n_assets": len(w_df)},
-                                data={"weights": weights_dict},
-                                context=opt_context,
-                            )
+                            weights_dict = opt_resp.weights.set_index("Symbol")["Weight"].to_dict() if not opt_resp.weights.empty else {}
+                            ledger.record_outcome(step="backtest_optimize", status="success", output_hashes={}, metrics={"weights": weights_dict})
 
+                        # 5. Simulation
+                        for sim_name in sim_names:
+                            simulator = build_simulator(sim_name)
+
+                            if ledger:
+                                ledger.record_intent(
+                                    "backtest_simulate",
+                                    {"window_index": i, "engine": engine_name, "profile": profile, "simulator": sim_name},
+                                    input_hashes={},
+                                )
+
+                            sim_results = simulator.simulate(weights_df=opt_resp.weights, returns=test_rets)
+
+                            # simulator.simulate returns a dict with metrics
+                            metrics = sim_results.get("metrics", {}) if isinstance(sim_results, dict) else {}
+
+                            if ledger:
+                                ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=metrics)
+
+                            results.append({"window": i, "engine": engine_name, "profile": profile, "simulator": sim_name, "metrics": metrics})
                     except Exception as e:
+                        logger.error(f"Error in tournament window {i}, engine {engine_name}, profile {profile}: {e}")
                         if ledger:
-                            ledger.record_outcome(step="backtest_optimize", status="error", output_hashes={"error": str(e)}, metrics={"error": str(e)}, context=opt_context)
-                        continue
+                            ledger.record_outcome(step="backtest_optimize", status="error", output_hashes={}, metrics={"error": str(e)})
 
-            # 2. Baselines
-            baseline_opt = build_engine("custom")
-            for b_prof in ["market", "benchmark"]:
-                w_b = baseline_opt.optimize(
-                    returns=train_data_raw,
-                    clusters=clusters,
-                    meta=candidate_meta,
-                    stats=stats_df,
-                    request=EngineRequest(profile=cast(ProfileName, b_prof), engine="custom", cluster_cap=1.0),
-                ).weights
-                if not w_b.empty:
-                    cached_weights[(baseline_engine, b_prof)] = w_b
-
-            # 3. Simulation
-            for s_name in sim_names:
-                simulator = build_simulator(s_name)
-                for (eng, prof), w_df in cached_weights.items():
-                    if (s_name, eng, prof) not in cumulative:
-                        continue
-                    sim_context = {"window_index": window_index, "engine": eng, "profile": prof, "simulator": s_name, "test_start": str(test_data.index[0])}
-                    try:
-                        perf = simulator.simulate(test_data_extended, w_df, initial_holdings=prev_weights.get((s_name, eng, prof)))
-                        d_rets = perf["daily_returns"].iloc[:test_window]
-                        prev_weights[(s_name, eng, prof)] = perf.get("final_weights", w_df.set_index("Symbol")["Weight"])
-                        results[s_name][eng][prof]["windows"].append(
-                            {
-                                "start_date": str(test_data_extended.index[0]),
-                                "sharpe": perf["sharpe"],
-                                "returns": perf["total_return"],
-                                "regime": regime,
-                                "quadrant": quadrant,
-                                "n_assets": len(w_df),
-                            }
-                        )
-                        cumulative[(s_name, eng, prof)].append(d_rets)
-
-                        if ledger:
-                            ledger.record_outcome(
-                                step="backtest_simulate",
-                                status="success",
-                                output_hashes={"sharpe": str(perf["sharpe"])},
-                                metrics={"sharpe": perf["sharpe"], "returns": perf["total_return"]},
-                                context=sim_context,
-                            )
-
-                    except Exception as e:
-                        if ledger:
-                            ledger.record_outcome(step="backtest_simulate", status="error", output_hashes={"error": str(e)}, metrics={"error": str(e)}, context=sim_context)
-                        continue
-
-        for s in sim_names:
-            for eng, p_map in results[s].items():
-                for prof, p_data in p_map.items():
-                    if p_data.get("windows") and (s, eng, prof) in cumulative:
-                        full_rets = pd.concat(cumulative[(s, eng, prof)])
-                        print(f"DEBUG: {s}/{eng}/{prof} rets head: {full_rets.head(3).values}")
-                        print(f"DEBUG: {s}/{eng}/{prof} non-zero rets: {(full_rets != 0).sum()}")
-
-                        from tradingview_scraper.utils.metrics import calculate_performance_metrics
-
-                        perf = calculate_performance_metrics(full_rets)
-
-                        # CR-210: Optional full-series persistence for forensic audit
-                        if os.getenv("PERSIST_RETURNS") == "1":
-                            from tradingview_scraper.settings import get_settings
-
-                            s_settings = get_settings()
-                            ret_dir = s_settings.run_data_dir / "returns"
-                            ret_dir.mkdir(parents=True, exist_ok=True)
-                            ret_path = ret_dir / f"{s}_{eng}_{prof}.pkl"
-                            full_rets.to_pickle(ret_path)
-                            p_data["returns_path"] = str(ret_path)
-                            print(f"DEBUG: Saved returns to {ret_path}")
-
-                        p_data["summary"] = {
-                            "annualized_return": perf["annualized_return"],
-                            "sharpe": perf["sharpe"],
-                            "max_drawdown": perf["max_drawdown"],
-                            "annualized_volatility": perf["annualized_vol"],
-                        }
-        return {"results": results}
-
-    def _cluster_data(self, df: pd.DataFrame) -> Dict[str, List[str]]:
-        from tradingview_scraper.selection_engines.engines import get_hierarchical_clusters
-
-        if df.shape[1] < 2:
-            return {"0": [str(s) for s in df.columns]}
-        try:
-            ids, _ = get_hierarchical_clusters(df, threshold=get_settings().threshold)
-            clusters = {}
-            for sym, cid in zip(df.columns, ids):
-                clusters.setdefault(str(cid), []).append(str(sym))
-            return clusters
-        except Exception:
-            return {"0": [str(s) for s in df.columns]}
+        return {"tournament_results": results}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["production", "research"], default="research")
+    parser.add_argument("--mode", default="research", choices=["research", "production"])
     parser.add_argument("--profile", default="crypto_production")
-    parser.add_argument("--selection-modes", default="v3.2")
-    parser.add_argument("--train-window", type=int, default=180)
-    parser.add_argument("--test-window", type=int, default=40)
-    parser.add_argument("--step-size", type=int, default=20)
+    parser.add_argument("--train-window", type=int)
+    parser.add_argument("--test-window", type=int)
+    parser.add_argument("--step-size", type=int)
     args = parser.parse_args()
-    if args.mode == "research":
-        os.environ["TV_PROFILE"] = args.profile
-        os.environ["TV_FEATURES__SELECTION_MODE"] = args.selection_modes
-        engine = BacktestEngine()
-        results = engine.run_tournament(train_window=args.train_window, test_window=args.test_window, step_size=args.step_size)
 
-        # Force fresh settings to avoid cache issues
-        from tradingview_scraper.settings import TradingViewScraperSettings
+    # Set TV_RUN_ID for proper directory creation
+    os.environ.setdefault("TV_RUN_ID", datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
-        settings = TradingViewScraperSettings()
-        output_dir = settings.summaries_run_dir / "data"
-
-        print(f"DEBUG: Saving results to {output_dir.absolute()}")
-        persist_tournament_artifacts(results, output_dir)
-
-        # ROOT DUMP FOR SAFETY
-        with open("tournament_results_ROOT.json", "w") as f_root:
-            json.dump(results, f_root, indent=2, default=str)
-        print("DEBUG: Wrote ROOT dump tournament_results_ROOT.json")
-
-        print(f"✅ Research Sweep Complete: {settings.run_id}")
-        print(f"Results saved to: {output_dir / 'tournament_results.json'}")
+    logging.basicConfig(level=logging.INFO)
+    engine = BacktestEngine()
+    engine.run_tournament(train_window=args.train_window, test_window=args.test_window, step_size=args.step_size)
