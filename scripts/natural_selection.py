@@ -185,6 +185,8 @@ def natural_selection(
                     "spec_version": spec_version,
                     "vetoes": vetoes,
                     "metrics": sanitized_metrics,
+                    "relaxation_stage": response.relaxation_stage,
+                    "active_thresholds": response.active_thresholds,
                 }
 
                 # Update main selection key
@@ -246,6 +248,8 @@ def natural_selection(
                 "raw_pool_count": len(returns.columns),
                 "selected_count": len(winners),
                 "selection_mode": current_mode,
+                "relaxation_stage": response.relaxation_stage,
+                "active_thresholds": response.active_thresholds,
             }
             if isinstance(sanitized_metrics, dict):
                 ledger_metrics.update(sanitized_metrics)

@@ -257,12 +257,15 @@ def prepare_portfolio_universe():
     alpha_meta = {s: alpha_meta[s] for s in returns_df.columns if s in alpha_meta}
     logger.info(f"Alpha Meta size after filter: {len(alpha_meta)}")
 
-    returns_path = os.getenv("PORTFOLIO_RETURNS_PATH", "data/lakehouse/portfolio_returns.pkl")
+    returns_path = os.getenv("PORTFOLIO_RETURNS_PATH", "data/lakehouse/returns_matrix.parquet")
     meta_path = os.getenv("PORTFOLIO_META_PATH", "data/lakehouse/portfolio_meta.json")
 
     logger.info(f"Returns matrix created: {returns_df.shape}")
     logger.info(f"Writing returns matrix to: {returns_path}")
-    returns_df.to_pickle(returns_path)
+    if returns_path.endswith(".parquet"):
+        returns_df.to_parquet(returns_path)
+    else:
+        returns_df.to_pickle(returns_path)
     with open(meta_path, "w") as f:
         json.dump(alpha_meta, f, indent=2)
 

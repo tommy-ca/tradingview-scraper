@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from tradingview_scraper.portfolio_engines.engines import _enforce_cap_series, _project_capped_simplex
+from tradingview_scraper.portfolio_engines import _enforce_cap_series, _project_capped_simplex
 
 
 class TestCappedSimplexProjection(unittest.TestCase):

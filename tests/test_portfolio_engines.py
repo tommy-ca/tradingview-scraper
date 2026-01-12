@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from tradingview_scraper.portfolio_engines.base import EngineRequest
-from tradingview_scraper.portfolio_engines.engines import (
+from tradingview_scraper.portfolio_engines import (
     CustomClusteredEngine,
     build_engine,
     list_available_engines,
@@ -167,7 +167,7 @@ class TestCustomClusteredEngine(unittest.TestCase):
 
     def test_equal_weight_profile(self):
         # This profile is handled by MarketBaselineEngine
-        from tradingview_scraper.portfolio_engines.engines import MarketBaselineEngine
+        from tradingview_scraper.portfolio_engines import MarketBaselineEngine
 
         engine = MarketBaselineEngine()
 
