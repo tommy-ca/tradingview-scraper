@@ -73,19 +73,35 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Adaptive Logging**: Review `AdaptiveMetaEngine` logging verbosity. Action: **Reduced to DEBUG** level to eliminate log spam during backtests.
 - [x] **Engine Consolidation**: Evaluate redundancy. Result: `skfolio` and `custom` are primary; `riskfolio` is secondary/experimental.
 
-### Phase 105: Crypto Production Re-Validation & TDD Hardening (IN PROGRESS)
-- [x] **TDD Expansion**: Created comprehensive crypto-specific test suite:
-  - `test_crypto_config_validation.py`: Validates manifest settings, feature flags, and parameter integrity (9 tests)
-  - `test_crypto_selection_logic.py`: Tests directional normalization, late-binding, and SSP fallbacks (8 tests)
-  - All pre-flight tests passing (17/17)
-- [ ] **Production Execution**: Execute `make flow-crypto` with fresh data using v3.3.1 certified system
-- [ ] **Learning Audit**: Capture and document:
-  - Selection funnel metrics (raw pool → final assets)
-  - Engine performance matrix (Barbell/HRP/Max-Sharpe)
-  - Tail risk statistics (MaxDD, VaR, drawdown duration)
-  - Directional purity verification (SHORT inversion correctness)
-- [ ] **Deep Forensic Review**: Generate human-readable window-by-window analysis using `generate_deep_report.py`
-- [ ] **Documentation Sync**: Update crypto sleeve specs with empirical findings and parameter adjustments
+### Phase 105: Crypto Production Re-Validation & TDD Hardening (COMPLETED)
+- [x] **TDD Expansion**: Created comprehensive crypto-specific test suite.
+- [x] **Production Execution**: Executed `make flow-production PROFILE=crypto_production` with v3.3.1.
+- [x] **Window-by-Window Forensic Audit**: Analyzed selection funnel and optimization windows.
+- [x] **Learning Audit**: Identified winner sparsity issues (n < 4) causing solver instability.
+- [x] **Deep Forensic Review**: Generated forensic reports for Run ID: 20260112-075640.
+- [x] **Documentation Sync**: Updated requirements with CR-210 and CR-211.
+
+### Phase 106: Selection Funnel Relaxation & Solver Optimization (COMPLETED)
+- [x] **Veto Audit**: Analyzed specific veto counts; identified "High Entropy" and "Low Efficiency" as primary bottlenecks in early windows.
+- [x] **Threshold Relaxation Experiment**:
+  - [x] Relaxed `entropy_max_threshold` to 1.0 (disabled).
+  - [x] Adjusted `efficiency_min_threshold` to 0.0.
+  - [x] Widen `hurst_random_walk` to [0.4, 0.6].
+- [x] **Selection Target Validation**: Implemented "Balanced Selection" fallback in `engines.py` ensuring min 15 candidates.
+- [x] **Solver Stability Verification**: Confirmed zero `nan` failures in late windows (12+) across all engines.
+- [x] **Specification Update**: Codified the "Balanced Selection" standard as CR-212 in `crypto_sleeve_requirements_v1.md`.
+
+### Phase 107: Dynamic Selection Intelligence & Root Cause Remediation (IN PROGRESS)
+- [ ] **Dynamic Threshold Relaxation (DTR)**: Implement a multi-stage relaxation loop instead of simple "loser recruitment":
+  - Stage 1: Standard V3.2 Vetoes.
+  - Stage 2: Relax Spectral Thresholds by 20% if $N < 15$.
+  - Stage 3: Force Cluster Representatives (ensure every cluster has $\ge 1$ asset if possible).
+- [ ] **History-Aware Metric Scaling**: Adjust `min_days_floor` vs. lookback depth to prevent "lookback truncation" noise in spectral metrics.
+- [ ] **Solver-Selection Coupling**: Update `SelectionRequest` to include a `min_candidates` hint derived from the optimizer's DOF needs.
+- [ ] **Metadata Fallback Standard**: Implement `CR-213` (Global Defaults for execution metadata) to prevent absolute vetoes of high-alpha assets with missing non-critical tags.
+- [ ] **Forensic Audit Update**: Update `audit.jsonl` to record *which* relaxation stage was triggered for each window.
+
+
 
 **Learning Focus**: Validate that v3.3.1 improvements (Annualized Return Clipping, SSP fallbacks, Entropy Order=5) eliminate previous crypto production instabilities and achieve target Sharpe ~1.88 per 20-day step alignment.
 
