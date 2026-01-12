@@ -32,3 +32,29 @@ If $N < 15$ after Stage 3, recruit the top-ranked assets by `alpha_score` from t
 1. **Solver Success Rate**: 100% (No `nan` or `infeasible` results).
 2. **Cluster Coverage**: 100% of non-empty clusters represented in the final selection.
 3. **Audit Traceability**: Every recruited asset must be tagged with its recruitment stage in `audit.jsonl`.
+
+## 6. Numerical Hardening (v1.1)
+To handle highly correlated crypto regimes, the platform now implements **Adaptive Ridge Scaling**.
+
+### 6.1 Dynamic Shrinkage Loop
+If the condition number $\kappa$ of the correlation/covariance matrix exceeds `kappa_shrinkage_threshold` (default: 5000), the engine applies iterative diagonal loading:
+$R' = (1-\lambda)R + \lambda I$
+The intensity $\lambda$ starts at 1% and increases in 1% steps until $\kappa$ is bounded or $\lambda = 10\%$ is reached.
+
+### 6.2 Adaptive Fallback (ERC)
+The meta-engine transition logic now incorporates an **Equal Risk Contribution (ERC)** safety state. This ensures that during regime transitions or solver instability, the portfolio defaults to a risk-parity state rather than returning NaN or unhedged weights.
+
+## 8. Modular Portfolio Engine Architecture (v1.3)
+To improve maintainability and testability, the portfolio engine layer has been refactored from a monolithic `engines.py` into a directory-based structure.
+
+### 8.1 Directory Structure
+- `tradingview_scraper/portfolio_engines/`:
+    - `__init__.py`: Factory (`build_engine`) and central registry.
+    - `base.py`: Shared abstract base class (`BaseRiskEngine`) and common mathematical utilities (`_project_capped_simplex`, `_safe_series`).
+    - `impl/`: Concrete implementations.
+        - `custom.py`: Clustered/Barbell logic.
+        - `skfolio.py`, `riskfolio.py`, `pypfopt.py`, `cvx.py`: 3rd-party library adapters.
+        - `adaptive.py`: Regime-aware meta-engine logic.
+
+### 8.2 Testing Strategy
+This modularity allows for independent unit testing of individual optimization models. The `BaseRiskEngine` interface ensures that all adapters provide consistent input/output behavior, allowing for seamless backend swapping during tournaments.

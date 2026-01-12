@@ -32,6 +32,11 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-211 | MUST | ✅ | **Solver Tolerance**: Optimization engines must implement explicit error handling and fallback logic for solver-specific failures (e.g., CVXPY infeasibility, skfolio recursion) triggered by low asset counts. |
 | CR-212 | MUST | ✅ | **Balanced Selection Standard**: The selection engine must ensure a minimum pool of 15 candidates per window by falling back to the top-ranked rejected assets (by alpha score) if primary filters are too restrictive. |
 | CR-213 | MUST | ✅ | **Global Metadata Fallback**: To prevent "Sparsity Vetoes" of high-alpha assets, the pipeline must provide default execution parameters (tick_size, lot_size) for recognized exchange classes (e.g., BINANCE_SPOT) if local metadata is missing. |
+| CR-214 | MUST | ✅ | **HTR Standard**: The selection engine must implement the 4-stage Hierarchical Threshold Relaxation loop (Strict -> Spectral -> Factor Representation -> Balanced Fallback) to ensure $N \ge 15$. |
+| CR-220 | MUST | ✅ | **Dynamic Ridge Scaling**: The system must iteratively apply shrinkage (diagonal loading) to the covariance matrix if the condition number (Kappa) exceeds a configurable threshold (default 5000), ensuring numerical stability for solvers. |
+| CR-221 | MUST | ✅ | **Adaptive Safety Protocol**: The `adaptive` meta-engine must default to an **Equal Risk Contribution (ERC)** fallback profile (or other configurable safety profiles like EW) when sub-solvers fail or during warm-up periods. |
+| CR-230 | MUST | ⏳ | **Toxicity Hard-Stop**: HTR Stage 3/4 recruitment must never include assets failing a strict entropy limit (default 0.999), even if factor representation floors are not met. |
+| CR-231 | MUST | ⏳ | **Optimized Shrinkage**: Transition from simple diagonal loading to **Ledoit-Wolf** for cluster benchmark covariance to improve the stability-alpha trade-off. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---

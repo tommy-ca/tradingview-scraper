@@ -49,6 +49,11 @@ class FeatureFlags(BaseModel):
     hurst_random_walk_max: float = 0.55
     eci_hurdle: float = 0.0
 
+    # Numerical Stability & Hardening
+    kappa_shrinkage_threshold: float = 5000.0
+    default_shrinkage_intensity: float = 0.01
+    adaptive_fallback_profile: str = "erc"
+
     # Forensic Analysis Defaults
     min_col_frac: float = 0.1
     use_robust_correlation: bool = True
@@ -446,6 +451,9 @@ if __name__ == "__main__":
             "features.efficiency_min_threshold": "TV_FEATURES__EFFICIENCY_MIN",
             "features.hurst_random_walk_min": "TV_FEATURES__HURST_RW_MIN",
             "features.hurst_random_walk_max": "TV_FEATURES__HURST_RW_MAX",
+            "features.kappa_shrinkage_threshold": "TV_FEATURES__KAPPA_SHRINKAGE_THRESHOLD",
+            "features.default_shrinkage_intensity": "TV_FEATURES__DEFAULT_SHRINKAGE_INTENSITY",
+            "features.adaptive_fallback_profile": "TV_FEATURES__ADAPTIVE_FALLBACK_PROFILE",
             "portfolio_lookback_days": "PORTFOLIO_LOOKBACK_DAYS",
             "portfolio_batch_size": "PORTFOLIO_BATCH_SIZE",
             "portfolio_backfill": "PORTFOLIO_BACKFILL",

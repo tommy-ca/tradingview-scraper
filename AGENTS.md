@@ -83,7 +83,8 @@ Every step of the production sequence persists its full execution trace in the r
 ### 6. Strategic Guiding Principles for Agents
 1.  **Alpha must survive friction**: Prioritize optimization engines that maintain Sharpe ratio stability in high-fidelity simulation. Use `feat_turnover_penalty` to minimize churn.
 2.  **Spectral Intelligence**: Prioritize spectral (DWT) and entropy metrics for regime detection over simple volatility ratios. Use `feat_spectral_regimes` for adaptive scaling.
-3.  **Execution Integrity**: Use `feat_partial_rebalance` to avoid noisy small trades. Generate implementation orders via `scripts/track_portfolio_state.py --orders`.
+3.  **HTR Resilience**: Always utilize the **Hierarchical Threshold Relaxation (v3.3)** loop to prevent winner sparsity. Verify recruitment stages in `audit.jsonl` if solver failure occurs.
+4.  **Execution Integrity**: Use `feat_partial_rebalance` to avoid noisy small trades. Generate implementation orders via `scripts/track_portfolio_state.py --orders`.
 4.  **TDD & Feature Flags**: All new risk management features must be implemented via TDD and gated behind feature flags in `TradingViewScraperSettings` to ensure production stability.
 5.  **Provenance First**: Always verify that the `manifest.json` has been archived in the run directory.
 6.  **Audit Integrity**: Every production decision must be backed by an entry in the `audit.jsonl` ledger. Never bypass the audit chain for manual weight overrides.
@@ -96,11 +97,12 @@ Every step of the production sequence persists its full execution trace in the r
 The platform supports multiple selection architectures, evaluated via head-to-head tournaments.
 
 ### Current Standards
-- **Selection v3.3.1 (Deep Audit Standard)**: **Log-Multiplicative Probability Scoring (Log-MPS)**.
-    - Uses additive log-probabilities for numerical stability and HPO optimization.
-    - **Entropy Resolution**: Order=5 (120 permutations) mandatory for noise differentiation.
-    - **Global Robust**: Achieving the highest 2025 Annualized Return and Sharpe.
-    - Features integrated spectral predictability filters (Entropy, Hurst, Efficiency).
+- **Selection v3.4 (Stabilized HTR Standard)**: **Hierarchical Threshold Relaxation**.
+    - Integrates the 4-stage relaxation loop (Strict -> Spectral -> Cluster Floor -> Alpha Fallback).
+    - **Numerical Hardening**: Implements **Dynamic Ridge Scaling** (Iterative shrinkage) to bound Kappa < 5000.
+    - **Adaptive Resilience**: Default fallback to **ERC (Equal Risk Contribution)** safety profile.
+    - Ensures $N \ge 15$ candidates and stable convex optimization.
+- **Selection v3.2 (Log-MPS Core)**: Deep Audit Standard using additive log-probabilities.
 - **Selection v2.1 (Stability Anchor)**: **Additive Rank-Sum (CARS 2.1)**. 
     - Uses **Multi-Method Normalization** (Logistic/Z-score/Rank).
     - Optimized for lower volatility and maximum drawdown protection.
