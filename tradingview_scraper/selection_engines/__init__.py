@@ -10,6 +10,7 @@ from tradingview_scraper.selection_engines.engines import (
     SelectionEngineV3,
     SelectionEngineV3_1,
     SelectionEngineV3_2,
+    SelectionEngineV3_4,
 )
 
 SELECTION_ENGINES: Dict[str, Type[BaseSelectionEngine]] = {
@@ -19,6 +20,7 @@ SELECTION_ENGINES: Dict[str, Type[BaseSelectionEngine]] = {
     "v3": SelectionEngineV3,
     "v3.1": SelectionEngineV3_1,
     "v3.2": SelectionEngineV3_2,
+    "v3.4": SelectionEngineV3_4,
     "legacy": SelectionEngineV2_0,  # Alias for backward compatibility
 }
 

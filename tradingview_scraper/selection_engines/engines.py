@@ -21,900 +21,267 @@ from tradingview_scraper.utils.scoring import (
 
 logger = logging.getLogger("selection_engines")
 
-
-def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
-    if returns.empty:
-        return pd.DataFrame()
-    corr = returns.replace(0, np.nan).corr(min_periods=20)
-    return corr.fillna(0.0)
-
+def get_robust_correlation(returns: pd.DataFrame, shrinkage: float = 0.01) -> pd.DataFrame:
+    if returns.empty: return pd.DataFrame()
+    corr = returns.replace(0, np.nan).corr(min_periods=20).fillna(0.0)
+    if not corr.empty:
+        n = corr.shape[0]
+        corr = corr * (1.0 - shrinkage) + np.eye(n) * shrinkage
+    return corr
 
 def get_hierarchical_clusters(returns: pd.DataFrame, threshold: float = 0.5, max_clusters: int = 25) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Computes averaged distance matrix and performs Ward Linkage clustering.
-    Returns (cluster_ids, linkage_matrix).
-    """
-    if returns.empty:
-        return np.array([]), np.array([])
-
-    settings = get_settings()
-    lookbacks = settings.cluster_lookbacks
-    available_len = len(returns)
-    valid_lookbacks = [l for l in lookbacks if l <= available_len] or [available_len]
-
+    if returns.empty: return np.array([]), np.array([])
+    settings = get_settings(); available_len = len(returns)
+    lookbacks = [l for l in settings.cluster_lookbacks if l <= available_len] or [available_len]
+    shrinkage = settings.features.default_shrinkage_intensity
     dist_matrices = []
-    for l in valid_lookbacks:
-        corr = get_robust_correlation(returns.tail(l))
-        if not corr.empty:
-            dist_matrices.append(np.sqrt(0.5 * (1 - corr.values.clip(-1, 1))))
-
-    if not dist_matrices:
-        return np.array([1] * len(returns.columns)), np.array([])
-
-    avg_dist = np.mean(dist_matrices, axis=0)
-    avg_dist = (avg_dist + avg_dist.T) / 2
+    for l in lookbacks:
+        corr = get_robust_correlation(returns.tail(l), shrinkage=shrinkage)
+        if not corr.empty: dist_matrices.append(np.sqrt(0.5 * (1 - corr.values.clip(-1, 1))))
+    if not dist_matrices: return np.array([1] * len(returns.columns)), np.array([])
+    avg_dist = (np.mean(dist_matrices, axis=0) + np.mean(dist_matrices, axis=0).T) / 2
     np.fill_diagonal(avg_dist, 0)
-
-    if len(returns.columns) < 2:
-        return np.array([1]), np.array([])
-
+    if len(returns.columns) < 2: return np.array([1]), np.array([])
     link = sch.linkage(squareform(avg_dist, checks=False), method="ward")
     cluster_ids = sch.fcluster(link, t=threshold, criterion="distance") if threshold > 0 else sch.fcluster(link, t=max_clusters, criterion="maxclust")
-
     return cluster_ids, link
 
-
 class SelectionEngineV2(BaseSelectionEngine):
-    """
-    Unified Composite Alpha-Risk Score (CARS 2.0).
-    Additive scoring: Score = 0.4*Mom + 0.2*Stab + 0.2*AF + 0.2*Liq.
-    """
-
     @property
-    def name(self) -> str:
-        return "v2"
-
-    def select(
-        self,
-        returns: pd.DataFrame,
-        raw_candidates: List[Dict[str, Any]],
-        stats_df: Optional[pd.DataFrame],
-        request: SelectionRequest,
-    ) -> SelectionResponse:
-        return self._select_additive_core(
-            returns,
-            raw_candidates,
-            stats_df,
-            request,
+    def name(self) -> str: return "v2"
+    def select(self, returns, raw_candidates, stats_df, request):
+        return self._select_additive_core(returns, raw_candidates, stats_df, request,
             weights={"momentum": 0.4, "stability": 0.2, "antifragility": 0.2, "liquidity": 0.2, "fragility": -0.1},
-            methods={"momentum": "rank", "stability": "rank", "liquidity": "rank", "antifragility": "rank", "survival": "rank", "efficiency": "rank", "entropy": "rank", "hurst_clean": "rank"},
-        )
-
-    def _select_additive_core(
-        self,
-        returns: pd.DataFrame,
-        raw_candidates: List[Dict[str, Any]],
-        stats_df: Optional[pd.DataFrame],
-        request: SelectionRequest,
-        weights: Dict[str, float],
-        methods: Dict[str, str],
-        clipping_sigma: float = 3.0,
-    ) -> SelectionResponse:
+            methods={"momentum": "rank", "stability": "rank", "liquidity": "rank", "antifragility": "rank", "survival": "rank", "efficiency": "rank", "entropy": "rank", "hurst_clean": "rank"})
+    def _select_additive_core(self, returns, raw_candidates, stats_df, request, weights, methods, clipping_sigma=3.0):
         candidate_map = {c["symbol"]: c for c in raw_candidates}
-        settings = get_settings()
-
-        cluster_ids, _ = get_hierarchical_clusters(returns, request.threshold, request.max_clusters)
-        clusters: Dict[int, List[str]] = {}
-        for sym, c_id in zip(returns.columns, cluster_ids):
-            cid = int(c_id)
-            if cid not in clusters:
-                clusters[cid] = []
-            clusters[cid].append(str(sym))
-
-        # 1. Component Extraction
-        mom_all: pd.Series = cast(pd.Series, returns.mean() * 252)
-        # Use standard std() but with a guard to prevent RuntimeWarning on empty/single-element slices
-        vol_all = pd.Series(0.0, index=returns.columns)
-        for s in returns.columns:
-            s_rets = returns[s].dropna()
-            if len(s_rets) > 1:
-                vol_all[s] = float(s_rets.std() * np.sqrt(252))
-            else:
-                vol_all[s] = 0.0
-        stab_all: pd.Series = cast(pd.Series, 1.0 / (vol_all + 1e-9))
-        liq_all: pd.Series = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
-        af_all: pd.Series = pd.Series(0.5, index=returns.columns)
-        frag_all: pd.Series = pd.Series(0.0, index=returns.columns)
-        regime_all: pd.Series = pd.Series(1.0, index=returns.columns)
-
-        # Predictability Metrics
-        lookback = min(len(returns), 120)
-        # CR-201: Increased order to 5 (120 permutations) for better noise differentiation
-        pe_all: pd.Series = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy(), order=5) for s in returns.columns})
-        er_all: pd.Series = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
-        hurst_all: pd.Series = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
-
+        settings = get_settings(); cluster_ids, _ = get_hierarchical_clusters(returns, request.threshold, request.max_clusters)
+        clusters = {}; [clusters.setdefault(int(c_id), []).append(str(sym)) for sym, c_id in zip(returns.columns, cluster_ids)]
+        mom_all = cast(pd.Series, returns.mean() * 252)
+        vol_all = pd.Series({s: float(returns[s].dropna().std() * np.sqrt(252)) if len(returns[s].dropna()) > 1 else 0.0 for s in returns.columns})
+        stab_all, liq_all = 1.0 / (vol_all + 1e-9), pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
+        af_all, frag_all, regime_all = pd.Series(0.5, index=returns.columns), pd.Series(0.0, index=returns.columns), pd.Series(1.0, index=returns.columns)
+        lookback = min(len(returns), 120); pe_all = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy(), order=5) for s in returns.columns})
+        er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns}); hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
-            if common:
-                af_all.loc[common] = stats_df.loc[common, "Antifragility_Score"]
-                if "Fragility_Score" in stats_df.columns:
-                    frag_all.loc[common] = stats_df.loc[common, "Fragility_Score"]
-                if "Regime_Survival_Score" in stats_df.columns:
-                    regime_all.loc[common] = stats_df.loc[common, "Regime_Survival_Score"]
-
-        # 2. Additive Scoring
+            for s in common:
+                af_all.loc[s] = stats_df.loc[s, "Antifragility_Score"]
+                if "Fragility_Score" in stats_df.columns: frag_all.loc[s] = stats_df.loc[s, "Fragility_Score"]
+                if "Regime_Survival_Score" in stats_df.columns: regime_all.loc[s] = stats_df.loc[s, "Regime_Survival_Score"]
         from tradingview_scraper.utils.scoring import map_to_probability
-
-        # Mapping to normalized space [0, 1] using factor-specific methods
-        metrics_raw = {
-            "momentum": mom_all,
-            "stability": stab_all,
-            "liquidity": liq_all,
-            "antifragility": af_all,
-            "survival": regime_all,
-            "efficiency": er_all,
-            "entropy": 1.0 - pe_all,  # High entropy = low score
-            "hurst_clean": 1.0 - abs(hurst_all - 0.5) * 2.0,  # 0.5 = low score
-            "fragility": -frag_all,  # High fragility = low score
-        }
-
-        metrics_norm = {}
-        for name, series in metrics_raw.items():
-            method = methods.get(name, "rank")
-            metrics_norm[name] = map_to_probability(series, method=method, sigma=clipping_sigma)
-
+        metrics_raw = {"momentum": mom_all, "stability": stab_all, "liquidity": liq_all, "antifragility": af_all, "survival": regime_all, "efficiency": er_all, "entropy": (1.0 - pe_all.fillna(1.0)), "hurst_clean": (1.0 - (hurst_all.fillna(0.5) - 0.5).abs() * 2.0), "fragility": -frag_all}
+        metrics_norm = {n: map_to_probability(s, method=methods.get(n, "rank"), sigma=clipping_sigma) for n, s in metrics_raw.items()}
         alpha_scores = pd.Series(0.0, index=returns.columns)
-        for name, w in weights.items():
-            if name in metrics_norm:
-                alpha_scores += w * metrics_norm[name]
-
-        selected_symbols = []
-        audit_clusters = {}
-        warnings = []
-
+        for n, w in weights.items():
+            if n in metrics_norm: alpha_scores += w * metrics_norm[n]
+        selected_symbols_dict, audit_clusters = {}, {}
         for c_id, symbols in clusters.items():
-            sub_rets = returns.loc[:, symbols]
-            if isinstance(sub_rets, pd.Series):
-                sub_rets = sub_rets.to_frame()
-
-            # Intra-cluster Selection: Pick top N per direction
-            # Standard: Top 3 for Crypto to ensure sufficient diversification per factor
-            actual_top_n = max(3, request.top_n)
+            sub_rets = returns[symbols]; actual_top_n = max(3, request.top_n)
             if settings.features.feat_dynamic_selection and len(symbols) > 1:
-                c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
-                n_syms = len(symbols)
-                if n_syms > 1:
-                    upper_indices = np.triu_indices(n_syms, k=1)
-                    mean_c = float(np.mean(c_corr.values[upper_indices]))
-                    actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
-
-            window = min(60, len(sub_rets))
-            sub_tail = sub_rets.tail(window)
-            cum_rets = (1 + sub_tail.fillna(0.0)).prod() - 1
-            m_winners = cum_rets[cum_rets >= request.min_momentum_score].index.tolist()
-
-            logger.info(f"Cluster {c_id}: {len(symbols)} symbols. m_winners: {len(m_winners)}. First 3 cum_rets: {cum_rets.head(3).to_dict()}")
-
-            id_to_best: Dict[str, str] = {}
+                mean_c = float(get_robust_correlation(sub_rets, shrinkage=settings.features.default_shrinkage_intensity).values[np.triu_indices(len(symbols), k=1)].mean()); actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
+            id_to_best = {}
             for s in symbols:
                 ident = candidate_map.get(s, {}).get("identity", s)
-                if ident not in id_to_best or alpha_scores[s] > alpha_scores[id_to_best[ident]]:
-                    id_to_best[ident] = s
-
-            uniques = list(id_to_best.values())
-            longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and s in m_winners]
-            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
-
-            logger.info(f"Cluster {c_id}: {len(symbols)} symbols -> {len(uniques)} uniques -> {len(longs)} longs, {len(shorts)} shorts")
-
-            c_selected = []
-            if longs:
-                top = cast(pd.Series, alpha_scores.loc[longs]).sort_values(ascending=False).head(actual_top_n).index.tolist()
-                c_selected.extend([str(s) for s in top])
-
-            if shorts:
-                top = cast(pd.Series, alpha_scores.loc[shorts]).sort_values(ascending=False).head(actual_top_n).index.tolist()
-                c_selected.extend([str(s) for s in top])
-
-            selected_symbols.extend(c_selected)
-            audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_selected}
-
-        winners = []
-        for s in selected_symbols:
-            if s in candidate_map:
-                cand = candidate_map[s].copy()
-                cand["alpha_score"] = float(alpha_scores[s])
-                winners.append(cand)
-            else:
-                winners.append({"symbol": s, "direction": "LONG", "alpha_score": float(alpha_scores[s])})
-
-        # Add metrics for auditing
-        metrics: Dict[str, Any] = {
-            "alpha_scores": {str(k): float(v) for k, v in cast(Any, alpha_scores).items()},
-            "predictability": {
-                "avg_pe": float(pe_all.mean()),
-                "avg_er": float(er_all.mean()),
-                "avg_hurst": float(hurst_all.mean()),
-            },
-            "raw_metrics": {
-                "momentum": {str(k): float(v) for k, v in cast(Any, mom_all).items()},
-                "stability": {str(k): float(v) for k, v in cast(Any, stab_all).items()},
-                "liquidity": {str(k): float(v) for k, v in cast(Any, liq_all).items()},
-                "antifragility": {str(k): float(v) for k, v in cast(Any, af_all).items()},
-                "survival": {str(k): float(v) for k, v in cast(Any, regime_all).items()},
-                "efficiency": {str(k): float(v) for k, v in cast(Any, er_all).items()},
-                "entropy": {str(k): float(v) for k, v in cast(Any, pe_all).items()},
-                "hurst": {str(k): float(v) for k, v in cast(Any, hurst_all).items()},
-                "fragility": {str(k): float(v) for k, v in cast(Any, frag_all).items()},
-            },
-        }
-
-        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version=getattr(self, "spec_version", "2.0"), warnings=warnings, vetoes={}, metrics=metrics)
-
+                if ident not in id_to_best or alpha_scores[s] > alpha_scores[id_to_best[ident]]: id_to_best[ident] = s
+            uniques = list(id_to_best.values()); m_win = (1 + sub_rets.tail(60).fillna(0.0)).prod() - 1
+            longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and m_win.get(s, 0) >= request.min_momentum_score]
+            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and m_win.get(s, 0) >= request.min_momentum_score]
+            c_sel = []
+            if longs: c_sel.extend(alpha_scores.loc[longs].sort_values(ascending=False).head(actual_top_n).index.tolist())
+            if shorts: c_sel.extend(alpha_scores.loc[shorts].sort_values(ascending=False).head(actual_top_n).index.tolist())
+            for s in c_sel: selected_symbols_dict[s] = 1
+            audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_sel}
+        winners = [({**candidate_map[s], "alpha_score": float(alpha_scores[s])} if s in candidate_map else {"symbol": s, "direction": "LONG", "alpha_score": float(alpha_scores[s])}) for s in list(selected_symbols_dict.keys())]
+        metrics = {"alpha_scores": alpha_scores.to_dict(), "predictability": {"avg_pe": float(pe_all.mean()), "avg_er": float(er_all.mean()), "avg_hurst": float(hurst_all.mean())}}
+        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version=getattr(self, "spec_version", "2.0"), warnings=[], vetoes={}, metrics=metrics)
 
 class SelectionEngineV2_1(SelectionEngineV2):
-    """
-    v2.1: Tuned CARS model.
-    - Additive Rank-Sum scoring with 8 metrics.
-    - Optimized weights from Global Robust HPO.
-    """
-
     @property
-    def name(self) -> str:
-        return "v2.1"
-
-    def __init__(self):
-        super().__init__()
-        self.spec_version = "2.1"
-
-    def select(
-        self,
-        returns: pd.DataFrame,
-        raw_candidates: List[Dict[str, Any]],
-        stats_df: Optional[pd.DataFrame],
-        request: SelectionRequest,
-    ) -> SelectionResponse:
-        settings = get_settings()
-        weights = settings.features.weights_v2_1_global
-        methods = settings.features.normalization_methods_v2_1
-        sigma = settings.features.clipping_sigma_v2_1
-        return self._select_additive_core(returns, raw_candidates, stats_df, request, weights=weights, methods=methods, clipping_sigma=sigma)
-
+    def name(self) -> str: return "v2.1"
+    def __init__(self): super().__init__(); self.spec_version = "2.1"
+    def select(self, returns, raw_candidates, stats_df, request):
+        s = get_settings(); return self._select_additive_core(returns, raw_candidates, stats_df, request, weights=s.features.weights_v2_1_global, methods=s.features.normalization_methods_v2_1, clipping_sigma=s.features.clipping_sigma_v2_1)
 
 class SelectionEngineV3(BaseSelectionEngine):
-    """
-    Multiplicative Probability Scoring (MPS 3.0) + Operation Darwin Vetoes.
-    Now enhanced with Spectral Predictability Filters (PE, Hurst, ER).
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.kappa_threshold = 1e6
-        self.eci_hurdle = 0.02
-        self.spec_version = "3.0"
-
+    def __init__(self): super().__init__(); self.kappa_threshold, self.eci_hurdle, self.spec_version = 1e6, 0.02, "3.0"
     @property
-    def name(self) -> str:
-        return "v3"
-
-    def select(
-        self,
-        returns: pd.DataFrame,
-        raw_candidates: List[Dict[str, Any]],
-        stats_df: Optional[pd.DataFrame],
-        request: SelectionRequest,
-    ) -> SelectionResponse:
-        return self._select_v3_core(returns, raw_candidates, stats_df, request)
-
-    def _calculate_alpha_scores(self, mps_metrics: Dict[str, pd.Series], methods: Dict[str, str], frag_penalty: pd.Series) -> pd.Series:
-        """
-        Default V3 Multiplicative Scoring.
-        Only includes Efficiency/Entropy if feature flags are enabled.
-        """
-        settings = get_settings()
-        filtered_metrics = {k: v for k, v in mps_metrics.items() if k not in ["efficiency", "entropy", "hurst_clean"]}
-
-        if settings.features.feat_efficiency_scoring:
-            filtered_metrics["efficiency"] = mps_metrics["efficiency"]
-
-        # V3.1 baseline doesn't include entropy/hurst in multiplicative score yet
-
-        mps = calculate_mps_score(filtered_metrics, methods=methods)
-        return mps * (1.0 - frag_penalty)
-
-    def _select_v3_core(
-        self,
-        returns: pd.DataFrame,
-        raw_candidates: List[Dict[str, Any]],
-        stats_df: Optional[pd.DataFrame],
-        request: SelectionRequest,
-    ) -> SelectionResponse:
+    def name(self) -> str: return "v3"
+    def select(self, returns, raw_candidates, stats_df, request): return self._select_v3_core(returns, raw_candidates, stats_df, request)
+    def _get_active_thresholds(self, request):
+        s = get_settings(); return {"entropy_max": request.params.get("entropy_max_threshold", s.features.entropy_max_threshold), "efficiency_min": request.params.get("efficiency_min_threshold", s.features.efficiency_min_threshold), "hurst_rw_min": request.params.get("hurst_random_walk_min", s.features.hurst_random_walk_min), "hurst_rw_max": request.params.get("hurst_random_walk_max", s.features.hurst_random_walk_max), "eci_hurdle": request.params.get("eci_hurdle", self.eci_hurdle), "kappa_max": request.params.get("kappa_shrinkage_threshold", s.features.kappa_shrinkage_threshold), "shr_init": request.params.get("default_shrinkage_intensity", s.features.default_shrinkage_intensity)}
+    def _calculate_alpha_scores(self, mps_metrics, methods, frag_penalty):
+        s = get_settings(); f_m = {k: v for k, v in mps_metrics.items() if k not in ["efficiency", "entropy", "hurst_clean"]}
+        if s.features.feat_efficiency_scoring: f_m["efficiency"] = mps_metrics["efficiency"]
+        return calculate_mps_score(f_m, methods=methods) * (1.0 - frag_penalty)
+    def _select_v3_core(self, returns, raw_candidates, stats_df, request):
         candidate_map = {c["symbol"]: c for c in raw_candidates}
-        settings = get_settings()
-        selection_warnings = []
-        metrics: Dict[str, Any] = {}
-        vetoes: Dict[str, List[str]] = {}
-
+        settings, selection_warnings, metrics, vetoes = get_settings(), [], {}, {}
+        thresholds = self._get_active_thresholds(request); relaxation_stage = request.params.get("relaxation_stage", 1)
         cluster_ids, _ = get_hierarchical_clusters(returns, request.threshold, request.max_clusters)
-        clusters: Dict[int, List[str]] = {}
-        for sym, c_id in zip(returns.columns, cluster_ids):
-            cid = int(c_id)
-            if cid not in clusters:
-                clusters[cid] = []
-            clusters[cid].append(str(sym))
-
-        # 1. Component Extraction
-        mom_all: pd.Series = cast(pd.Series, returns.mean() * 252)
-        # Use standard std() but with a guard to prevent RuntimeWarning on empty/single-element slices
-        vol_all = pd.Series(0.0, index=returns.columns)
-        for s in returns.columns:
-            s_rets = returns[s].dropna()
-            if len(s_rets) > 1:
-                vol_all[s] = float(s_rets.std() * np.sqrt(252))
-            else:
-                vol_all[s] = 0.0
-        stab_all: pd.Series = cast(pd.Series, 1.0 / (vol_all + 1e-9))
-
-        liq_all_dict = {}
-        for s in returns.columns:
-            s_str = str(s)
-            meta = candidate_map.get(s_str)
-            if not meta:
-                # Search by identity or unprefixed symbol
-                unprefixed = s_str.split(":")[-1] if ":" in s_str else s_str
-                meta = next((c for c in raw_candidates if c.get("identity") == s_str or c.get("symbol") == s_str or c.get("symbol") == unprefixed), {})
-            liq_all_dict[s] = calculate_liquidity_score(s_str, {s_str: meta} if meta else {})
-
-        liq_all: pd.Series = pd.Series(liq_all_dict)
-        af_all: pd.Series = pd.Series(0.5, index=returns.columns)
-        frag_all: pd.Series = pd.Series(0.0, index=returns.columns)
-        regime_all: pd.Series = pd.Series(1.0, index=returns.columns)
-
-        # Asset Predictability Metrics
-        lookback = min(len(returns), 120)
-        # CR-201: Increased order to 5 (120 permutations) for better noise differentiation
-        pe_all: pd.Series = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy(), order=5) for s in returns.columns})
-        er_all: pd.Series = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
-        hurst_all: pd.Series = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
-
-        from tradingview_scraper.utils.predictability import (
-            calculate_autocorrelation,
-            calculate_dwt_turbulence,
-            calculate_ljungbox_pvalue,
-            calculate_stationarity_score,
-        )
-
-        dwt_all = pd.Series({s: calculate_dwt_turbulence(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
-        adf_all = pd.Series({s: calculate_stationarity_score(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
-        acf_all = pd.Series({s: calculate_autocorrelation(returns[s].to_numpy(), lag=1) for s in returns.columns})
-        lb_all = pd.Series({s: calculate_ljungbox_pvalue(returns[s].to_numpy(), lags=5) for s in returns.columns})
-
-        # Higher-Order Moments
-        skew_all = cast(pd.Series, returns.skew())
-        kurt_all = cast(pd.Series, returns.kurtosis())
-
+        clusters = {}; [clusters.setdefault(int(c_id), []).append(str(sym)) for sym, c_id in zip(returns.columns, cluster_ids)]
+        mom_all = cast(pd.Series, returns.mean() * 252)
+        vol_all = pd.Series({s: float(returns[s].dropna().std() * np.sqrt(252)) if len(returns[s].dropna()) > 1 else 0.0 for s in returns.columns})
+        stab_all, liq_all = 1.0 / (vol_all + 1e-9), pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
+        af_all, frag_all, regime_all = pd.Series(0.5, index=returns.columns), pd.Series(0.0, index=returns.columns), pd.Series(1.0, index=returns.columns)
+        lookback = min(len(returns), 120); pe_all = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy(), order=5) for s in returns.columns})
+        er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns}); hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
-            if common:
-                af_all.loc[common] = stats_df.loc[common, "Antifragility_Score"]
-                if "Fragility_Score" in stats_df.columns:
-                    frag_all.loc[common] = stats_df.loc[common, "Fragility_Score"]
-                if "Regime_Survival_Score" in stats_df.columns:
-                    regime_all.loc[common] = stats_df.loc[common, "Regime_Survival_Score"]
-
-        # AF Significance Multiplier: Linear penalty for history < 1 year (252 sessions)
-        # Prevents "Small Sample Bias" where new assets (PIPPIN, MYX) appear hyper-antifragile
-        history_counts = returns.count()
-        sig_multiplier = (history_counts / 252.0).clip(upper=1.0)
-        af_all = af_all * sig_multiplier
-        logger.info(f"Applied AF Significance Multiplier. Avg Penalty: {1.0 - sig_multiplier.mean():.2%}")
-
-        # V3 Multiplicative Selection (Operation Darwin)
-        mps_metrics = {
-            "momentum": mom_all,
-            "stability": stab_all,
-            "liquidity": liq_all,
-            "antifragility": af_all,
-            "survival": regime_all,
-            "efficiency": er_all,
-            "entropy": (1.0 - pe_all).clip(0, 1),  # High entropy = low probability
-            "hurst_clean": (1.0 - abs(hurst_all - 0.5) * 2.0).clip(0, 1),  # 0.5 = low probability
-        }
-        methods = {
-            "survival": "cdf",
-            "liquidity": "cdf",
-            "momentum": "rank",
-            "stability": "rank",
-            "antifragility": "rank",
-            "efficiency": "cdf",
-            "entropy": "rank",
-            "hurst_clean": "rank",
-        }
-
-        # Scoring Standard (Overridable)
-        max_frag = float(frag_all.max())
-        frag_penalty = (frag_all / (max_frag if max_frag != 0 else 1.0)).fillna(0) * 0.5
-        alpha_scores = self._calculate_alpha_scores(mps_metrics, methods, frag_penalty)
-
-        # V3 Condition Number Check (Numerical Stability Gate)
-        force_aggressive_pruning = False
-        kappa = 1.0
-        corr = get_robust_correlation(returns)
+            for s in common:
+                af_all.loc[s] = stats_df.loc[s, "Antifragility_Score"]
+                if "Fragility_Score" in stats_df.columns: frag_all.loc[s] = stats_df.loc[s, "Fragility_Score"]
+                if "Regime_Survival_Score" in stats_df.columns: regime_all.loc[s] = stats_df.loc[s, "Regime_Survival_Score"]
+        af_all = af_all * (returns.count() / 252.0).clip(upper=1.0)
+        mps_metrics = {"momentum": mom_all, "stability": stab_all, "liquidity": liq_all, "antifragility": af_all, "survival": regime_all, "efficiency": er_all, "entropy": (1.0 - pe_all.fillna(1.0)).clip(0, 1), "hurst_clean": (1.0 - (hurst_all.fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1)}
+        methods = {"survival": "cdf", "liquidity": "cdf", "momentum": "rank", "stability": "rank", "antifragility": "rank", "efficiency": "cdf", "entropy": "rank", "hurst_clean": "rank"}
+        max_f = float(frag_all.max()); frag_penalty = (frag_all / (max_f if max_f != 0 else 1.0)).fillna(0) * 0.5
+        alpha_s = self._calculate_alpha_scores(mps_metrics, methods, frag_penalty); alpha_scores_clean = (alpha_s if isinstance(alpha_s, pd.Series) else pd.Series(alpha_s, index=returns.columns)).copy()
+        alpha_scores = alpha_scores_clean.copy()
+        shrinkage, kappa_thresh, kappa = thresholds["shr_init"], thresholds["kappa_max"], 1e20
+        corr = get_robust_correlation(returns, shrinkage=shrinkage)
         if not corr.empty:
-            eigenvalues = np.linalg.eigvalsh(corr.values)
-            min_ev = np.abs(eigenvalues).min()
-            kappa = float(eigenvalues.max() / (min_ev + 1e-15))
-            if kappa > self.kappa_threshold:
-                msg = f"High Condition Number (kappa={kappa:.2e}). Forcing aggressive pruning."
-                logger.warning(msg)
-                selection_warnings.append(msg)
-                force_aggressive_pruning = True
-
-        # V3 Execution & Metadata Vetoes
+            while shrinkage <= 0.1:
+                evs = np.linalg.eigvalsh(corr.values); kappa = float(evs.max() / (np.abs(evs).min() + 1e-15))
+                if kappa <= kappa_thresh: break
+                shrinkage += 0.01; corr = get_robust_correlation(returns, shrinkage=shrinkage)
+            if kappa > kappa_thresh: force_aggressive_pruning = True; selection_warnings.append(f"High Kappa ({kappa:.2e}) after max shrinkage")
         disqualified = set()
-
-        def _record_veto(sym: str, reason: str):
-            if sym not in vetoes:
-                vetoes[sym] = []
-            vetoes[sym].append(reason)
-            disqualified.add(sym)
-            logger.warning(f"Vetoing {sym}: {reason}")
-            selection_warnings.append(f"Vetoing {sym}: {reason}")
-
-        # Absolute Survival Veto
+        def _record_veto(sym, reason): vetoes.setdefault(sym, []).append(reason); disqualified.add(sym)
         for s in returns.columns:
-            s_score = float(regime_all[s]) if s in regime_all.index else 1.0
-            if s_score < 0.1:
-                _record_veto(str(s), f"Failed Darwinian Health Gate (Regime Survival={s_score:.4f})")
-
-        # Spectral Predictability Vetoes (New in 2026-01-01) - Rollout Gate
+            if regime_all[s] < 0.1: _record_veto(str(s), "Failed Darwinian Health Gate")
         if settings.features.feat_predictability_vetoes:
             for s in returns.columns:
-                if str(s) in disqualified:
-                    continue
-
-                pe = float(pe_all[s])
-                if pe > settings.features.entropy_max_threshold:
-                    _record_veto(str(s), f"High Entropy ({pe:.4f})")
-                    continue
-
-                er = float(er_all[s])
-                if er < settings.features.efficiency_min_threshold:
-                    _record_veto(str(s), f"Low Efficiency ({er:.4f})")
-                    continue
-
-                h = float(hurst_all[s])
-                # CR-157: Benchmark Exemption for Random Walk
-                is_benchmark = candidate_map.get(str(s), {}).get("is_benchmark", False)
-                if not is_benchmark and settings.features.hurst_random_walk_min < h < settings.features.hurst_random_walk_max:
-                    # Discard random walk zone
-                    _record_veto(str(s), f"Random Walk zone (Hurst={h:.4f})")
-                    continue
-
-                # CR-156: Toxic Persistence Veto
-                # Disqualify assets in persistent downtrends (Hurst > 0.55 and Momentum < 0)
-                # These are "Falling Knives" that lack mean-reversion potential in the current window.
-                annual_momentum = float(mom_all[s]) if s in mom_all.index else 0.0
-                if h > 0.55 and annual_momentum < 0:
-                    _record_veto(str(s), f"Toxic Persistence (H={h:.4f}, M={annual_momentum:.4f})")
-                    continue
-        else:
-            logger.debug("Predictability vetoes skipped (feature flag disabled)")
-
-        # Metadata Completeness
-        required_meta = ["tick_size", "lot_size", "price_precision"]
+                if str(s) in disqualified: continue
+                pe, er, h = pe_all[s], er_all[s], hurst_all[s]
+                if pe is not None and not np.isnan(pe) and pe > thresholds["entropy_max"]: _record_veto(str(s), f"High Entropy ({pe:.4f})")
+                if er is not None and not np.isnan(er) and er < thresholds["efficiency_min"]: _record_veto(str(s), f"Low Efficiency ({er:.4f})")
+                if h is not None and not np.isnan(h) and not candidate_map.get(str(s), {}).get("is_benchmark", False):
+                    if thresholds["hurst_rw_min"] < h < thresholds["hurst_rw_max"]: _record_veto(str(s), f"Random Walk (H={h:.4f})")
+                if h is not None and not np.isnan(h) and h > 0.55 and mom_all[s] < 0: _record_veto(str(s), f"Toxic Persistence (H={h:.4f})")
         for s in returns.columns:
-            s_str = str(s)
-            if s_str in disqualified:
-                continue
-
-            # Robust Meta Lookup: Try direct symbol, then identity
-            meta = candidate_map.get(s_str)
-            if not meta:
-                # Search by identity or unprefixed symbol
-                unprefixed = s_str.split(":")[-1] if ":" in s_str else s_str
-                meta = next((c for c in raw_candidates if c.get("identity") == s_str or c.get("symbol") == s_str or c.get("symbol") == unprefixed), {})
-
-            missing = [f for f in required_meta if f not in meta]
-            if missing:
-                _record_veto(s_str, f"Missing metadata {missing}")
-
-        # ECI (Estimated Cost of Implementation)
-        order_size = 1e6
+            if str(s) in disqualified: continue
+            meta = candidate_map.get(str(s)) or next((c for c in raw_candidates if c.get("identity") == str(s) or c.get("symbol") == str(s)), {})
+            if any(f not in meta for f in ["tick_size", "lot_size", "price_precision"]): _record_veto(str(s), "Missing metadata")
         for s in returns.columns:
-            s_str = str(s)
-            if s_str in disqualified:
-                continue
+            if str(s) in disqualified: continue
+            meta = candidate_map.get(str(s)) or next((c for c in raw_candidates if c.get("identity") == str(s) or c.get("symbol") == str(s)), {})
+            adv = float(meta.get("value_traded") or 1e8); eci_raw = float(vol_all[s] * np.sqrt(1e6 / (adv if adv > 0 else 1e8)))
+            current_hurdle = min(thresholds["eci_hurdle"], request.min_momentum_score - 0.05) if request.min_momentum_score < 0 else thresholds["eci_hurdle"]
+            if (mom_all[s] - eci_raw) < current_hurdle and not (mom_all[s] > 1.0 and (mom_all[s] - eci_raw) >= (current_hurdle * 1.25)): _record_veto(str(s), f"High friction (ECI={eci_raw:.4f})")
+        
+        # Benchmark Exemption: Restore benchmarks if they were disqualified
+        benchmarks = settings.benchmark_symbols
+        for b in benchmarks:
+            if b in returns.columns and b in disqualified:
+                disqualified.remove(b)
+                if b in vetoes: del vetoes[b]
+                logger.info(f"Selection: Protected Benchmark {b}")
 
-            # Robust Meta Lookup
-            meta = candidate_map.get(s_str)
-            if not meta:
-                unprefixed = s_str.split(":")[-1] if ":" in s_str else s_str
-                meta = next((c for c in raw_candidates if c.get("identity") == s_str or c.get("symbol") == s_str or c.get("symbol") == unprefixed), {})
-
-            # Use institutional floor if ADV is missing or near-zero
-            adv = float(meta.get("value_traded") or meta.get("Value.Traded") or 1e8)
-            if adv <= 0:
-                adv = 1e8
-
-            vol_val = float(vol_all[s]) if s in vol_all.index else 0.5
-            eci_raw = float(vol_val * np.sqrt(order_size / adv))
-            # Cap ECI in logs/metrics, but use raw ECI for veto decisions.
-            eci = min(0.10, eci_raw)
-
-            annual_momentum = float(mom_all[s]) if s in mom_all.index else 0.0
-            m_gain = annual_momentum - eci_raw
-
-            # Dynamic ECI Hurdle: If we allow negative momentum (turnaround plays),
-            # we must lower the ECI hurdle to prevent them from being blanket-vetoed.
-            # We enforce a 5% margin below the momentum floor.
-            current_hurdle = min(self.eci_hurdle, request.min_momentum_score - 0.05) if request.min_momentum_score < 0 else self.eci_hurdle
-
-            if m_gain < current_hurdle:
-                # If momentum is very high (> 100% ann.), we apply a 25% safety buffer to the hurdle
-                if annual_momentum > 1.0 and m_gain >= (current_hurdle * 1.25):
-                    logger.debug(f"Allowing {s} with high friction due to extreme Alpha dominance (M={annual_momentum:.2f})")
-                else:
-                    _record_veto(str(s), f"High friction (ECI={eci_raw:.4f}) relative to Momentum ({annual_momentum:.4f})")
-
-        for s in disqualified:
-            alpha_scores.loc[s] = -1.0
-
-        # Additional Metrics for Response
-        metrics["kappa"] = kappa
-        metrics["n_disqualified"] = len(disqualified)
-        metrics["alpha_scores"] = {str(k): float(v) for k, v in cast(Any, alpha_scores).items()}
-        metrics["predictability"] = {
-            "avg_pe": float(pe_all.mean()),
-            "avg_er": float(er_all.mean()),
-            "avg_hurst": float(hurst_all.mean()),
-            "avg_acf": float(acf_all.mean()),
-            "avg_lb_pvalue": float(lb_all.mean()),
-        }
-
-        # Comprehensive Raw Metrics for Audit and HPO
-        metrics["raw_metrics"] = {
-            "momentum": mom_all.to_dict(),
-            "stability": stab_all.to_dict(),
-            "liquidity": liq_all.to_dict(),
-            "antifragility": af_all.to_dict(),
-            "survival": regime_all.to_dict(),
-            "efficiency": er_all.to_dict(),
-            "entropy": pe_all.to_dict(),
-            "hurst": hurst_all.to_dict(),
-            "fragility": frag_all.to_dict(),
-            "skew": skew_all.to_dict(),
-            "kurtosis": kurt_all.to_dict(),
-            "dwt": dwt_all.to_dict(),
-            "adf": adf_all.to_dict(),
-            "acf": acf_all.to_dict(),
-            "lb_pvalue": lb_all.to_dict(),
-        }
-
-        # HPO Support: Record raw component probabilities P_i
-        from tradingview_scraper.utils.scoring import map_to_probability
-
-        component_probs = {}
-        for name, series in mps_metrics.items():
-            method = methods.get(name, "rank")
-            component_probs[name] = map_to_probability(series, method=method).to_dict()
-
-        # Add PE, Hurst, ACF, LB too
-        component_probs["entropy"] = (1.0 - pe_all).clip(0, 1).to_dict()
-        component_probs["hurst_clean"] = (1.0 - abs(hurst_all - 0.5) * 2.0).clip(0, 1).to_dict()
-        component_probs["acf"] = acf_all.clip(-1, 1).to_dict()
-        component_probs["lb_pvalue"] = (1.0 - lb_all).clip(0, 1).to_dict()  # Low p-value = High score
-        metrics["component_probs"] = component_probs
-
-        # Calculate avg_eci safely
-        valid_advs = [float(candidate_map.get(str(s), {}).get("value_traded") or 1e-9) for s in returns.columns]
-
-        avg_eci_vals = []
-        for s, adv in zip(returns.columns, valid_advs):
-            v = float(vol_all[s]) if s in vol_all.index else 0.5
-            avg_eci_vals.append(v * np.sqrt(1e6 / adv))
-        metrics["avg_eci"] = float(np.mean(avg_eci_vals))
-
-        selected_symbols = []
-        audit_clusters = {}
+        for s in disqualified: alpha_scores.loc[s] = -1.0
+        selected_symbols_dict, audit_clusters = {}, {}
+        m_win_all = (1 + returns.tail(60).fillna(0.0)).prod() - 1
         for c_id, symbols in clusters.items():
-            symbols = [s for s in symbols if s not in disqualified]
-            if not symbols:
-                continue
-
-            sub_rets = returns.loc[:, symbols]
-            if isinstance(sub_rets, pd.Series):
-                sub_rets = sub_rets.to_frame()
-
-            # Intra-cluster Selection: Pick top N per direction
-            # Relaxed for increased solver stability: min 5 assets per cluster/direction
-            actual_top_n = max(5, request.top_n) if not force_aggressive_pruning else 1
-
-            if not force_aggressive_pruning and settings.features.feat_dynamic_selection and len(symbols) > 1:
-                c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
-                n_syms = len(symbols)
-                if n_syms > 1:
-                    upper_indices = np.triu_indices(n_syms, k=1)
-                    mean_c = float(np.mean(c_corr.values[upper_indices]))
-                    actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
-
-            window = min(60, len(sub_rets))
-            sub_tail = sub_rets.tail(window)
-            cum_rets = (1 + sub_tail.fillna(0.0)).prod() - 1
-            m_winners = cum_rets[cum_rets >= request.min_momentum_score].index.tolist()
-
-            logger.info(f"Cluster {c_id}: {len(symbols)} symbols. m_winners: {len(m_winners)}. First 3 cum_rets: {cum_rets.head(3).to_dict()}")
-
-            id_to_best: Dict[str, str] = {}
-            for s in symbols:
+            non_vetoed = [s for s in symbols if s not in disqualified]
+            if not non_vetoed and relaxation_stage >= 3:
+                candidates = [s for s in symbols if not any(v in vetoes.get(s, []) for v in ["Darwinian", "metadata"])]
+                if candidates:
+                    valid_c = [c for c in candidates if not returns[c].dropna().empty and pe_all[c] <= 0.995]
+                    if valid_c: best_s = alpha_scores_clean.loc[valid_c].idxmax(); non_vetoed = [best_s]; logger.info(f"Stage 3: Forced representative {best_s}")
+            if not non_vetoed: continue
+            sub_rets = returns[non_vetoed]; actual_top_n = max(5, request.top_n)
+            if settings.features.feat_dynamic_selection and len(non_vetoed) > 1:
+                mean_c = float(get_robust_correlation(sub_rets, shrinkage=shrinkage).values[np.triu_indices(len(non_vetoed), k=1)].mean()); actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
+            id_to_best = {}
+            for s in non_vetoed:
                 ident = candidate_map.get(s, {}).get("identity", s)
-                if ident not in id_to_best or alpha_scores[s] > alpha_scores[id_to_best[ident]]:
-                    id_to_best[ident] = s
+                if ident not in id_to_best or alpha_scores_clean[s] > alpha_scores_clean[id_to_best[ident]]: id_to_best[ident] = s
+            uniques = list(id_to_best.values()); longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and m_win_all.get(s, 0) >= request.min_momentum_score]
+            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and m_win_all.get(s, 0) >= request.min_momentum_score]
+            
+            # Ensure benchmarks are kept in their clusters if they passed hygiene
+            for b in benchmarks:
+                if b in non_vetoed and b not in longs and b not in shorts:
+                    if candidate_map.get(b, {}).get("direction", "LONG") == "LONG": longs.append(b)
+                    else: shorts.append(b)
 
-            uniques = list(id_to_best.values())
-            longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and s in m_winners]
-            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
-
-            logger.info(f"Cluster {c_id}: {len(symbols)} symbols -> {len(uniques)} uniques -> {len(longs)} longs, {len(shorts)} shorts")
-
-            c_selected = []
-            if longs:
-                top = cast(pd.Series, alpha_scores.loc[longs]).sort_values(ascending=False).head(actual_top_n).index.tolist()
-                c_selected.extend([str(s) for s in top])
-
-            if shorts:
-                top = cast(pd.Series, alpha_scores.loc[shorts]).sort_values(ascending=False).head(actual_top_n).index.tolist()
-                c_selected.extend([str(s) for s in top])
-
-            selected_symbols.extend(c_selected)
-            audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_selected}
-
-        winners = []
-        for s in selected_symbols:
-            if s in candidate_map:
-                cand = candidate_map[s].copy()
-                cand["alpha_score"] = float(alpha_scores[s])
-                winners.append(cand)
-            else:
-                winners.append({"symbol": s, "direction": "LONG", "alpha_score": float(alpha_scores[s])})
-
-        # Ensure minimum pool size for solver stability (Balanced Selection Standard)
-        # CR-212: Ensure min 15 candidates by falling back to top rejected alpha leaders
-        min_pool_size = 15
-        if len(winners) < min_pool_size:
-            n_needed = min_pool_size - len(winners)
-            # Find best of the vetoed assets (by alpha score, excluding those already in winners)
-            current_winner_syms = {w["symbol"] for w in winners}
-
-            # Ensure alpha_scores is a Series for proper indexing and sorting
-            if not isinstance(alpha_scores, pd.Series):
-                scores_series = pd.Series(alpha_scores, index=returns.columns)
-            else:
-                scores_series = alpha_scores
-
-            others = scores_series[~scores_series.index.isin(current_winner_syms)].sort_values(ascending=False)
-            if not others.empty:
-                extra_syms = others.head(n_needed).index.tolist()
-                for s in extra_syms:
-                    s_str = str(s)
-                    if s_str in candidate_map:
-                        cand = candidate_map[s_str].copy()
-                        cand["alpha_score"] = float(scores_series[s])
-                        cand["selection_note"] = "Added via Balanced Selection fallback"
-                        winners.append(cand)
-                    else:
-                        winners.append({"symbol": s_str, "direction": "LONG", "alpha_score": float(scores_series[s]), "selection_note": "Added via Balanced Selection fallback"})
-
-        # Ensure JSON serializable audit_clusters
-        serializable_clusters = {int(k): v for k, v in audit_clusters.items()}
-
-        return SelectionResponse(winners=winners, audit_clusters=serializable_clusters, spec_version=self.spec_version, warnings=selection_warnings, vetoes=vetoes, metrics=metrics)
-
+            c_sel = []
+            if longs: c_sel.extend(alpha_scores_clean.loc[longs].sort_values(ascending=False).head(actual_top_n).index.tolist())
+            if shorts: c_sel.extend(alpha_scores_clean.loc[shorts].sort_values(ascending=False).head(actual_top_n).index.tolist())
+            for s in c_sel: selected_symbols_dict[s] = 1
+            audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_sel}
+        selected_symbols = list(selected_symbols_dict.keys())
+        winners = [({**candidate_map[s], "alpha_score": float(alpha_scores_clean[s])} if s in candidate_map else {"symbol": s, "direction": "LONG", "alpha_score": float(alpha_scores_clean[s])}) for s in selected_symbols]
+        if len(winners) < 15 and relaxation_stage >= 4:
+            current_syms = {w["symbol"] for w in winners}
+            qualified = [s for s in alpha_scores_clean.index if s not in current_syms and not any(v in vetoes.get(s, []) for v in ["Darwinian", "metadata"]) and not returns[s].dropna().empty and pe_all[s] <= 0.995]
+            others = alpha_scores_clean.loc[qualified].sort_values(ascending=False).head(15 - len(winners))
+            for s, score in others.items(): winners.append({**candidate_map.get(s, {"symbol": s, "direction": "LONG"}), "alpha_score": float(score), "selection_note": "Added via Balanced Selection fallback"})
+        metrics = {"alpha_scores": alpha_scores_clean.to_dict(), "kappa": kappa, "shrinkage": shrinkage, "raw_metrics": {"entropy": pe_all.to_dict()}}
+        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version=self.spec_version, warnings=selection_warnings, vetoes=vetoes, metrics=metrics, relaxation_stage=relaxation_stage, active_thresholds=thresholds)
 
 class SelectionEngineV3_1(SelectionEngineV3):
-    """
-    v3.1: Relaxed V3 logic.
-    - Kappa threshold raised to 1e20 (prevent permanent panic).
-    - ECI Hurdle lowered to 0.5% (allow lower-alpha defensive assets).
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.kappa_threshold = 1e20
-        self.eci_hurdle = 0.005
-        self.spec_version = "3.1"
-
     @property
-    def name(self) -> str:
-        return "v3.1"
-
+    def name(self) -> str: return "v3.1"
+    def __init__(self): super().__init__(); self.kappa_threshold, self.eci_hurdle, self.spec_version = 1e20, 0.005, "3.1"
 
 class SelectionEngineV3_2(SelectionEngineV3_1):
-    """
-    v3.2: Log-MPS Standard.
-    - Uses additive log-probabilities for numerical stability.
-    - Component weights omega are tunable via HPO (Optuna).
-    - Integrated predictability filters.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.spec_version = "3.2"
-        # Optimized weights (will be updated via Phase 3 HPO)
-        # Defaults to 1.0 for all components (parity with v3.1)
-        self.weights = {
-            "momentum": 1.0,
-            "stability": 1.0,
-            "liquidity": 1.0,
-            "antifragility": 1.0,
-            "survival": 1.0,
-            "efficiency": 1.0,
-        }
-
     @property
-    def name(self) -> str:
-        return "v3.2"
-
-    def select(
-        self,
-        returns: pd.DataFrame,
-        raw_candidates: List[Dict[str, Any]],
-        stats_df: Optional[pd.DataFrame],
-        request: SelectionRequest,
-    ) -> SelectionResponse:
-        settings = get_settings()
-        if not settings.features.feat_selection_logmps:
-            # Fallback to v3.1 logic if flag is off
-            logger.debug("feat_selection_logmps disabled, falling back to v3.1 multiplicative logic")
-            engine_v31 = SelectionEngineV3_1()
-            return engine_v31.select(returns, raw_candidates, stats_df, request)
-
-        # Global Robust Weighting (Validated 2026-01-02)
-        self.weights = settings.features.weights_global
-        logger.info("Using Global Robust weights for Selection v3.2")
-
-        return self._select_v3_core(returns, raw_candidates, stats_df, request)
-
-    def _calculate_alpha_scores(self, mps_metrics: Dict[str, pd.Series], methods: Dict[str, str], frag_penalty: pd.Series) -> pd.Series:
-        """
-        Calculates scores using additive log-probabilities: Score = sum( omega_i * ln(P_i) ).
-        Includes predictability metrics (Efficiency, Entropy, Hurst) in the sum.
-        """
+    def name(self) -> str: return "v3.2"
+    def __init__(self): super().__init__(); self.spec_version, self.weights = "3.2", {"momentum": 1.0, "stability": 1.0, "liquidity": 1.0, "antifragility": 1.0, "survival": 1.0, "efficiency": 1.0}
+    def select(self, returns, raw_candidates, stats_df, request):
+        s = get_settings(); self.weights = s.features.weights_global; return self._select_v3_core(returns, raw_candidates, stats_df, request)
+    def _calculate_alpha_scores(self, mps_metrics, methods, frag_penalty):
         from tradingview_scraper.utils.scoring import map_to_probability
+        probs = {n: map_to_probability(s, method=methods.get(n, "rank")) for n, s in mps_metrics.items()}
+        floor, log_score = 1e-9, pd.Series(0.0, index=frag_penalty.index)
+        for n, p in probs.items(): log_score += self.weights.get(n, 1.0) * np.log(p.fillna(0.5).clip(lower=floor))
+        return cast(pd.Series, np.exp(log_score + np.log((1.0 - frag_penalty).clip(lower=floor))))
 
-        # 1. Prepare ALL components (Core + Predictability)
-        # We need to access the metrics from the calling context if possible,
-        # or we just rely on mps_metrics being pre-populated.
-        # Wait, _select_v3_core doesn't know about predictability in mps_metrics.
-        # I should have injected them there.
-
-        # 2. Compute individual probabilities P_i
-        probs: Dict[str, pd.Series] = {}
-        for name, series in mps_metrics.items():
-            method = methods.get(name, "rank")
-            probs[name] = map_to_probability(series, method=method)
-
-        # 3. Sum log-probabilities
-        floor = 1e-9
-        log_score = pd.Series(0.0, index=frag_penalty.index)
-
-        for name, p_series in probs.items():
-            omega = self.weights.get(name, 1.0)
-            # Use fillna(floor) to ensure NaNs in components don't kill the entire alpha score
-            log_score += omega * np.log(p_series.fillna(floor).clip(lower=floor))
-
-        # Log-based penalty: log(1 - penalty)
-        penalty_factor = (1.0 - frag_penalty).clip(lower=floor)
-        log_score += np.log(penalty_factor)
-
-        # Return exponential to stay in probability-like space [0, 1] for ranking compatibility
-        result = np.exp(log_score)
-        return cast(pd.Series, result)
-
+class SelectionEngineV3_4(SelectionEngineV3_2):
+    @property
+    def name(self) -> str: return "v3.4"
+    def __init__(self): super().__init__(); self.spec_version = "3.4"
+    def select(self, returns, raw_candidates, stats_df, request):
+        import dataclasses; params = request.params.copy(); last_resp = None
+        for stage in [1, 2, 3, 4]:
+            params["relaxation_stage"] = stage
+            if stage == 2:
+                t = self._get_active_thresholds(request)
+                params.update({"entropy_max_threshold": min(1.0, t["entropy_max"] * 1.2), "efficiency_min_threshold": t["efficiency_min"] * 0.8})
+            req = dataclasses.replace(request, params=params); resp = super().select(returns, raw_candidates, stats_df, req); last_resp = resp
+            if len(resp.winners) >= 15: return resp
+        return last_resp
 
 class SelectionEngineV2_0(BaseSelectionEngine):
-    """
-    Original local normalization within clusters.
-    Renamed from 'legacy' back to 'v2.0' for standard benchmarking.
-    """
-
     @property
-    def name(self) -> str:
-        return "v2.0"
-
-    def select(
-        self,
-        returns: pd.DataFrame,
-        raw_candidates: List[Dict[str, Any]],
-        stats_df: Optional[pd.DataFrame],
-        request: SelectionRequest,
-    ) -> SelectionResponse:
+    def name(self) -> str: return "v2.0"
+    def select(self, returns, raw_candidates, stats_df, request):
         candidate_map = {c["symbol"]: c for c in raw_candidates}
-        settings = get_settings()
-        alpha_scores = pd.Series(0.0, index=returns.columns)
-        warnings = []
-
+        s, alpha_scores = get_settings(), pd.Series(0.0, index=returns.columns)
         cluster_ids, _ = get_hierarchical_clusters(returns, request.threshold, request.max_clusters)
-        clusters: Dict[int, List[str]] = {}
-        for sym, c_id in zip(returns.columns, cluster_ids):
-            cid = int(c_id)
-            if cid not in clusters:
-                clusters[cid] = []
-            clusters[cid].append(str(sym))
-
-        selected_symbols = []
-        audit_clusters = {}
-
+        clusters = {}; [clusters.setdefault(int(c_id), []).append(str(sym)) for sym, c_id in zip(returns.columns, cluster_ids)]
+        selected_symbols_dict, audit_clusters = {}, {}
+        m_win_all = (1 + returns.tail(60).fillna(0.0)).prod() - 1
         for c_id, symbols in clusters.items():
-            sub_rets = returns.loc[:, symbols]
-            if isinstance(sub_rets, pd.Series):
-                sub_rets = sub_rets.to_frame()
-
-            # Intra-cluster Selection: Pick top N per direction
-            # Standard: Top 3 for Crypto to ensure sufficient diversification per factor
-            actual_top_n = max(3, request.top_n)
-            if settings.features.feat_dynamic_selection and len(symbols) > 1:
-                c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
-                n_syms = len(symbols)
-                if n_syms > 1:
-                    upper_indices = np.triu_indices(n_syms, k=1)
-                    mean_c = float(np.mean(c_corr.values[upper_indices]))
-                    actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
-
-            window = min(60, len(sub_rets))
-            sub_tail = sub_rets.tail(window)
-            cum_rets = (1 + sub_tail.fillna(0.0)).prod() - 1
-            m_winners = cum_rets[cum_rets >= request.min_momentum_score].index.tolist()
-
-            # V2.0: Local normalization within cluster
-            mom_local = sub_rets.mean() * 252
-            vol_local = pd.Series(0.0, index=symbols)
-            for s in symbols:
-                s_rets = sub_rets[s].dropna()
-                if len(s_rets) > 1:
-                    vol_local[s] = float(s_rets.std() * np.sqrt(252))
-                else:
-                    vol_local[s] = 0.0
-            stab_local = 1.0 / (vol_local + 1e-9)
-            conv_local = pd.Series(0.0, index=symbols)
+            sub_rets = returns[symbols]; actual_top_n = max(3, request.top_n)
+            if s.features.feat_dynamic_selection and len(symbols) > 1:
+                mean_c = float(get_robust_correlation(sub_rets, shrinkage=s.features.default_shrinkage_intensity).values[np.triu_indices(len(symbols), k=1)].mean()); actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
+            vol_l = pd.Series({sym: float(sub_rets[sym].dropna().std() * np.sqrt(252)) if len(sub_rets[sym].dropna()) > 1 else 0.0 for sym in symbols})
+            conv_l = pd.Series(0.0, index=symbols)
             if stats_df is not None:
-                common_local = [s for s in symbols if s in stats_df.index]
-                if common_local:
-                    conv_local.loc[common_local] = stats_df.loc[common_local, "Antifragility_Score"]
-            liq_local = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in symbols})
-
-            cluster_alpha = (
-                0.3 * normalize_series(cast(pd.Series, mom_local))
-                + 0.2 * normalize_series(cast(pd.Series, stab_local))
-                + 0.2 * normalize_series(cast(pd.Series, conv_local))
-                + 0.3 * normalize_series(cast(pd.Series, liq_local))
-            )
-            alpha_scores.loc[symbols] = cluster_alpha
-
-            id_to_best: Dict[str, str] = {}
-            for s in symbols:
-                ident = candidate_map.get(s, {}).get("identity", s)
-                if ident not in id_to_best or alpha_scores[s] > alpha_scores[id_to_best[ident]]:
-                    id_to_best[ident] = s
-
-            uniques = list(id_to_best.values())
-            longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and s in m_winners]
-            shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and s in m_winners]
-
-            logger.info(f"Cluster {c_id}: {len(symbols)} symbols -> {len(uniques)} uniques -> {len(longs)} longs, {len(shorts)} shorts")
-
-            c_selected = []
-            if longs:
-                top = cast(pd.Series, alpha_scores.loc[longs]).sort_values(ascending=False).head(actual_top_n).index.tolist()
-                c_selected.extend([str(s) for s in top])
-
-            if shorts:
-                top = cast(pd.Series, alpha_scores.loc[shorts]).sort_values(ascending=False).head(actual_top_n).index.tolist()
-                c_selected.extend([str(s) for s in top])
-
-            selected_symbols.extend(c_selected)
-            audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_selected}
-
-        winners = [candidate_map[s] if s in candidate_map else {"symbol": s, "direction": "LONG"} for s in selected_symbols]
-        return SelectionResponse(winners=winners, audit_clusters=audit_clusters, spec_version="2.0", warnings=warnings, vetoes={}, metrics={})
+                common = [sym for sym in symbols if sym in stats_df.index]
+                for sym in common: conv_l.loc[sym] = stats_df.loc[sym, "Antifragility_Score"]
+            alpha_scores.loc[symbols] = (0.3 * normalize_series(sub_rets.mean() * 252) + 0.2 * normalize_series(1.0 / (vol_l + 1e-9)) + 0.2 * normalize_series(conv_l) + 0.3 * normalize_series(pd.Series({sym: calculate_liquidity_score(str(sym), candidate_map) for sym in symbols})))
+            id_to_best = {}
+            for sym in symbols:
+                ident = candidate_map.get(sym, {}).get("identity", sym)
+                if ident not in id_to_best or alpha_scores[sym] > alpha_scores[id_to_best.get(ident, sym)]: id_to_best[ident] = sym
+            uniques = list(id_to_best.values()); longs = [sym for sym in uniques if candidate_map.get(sym, {}).get("direction", "LONG") == "LONG" and m_win_all.get(sym, 0) >= request.min_momentum_score]
+            shorts = [sym for sym in uniques if candidate_map.get(sym, {}).get("direction") == "SHORT" and m_win_all.get(sym, 0) >= request.min_momentum_score]
+            c_sel = []
+            if longs: c_sel.extend(alpha_scores.loc[longs].sort_values(ascending=False).head(actual_top_n).index.tolist())
+            if shorts: c_sel.extend(alpha_scores.loc[shorts].sort_values(ascending=False).head(actual_top_n).index.tolist())
+            for s_key in c_sel: selected_symbols_dict[s_key] = 1
+            audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_sel}
+        return SelectionResponse(winners=[candidate_map.get(sym, {"symbol": sym, "direction": "LONG"}) for sym in list(selected_symbols_dict.keys())], audit_clusters=audit_clusters, spec_version="2.0")
