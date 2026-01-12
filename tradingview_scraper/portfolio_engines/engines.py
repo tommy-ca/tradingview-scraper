@@ -504,8 +504,8 @@ class CustomClusteredEngine(BaseRiskEngine):
         # Diversity Floor: If core universe is too small, fallback to Equal Weight for the core layer
         # to prevent HRP collapse into a single asset.
         core_profile = "hrp"
-        if len(core_symbols) < 5:
-            logger.warning("Diversity Floor Triggered: core_symbols n=%s < 5; using Equal Weight for core.", len(core_symbols))
+        if len(core_symbols) < 10:
+            logger.warning("Diversity Floor Triggered: core_symbols n=%s < 10; using Equal Weight for core.", len(core_symbols))
             core_profile = "equal_weight"
 
         core_clusters = {c_id: [s for s in syms if s in core_symbols] for c_id, syms in universe.clusters.items() if str(c_id) not in aggressor_cluster_ids}

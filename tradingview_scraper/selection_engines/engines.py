@@ -628,8 +628,8 @@ class SelectionEngineV3(BaseSelectionEngine):
                 sub_rets = sub_rets.to_frame()
 
             # Intra-cluster Selection: Pick top N per direction
-            # Standard: Top 3 for Crypto to ensure sufficient diversification per factor
-            actual_top_n = max(3, request.top_n) if not force_aggressive_pruning else 1
+            # Relaxed for increased solver stability: min 5 assets per cluster/direction
+            actual_top_n = max(5, request.top_n) if not force_aggressive_pruning else 1
 
             if not force_aggressive_pruning and settings.features.feat_dynamic_selection and len(symbols) > 1:
                 c_corr = get_robust_correlation(cast(pd.DataFrame, sub_rets))
@@ -679,6 +679,33 @@ class SelectionEngineV3(BaseSelectionEngine):
             else:
                 winners.append({"symbol": s, "direction": "LONG", "alpha_score": float(alpha_scores[s])})
 
+        # Ensure minimum pool size for solver stability (Balanced Selection Standard)
+        # CR-212: Ensure min 15 candidates by falling back to top rejected alpha leaders
+        min_pool_size = 15
+        if len(winners) < min_pool_size:
+            n_needed = min_pool_size - len(winners)
+            # Find best of the vetoed assets (by alpha score, excluding those already in winners)
+            current_winner_syms = {w["symbol"] for w in winners}
+
+            # Ensure alpha_scores is a Series for proper indexing and sorting
+            if not isinstance(alpha_scores, pd.Series):
+                scores_series = pd.Series(alpha_scores, index=returns.columns)
+            else:
+                scores_series = alpha_scores
+
+            others = scores_series[~scores_series.index.isin(current_winner_syms)].sort_values(ascending=False)
+            if not others.empty:
+                extra_syms = others.head(n_needed).index.tolist()
+                for s in extra_syms:
+                    s_str = str(s)
+                    if s_str in candidate_map:
+                        cand = candidate_map[s_str].copy()
+                        cand["alpha_score"] = float(scores_series[s])
+                        cand["selection_note"] = "Added via Balanced Selection fallback"
+                        winners.append(cand)
+                    else:
+                        winners.append({"symbol": s_str, "direction": "LONG", "alpha_score": float(scores_series[s]), "selection_note": "Added via Balanced Selection fallback"})
+
         # Ensure JSON serializable audit_clusters
         serializable_clusters = {int(k): v for k, v in audit_clusters.items()}
 
@@ -688,13 +715,13 @@ class SelectionEngineV3(BaseSelectionEngine):
 class SelectionEngineV3_1(SelectionEngineV3):
     """
     v3.1: Relaxed V3 logic.
-    - Kappa threshold raised to 1e18 (prevent permanent panic).
+    - Kappa threshold raised to 1e20 (prevent permanent panic).
     - ECI Hurdle lowered to 0.5% (allow lower-alpha defensive assets).
     """
 
     def __init__(self):
         super().__init__()
-        self.kappa_threshold = 1e18
+        self.kappa_threshold = 1e20
         self.eci_hurdle = 0.005
         self.spec_version = "3.1"
 
