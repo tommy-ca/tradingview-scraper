@@ -130,10 +130,21 @@ This document codifies the institutional requirements and design specifications 
 ### Phase 111: TDD Validation of Modular Portfolio Architecture (COMPLETED)
 - [x] **Architecture Audit**: Documented the new directory-based engine structure in Design Docs.
 - [x] **Interface Testing**: Verified `BaseRiskEngine` compliance across all adapters.
-- [x] **Factory Testing**: Verified `build_engine` correctly routes to modular impls (`tests/test_portfolio_engine_factory.py`).
-- [x] **Stability Testing**: Implemented regression tests for Dynamic Ridge Scaling and Toxicity Hard-Stop (`tests/test_selection_hardening.py`, `tests/test_numerical_hardening.py`).
+- [x] **Factory Testing**: Verified `build_engine` correctly routes to modular impls.
+- [x] **Stability Testing**: Implemented regression tests for Dynamic Ridge Scaling and Toxicity Hard-Stop.
 - [x] **Alpha Recovery Validation**: Run `v3_4_alpha_recovery_v5` confirmed 100% solver success with restored conviction.
-- [x] **Worktree Cleanup**: Performed modular split of `engines.py`.
 
-### Phase 112: Persistence Analysis & Step-Size Calibration (PENDING)
+### Phase 112: Selection Engine Refactor & Metric Forensic Audit (COMPLETED)
+- [x] **Modular Selection Split**: Refactored `selection_engines/engines.py` into `impl/` directory (v2, v2.1, v3, v3.2, v3.4).
+- [x] **Forensic Metric Audit**: Identified the root cause of identical Sharpe ratios (Shared Inheritance & Meta-Engine Redundancy).
+- [x] **Adaptive Fix**: Refactored `AdaptiveMetaEngine` to properly propagate sub-solver context and provide transparent backend mapping.
+- [x] **Tournament Optimization**: Updated `backtest_engine.py` to only execute the `adaptive` profile once per window, eliminating redundant computations and collisions.
+- [x] **TDD Selection**: Created `tests/test_selection_engine_factory.py` and verified 100% factory routing accuracy.
+- [x] **Validation Run**: Executed `v3_4_2_final` tournament confirming unique, regime-specific performance for each meta-model.
+
+### Phase 113: Multi-Sleeve Meta-Portfolio Integration (PENDING)
+
+---
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.1) - Phase 112 In Progress
+
 
