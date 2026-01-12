@@ -217,7 +217,11 @@ class ProductionPipeline:
         return {"metrics": {"n_selected_symbols": len(data)}}
 
     def validate_health(self) -> Dict[str, Any]:
-        """Health Gate: Check for gaps and stale assets."""
+        """Health Gate: Check for gaps and stale assets.
+
+        Returns metrics dict with health_gate status and counts.
+        If STALE or DEGRADED assets found, returns trigger_recovery=True.
+        """
         report_path = self.run_dir / "data_health_selected.md"
         if not report_path.exists():
             return {"metrics": {"health_gate": "report_missing"}}
@@ -239,7 +243,25 @@ class ProductionPipeline:
                 if "DEGRADED" in line:
                     degraded += 1
 
-            return {"metrics": {"health_gate": "checked", "n_missing": missing, "n_stale": stale, "n_degraded": degraded}}
+            metrics = {
+                "health_gate": "checked",
+                "n_missing": missing,
+                "n_stale": stale,
+                "n_degraded": degraded,
+            }
+
+            # CRITICAL FIX: Trigger auto-recovery if stale or degraded data found
+            # Issue: https://github.com/anomalyco/tradingview-scraper/issues/XXX
+            # Audit: docs/audit/crypto_production_funnel_audit_20260112.md
+            if stale > 0 or degraded > 0:
+                metrics["trigger_recovery"] = True
+                metrics["recovery_reason"] = []
+                if stale > 0:
+                    metrics["recovery_reason"].append(f"{stale} STALE assets")
+                if degraded > 0:
+                    metrics["recovery_reason"].append(f"{degraded} DEGRADED assets")
+
+            return {"metrics": metrics}
         except Exception as e:
             return {"metrics": {"health_gate": f"error: {str(e)}"}}
 
@@ -319,9 +341,25 @@ class ProductionPipeline:
 
         make_base = ["make", f"PROFILE={self.profile}", f"MANIFEST={self.manifest_path}"]
 
+        # CRITICAL FIX: Production profiles MUST enforce STRICT_HEALTH=1 (no override allowed)
+        # Issue: https://github.com/anomalyco/tradingview-scraper/issues/XXX
+        # Audit: docs/audit/crypto_production_funnel_audit_20260112.md
+        production_profiles = ["production", "crypto_production", "production_2026_q1", "institutional_etf"]
+
         strict_health_arg = "STRICT_HEALTH=1"
-        if os.getenv("TV_STRICT_HEALTH") == "0" or os.getenv("STRICT_HEALTH") == "0":
-            strict_health_arg = "STRICT_HEALTH=0"
+        if self.profile in production_profiles:
+            # Production profiles: ALWAYS enforce STRICT_HEALTH=1
+            strict_health_arg = "STRICT_HEALTH=1"
+            if os.getenv("TV_STRICT_HEALTH") == "0" or os.getenv("STRICT_HEALTH") == "0":
+                self.console.print(
+                    f"[bold yellow]WARNING:[/] Environment override STRICT_HEALTH=0 detected. "
+                    f"Profile '{self.profile}' is a production profile and REQUIRES STRICT_HEALTH=1. "
+                    f"Ignoring override and enforcing STRICT_HEALTH=1."
+                )
+        else:
+            # Development/experimental profiles: Allow override for fast iteration
+            if os.getenv("TV_STRICT_HEALTH") == "0" or os.getenv("STRICT_HEALTH") == "0":
+                strict_health_arg = "STRICT_HEALTH=0"
 
         all_steps: List[Tuple[str, List[str], Optional[Callable[[], Any]]]] = [
             ("Cleanup", [*make_base, "clean-run"], None),
@@ -367,7 +405,62 @@ class ProductionPipeline:
                 if absolute_step == 1 and success:
                     self.snapshot_resolved_manifest()
 
-                # Integrated Recovery for Step 8 (Health Audit)
+                # Integrated Recovery for Step 9 (Health Audit)
+                # CRITICAL FIX: Auto-recovery triggers on STALE/DEGRADED detection
+                # Issue: https://github.com/anomalyco/tradingview-scraper/issues/XXX
+                # Audit: docs/audit/crypto_production_funnel_audit_20260112.md
+                if name == "Health Audit" and success:
+                    # Check if validate_health() detected issues requiring recovery
+                    health_metrics = val_fn() if val_fn else {}
+                    trigger_recovery = health_metrics.get("metrics", {}).get("trigger_recovery", False)
+
+                    if trigger_recovery:
+                        recovery_reason = health_metrics["metrics"].get("recovery_reason", [])
+                        reason_str = " and ".join(recovery_reason)
+                        progress.console.print(f"[bold yellow]>>> Health Audit detected issues: {reason_str}[/]\n[bold yellow]>>> Triggering Self-Healing Recovery Loop...[/]")
+
+                        if self.ledger:
+                            self.ledger.record_intent(
+                                step="recovery",
+                                params={"trigger": "auto_recovery", "reason": reason_str},
+                                input_hashes={},
+                            )
+
+                        # Execute Recovery
+                        recovery_task = progress.add_task("[yellow]Self-Healing Recovery", total=None)
+                        if self.run_step(
+                            "Recovery",
+                            [*make_base, "data-repair"],
+                            step_num=absolute_step,
+                            progress=progress,
+                            task_id=recovery_task,
+                        ):
+                            progress.console.print("[bold green]>>> Recovery complete. Re-auditing health...[/]")
+                            # Re-run Health Audit (Hard Gate)
+                            audit_retry_task = progress.add_task("[cyan]Health Audit (Post-Recovery)", total=None)
+                            if not self.run_step(
+                                "Health Audit (Post-Recovery)",
+                                [*make_base, "data-audit", strict_health_arg],
+                                step_num=absolute_step,
+                                validate_fn=self.validate_health,
+                                progress=progress,
+                                task_id=audit_retry_task,
+                            ):
+                                progress.console.print("[bold red]FATAL: Health Audit failed even after recovery. Aborting.[/]")
+                                sys.exit(1)
+                            else:
+                                # Re-check if recovery actually fixed the issues
+                                post_recovery_health = self.validate_health()
+                                still_has_issues = post_recovery_health.get("metrics", {}).get("trigger_recovery", False)
+                                if still_has_issues:
+                                    progress.console.print("[bold red]FATAL: Health issues persist after recovery. Manual intervention required.[/]")
+                                    sys.exit(1)
+                                progress.console.print("[bold green]>>> Health audit passed after recovery.[/]")
+                        else:
+                            progress.console.print("[bold red]FATAL: Recovery failed. Aborting.[/]")
+                            sys.exit(1)
+
+                # Legacy recovery path for Health Audit failure
                 if name == "Health Audit" and not success:
                     progress.console.print("[bold yellow]>>> Health Audit failed. Triggering Self-Healing Recovery Loop...[/]")
                     if self.ledger:
