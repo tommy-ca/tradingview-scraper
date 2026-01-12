@@ -93,7 +93,7 @@
         "feat_dynamic_selection": false,
         "feat_short_direction": true,
         "entropy_max_threshold": 0.999,
-        "efficiency_min_threshold": 0.05,
+        "efficiency_min_threshold": 0.03,
         "eci_hurdle": -0.6,
         "min_col_frac": 0.05,
         "use_robust_correlation": true,
