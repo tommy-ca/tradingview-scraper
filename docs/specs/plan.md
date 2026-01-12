@@ -73,6 +73,22 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Adaptive Logging**: Review `AdaptiveMetaEngine` logging verbosity. Action: **Reduced to DEBUG** level to eliminate log spam during backtests.
 - [x] **Engine Consolidation**: Evaluate redundancy. Result: `skfolio` and `custom` are primary; `riskfolio` is secondary/experimental.
 
+### Phase 105: Crypto Production Re-Validation & TDD Hardening (IN PROGRESS)
+- [x] **TDD Expansion**: Created comprehensive crypto-specific test suite:
+  - `test_crypto_config_validation.py`: Validates manifest settings, feature flags, and parameter integrity (9 tests)
+  - `test_crypto_selection_logic.py`: Tests directional normalization, late-binding, and SSP fallbacks (8 tests)
+  - All pre-flight tests passing (17/17)
+- [ ] **Production Execution**: Execute `make flow-crypto` with fresh data using v3.3.1 certified system
+- [ ] **Learning Audit**: Capture and document:
+  - Selection funnel metrics (raw pool → final assets)
+  - Engine performance matrix (Barbell/HRP/Max-Sharpe)
+  - Tail risk statistics (MaxDD, VaR, drawdown duration)
+  - Directional purity verification (SHORT inversion correctness)
+- [ ] **Deep Forensic Review**: Generate human-readable window-by-window analysis using `generate_deep_report.py`
+- [ ] **Documentation Sync**: Update crypto sleeve specs with empirical findings and parameter adjustments
+
+**Learning Focus**: Validate that v3.3.1 improvements (Annualized Return Clipping, SSP fallbacks, Entropy Order=5) eliminate previous crypto production instabilities and achieve target Sharpe ~1.88 per 20-day step alignment.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.3.1)
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.3.1) - Phase 105 In Progress
 
