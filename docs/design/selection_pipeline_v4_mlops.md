@@ -45,6 +45,9 @@ Every run generates an `audit.jsonl` that follows the standard ML tracking schem
 - **Metrics**: Cluster density, average conviction, pool diversity.
 - **Artifacts**: Link to the generated `portfolio_candidates.json`.
 
+### 5.3 Global Ledger Mapping
+To maintain schema hygiene, the v4 pipeline's internal audit trail is mapped to the `data.pipeline_audit` field of the global system ledger. This ensures that MLOps stage transitions are traceable without bloating the high-frequency metrics namespace used for performance analysis.
+
 ## 6. Implementation Strategy (The HTR Controller)
 The **Hierarchical Threshold Relaxation (HTR)** logic is moved from recursion into a **Pipeline Orchestrator**.
 

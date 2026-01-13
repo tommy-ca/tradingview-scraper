@@ -142,12 +142,25 @@ class BacktestEngine:
                 window_meta[w["symbol"]] = w
 
             if ledger:
+                # CR-420: Structured Telemetry Segregation
+                # Extract pipeline audit from metrics to keep scalar KPIs clean
+                metrics_payload = {"n_winners": len(winners_syms), "winners": winners_syms, **selection.metrics}
+                pipeline_audit = metrics_payload.pop("pipeline_audit", None)
+
+                data_payload = {
+                    "relaxation_stage": selection.relaxation_stage,
+                    "audit_clusters": selection.audit_clusters,
+                    "winners_meta": selection.winners,
+                }
+                if pipeline_audit:
+                    data_payload["pipeline_audit"] = pipeline_audit
+
                 ledger.record_outcome(
                     step="backtest_select",
                     status="success",
                     output_hashes={},
-                    metrics={"n_winners": len(winners_syms), "winners": winners_syms, **selection.metrics},
-                    data={"relaxation_stage": selection.relaxation_stage, "audit_clusters": selection.audit_clusters, "winners_meta": selection.winners},
+                    metrics=metrics_payload,
+                    data=data_payload,
                     context={"window_index": i, "engine": selection_engine.name},
                 )
 

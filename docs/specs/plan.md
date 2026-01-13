@@ -145,7 +145,13 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Shadow Mode**: Enabled `v4` shadow execution in production tournaments.
 - [x] **Deprecation**: Identified `selection_engines/impl` legacy code for future deprecation.
 
-### Phase 135: Legacy Deprecation & v4 Cutover (PLANNED)
+### Phase 135: Deep Audit Integration & Telemetry (COMPLETED)
+- [x] **Requirement**: Formalized CR-420 for granular telemetry segregation.
+- [x] **Design Update**: Added Global Ledger Mapping specs to v4 design docs.
+- [x] **Orchestrator Update**: Refactored `backtest_engine.py` to move audit trails to the `data` blob.
+- [x] **Integration Test**: Verified end-to-end telemetry flow via `tests/test_audit_v4_integration.py`.
+
+### Phase 136: Legacy Deprecation & v4 Cutover (PLANNED)
 - [ ] **Validation Period**: Confirm v4 stability and alpha parity after 1 week of shadow runs.
 - [ ] **Cutover**: Promote `v4` pipeline to be the default selection engine.
 - [ ] **Cleanup**: Remove `v3.x` legacy engines from the codebase.

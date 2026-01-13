@@ -62,6 +62,7 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-402 | MUST | ✅ | **Schema-Validated Handover**: Every pipeline stage transition MUST be validated by a strict schema (Pydantic) to ensure end-to-end data integrity. |
 | CR-403 | MUST | ✅ | **Pipeline Modularity**: The v4 pipeline architecture MUST support the hot-swapping of `ConvictionScorer` models without re-implementing clustering or selection logic. |
 | CR-410 | MUST | ✅ | **Shadow Mode Execution**: The system MUST support running the v4 MLOps pipeline in parallel with the v3 Legacy engine for a configurable period ("Shadow Week") to validate stability before full cutover. |
+| CR-420 | MUST | ✅ | **Structured Telemetry Segregation**: The Orchestrator MUST segregate granular `pipeline_audit` trails from scalar selection metrics. Telemetry MUST be persisted in the `data` field of the `AuditLedger` to ensure full traceability without bloating the KPIs namespace. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---
