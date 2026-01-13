@@ -134,3 +134,9 @@ Institutional verification is now standardized via automated per-window trace:
 - **Directional Trace**: Verifies sign preservation across thousands of strategy atom implementations.
 - **Volatility Anchors**: Ensures profiles remain within their risk bands (MinVar: 0.35, HRP: 0.45, MaxSharpe: 0.90).
 - **Outlier Quarantine**: Automated identification of "Flash Crash" windows to trigger safety protocols.
+
+## 16. Tail-Risk Mitigation (CR-630)
+The v4 pipeline integrates high-order statistical moments to improve robustness:
+- **Skewness & Kurtosis**: Penalizes assets with asymmetric return distributions or "fat tails" that increase the probability of extreme losses.
+- **Conditional Value at Risk (CVaR)**: Directly measures the expected loss in the worst 5% of scenarios, providing a more conservative risk estimate than standard deviation.
+- **Integration**: These metrics are used as both selection features in `InferenceStage` and regime indicators in `MarketRegimeDetector`.

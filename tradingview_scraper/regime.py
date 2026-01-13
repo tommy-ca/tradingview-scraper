@@ -162,6 +162,19 @@ class MarketRegimeDetector:
             regime = "NORMAL"
         return regime, {"growth_axis": ann_return, "stress_axis": stress_axis, "ann_return": ann_return, "vol_ratio": vol_ratio, "turbulence": turbulence}
 
+    def _tail_risk_metrics(self, returns: np.ndarray) -> Dict[str, float]:
+        """Calculates skewness and kurtosis to identify fat tails."""
+        from scipy.stats import kurtosis, skew
+
+        # Clean NaNs
+        r = returns[~np.isnan(returns)]
+        if len(r) < 20:
+            return {"skew": 0.0, "kurtosis": 0.0}
+
+        s = float(skew(r))
+        k = float(kurtosis(r))
+        return {"skew": s, "kurtosis": k}
+
     def detect_regime(self, returns: pd.DataFrame) -> Tuple[str, float, str]:
         if returns.empty or len(returns) < 20:
             return "NORMAL", 1.0, "NORMAL"
@@ -180,6 +193,10 @@ class MarketRegimeDetector:
         hurst = self._hurst_exponent(market_rets)
         stationarity = self._stationarity_score(market_rets)
 
+        # Tail Risk Integration (CR-630)
+        tail_metrics = self._tail_risk_metrics(market_rets)
+        fat_tail_score = min(1.0, abs(tail_metrics["kurtosis"]) / 10.0)
+
         # CRP-270: Weighted Score using injectable weights
         regime_score = (
             self.weights["vol_ratio"] * vol_ratio
@@ -188,6 +205,7 @@ class MarketRegimeDetector:
             + self.weights["entropy"] * ent
             + self.weights["hurst"] * abs(hurst - 0.5) * 2.0
             + self.weights["stationarity"] * stationarity
+            + 0.15 * fat_tail_score  # Add 15% weight to tail risk
         )
 
         quadrant, quad_metrics = self.detect_quadrant_regime(returns)

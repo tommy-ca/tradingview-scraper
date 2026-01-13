@@ -20,10 +20,23 @@ class InferenceStage(BasePipelineStage):
         return "Inference"
 
     def __init__(self, weights: Optional[Dict[str, float]] = None):
-        # Default Weights (v3.4 Standard)
-        self.weights = weights or {"momentum": 1.0, "stability": 1.0, "liquidity": 1.0, "entropy": 1.0, "efficiency": 1.0, "hurst_clean": 1.0, "adx": 1.0, "survival": 1.0, "antifragility": 1.0}
+        # Default Weights (v3.5.7 Standard)
+        self.weights = weights or {
+            "momentum": 1.0,
+            "stability": 1.0,
+            "liquidity": 1.0,
+            "entropy": 1.0,
+            "efficiency": 1.0,
+            "hurst_clean": 1.0,
+            "adx": 1.0,
+            "survival": 1.0,
+            "antifragility": 1.0,
+            "skew": 0.5,
+            "kurtosis": 0.5,
+            "cvar": 1.0,
+        }
 
-        # Mapping Methods (v3.4 Standard)
+        # Mapping Methods (v3.5.7 Standard)
         self.methods = {
             "survival": "cdf",
             "liquidity": "cdf",
@@ -34,6 +47,9 @@ class InferenceStage(BasePipelineStage):
             "entropy": "rank",
             "hurst_clean": "rank",
             "adx": "cdf",
+            "skew": "rank",
+            "kurtosis": "rank",
+            "cvar": "cdf",
         }
 
     def execute(self, context: SelectionContext) -> SelectionContext:
@@ -46,11 +62,19 @@ class InferenceStage(BasePipelineStage):
 
         # 1. Map Features to Probabilities
         # We only map features that exist in both the store and our config
-        active_features = [f for f in features.columns if f in self.weights]
+        active_features = [str(f) for f in features.columns if f in self.weights]
 
         # Helper: Get series for scoring
-        # Note: We need separate Series dict for calculate_mps_score
-        metrics_dict = {f: features[f] for f in active_features}
+        metrics_dict: Dict[str, pd.Series] = {}
+        for f in active_features:
+            f_str = str(f)
+            val = features[f_str]
+            if isinstance(val, pd.Series):
+                metrics_dict[f_str] = val
+            elif isinstance(val, pd.DataFrame):
+                metrics_dict[f_str] = val.iloc[:, 0]
+            else:
+                metrics_dict[f_str] = pd.Series(val)
 
         # 2. Calculate Final Alpha Score
         # This reuses the validated logic from utils.scoring
@@ -63,9 +87,12 @@ class InferenceStage(BasePipelineStage):
 
         # Add component probabilities for audit
         for f in active_features:
-            outputs[f"{f}_prob"] = map_to_probability(features[f], method=self.methods.get(f, "rank"))
+            f_str = str(f)
+            s_val = metrics_dict[f_str]
+            outputs[f"{f_str}_prob"] = map_to_probability(s_val, method=self.methods.get(f_str, "rank"))
 
         context.inference_outputs = outputs
+
         context.model_metadata = {"model": "Log-MPS-v4", "weights": self.weights, "methods": self.methods}
 
         context.log_event(self.name, "ScoringComplete", {"mean_score": float(alpha_scores.mean()), "max_score": float(alpha_scores.max())})

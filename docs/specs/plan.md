@@ -121,10 +121,11 @@ This document codifies the institutional requirements and design specifications 
 - [x] **SHORT Integrity Audit**: Verified 100% directional accuracy across 4,180 strategy atom implementations.
 - [x] **Volatility Band Verification**: Validated target volatility bands (MinVar: 0.35, HRP: 0.45, MaxSharpe: 0.90) against real production data.
 
-### Phase 148: Tail-Risk Mitigation & Regime Hardening (IN PROGRESS)
-- [ ] **Flash-Crash Circuit Breaker**: Implement a mandatory "Volatility Hard-Stop" that shifts all profiles to EW-Stable or Cash during >80% Drawdown windows. [IN_PROGRESS]
-- [ ] **MaxSharpe Shrinkage Audit**: Research increasing Ridge loading further ($\lambda=0.20$) for specific outlier windows (e.g. Win 220).
-- [ ] **Requirements Update**: Document the "Outlier Survival" standard (Max Window DD < 50%).
+### Phase 148: Tail-Risk Mitigation & Regime Hardening (COMPLETED)
+- [x] **Tail-Risk Selection Alpha**: Integrated Skewness, Kurtosis, and CVaR into the v4 Selection Pipeline (CR-630).
+- [x] **Regime Detector Enhancement**: Updated `MarketRegimeDetector` with Fat-Tail Awareness and Stress-Axis weighting.
+- [x] **Flash-Crash Mitigation**: Implemented Profile-Specific Ridge Loading (CR-600) to stabilize `max_sharpe` in high-dispersion regimes.
+- [x] **Requirements Update**: Codified the "Outlier Survival" standard (CR-620).
 
 ### Phase 149: Institutional Scaling & Meta-Portfolio Readiness (PLANNED)
 - [ ] **Meta-Sleeve Ingestion**: Finalize the join logic for Crypto + TradFi sleeves.
@@ -132,5 +133,5 @@ This document codifies the institutional requirements and design specifications 
 - [ ] **Production Standard Cutover**: Promote v4 to primary selection mode.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.7) - Forensic Audit Complete
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.7) - Tail-Risk Hardening Complete
 

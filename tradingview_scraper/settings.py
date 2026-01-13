@@ -72,6 +72,10 @@ class FeatureFlags(BaseModel):
         "efficiency": 1.5348,
         "entropy": 0.0322,
         "hurst_clean": 0.3485,
+        "adx": 1.0,
+        "skew": 0.5,
+        "kurtosis": 0.5,
+        "cvar": 1.0,
     }
     top_n_global: int = 5
 

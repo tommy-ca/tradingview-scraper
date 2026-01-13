@@ -45,6 +45,14 @@ class FeatureEngineeringStage(BasePipelineStage):
         efficiency = df.apply(lambda col: calculate_efficiency_ratio(col.tail(lookback).to_numpy()))
         hurst = df.apply(lambda col: calculate_hurst_exponent(col.to_numpy()))
 
+        # Tail Risk Features (CR-630)
+        from scipy.stats import kurtosis, skew
+
+        skewness = df.apply(lambda col: float(skew(col.dropna().to_numpy())) if len(col.dropna()) > 2 else 0.0)
+        kurt = df.apply(lambda col: float(kurtosis(col.dropna().to_numpy())) if len(col.dropna()) > 2 else 0.0)
+        # CVaR (Expected Shortfall) at 95% confidence
+        cvar = df.apply(lambda col: col[col <= col.quantile(0.05)].mean() if len(col.dropna()) > 20 else -0.1)
+
         # 3. Discovery Metadata & External Features
         candidate_map = {c["symbol"]: c for c in context.raw_pool}
 
@@ -73,6 +81,9 @@ class FeatureEngineeringStage(BasePipelineStage):
                 "liquidity": liquidity,
                 "antifragility": af_all,
                 "survival": regime_all,
+                "skew": skewness.fillna(0.0),
+                "kurtosis": kurt.fillna(0.0),
+                "cvar": cvar.fillna(-0.1),
             }
         )
 
