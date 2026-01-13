@@ -46,11 +46,13 @@ class BaselineSelectionEngine(BaseSelectionEngine):
         # 2. Provide clusters for the portfolio engines (still useful for HRP/Clustered)
         cluster_ids, _ = get_hierarchical_clusters(returns, request.threshold, request.max_clusters)
         clusters = {}
+        winner_syms = {w["symbol"] for w in winners}
         for sym, c_id in zip(returns.columns, cluster_ids):
             cid = int(c_id)
-            clusters.setdefault(cid, {"size": 0, "selected": []})
+            if cid not in clusters:
+                clusters[cid] = {"size": 0, "selected": []}
             clusters[cid]["size"] += 1
-            if str(sym) in [w["symbol"] for w in winners]:
+            if str(sym) in winner_syms:
                 clusters[cid]["selected"].append(str(sym))
 
         return SelectionResponse(

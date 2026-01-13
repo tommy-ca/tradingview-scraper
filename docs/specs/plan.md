@@ -95,12 +95,18 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Hardened toxicity tests**: Verified 0.999 entropy ceiling in `test_selection_hardening.py`.
 - [x] **Address linting issues**: Cleaned up bare excepts and type diagnostics.
 
-### Phase 127: Selection Funnel & Clustering Audit (IN PROGRESS)
-- [ ] **Discovery Stage Audit**: Review `select_top_universe.py` for identity grouping accuracy across venues. [IN_PROGRESS]
-- [ ] **Clustering Logic Review**: Audit hierarchical clustering in `SelectionEngineV3` (Ward linkage, distance metrics).
-- [ ] **Top N Selection Purity**: Ensure Top N per cluster correctly prioritizes Log-MPS conviction while maintaining factor diversity.
-- [ ] **Scanned Universe Selection Review**: Trace how L4 scanner outputs are filtered before entering the "Raw Pool."
-- [ ] **Requirements Update**: Codify the "Canonical Consolidation" standard for multi-venue assets.
+### Phase 127: Selection Funnel & Clustering Audit (COMPLETED)
+- [x] **Discovery Stage Audit**: Reviewed `select_top_universe.py` for identity grouping accuracy; implemented iterative quote stripping.
+- [x] **Clustering Logic Review**: Audited hierarchical clustering in `SelectionEngineV3` (Ward linkage, multi-lookback averaging).
+- [x] **Top N Selection Purity**: Verified Top N per cluster prioritizes Log-MPS conviction while maintaining factor diversity.
+- [x] **Scanned Universe Selection**: Trace how L4 scanner outputs are filtered before entering the "Raw Pool."
+- [x] **Requirements Update**: Codified the "Canonical Consolidation" and "Top-N Cluster Purity" standards.
+
+### Phase 128: Baseline Standards & Benchmarking (IN PROGRESS)
+- [ ] **Baseline Engine Audit**: Review `BaselineSelectionEngine` for interface purity. [IN_PROGRESS]
+- [ ] **Structural Baseline Implementation**: Create `liquid_htr` selection engine (HTR clustering + Liquidity Top-N) to isolate Log-MPS alpha.
+- [ ] **Dimensionality Bias Audit**: Verify if solvers benefit purely from pool reduction ($N=200 \rightarrow N=20$) regardless of asset quality.
+- [ ] **Requirements Update**: Define "Pass-through" vs "Structural" baseline standards.
 
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.3) - Phase 125 In Progress

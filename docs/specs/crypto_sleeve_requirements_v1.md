@@ -53,6 +53,8 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-310 | MUST | ✅ | **Canonical Consolidation**: The Discovery stage MUST deduplicate symbols by economic identity (e.g., BTC, GC) across multiple venues, selecting the most liquid implementation to prevent fragmentation in the "Raw Pool." |
 | CR-311 | MUST | ✅ | **Top-N Cluster Purity**: The selection engine MUST prioritize candidates by Log-MPS conviction score within each hierarchical cluster, ensuring the highest conviction representatives for each identified alpha factor. |
 | CR-312 | MUST | ✅ | **History-Aware Sanitization**: The data preparation layer MUST enforce a configurable history floor (min_days_floor) and zero-variance filter to eliminate statistically insignificant assets before optimization. |
+| CR-320 | MUST | ✅ | **Pass-through Baseline**: The system MUST provide a `baseline` engine that passes ALL valid candidates to quantify the "Gross Alpha" of the entire selection funnel. |
+| CR-321 | MUST | ✅ | **Structural Baseline**: The system MUST provide a `liquid_htr` engine that performs hierarchical clustering but selects Top-N by liquidity (Value.Traded), isolating the "Statistical Alpha" added by Log-MPS scoring. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---
