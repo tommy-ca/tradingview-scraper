@@ -36,3 +36,10 @@ Where $Factor$ is $1.0$ for LONG atoms and $-1.0$ for SHORT atoms.
 
 ### 4.1 Weight Flattening Guard
 The orchestrator implements a post-aggregation guard to verify that $\sum Weight_{Net}$ aligns with the target exposure ($0.0$ for Neutral, $1.0$ for Long-Only).
+
+## 5. Cross-Pillar Audit Standards
+To ensure 3-Pillar integrity, the platform mandates:
+1. **Pillar 1 (Selection)**: Must emit granular feature and probability logs.
+2. **Pillar 2 (Synthesis)**: Must explicitly record directional inversion factors.
+3. **Pillar 3 (Allocation)**: Must log solver convergence and condition number (Kappa) statistics.
+All signals are consolidated into the human-readable "Deep Forensic Report."

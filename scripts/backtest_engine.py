@@ -292,9 +292,15 @@ if __name__ == "__main__":
     parser.add_argument("--test-window", type=int)
     parser.add_argument("--step-size", type=int)
     parser.add_argument("--selection-mode", help="Override selection mode")
+    parser.add_argument("--profiles", help="Comma-separated list of risk profiles")
+    parser.add_argument("--engines", help="Comma-separated list of portfolio engines")
     args = parser.parse_args()
 
     os.environ.setdefault("TV_RUN_ID", datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
     logging.basicConfig(level=logging.INFO)
     engine = BacktestEngine()
-    engine.run_tournament(train_window=args.train_window, test_window=args.test_window, step_size=args.step_size, selection_mode=args.selection_mode)
+
+    profiles = [p.strip() for p in args.profiles.split(",")] if args.profiles else None
+    engines = [e.strip() for e in args.engines.split(",")] if args.engines else None
+
+    engine.run_tournament(train_window=args.train_window, test_window=args.test_window, step_size=args.step_size, selection_mode=args.selection_mode, profiles=profiles, engines=engines)

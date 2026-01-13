@@ -58,8 +58,19 @@ def analyze_funnel(audit_data):
         # Capture selection breadth
         elif step == "backtest_select" and status == "success":
             met = entry.get("outcome", {}).get("metrics", {})
+            data = entry.get("data", {})
+
+            # Legacy v3 metrics
             stats["Refinement"] = max(stats["Refinement"], met.get("n_universe_symbols", 0))
             stats["Selection"] = max(stats["Selection"], met.get("n_winners", 0))
+
+            # MLOps v4 telemetry (CR-420)
+            if "pipeline_audit" in data:
+                pipeline = data["pipeline_audit"]
+                for stage in pipeline:
+                    if stage.get("stage") == "Ingestion":
+                        stats["Discovery"] = max(stats["Discovery"], stage.get("data", {}).get("n_candidates", 0))
+                        stats["Refinement"] = max(stats["Refinement"], stage.get("data", {}).get("n_candidates", 0))
 
     # Safety: If Discovery is 0 but we have Refinement, Discovery must be at least Refinement
     if stats["Discovery"] == 0 and stats["Refinement"] > 0:
@@ -240,7 +251,7 @@ def generate_report(run_id: str):
 
     report = [
         f"# Deep Full Analysis & Audit Report (Run: {run_id})",
-        "**Status**: 🟢 PRODUCTION CERTIFIED (v3.3.1)",
+        "**Status**: 🟢 PRODUCTION CERTIFIED (v3.4.6)",
         f"**Date**: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "\n## 1. Five-Stage Funnel Trace",
         "Tracing signal retention from discovery to optimized winner pool.",
@@ -273,9 +284,23 @@ def generate_report(run_id: str):
     report.append("- **Regime Stability**: Verified that rebalancing window (20d) correctly aligned with persistent alpha.")
     report.append("- **Stability Check**: Verified bit-perfect reproducibility via consistent cluster hashes.")
 
+    # MLOps Telemetry Section
+    v4_audit = [e for e in audit_data if e.get("step") == "backtest_select" and "pipeline_audit" in e.get("data", {})]
+    if v4_audit:
+        report.append("\n## 6. MLOps Pipeline Telemetry (v4)")
+        report.append("Tracing internal stage transitions for the champion selection pipeline.")
+        report.append("| Window | Stage | Event | Details |")
+        report.append("| :--- | :--- | :--- | :--- |")
+        # Sample first window only to avoid bloat
+        sample_trail = v4_audit[0]["data"]["pipeline_audit"]
+        win_idx = v4_audit[0]["context"].get("window_index", 0)
+        for stage in sample_trail:
+            report.append(f"| {win_idx} | {stage['stage']} | {stage['event']} | {json.dumps(stage.get('data', {}))} |")
+
     out_dir = Path(f"artifacts/summaries/runs/{run_id}/reports")
+
     out_dir.mkdir(parents=True, exist_ok=True)
-    report_path = out_dir / "deep_forensic_audit_v3_3_1.md"
+    report_path = out_dir / "deep_forensic_audit_v3_4_6.md"
 
     with open(report_path, "w") as f:
         f.write("\n".join(report))

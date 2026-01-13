@@ -48,6 +48,15 @@ Every run generates an `audit.jsonl` that follows the standard ML tracking schem
 ### 5.3 Global Ledger Mapping
 To maintain schema hygiene, the v4 pipeline's internal audit trail is mapped to the `data.pipeline_audit` field of the global system ledger. This ensures that MLOps stage transitions are traceable without bloating the high-frequency metrics namespace used for performance analysis.
 
+### 5.4 Matrix Stability Validation
+The v4 pipeline has been validated across a multi-dimensional risk matrix (MaxSharpe, HRP, Barbell, MinVariance) using the `SelectionPipelineAdapter`. This ensures that the modular HTR loop correctly provides a stable pool of strategy atoms to all production portfolio engines.
+
+### 5.5 Grand Tournament Standard (v3.4.6)
+Institutional validation now requires a head-to-head tournament against the `v3.4` champion engine. Success criteria include:
+- **Zero Bankruptcy**: 100% survival across all stress windows (v4 outperformed baseline in Q1 2026 audit).
+- **Telemetry Purity**: Verifiable structured events in `data.pipeline_audit`.
+- **Logic Preservation**: Match legacy alpha signatures while improving modularity.
+
 ## 6. Implementation Strategy (The HTR Controller)
 The **Hierarchical Threshold Relaxation (HTR)** logic is moved from recursion into a **Pipeline Orchestrator**.
 

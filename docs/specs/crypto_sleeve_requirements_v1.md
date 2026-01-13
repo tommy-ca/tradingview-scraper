@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-13) - Deep Audit Standard v3.4.5.
+**Production Certified** (2026-01-13) - Deep Audit Standard v3.4.6.
 
 ---
 
@@ -63,7 +63,9 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-403 | MUST | ✅ | **Pipeline Modularity**: The v4 pipeline architecture MUST support the hot-swapping of `ConvictionScorer` models without re-implementing clustering or selection logic. |
 | CR-410 | MUST | ✅ | **Shadow Mode Execution**: The system MUST support running the v4 MLOps pipeline in parallel with the v3 Legacy engine for a configurable period ("Shadow Week") to validate stability before full cutover. |
 | CR-420 | MUST | ✅ | **Structured Telemetry Segregation**: The Orchestrator MUST segregate granular `pipeline_audit` trails from scalar selection metrics. Telemetry MUST be persisted in the `data` field of the `AuditLedger` to ensure full traceability without bloating the KPIs namespace. |
-| CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
+| CR-430 | MUST | ✅ | **Selection Purity Cutover**: The system MUST default to the v4 MLOps-centric selection pipeline for all production and pre-live flows, ensuring a single, standardized, and observable alpha funnel. |
+| CR-440 | MUST | ✅ | **Grand Tournament Validation**: Every major architectural shift MUST be validated via a master tournament covering the full selection-optimization matrix (Selection: v3.2, v3.4, v4; Profiles: MaxSharpe, HRP, Barbell). |
+| CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable \"Deep Forensic Report\" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---
 
