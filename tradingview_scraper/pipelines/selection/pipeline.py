@@ -51,7 +51,7 @@ class SelectionPipeline:
             "feature_lookback": self.settings.features.feature_lookback,
             "cluster_threshold": 0.7,
             "max_clusters": 25,
-            "top_n": 2,
+            "top_n": self.settings.top_n,
         }
         if overrides:
             params.update(overrides)
@@ -132,7 +132,7 @@ class SelectionPipeline:
             "feature_lookback": self.settings.features.feature_lookback,
             "cluster_threshold": 0.7,
             "max_clusters": 25,
-            "top_n": 2,
+            "top_n": self.settings.top_n,
         }
         if overrides:
             params.update(overrides)

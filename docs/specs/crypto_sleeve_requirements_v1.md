@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-13) - Deep Audit Standard v3.5.4.
+**Production Certified** (2026-01-13) - Deep Audit Standard v3.5.5.
 
 ### 1.4 Statistical Performance Baselines (Grand Tournament 2026-01-13)
 The following benchmarks serve as the institutional standard for Q1 2026 production:

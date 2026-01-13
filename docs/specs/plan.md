@@ -92,13 +92,20 @@ This document codifies the institutional requirements and design specifications 
 
 ### Phase 143: Deep Matrix Audit & Operational Standards (COMPLETED)
 - [x] **Exhaustive Matrix Trace**: Audited 7 risk profiles across 3 engines (skfolio, riskfolio, custom).
-- [x] **Directional Purity Verified**: 100% integrity across 987 SHORT atom implementations in the v3.5.4 standard.
-- [x] **Anomaly Audit**: Identified `max_sharpe` tail-risk in high-dispersion windows (e.g. Window 392).
-- [x] **Champion Identification**: Validated `risk_parity` and `market_neutral` as the production performance anchors (Sharpe ~1.9).
+- [x] **Directional Purity Verified**: 100% integrity across 987 SHORT atom implementations.
+- [x] **Anomaly Audit**: Identified `max_sharpe` tail-risk in high-dispersion windows.
+- [x] **Champion Identification**: Validated `risk_parity` and `market_neutral` as the production anchors.
 
-### Phase 144: Institutional Scale & Vectorization (PLANNED)
+### Phase 144: Final Sprint Validation & Full Matrix Audit (COMPLETED)
+- [x] **Full-System Tournament**: Executed exhaustive matrix (Selection v3.2/v3.4/v4 x 7 Profiles x 3 Engines x 2 Simulators).
+- [x] **HTR Loop & Top_N Fixes**: Resolved hardcoded Stage 1 and Top_N=2 discrepancies in v4 pipeline.
+- [x] **Window forensic audit**: Analyzed per-rebalance portfolio snapshots; verified 100% directional integrity.
+- [x] **Requirements Update**: Codified the final Q1 2026 performance matrix and institutional bounds.
+
+### Phase 145: Institutional Scaling & Meta-Portfolio Readiness (PLANNED)
 - [ ] **Vectorized Alpha Scoring**: Implement O(1) batch scoring for universes N > 1000.
-- [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage on HRP vs MVO.
+- [ ] **Meta-Sleeve Ingestion**: Finalize the join logic for Crypto + TradFi sleeves in the meta-portfolio.
+- [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage on HRP turnover.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.4) - Forensic Audit Complete
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.5) - Refactor Complete & Validated
