@@ -63,7 +63,8 @@ class SkfolioEngine(CustomClusteredEngine):
         # CR-290: Market Neutral Constraint
         if request.market_neutral and request.benchmark_returns is not None:
             # Skfolio supports linear constraints, but for now we fallback to custom
-            raise ValueError("Skfolio native Market Neutrality not yet implemented")
+            logger.info("Skfolio: Market Neutrality requested, falling back to custom engine")
+            return super()._optimize_cluster_weights(universe=universe, request=request)
 
         # CR-590: Strict 25% Cluster Cap Enforcement
         cap_val = min(0.25, float(request.cluster_cap))

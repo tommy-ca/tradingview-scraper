@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, cast
 import numpy as np
 import pandas as pd
 import scipy.cluster.hierarchy as sch
-from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 from sklearn.covariance import ledoit_wolf
 
@@ -110,7 +109,21 @@ def _cov_shrunk(returns: pd.DataFrame, kappa_thresh: float = 15000.0, default_sh
 
 
 def _solve_cvxpy(
-    *, n, cap, cov, mu=None, penalties=None, profile="min_variance", risk_free_rate=0.0, prev_weights=None, l2_gamma=0.0, solver=None, solver_options=None, betas=None, market_neutral=False
+    *,
+    n,
+    cap,
+    cov,
+    mu=None,
+    penalties=None,
+    profile="min_variance",
+    risk_free_rate=0.0,
+    prev_weights=None,
+    l2_gamma=0.0,
+    solver=None,
+    solver_options=None,
+    betas=None,
+    market_neutral=False,
+    beta_tolerance=None,
 ):
     import cvxpy as cp
 
@@ -121,18 +134,22 @@ def _solve_cvxpy(
 
     w = cp.Variable(n)
     # Constraints: Long only, sum to 1, individual cap
-    # We use a slightly looser sum constraint if necessary, but sum(w) == 1 is standard
     constraints = [cp.sum(w) == 1.0, w >= 0.0, w <= cap]
 
     # CR-290: Market Neutral Constraint Hardening (Phase 125)
     if market_neutral and betas is not None:
-        # Tighten tolerance from 0.15 to 0.05 if universe density is sufficient
-        beta_tolerance = 0.05 if n >= 15 else 0.15
-        constraints.append(cp.abs(w @ betas) <= beta_tolerance)
+        tol = beta_tolerance or (0.05 if n >= 15 else 0.15)
+        constraints.append(cp.abs(w @ betas) <= tol)
 
     risk = cp.quad_form(w, cov + np.eye(n) * 1e-6)
     p_t = (w @ penalties) * 0.2 if penalties is not None else 0.0
     l2_val = float(l2_gamma)
+
+    # CR-600: Profile-Specific Numerical Hardening
+    if profile == "max_sharpe":
+        # Force higher L2 to prevent extreme concentration/outliers in high-alpha chasing
+        l2_val = max(l2_val, 0.10)
+
     l2 = l2_val * cp.sum_squares(w) if l2_val > 0 else 0.0
 
     t_p = 0.0
@@ -167,7 +184,26 @@ def _solve_cvxpy(
         if w.value is None or prob.status not in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}:
             logger.warning(f"Solver failed: status={prob.status}, profile={profile}, neutral={market_neutral}")
             if market_neutral:
-                # Recursive fallback to unconstrained
+                # Recursive fallback to unconstrained or relaxed
+                current_tol = beta_tolerance or (0.05 if n >= 15 else 0.15)
+                if current_tol < 0.3:
+                    logger.info(f"Retrying Market Neutral with relaxed tolerance: {current_tol + 0.1}")
+                    return _solve_cvxpy(
+                        n=n,
+                        cap=cap,
+                        cov=cov,
+                        mu=mu,
+                        penalties=penalties,
+                        profile=profile,
+                        risk_free_rate=risk_free_rate,
+                        prev_weights=prev_weights,
+                        l2_gamma=l2_gamma,
+                        solver=solver,
+                        solver_options=options,
+                        betas=betas,
+                        market_neutral=True,
+                        beta_tolerance=current_tol + 0.1,
+                    )
                 return _solve_cvxpy(
                     n=n,
                     cap=cap,
@@ -180,7 +216,9 @@ def _solve_cvxpy(
                     l2_gamma=l2_gamma,
                     solver=solver,
                     solver_options=options,
+                    betas=betas,
                     market_neutral=False,
+                    beta_tolerance=None,
                 )
             return np.array([1.0 / n] * n)
 
@@ -255,8 +293,10 @@ class CustomClusteredEngine(BaseRiskEngine):
         cov = _cov_shrunk(X, kappa_thresh=request.kappa_shrinkage_threshold, default_shrinkage=request.default_shrinkage_intensity)
 
         if request.profile == "hrp":
-            link = linkage(squareform(np.sqrt(0.5 * (1 - X.corr().values.clip(-1, 1))), checks=False), method="ward")
-            w_np = _get_recursive_bisection_weights(cov, cast(List[int], pd.Series(sch.leaves_list(link)).tolist()))
+            link = sch.linkage(squareform(np.sqrt(0.5 * (1 - X.corr().values.clip(-1, 1))), checks=False), method="ward")
+            # Ensure sort_ix is a list of ints
+            sort_ix = cast(List[int], sch.leaves_list(link).tolist())
+            w_np = _get_recursive_bisection_weights(cov, sort_ix)
             return _enforce_cap_series(pd.Series(w_np, index=X.columns), cap)
 
         l2 = {"EXPANSION": 0.05, "INFLATIONARY_TREND": 0.10, "STAGNATION": 0.10, "CRISIS": 0.20}.get(request.market_environment, 0.05)
@@ -292,6 +332,7 @@ class CustomClusteredEngine(BaseRiskEngine):
             l2_gamma=l2,
             betas=betas,
             market_neutral=is_neutral,
+            beta_tolerance=None,
         )
         return _safe_series(w, X.columns)
 

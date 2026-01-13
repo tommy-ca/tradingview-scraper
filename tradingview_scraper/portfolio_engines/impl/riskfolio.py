@@ -58,7 +58,8 @@ class RiskfolioEngine(CustomClusteredEngine):
 
                 # CR-290: Market Neutral Constraint
                 if request.market_neutral and request.benchmark_returns is not None:
-                    raise ValueError("Riskfolio native Market Neutrality not yet implemented")
+                    logger.info("Riskfolio: Market Neutrality requested, falling back to custom engine")
+                    return super()._optimize_cluster_weights(universe=universe, request=request)
 
                 w = port.optimization(
                     model="Classic", rm="MV", obj="Sharpe" if request.profile == "max_sharpe" else "MinRisk", rf=cast(Any, float(request.risk_free_rate)), l=cast(Any, float(request.l2_gamma))

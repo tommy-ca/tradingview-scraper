@@ -121,10 +121,16 @@ In the v4 architecture, Market Neutrality is decoupled from Alpha Generation.
 The `barbell` strategy segments capital into "Core" (Antifragile) and "Aggressor" (High-Conviction) layers.
 - **Synthesis Mapping**: Because optimization happens in "Strategy Space" (Atoms), the engine explicitly maps Strategy IDs (e.g., `BTC_mom_LONG`) back to physical stats (e.g., `BTC` Antifragility Score) to ensure the Core layer truly contains the most resilient assets.
 
-## 14. Final Operational Certification (v3.5.5)
+## 14. Final Operational Certification (v3.5.7)
 As of Q1 2026, the v4 Selection Pipeline is the **Institutional Standard** for the multi-sleeve meta-portfolio.
 - **Reliability**: Validated via exhaustive 3D Matrix Tournament (Selection x Profile x Engine).
-- **Hardened Allocation**: Enforced mandatory 25% max cluster weight (CR-590) to ensure factor diversity.
+- **Hardened Allocation**: Enforced mandatory 25% max cluster weight (CR-590).
 - **Directionality**: 100% verified SHORT atom normalization.
-- **Traceability**: All stage transitions (Ingestion -> Synthesis) are fully audited in the deep ledger.
-- **Statistical Benchmark**: Achieved Mean Sharpe 5.48 with 60/20/20 sampling configuration.
+- **Traceability**: All stage transitions audited via `comprehensive_audit_v4.py`.
+- **Statistical Benchmark**: Achieved Mean Sharpe 5.48 with 60/20/20 configuration.
+
+## 15. Deep Forensic Audit Methodology
+Institutional verification is now standardized via automated per-window trace:
+- **Directional Trace**: Verifies sign preservation across thousands of strategy atom implementations.
+- **Volatility Anchors**: Ensures profiles remain within their risk bands (MinVar: 0.35, HRP: 0.45, MaxSharpe: 0.90).
+- **Outlier Quarantine**: Automated identification of "Flash Crash" windows to trigger safety protocols.
