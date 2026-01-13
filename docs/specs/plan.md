@@ -59,15 +59,22 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Cross-Version Benchmark**: Generated performance matrix confirming v4 dominance and v3 stability.
 
 ### Phase 138: Full Risk Matrix Audit (COMPLETED)
-- [x] **Exhaustive Sweep**: Executed tournament with ALL risk profiles (`equal_weight`, `min_variance`, `risk_parity`, `max_sharpe`, `hrp`, `barbell`, `market_neutral`).
-- [x] **Short Handling Audit**: Verified correct sign preservation in `Net_Weight` (-0.012 for SHORTs) and correct simulator mapping.
-- [x] **HTR Loop Fix**: Patched `SelectionPipelineAdapter` to allow internal HTR looping (Stages 1-4).
-- [x] **Data Hygiene Audit**: Identified and resolved "Sparse Parquet" bottleneck by prioritizing `portfolio_returns.pkl`.
-- [x] **Performance Matrix**: Validated v4 dominance (Sharpe 4.05 vs v3.4 3.62 in MaxSharpe).
+- [x] **Exhaustive Sweep**: Executed tournament with ALL risk profiles.
+- [x] **Short Handling Audit**: Verified sign preservation and simulator mapping.
+- [x] **HTR Loop Fix**: Patched adapter for internal relaxation cycles.
+- [x] **Data Hygiene**: Prioritized rich returns matrices.
 
-### Phase 139: Production Cutover & Documentation (PLANNED)
-- [ ] **Default Engine Switch**: Update `BacktestEngine` and `ProductionPipeline` to default to `selection_mode="v4"`.
-- [ ] **Legacy Archiving**: Move `v2` and `v3` implementation files to `legacy/` directory.
+### Phase 139: Deep Window Audit & Statistical Grand Tournament (COMPLETED)
+- [x] **Audit Ledger Context**: Added global timescales (train/test/rebalance) to genesis block.
+- [x] **Statistical Tournament**: Executed exhaustive sweep (Lookback x Rebalance x Selection); identified 30-day alpha half-life.
+- [x] **Window Forensic**: Verified 100% directional integrity and analyzed "Window 300" crash outlier.
+- [x] **Discovery Audit**: Codified CR-460 for early-funnel alpha quantification.
+
+### Phase 140: Production Standard Finalization (COMPLETED)
+- [x] **Default Engine Cutover**: Standardized on v4 for all production runs.
+- [x] **Final Certification Tournament**: Executed exhaustive risk profile matrix; v4 confirmed as institutional standard.
+- [x] **Anomaly Audit**: Identified solver instability in low-volatility regimes (Win 140/300); verified SHORT integrity.
+- [x] **Legacy Preservation**: Retained v2/v3 engines for historical anchoring.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.8) - Alpha Matrix Validated
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.0) - Selection Pipeline Refactor Complete

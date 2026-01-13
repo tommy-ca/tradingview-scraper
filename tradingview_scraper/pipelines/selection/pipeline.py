@@ -48,7 +48,7 @@ class SelectionPipeline:
 
         # 1. Initialize Context
         params = {
-            "feature_lookback": 120,
+            "feature_lookback": self.settings.features.feature_lookback,
             "cluster_threshold": 0.7,
             "max_clusters": 25,
             "top_n": 2,
@@ -121,7 +121,7 @@ class SelectionPipeline:
 
         # 1. Initialize Context
         params = {
-            "feature_lookback": 120,  # v3 Standard
+            "feature_lookback": self.settings.features.feature_lookback,
             "cluster_threshold": 0.7,
             "max_clusters": 25,
             "top_n": 2,

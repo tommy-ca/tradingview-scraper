@@ -115,7 +115,17 @@ class BacktestEngine:
 
         if ledger and not ledger.last_hash:
             manifest_hash = hashlib.sha256(open(config.manifest_path, "rb").read()).hexdigest() if config.manifest_path.exists() else "unknown"
-            ledger.record_genesis(config.run_id, config.profile, manifest_hash)
+            audit_config = {
+                "train_window": train_window,
+                "test_window": test_window,
+                "step_size": step_size,
+                "selection_mode": selection_mode_override or str(config.features.selection_mode or "v3.4"),
+                "feature_lookback": int(config.features.feature_lookback),
+                "profiles": profiles,
+                "engines": engines,
+                "simulators": sim_names,
+            }
+            ledger.record_genesis(config.run_id, config.profile, manifest_hash, config=audit_config)
 
         results = []
         for i in range(train_window, total_len - test_window, step_size):

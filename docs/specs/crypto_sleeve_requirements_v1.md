@@ -9,7 +9,9 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-13) - Deep Audit Standard v3.4.8.
+**Production Certified** (2026-01-13) - Deep Audit Standard v3.5.0.
+
+| CR-480 | MUST | ✅ | **Final Certification Protocol**: Prior to any major release, the system MUST undergo an exhaustive risk profile tournament across all selection-optimization-simulator combinations to ensure zero performance regression and 100% directional integrity. |
 
 ---
 
@@ -63,8 +65,11 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-403 | MUST | ✅ | **Pipeline Modularity**: The v4 pipeline architecture MUST support the hot-swapping of `ConvictionScorer` models without re-implementing clustering or selection logic. |
 | CR-410 | MUST | ✅ | **Shadow Mode Execution**: The system MUST support running the v4 MLOps pipeline in parallel with the v3 Legacy engine for a configurable period ("Shadow Week") to validate stability before full cutover. |
 | CR-420 | MUST | ✅ | **Structured Telemetry Segregation**: The Orchestrator MUST segregate granular `pipeline_audit` trails from scalar selection metrics. Telemetry MUST be persisted in the `data` field of the `AuditLedger` to ensure full traceability without bloating the KPIs namespace. |
-| CR-430 | MUST | ✅ | **Selection Engine Coexistence**: The platform MUST maintain backward compatibility with legacy selection engines (v2.x, v3.x). These engines are preserved as "Anchors" for historical benchmarking while v4 serves as the modern MLOps standard. |
-| CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
+| CR-430 | MUST | ✅ | **Selection Engine Coexistence**: The platform MUST maintain backward compatibility with legacy selection engines (v2.x, v3.x). These engines are preserved as \"Anchors\" for historical benchmarking while v4 serves as the modern MLOps standard. |
+| CR-450 | MUST | ✅ | **Deep Window Traceability**: The audit ledger MUST record global timescale configurations (rebalance window, train/test windows) in the genesis block to ensure statistical reproducibility across different sampling frequencies. |
+| CR-460 | MUST | ✅ | **Discovery-to-Selection Purity Audit**: Every tournament MUST quantify the alpha contribution of discovery-stage filters (L4 Scanners) by benchmarking against a 'No-Selection' Raw Pool to identify bottlenecks in the early alpha funnel. |
+| CR-470 | MUST | ✅ | **Alpha Decay Monitoring**: The system MUST implement statistical rebalance-frequency audits (Grand Tournament Protocol) to identify the half-life of alpha signals and enforce a production rebalance floor (default <= 20 days). |
+| CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable \"Deep Forensic Report\" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 
 ---

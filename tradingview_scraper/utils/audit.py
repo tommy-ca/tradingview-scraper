@@ -143,7 +143,7 @@ class AuditLedger:
 
         self.last_hash = current_hash
 
-    def record_genesis(self, run_id: str, profile: str, manifest_hash: str):
+    def record_genesis(self, run_id: str, profile: str, manifest_hash: str, config: Optional[Dict[str, Any]] = None):
         """Creates the Genesis Block for a new run."""
         git_hash = "unknown"
         try:
@@ -164,6 +164,8 @@ class AuditLedger:
                 "git_hash": git_hash,
             },
         }
+        if config:
+            record["config"] = config
         self._append(record)
 
     def record_intent(
