@@ -6,30 +6,44 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, cast, Any
+from typing import Any, Dict, Optional, cast
 
 import pandas as pd
-import numpy as np
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+from tradingview_scraper.portfolio_engines import build_engine
 from tradingview_scraper.portfolio_engines.backtest_simulators import build_simulator
 from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
-from tradingview_scraper.portfolio_engines import build_engine
 from tradingview_scraper.regime import MarketRegimeDetector
 from tradingview_scraper.risk import AntifragilityAuditor
-from tradingview_scraper.selection_engines.base import SelectionRequest, SelectionResponse
 from tradingview_scraper.selection_engines import build_selection_engine
+from tradingview_scraper.selection_engines.base import SelectionRequest, get_hierarchical_clusters
 from tradingview_scraper.utils.audit import AuditLedger
+from tradingview_scraper.utils.synthesis import StrategySynthesizer
 
 logger = logging.getLogger("backtest_engine")
+
+
+class BacktestOrchestrator:
+    """
+    Orchestrates the 3-pillar workflow: Selection -> Synthesis -> Allocation.
+    """
+
+    def __init__(self, engine: "BacktestEngine"):
+        self.engine = engine
+        self.config: Optional[Any] = None
+
+    def resolve_regime_profile(self, regime: str) -> ProfileName:
+        """Pillar 3: Map detected regime to the target risk profile."""
+        mapping = {"EXPANSION": "max_sharpe", "INFLATIONARY_TREND": "barbell", "NORMAL": "max_sharpe", "STAGNATION": "min_variance", "TURBULENT": "hrp", "CRISIS": "hrp"}
+        return cast(ProfileName, mapping.get(regime, "equal_weight"))
 
 
 class BacktestEngine:
     """
     Unified Backtest Engine for Research and Production validation.
-    Orchestrates selection, optimization, and simulation across windows.
     """
 
     def __init__(self, lakehouse_dir: str = "data/lakehouse"):
@@ -44,6 +58,7 @@ class BacktestEngine:
         settings = get_settings()
         self.detector = MarketRegimeDetector(audit_path=settings.summaries_run_dir / "regime_audit.jsonl")
         self.auditor = AntifragilityAuditor()
+        self.orchestrator = BacktestOrchestrator(self)
 
     def load_data(self):
         rets_path = self.lakehouse / "returns_matrix.parquet"
@@ -59,7 +74,7 @@ class BacktestEngine:
             self.stats = pd.read_json(stats_path_json)
             if "Symbol" in self.stats.columns:
                 self.stats.set_index("Symbol", inplace=True)
-                
+
         if meta_path.exists():
             with open(meta_path, "r") as f:
                 raw_meta = json.load(f)
@@ -69,25 +84,34 @@ class BacktestEngine:
         from tradingview_scraper.settings import get_settings
 
         config = get_settings()
+        self.orchestrator.config = config
         train_window = kwargs.get("train_window") or int(config.train_window)
         test_window = kwargs.get("test_window") or int(config.test_window)
         step_size = kwargs.get("step_size") or int(config.step_size)
         profiles = kwargs.get("profiles") or [p.strip() for p in config.profiles.split(",")]
         engines = kwargs.get("engines") or [e.strip() for e in config.engines.split(",")]
         sim_names = kwargs.get("simulators") or [s.strip() for s in config.backtest_simulators.split(",")]
+        selection_mode_override = kwargs.get("selection_mode")
+        regime_weights = kwargs.get("regime_weights")
 
         returns_to_use = self.returns.dropna(how="all")
         total_len = len(returns_to_use)
 
+        # Pillar 2: Synthesis Layer Initialization
+        synthesizer = StrategySynthesizer()
+
+        # Update detector if weights are provided
+        detector_to_use = self.detector
+        if regime_weights:
+            detector_to_use = MarketRegimeDetector(weights=regime_weights)
+
         run_dir = config.prepare_summaries_run_dir()
         ledger = AuditLedger(run_dir) if config.features.feat_audit_ledger else None
 
-        # Record Genesis if ledger is new
         if ledger and not ledger.last_hash:
             manifest_hash = hashlib.sha256(open(config.manifest_path, "rb").read()).hexdigest() if config.manifest_path.exists() else "unknown"
             ledger.record_genesis(config.run_id, config.profile, manifest_hash)
 
-        # 1. Rolling Windows
         results = []
         for i in range(train_window, total_len - test_window, step_size):
             window_start = returns_to_use.index[i - train_window]
@@ -97,110 +121,128 @@ class BacktestEngine:
             train_rets = returns_to_use.loc[window_start:window_end]
             test_rets = returns_to_use.loc[window_end:test_end]
 
-            # 2. Market Regime detection
-            regime_resp = self.detector.detect_regime(train_rets)
+            # 1. Market Regime detection
+            regime_resp = detector_to_use.detect_regime(train_rets)
             regime_name = regime_resp[0]
             logger.info(f"Window {i}: Regime: {regime_name}")
 
-            # 3. Dynamic Selection (Operation Darwin - HTR v3.4)
-            current_mode = str(config.features.selection_mode or "v3.4")
+            # 2. Pillar 1: Universe Selection
+            current_mode = selection_mode_override or str(config.features.selection_mode or "v3.4")
             selection_engine = build_selection_engine(current_mode)
             raw_cands = [v for k, v in self.metadata.items() if k in train_rets.columns]
 
-            # Record Selection Intent
-            sel_ctx = {"window_index": i, "engine": selection_engine.name}
-            if ledger:
-                ledger.record_intent("backtest_select", sel_ctx, input_hashes={})
-
-            sel_req = SelectionRequest(
-                threshold=float(config.threshold),
-                top_n=int(config.top_n),
-                min_momentum_score=float(config.min_momentum_score),
-                max_clusters=25,
-            )
+            sel_req = SelectionRequest(threshold=float(config.threshold), top_n=int(config.top_n), min_momentum_score=float(config.min_momentum_score), max_clusters=25)
             selection = selection_engine.select(train_rets, raw_cands, self.stats, sel_req)
             if selection is None:
-                logger.error(f"Selection failed for window {i}")
                 continue
-                
-            winners = [w["symbol"] for w in selection.winners]
-            
-            # Record Selection Outcome
+
+            winners_syms = [w["symbol"] for w in selection.winners]
+            window_meta = self.metadata.copy()
+            for w in selection.winners:
+                window_meta[w["symbol"]] = w
+
             if ledger:
                 ledger.record_outcome(
                     step="backtest_select",
                     status="success",
                     output_hashes={},
-                    metrics={"n_winners": len(winners), "winners": winners, **selection.metrics},
-                    data={"relaxation_stage": selection.relaxation_stage, "audit_clusters": selection.audit_clusters},
-                    context=sel_ctx
+                    metrics={"n_winners": len(winners_syms), "winners": winners_syms, **selection.metrics},
+                    data={"relaxation_stage": selection.relaxation_stage, "audit_clusters": selection.audit_clusters, "winners_meta": selection.winners},
+                    context={"window_index": i, "engine": selection_engine.name},
                 )
 
-            if not winners:
-                logger.warning(f"No winners selected for window {i}")
+            if not winners_syms:
                 continue
 
-            # 4. Optimization Tournament
-            for engine_name in engines:
-                # PERFORMANCE FIX: Adaptive engine only needs to run once per window
-                # because it ignores the 'profile' and maps to regime profile internally.
-                profiles_to_run = ["adaptive"] if engine_name == "adaptive" else profiles
-                
-                for profile in profiles_to_run:
-                    opt_ctx = {"window_index": i, "engine": engine_name, "profile": profile, "regime": regime_name}
-                    try:
-                        engine = build_engine(engine_name)
+            # 3. Pillar 2: Strategy Synthesis
+            # Applies alpha logic and handles SHORT inversion
+            train_rets_strat = synthesizer.synthesize(train_rets, selection.winners, config.features)
 
-                        # Record Optimization Intent
+            # 4. Pillar 3: Allocation (Tournament)
+
+            # Re-calculate clusters on synthesized returns (CR-291)
+            # This identifies uncorrelated alpha clusters in logic-space
+            new_cluster_ids, _ = get_hierarchical_clusters(train_rets_strat, float(config.threshold), 25)
+            stringified_clusters = {}
+            for sym, c_id in zip(train_rets_strat.columns, new_cluster_ids):
+                stringified_clusters.setdefault(str(c_id), []).append(str(sym))
+
+            # Benchmark for market-neutral
+            bench_sym = config.benchmark_symbols[0] if config.benchmark_symbols else None
+            bench_rets = train_rets[bench_sym] if bench_sym and bench_sym in train_rets.columns else None
+
+            for engine_name in engines:
+                # Optimized Path: Adaptive engine only needs to run once per window
+                profiles_to_run = ["adaptive"] if engine_name == "adaptive" else profiles
+
+                for profile in profiles_to_run:
+                    actual_profile = self.orchestrator.resolve_regime_profile(regime_name) if profile == "adaptive" else cast(ProfileName, profile)
+
+                    target_engine = engine_name
+                    if actual_profile in ["market", "benchmark"]:
+                        target_engine = "market"
+                    elif actual_profile == "barbell":
+                        target_engine = "custom"
+
+                    opt_ctx = {"window_index": i, "engine": target_engine, "profile": profile, "regime": regime_name, "actual_profile": actual_profile}
+                    try:
+                        engine = build_engine(target_engine)
                         if ledger:
                             ledger.record_intent("backtest_optimize", opt_ctx, input_hashes={})
 
                         req = EngineRequest(
-                            profile=cast(ProfileName, profile),
-                            engine=engine_name, # CRITICAL: Pass engine name for sub-solver recruitment
+                            profile=actual_profile,
+                            engine=target_engine,
                             regime=regime_name,
                             market_environment=regime_name,
                             cluster_cap=0.25,
                             kappa_shrinkage_threshold=float(config.features.kappa_shrinkage_threshold),
                             default_shrinkage_intensity=float(config.features.default_shrinkage_intensity),
-                            adaptive_fallback_profile=str(config.features.adaptive_fallback_profile)
+                            adaptive_fallback_profile=str(config.features.adaptive_fallback_profile),
+                            benchmark_returns=bench_rets,  # For market_neutral
                         )
 
-                        stringified_clusters = {str(k): v for k, v in selection.audit_clusters.items()}
-                        
-                        # Market profile needs the full universe (benchmarks)
-                        if profile == "market":
-                            # Combine winners and benchmarks
-                            market_syms = list(set(winners) | set(config.benchmark_symbols))
-                            market_syms = [s for s in market_syms if s in train_rets.columns]
-                            train_rets_opt = train_rets[market_syms]
-                        else:
-                            train_rets_opt = train_rets[winners]
-                            
-                        opt_resp = engine.optimize(
-                            returns=train_rets_opt, clusters=stringified_clusters, meta=self.metadata, stats=self.stats, request=req
-                        )
+                        # Market profile needs the full pool, others use synthesized strategies
+                        returns_for_opt = train_rets if actual_profile == "market" else train_rets_strat
 
-                        # Record Optimization Outcome
+                        opt_resp = engine.optimize(returns=returns_for_opt, clusters=stringified_clusters, meta=window_meta, stats=self.stats, request=req)
+
+                        # Execution Layer: Aggregates strategy-level weights back to physical assets
+                        flat_weights = synthesizer.flatten_weights(opt_resp.weights)
+
+                        # Pillar 3: Weight Flattening Guard (Phase 125)
+                        # Verifies that aggregated net exposure matches target intent
+                        if not flat_weights.empty:
+                            net_sum = float(flat_weights["Net_Weight"].sum())
+                            gross_sum = float(flat_weights["Weight"].sum())
+                            # Market Neutral profiles (CR-290) should have net exposure near 0
+                            # Standard long-biased profiles should have net exposure near 1.0
+                            is_neutral = actual_profile == "market_neutral" or getattr(req, "market_neutral", False)
+                            target_net = 0.0 if is_neutral else 1.0
+
+                            if abs(net_sum - target_net) > 0.05:
+                                logger.warning(f"Weight Guard Triggered: Profile={actual_profile}, Net={net_sum:.4f}, Target={target_net:.4f}, Gross={gross_sum:.4f}")
+                            else:
+                                logger.info(f"Weight Guard Passed: Profile={actual_profile}, Net={net_sum:.4f}, Gross={gross_sum:.4f}")
+
                         if ledger:
-                            weights_dict = opt_resp.weights.set_index("Symbol")["Weight"].to_dict() if not opt_resp.weights.empty else {}
+                            weights_dict = flat_weights.set_index("Symbol")["Net_Weight"].to_dict()
                             ledger.record_outcome(step="backtest_optimize", status="success", output_hashes={}, metrics={"weights": weights_dict}, context=opt_ctx)
 
-                        if opt_resp.weights.empty:
-                            logger.warning(f"Optimization returned empty weights for {engine_name}/{profile} in window {i}")
+                        if flat_weights.empty:
                             continue
 
                         # 5. Simulation
                         for sim_name in sim_names:
-                            sim_ctx = {"window_index": i, "engine": engine_name, "profile": profile, "simulator": sim_name}
+                            sim_ctx = {"window_index": i, "engine": target_engine, "profile": profile, "simulator": sim_name}
                             try:
                                 simulator = build_simulator(sim_name)
                                 if ledger:
                                     ledger.record_intent("backtest_simulate", sim_ctx, input_hashes={})
 
-                                sim_results = simulator.simulate(weights_df=opt_resp.weights, returns=test_rets)
+                                # Simulator MUST use original test returns of physical assets
+                                sim_results = simulator.simulate(weights_df=flat_weights, returns=test_rets)
 
-                                # Handle both dict and object responses from simulator
                                 metrics = {}
                                 if isinstance(sim_results, dict):
                                     metrics = sim_results.get("metrics", sim_results)
@@ -212,13 +254,11 @@ class BacktestEngine:
                                 if ledger:
                                     ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=sanitized_metrics, context=sim_ctx)
 
-                                results.append({"window": i, "engine": engine_name, "profile": profile, "simulator": sim_name, "metrics": sanitized_metrics})
+                                results.append({"window": i, "engine": target_engine, "profile": profile, "simulator": sim_name, "metrics": sanitized_metrics})
                             except Exception as e_sim:
-                                logger.error(f"Error in simulation window {i}, engine {engine_name}, profile {profile}, simulator {sim_name}: {e_sim}")
                                 if ledger:
                                     ledger.record_outcome(step="backtest_simulate", status="error", output_hashes={}, metrics={"error": str(e_sim)}, context=sim_ctx)
                     except Exception as e:
-                        logger.error(f"Error in tournament window {i}, engine {engine_name}, profile {profile}: {e}")
                         if ledger:
                             ledger.record_outcome(step="backtest_optimize", status="error", output_hashes={}, metrics={"error": str(e)}, context=opt_ctx)
 
@@ -232,10 +272,10 @@ if __name__ == "__main__":
     parser.add_argument("--train-window", type=int)
     parser.add_argument("--test-window", type=int)
     parser.add_argument("--step-size", type=int)
+    parser.add_argument("--selection-mode", help="Override selection mode")
     args = parser.parse_args()
 
     os.environ.setdefault("TV_RUN_ID", datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-
     logging.basicConfig(level=logging.INFO)
     engine = BacktestEngine()
-    engine.run_tournament(train_window=args.train_window, test_window=args.test_window, step_size=args.step_size)
+    engine.run_tournament(train_window=args.train_window, test_window=args.test_window, step_size=args.step_size, selection_mode=args.selection_mode)

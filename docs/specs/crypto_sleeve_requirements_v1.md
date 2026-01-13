@@ -35,8 +35,20 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-214 | MUST | ✅ | **HTR Standard**: The selection engine must implement the 4-stage Hierarchical Threshold Relaxation loop (Strict -> Spectral -> Factor Representation -> Balanced Fallback) to ensure $N \ge 15$. |
 | CR-220 | MUST | ✅ | **Dynamic Ridge Scaling**: The system must iteratively apply shrinkage (diagonal loading) to the covariance matrix if the condition number (Kappa) exceeds a configurable threshold (default 5000), ensuring numerical stability for solvers. |
 | CR-221 | MUST | ✅ | **Adaptive Safety Protocol**: The `adaptive` meta-engine must default to an **Equal Risk Contribution (ERC)** fallback profile (or other configurable safety profiles like EW) when sub-solvers fail or during warm-up periods. |
-| CR-230 | MUST | ⏳ | **Toxicity Hard-Stop**: HTR Stage 3/4 recruitment must never include assets failing a strict entropy limit (default 0.999), even if factor representation floors are not met. |
-| CR-231 | MUST | ⏳ | **Optimized Shrinkage**: Transition from simple diagonal loading to **Ledoit-Wolf** for cluster benchmark covariance to improve the stability-alpha trade-off. |
+| CR-230 | MUST | ✅ | **Toxicity Hard-Stop**: HTR Stage 3/4 recruitment must never include assets failing a strict entropy limit (default 0.999 for Crypto), ensuring factor representation without alpha dilution. |
+| CR-232 | MUST | ✅ | **Backend Purity**: Optimization engines must not use shared base-class fallbacks; each backend (`skfolio`, `riskfolio`, etc.) must execute its own solver or return explicit failure to ensure performance differentiation. |
+| CR-233 | MUST | ✅ | **Hybrid Barbell**: The `barbell` strategy must optimize its core layer using the engine's native solver, allowing for backend-specific risk-management profiles. |
+| CR-240 | MUST | ✅ | **Baseline Selection Standard**: The system must provide a `baseline` selection engine that passes through all candidates to the portfolio engines, enabling quantification of Selection Alpha. |
+| CR-250 | MUST | ✅ | **Statistical Sample Floor**: Forensic audits and tournaments must utilize at least 15 candidates (via HTR Stage 4 fallback) to ensure numerical differentiation between solvers and prevent constrained convergence to bit-perfect identical weights. |
+| CR-260 | MUST | ✅ | **Directional Synthetic Longs**: Portfolio engines must handle `SHORT` candidates by inverting their returns ($R_{syn} = -1 \times R_{raw}$) before optimization to ensure risk-parity and convex engines treat them as alpha-positive stability contributors. |
+| CR-261 | MUST | ✅ | **Regime-Direction Alignment**: The `MarketRegimeDetector` must influence the late-binding asset direction, specifically enforcing tighter filters on `LONG` candidates during `CRISIS` or `TURBULENT` regimes. |
+| CR-270 | MUST | ✅ | **Synthesis-Allocation Decoupling**: Decision logic (regime mapping, directional inversion) is abstracted into the Strategy Synthesis layer. Portfolio engines are "Decision-Naive" and operate only on processed return streams. |
+| CR-271 | MUST | ✅ | **Atomic Strategy Interface**: The platform supports "Atomic Strategies" (Asset, Logic, TimeScale) as optimization candidates. Each Atom must have exactly ONE logic. |
+| CR-280 | MUST | ✅ | **Complex Strategy Composition**: Supports ensembling atoms into complex strategies. Note: Strategic intents (like Barbell or Neutrality) are handled by Pillar 3 (Allocation) for global optimality. |
+| CR-281 | MUST | ✅ | **Recursive Weight Flattening**: The Orchestrator supports mapping optimized strategy weights back to underlying physical assets for implementation. |
+| CR-290 | MUST | ✅ | **Market Neutral Constraint**: Market neutrality is a native optimization constraint (not a profile), enabling beta-hedged Max-Sharpe/HRP portfolios. |
+| CR-291 | MUST | ✅ | **Synthetic Hierarchical Clustering**: The Allocation layer performs hierarchical clustering on synthesized return streams to identify uncorrelated alpha factors. |
+| CR-292 | MUST | ✅ | **Pillar 3 Strategy Status**: The `barbell` strategy is classified as a **Risk Profile** (Pillar 3) because it manages capital segmentation across provided alpha streams. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---

@@ -193,13 +193,21 @@ class CVXPortfolioSimulator(BaseSimulator):
         if cash_key not in universe:
             universe.append(cash_key)
 
-        w_target_raw = weights_df.set_index("Symbol")["Weight"].astype(float)
+        # Use Net_Weight to handle directional returns correctly (Long/Short).
+        if "Net_Weight" in weights_df.columns:
+            w_target_raw = weights_df.set_index("Symbol")["Net_Weight"].astype(float)
+        else:
+            w_target_raw = weights_df.set_index("Symbol")["Weight"].astype(float)
+
         if isinstance(w_target_raw, pd.DataFrame):
             w_target_raw = w_target_raw.iloc[:, 0]
         w_target = cast(pd.Series, w_target_raw).reindex(universe, fill_value=0.0)
 
-        non_cash_sum = float(w_target.drop(index=[cash_key]).abs().sum())
-        w_target[cash_key] = max(0.0, 1.0 - non_cash_sum)
+        # Cash calculation: max(0.0, 1.0 - absolute sum of risk assets)
+        # Note: In a Long/Short portfolio, leverage or margin might apply,
+        # but here we assume a dollar-neutral or cash-constrained allocation.
+        non_cash_abs_sum = float(w_target.drop(index=[cash_key]).abs().sum())
+        w_target[cash_key] = max(0.0, 1.0 - non_cash_abs_sum)
         w_target = w_target.fillna(0.0)
 
         rebalance_mode = settings.features.feat_rebalance_mode

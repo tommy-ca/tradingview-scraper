@@ -18,15 +18,18 @@ logger = logging.getLogger("metadata_enrichment")
 def get_asset_class(symbol: str) -> str:
     """Heuristic to determine asset class from symbol."""
     if ":" not in symbol:
+        # Fallback for cryptos that might not have a prefix in some contexts
+        if any(pair in symbol for pair in ["USDT", "USDC", "BTC", "ETH"]):
+            return "CRYPTO"
         return "UNKNOWN"
     exchange = symbol.split(":")[0].upper()
-    if exchange in ["BINANCE", "OKX", "BYBIT", "BITGET"]:
+    if exchange in ["BINANCE", "OKX", "BYBIT", "BITGET", "PHEMEX", "MEXC", "DERIBIT", "BITMEX"]:
         return "CRYPTO"
-    if exchange in ["NYSE", "NASDAQ", "AMEX"]:
+    if exchange in ["NYSE", "NASDAQ", "AMEX", "BATS", "ARCA"]:
         return "EQUITY"
-    if exchange in ["OANDA", "THINKMARKETS", "FOREXCOM"]:
+    if exchange in ["OANDA", "THINKMARKETS", "FOREXCOM", "SAXO", "IG"]:
         return "FOREX"
-    if exchange in ["CME", "CBOT", "NYMEX", "COMEX"]:
+    if exchange in ["CME", "CBOT", "NYMEX", "COMEX", "ICE", "EUREX"]:
         return "FUTURES"
     return "CFD"
 

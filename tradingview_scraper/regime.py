@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Tuple, cast
+from typing import Dict, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,7 @@ class MarketRegimeDetector:
     """
     Advanced market regime detector using statistical complexity, volatility clustering,
     long-term memory (Hurst), and stationarity (ADF).
+    Supports injectable weights for Optuna calibration.
     """
 
     def __init__(
@@ -30,6 +31,8 @@ class MarketRegimeDetector:
         *,
         audit_path: str | Path = "data/lakehouse/regime_audit.jsonl",
         enable_audit_log: bool = True,
+        # CRP-270: Injectable weights
+        weights: Optional[Dict[str, float]] = None,
     ):
         self.crisis_threshold = crisis_threshold
         self.quiet_threshold = quiet_threshold
@@ -43,6 +46,16 @@ class MarketRegimeDetector:
 
         self.enable_audit_log = bool(enable_audit_log)
         self.audit_path = Path(audit_path) if audit_path else None
+
+        # CRP-270: Set Weights
+        self.weights = weights or {
+            "vol_ratio": 0.35,
+            "turbulence": 0.25,
+            "clustering": 0.15,
+            "entropy": 0.10,
+            "hurst": 0.10,
+            "stationarity": 0.05,
+        }
 
     def _save_audit_log(
         self,
@@ -78,19 +91,19 @@ class MarketRegimeDetector:
 
     def _hurst_exponent(self, x: np.ndarray) -> float:
         h = calculate_hurst_exponent(x)
-        return float(h if h is not None else 0.5)
+        return float(h) if h is not None else 0.5
 
     def _stationarity_score(self, x: np.ndarray) -> float:
         s = calculate_stationarity_score(x)
-        return float(s if s is not None else 0.5)
+        return float(s) if s is not None else 0.5
 
     def _permutation_entropy(self, x: np.ndarray, order: int = 3, delay: int = 1) -> float:
         pe = calculate_permutation_entropy(x, order, delay)
-        return float(pe if pe is not None else 1.0)
+        return float(pe) if pe is not None else 1.0
 
     def _dwt_turbulence(self, returns: np.ndarray) -> float:
         turb = calculate_dwt_turbulence(returns)
-        return float(turb if turb is not None else 0.5)
+        return float(turb) if turb is not None else 0.5
 
     def _serial_correlation(self, returns: np.ndarray, lags: int = 1) -> float:
         if len(returns) < lags + 1:
@@ -108,6 +121,7 @@ class MarketRegimeDetector:
 
     def _hmm_classify(self, x: np.ndarray) -> str:
         from hmmlearn.hmm import GaussianHMM
+
         if len(x) < 40:
             return "NORMAL"
         try:
@@ -159,21 +173,40 @@ class MarketRegimeDetector:
         current_vol = float(tail_slice.std()) if len(tail_slice.dropna()) > 1 else 0.0
         baseline_vol = float(mean_rets_series.std()) if len(mean_rets_series.dropna()) > 1 else 1.0
         vol_ratio = current_vol / (baseline_vol + 1e-12)
+
         ent = self._permutation_entropy(market_rets[-64:])
         vc = max(0.0, self._volatility_clustering(market_rets))
         turbulence = self._dwt_turbulence(market_rets[-64:])
         hurst = self._hurst_exponent(market_rets)
         stationarity = self._stationarity_score(market_rets)
-        regime_score = (0.35 * vol_ratio + 0.25 * turbulence + 0.15 * vc + 0.10 * ent + 0.10 * abs(hurst - 0.5) * 2.0 + 0.05 * stationarity)
+
+        # CRP-270: Weighted Score using injectable weights
+        regime_score = (
+            self.weights["vol_ratio"] * vol_ratio
+            + self.weights["turbulence"] * turbulence
+            + self.weights["clustering"] * vc
+            + self.weights["entropy"] * ent
+            + self.weights["hurst"] * abs(hurst - 0.5) * 2.0
+            + self.weights["stationarity"] * stationarity
+        )
+
         quadrant, quad_metrics = self.detect_quadrant_regime(returns)
         hmm_regime = self._hmm_classify(market_rets)
-        if regime_score >= 1.8: regime = "CRISIS"
-        elif regime_score < 0.7: regime = "QUIET"
-        else: regime = "NORMAL"
+
+        if regime_score >= self.crisis_threshold:
+            regime = "CRISIS"
+        elif regime_score < self.quiet_threshold:
+            regime = "QUIET"
+        else:
+            regime = "NORMAL"
+
         settings = get_settings()
         if settings.features.feat_spectral_regimes:
-            if (turbulence > 0.7 or hurst > 0.65) and regime not in ["CRISIS", "QUIET"]: regime = "TURBULENT"
-            if (hmm_regime == "CRISIS" or quadrant == "CRISIS") and regime_score > 1.5: regime = "CRISIS"
+            if (turbulence > 0.7 or hurst > 0.65) and regime not in ["CRISIS", "QUIET"]:
+                regime = "TURBULENT"
+            if (hmm_regime == "CRISIS" or quadrant == "CRISIS") and regime_score > 1.5:
+                regime = "CRISIS"
+
         full_metrics = {"vol_ratio": vol_ratio, "turbulence": turbulence, "clustering": vc, "entropy": ent, "hurst": hurst, "stationarity": stationarity, "hmm_state": hmm_regime, **quad_metrics}
         self._save_audit_log(regime, regime_score, full_metrics, quadrant)
         logger.info(f"Regime: {regime} (Score: {regime_score:.2f}) | Quadrant: {quadrant} | HMM: {hmm_regime}")

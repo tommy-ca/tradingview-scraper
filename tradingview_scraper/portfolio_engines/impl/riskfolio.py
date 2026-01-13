@@ -1,14 +1,15 @@
 from __future__ import annotations
+
 import importlib.util
 import logging
-from typing import Any, Dict, List, Optional, Tuple, cast
-import numpy as np
+from typing import Any, Dict, List, Optional, cast
+
 import pandas as pd
 
-from tradingview_scraper.portfolio_engines.base import EngineRequest, EngineResponse, ProfileName, _effective_cap, _enforce_cap_series
+from tradingview_scraper.portfolio_engines.base import EngineRequest, EngineResponse, _effective_cap, _enforce_cap_series
 from tradingview_scraper.portfolio_engines.impl.custom import CustomClusteredEngine
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("riskfolio")
 
 
 class RiskfolioEngine(CustomClusteredEngine):
@@ -19,6 +20,9 @@ class RiskfolioEngine(CustomClusteredEngine):
     @classmethod
     def is_available(cls) -> bool:
         return bool(importlib.util.find_spec("riskfolio"))
+
+    def optimize(self, *, returns: pd.DataFrame, clusters: Dict[str, List[str]], meta: Optional[Dict[str, Any]] = None, stats: Optional[pd.DataFrame] = None, request: EngineRequest) -> EngineResponse:
+        return super().optimize(returns=returns, clusters=clusters, meta=meta, stats=stats, request=request)
 
     def _optimize_cluster_weights(self, *, universe, request) -> pd.Series:
         import riskfolio as rp
@@ -31,24 +35,32 @@ class RiskfolioEngine(CustomClusteredEngine):
         if n == 1:
             return pd.Series([1.0], index=X.columns)
 
-        # Riskfolio requires at least 3 assets for some estimators
         if n < 3:
             return super()._optimize_cluster_weights(universe=universe, request=request)
 
-        if request.profile == "hrp":
-            port = rp.HCPortfolio(returns=X)
-            w = port.optimization(model="HRP", codependence="pearson", rm="MV", linkage="ward")
-        elif request.profile == "risk_parity" or request.profile == "erc":
-            port = rp.Portfolio(returns=X)
-            port.assets_stats(method_mu="hist", method_cov="ledoit")
-            w = port.rp_optimization(model="Classic", rm="MV", rf=cast(Any, 0.0), b=None)
-        elif request.profile == "equal_weight":
-            return pd.Series(1.0 / n, index=X.columns)
-        else:
-            port = rp.Portfolio(returns=X)
-            port.assets_stats(method_mu="hist", method_cov="ledoit")
-            w = port.optimization(
-                model="Classic", rm="MV", obj="Sharpe" if request.profile == "max_sharpe" else "MinRisk", rf=cast(Any, float(request.risk_free_rate)), l=cast(Any, float(request.l2_gamma))
-            )
+        try:
+            if request.profile == "hrp":
+                port = rp.HCPortfolio(returns=X)
+                w = port.optimization(model="HRP", codependence="pearson", rm="MV", linkage="ward")
+            elif request.profile == "risk_parity" or request.profile == "erc":
+                port = rp.Portfolio(returns=X)
+                port.assets_stats(method_mu="hist", method_cov="ledoit")
+                w = port.rp_optimization(model="Classic", rm="MV", rf=cast(Any, 0.0), b=None)
+            elif request.profile == "equal_weight":
+                return pd.Series(1.0 / n, index=X.columns)
+            else:
+                port = rp.Portfolio(returns=X)
+                port.assets_stats(method_mu="hist", method_cov="ledoit")
 
-        return _enforce_cap_series((w.iloc[:, 0] if isinstance(w, pd.DataFrame) else pd.Series(w)).reindex(X.columns).fillna(0.0).astype(float), cap)
+                # CR-290: Market Neutral Constraint
+                if request.market_neutral and request.benchmark_returns is not None:
+                    raise ValueError("Riskfolio native Market Neutrality not yet implemented")
+
+                w = port.optimization(
+                    model="Classic", rm="MV", obj="Sharpe" if request.profile == "max_sharpe" else "MinRisk", rf=cast(Any, float(request.risk_free_rate)), l=cast(Any, float(request.l2_gamma))
+                )
+
+            return _enforce_cap_series((w.iloc[:, 0] if isinstance(w, pd.DataFrame) else pd.Series(w)).reindex(X.columns).fillna(0.0).astype(float), cap)
+        except Exception as e:
+            logger.error(f"Riskfolio optimization failed: {e}")
+            raise

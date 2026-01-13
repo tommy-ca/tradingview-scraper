@@ -1,7 +1,7 @@
-import pytest
-import pandas as pd
 import numpy as np
-from tradingview_scraper.selection_engines.engines import SelectionEngineV3_4, get_robust_correlation
+import pandas as pd
+
+from tradingview_scraper.selection_engines import SelectionEngineV3_4, get_robust_correlation
 from tradingview_scraper.selection_engines.base import SelectionRequest
 
 

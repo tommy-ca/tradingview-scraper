@@ -3,8 +3,8 @@ import logging
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.portfolio_engines import CustomClusteredEngine, CVXPortfolioEngine, SkfolioEngine
 from tradingview_scraper.portfolio_engines.base import EngineRequest
-from tradingview_scraper.portfolio_engines.engines import CustomClusteredEngine, CVXPortfolioEngine, SkfolioEngine
 
 logging.basicConfig(level=logging.INFO)
 

@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 import pywt
@@ -12,16 +12,17 @@ from statsmodels.tsa.stattools import adfuller
 logger = logging.getLogger(__name__)
 
 
-def calculate_hurst_exponent(x: np.ndarray) -> float:
+def calculate_hurst_exponent(x: np.ndarray) -> Optional[float]:
     """
     Calculates the Hurst Exponent using Rescaled Range (R/S) analysis.
     Values:
     - H > 0.5: Trending (Persistent)
     - H < 0.5: Mean-reverting (Anti-persistent)
     - H = 0.5: Random Walk (Brownian Motion)
+    Returns None if history < 32 sessions.
     """
     if len(x) < 32:
-        return 0.5
+        return None
 
     try:
 
@@ -73,14 +74,15 @@ def calculate_hurst_exponent(x: np.ndarray) -> float:
         return 0.5
 
 
-def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1) -> float:
+def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1) -> Optional[float]:
     """
     Calculates Permutation Entropy as a measure of structural randomness.
     Low values = ordered/trending, High values = noisy/random.
+    Returns None if history < order.
     """
     x = x[~np.isnan(x)]
     if len(x) < order:
-        return 1.0
+        return None
 
     n = len(x) - (order - 1) * delay
     permutations = []
@@ -97,18 +99,19 @@ def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1)
     return float(pe_val / math.log(math.factorial(order)))
 
 
-def calculate_efficiency_ratio(returns: np.ndarray) -> float:
+def calculate_efficiency_ratio(returns: np.ndarray) -> Optional[float]:
     """
     Calculates Kaufman's Efficiency Ratio (ER).
     ER = |Total Change| / Sum of Absolute Changes
 
     Higher ER (approaching 1.0) indicates a more efficient trend.
     Lower ER (approaching 0.0) indicates high noise/chop.
+    Returns None if history < 10 sessions.
     """
     # Clean NaNs
     returns = returns[~np.isnan(returns)]
-    if len(returns) < 2:
-        return 0.0
+    if len(returns) < 10:
+        return None
 
     # Net cumulative return
     net_change = abs(np.sum(returns))
@@ -122,14 +125,15 @@ def calculate_efficiency_ratio(returns: np.ndarray) -> float:
     return float(net_change / path_length)
 
 
-def calculate_dwt_turbulence(returns: np.ndarray) -> float:
+def calculate_dwt_turbulence(returns: np.ndarray) -> Optional[float]:
     """
     Uses Discrete Wavelet Transform to measure high-frequency 'turbulence'.
     Returns a value in [0, 1] representing the fraction of energy in noise.
+    Returns None if history < 8 sessions.
     """
     returns = returns[~np.isnan(returns)]
     if len(returns) < 8:
-        return 0.5
+        return None
 
     try:
         coeffs = pywt.wavedec(returns, "haar", level=min(3, pywt.dwt_max_level(len(returns), "haar")))
@@ -149,13 +153,14 @@ def calculate_dwt_turbulence(returns: np.ndarray) -> float:
         return 0.5
 
 
-def calculate_stationarity_score(returns: np.ndarray) -> float:
+def calculate_stationarity_score(returns: np.ndarray) -> Optional[float]:
     """
     Uses Augmented Dickey-Fuller (ADF) test to measure stationarity.
     Returns a score in [0, 1] where 1.0 is highly non-stationary/trending.
+    Returns None if history < 20 sessions.
     """
     if len(returns) < 20:
-        return 0.5
+        return None
 
     try:
         if len(returns) < 2 or float(np.nanstd(returns)) < 1e-12:
@@ -270,15 +275,16 @@ def calculate_trend_duration(series: np.ndarray, window: int = 50) -> int:
         return 0
 
 
-def calculate_ljungbox_pvalue(x: np.ndarray, lags: int = 5) -> float:
+def calculate_ljungbox_pvalue(x: np.ndarray, lags: int = 5) -> Optional[float]:
     """
     Performs Ljung-Box Q-test for serial correlation.
     Returns the minimum p-value across specified lags.
     Small p-values (< 0.05) indicate significant self-predictability (not white noise).
+    Returns None if history < lags + 1.
     """
     x = x[~np.isnan(x)]
     if len(x) < lags + 1:
-        return 1.0
+        return None
     try:
         # lb_stat, p_value
         res = acorr_ljungbox(x, lags=lags, return_df=True)

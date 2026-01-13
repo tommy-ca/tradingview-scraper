@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional, cast
+from typing import Dict, cast
 
 import numpy as np
 import pandas as pd
@@ -64,19 +64,23 @@ class SelectionEngineV3(BaseSelectionEngine):
         candidate_map = {c["symbol"]: c for c in raw_candidates}
         settings, selection_warnings, metrics, vetoes = get_settings(), [], {}, {}
         thresholds = self._get_active_thresholds(request)
-        relaxation_stage = request.params.get("relaxation_stage", 1)
+        relaxation_stage = int(request.params.get("relaxation_stage", 1))
+
         cluster_ids, _ = get_hierarchical_clusters(returns, request.threshold, request.max_clusters)
         clusters = {}
         for sym, c_id in zip(returns.columns, cluster_ids):
             clusters.setdefault(int(c_id), []).append(str(sym))
+
         mom_all = cast(pd.Series, returns.mean() * 252)
         vol_all = pd.Series({s: float(returns[s].dropna().std() * np.sqrt(252)) if len(returns[s].dropna()) > 1 else 0.0 for s in returns.columns})
         stab_all, liq_all = 1.0 / (vol_all + 1e-9), pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
         af_all, frag_all, regime_all = pd.Series(0.5, index=returns.columns), pd.Series(0.0, index=returns.columns), pd.Series(1.0, index=returns.columns)
+
         lookback = min(len(returns), 120)
         pe_all = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy(), order=5) for s in returns.columns})
         er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
         hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
+
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
             for s in common:
@@ -85,6 +89,7 @@ class SelectionEngineV3(BaseSelectionEngine):
                     frag_all.loc[s] = stats_df.loc[s, "Fragility_Score"]
                 if "Regime_Survival_Score" in stats_df.columns:
                     regime_all.loc[s] = stats_df.loc[s, "Regime_Survival_Score"]
+
         af_all = af_all * (returns.count() / 252.0).clip(upper=1.0)
         mps_metrics = {
             "momentum": mom_all,
@@ -106,11 +111,13 @@ class SelectionEngineV3(BaseSelectionEngine):
             "entropy": "rank",
             "hurst_clean": "rank",
         }
+
         max_f = float(frag_all.max())
         frag_penalty = (frag_all / (max_f if max_f != 0 else 1.0)).fillna(0) * 0.5
         alpha_s = self._calculate_alpha_scores(mps_metrics, methods, frag_penalty)
         alpha_scores_clean = (alpha_s if isinstance(alpha_s, pd.Series) else pd.Series(alpha_s, index=returns.columns)).copy()
         alpha_scores = alpha_scores_clean.copy()
+
         shrinkage, kappa_thresh, kappa = thresholds["shr_init"], thresholds["kappa_max"], 1e20
         corr = get_robust_correlation(returns, shrinkage=shrinkage)
         if not corr.empty:
@@ -121,9 +128,7 @@ class SelectionEngineV3(BaseSelectionEngine):
                     break
                 shrinkage += 0.01
                 corr = get_robust_correlation(returns, shrinkage=shrinkage)
-            if kappa > kappa_thresh:
-                force_aggressive_pruning = True
-                selection_warnings.append(f"High Kappa ({kappa:.2e}) after max shrinkage")
+
         disqualified = set()
 
         def _record_veto(sym, reason):
@@ -133,6 +138,7 @@ class SelectionEngineV3(BaseSelectionEngine):
         for s in returns.columns:
             if regime_all[s] < 0.1:
                 _record_veto(str(s), "Failed Darwinian Health Gate")
+
         if settings.features.feat_predictability_vetoes:
             for s in returns.columns:
                 if str(s) in disqualified:
@@ -147,12 +153,14 @@ class SelectionEngineV3(BaseSelectionEngine):
                         _record_veto(str(s), f"Random Walk (H={h:.4f})")
                 if h is not None and not np.isnan(h) and h > 0.55 and mom_all[s] < 0:
                     _record_veto(str(s), f"Toxic Persistence (H={h:.4f})")
+
         for s in returns.columns:
             if str(s) in disqualified:
                 continue
             meta = candidate_map.get(str(s)) or next((c for c in raw_candidates if c.get("identity") == str(s) or c.get("symbol") == str(s)), {})
             if any(f not in meta for f in ["tick_size", "lot_size", "price_precision"]):
                 _record_veto(str(s), "Missing metadata")
+
         for s in returns.columns:
             if str(s) in disqualified:
                 continue
@@ -163,46 +171,65 @@ class SelectionEngineV3(BaseSelectionEngine):
             if (mom_all[s] - eci_raw) < current_hurdle and not (mom_all[s] > 1.0 and (mom_all[s] - eci_raw) >= (current_hurdle * 1.25)):
                 _record_veto(str(s), f"High friction (ECI={eci_raw:.4f})")
 
-        # Benchmark Exemption: Restore benchmarks if they were disqualified
+        # Benchmark Exemption
         benchmarks = settings.benchmark_symbols
         for b in benchmarks:
             if b in returns.columns and b in disqualified:
                 disqualified.remove(b)
                 if b in vetoes:
                     del vetoes[b]
-                logger.info(f"Selection: Protected Benchmark {b}")
 
         for s in disqualified:
             alpha_scores.loc[s] = -1.0
+
         selected_symbols_dict, audit_clusters = {}, {}
         m_win_all = (1 + returns.tail(60).fillna(0.0)).prod() - 1
+
         for c_id, symbols in clusters.items():
             non_vetoed = [s for s in symbols if s not in disqualified]
+
+            # STAGE 3: Factor Representation Floor
             if not non_vetoed and relaxation_stage >= 3:
+                # Find best representative in cluster that isn't hard-vetoed
                 candidates = [s for s in symbols if not any(v in vetoes.get(s, []) for v in ["Darwinian", "metadata"])]
                 if candidates:
-                    valid_c = [c for c in candidates if not returns[c].dropna().empty and pe_all[c] <= 0.995]
+                    # Enforce Entropy ceiling even in Stage 3
+                    valid_c = [c for c in candidates if not returns[c].dropna().empty and pe_all[c] <= 0.999]
                     if valid_c:
                         best_s = alpha_scores_clean.loc[valid_c].idxmax()
                         non_vetoed = [best_s]
-                        logger.info(f"Stage 3: Forced representative {best_s}")
+                        logger.info(f"Stage 3: Forced representative {best_s} for cluster {c_id}")
+
             if not non_vetoed:
                 continue
+
+            # Pillar 2 - Dynamic Directions (moved from orchestrator for selection logic aware)
+            # This allows Pillar 2 to influence Pillar 1 winners if enabled.
+            if settings.features.feat_dynamic_direction:
+                for s in non_vetoed:
+                    new_dir = "LONG" if m_win_all.get(s, 0) >= 0 else "SHORT"
+                    if s in candidate_map:
+                        candidate_map[s]["direction"] = new_dir
+                        if new_dir == "SHORT":
+                            m_win_all[s] = -1.0 * m_win_all[s]
+
             sub_rets = returns[non_vetoed]
             actual_top_n = max(5, request.top_n)
             if settings.features.feat_dynamic_selection and len(non_vetoed) > 1:
                 mean_c = float(get_robust_correlation(sub_rets, shrinkage=shrinkage).values[np.triu_indices(len(non_vetoed), k=1)].mean())
                 actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
+
             id_to_best = {}
             for s in non_vetoed:
                 ident = candidate_map.get(s, {}).get("identity", s)
                 if ident not in id_to_best or alpha_scores_clean[s] > alpha_scores_clean[id_to_best[ident]]:
                     id_to_best[ident] = s
             uniques = list(id_to_best.values())
+
             longs = [s for s in uniques if candidate_map.get(s, {}).get("direction", "LONG") == "LONG" and m_win_all.get(s, 0) >= request.min_momentum_score]
             shorts = [s for s in uniques if candidate_map.get(s, {}).get("direction") == "SHORT" and m_win_all.get(s, 0) >= request.min_momentum_score]
 
-            # Ensure benchmarks are kept in their clusters if they passed hygiene
+            # Protect benchmarks
             for b in benchmarks:
                 if b in non_vetoed and b not in longs and b not in shorts:
                     if candidate_map.get(b, {}).get("direction", "LONG") == "LONG":
@@ -218,21 +245,25 @@ class SelectionEngineV3(BaseSelectionEngine):
             for s_key in c_sel:
                 selected_symbols_dict[s_key] = 1
             audit_clusters[int(c_id)] = {"size": len(symbols), "selected": c_sel}
+
         selected_symbols = list(selected_symbols_dict.keys())
         winners = [
             ({**candidate_map[s], "alpha_score": float(alpha_scores_clean[s])} if s in candidate_map else {"symbol": s, "direction": "LONG", "alpha_score": float(alpha_scores_clean[s])})
             for s in selected_symbols
         ]
+
+        # STAGE 4: Alpha-Leader Fallback (Balanced Selection)
         if len(winners) < 15 and relaxation_stage >= 4:
             current_syms = {w["symbol"] for w in winners}
             qualified = [
                 s
                 for s in alpha_scores_clean.index
-                if s not in current_syms and not any(v in vetoes.get(s, []) for v in ["Darwinian", "metadata"]) and not returns[s].dropna().empty and pe_all[s] <= 0.995
+                if s not in current_syms and not any(v in vetoes.get(s, []) for v in ["Darwinian", "metadata"]) and not returns[s].dropna().empty and pe_all[s] <= 0.999
             ]
             others = alpha_scores_clean.loc[qualified].sort_values(ascending=False).head(15 - len(winners))
             for s, score in others.items():
                 winners.append({**candidate_map.get(s, {"symbol": s, "direction": "LONG"}), "alpha_score": float(score), "selection_note": "Added via Balanced Selection fallback"})
+
         metrics = {"alpha_scores": alpha_scores_clean.to_dict(), "kappa": kappa, "shrinkage": shrinkage, "raw_metrics": {"entropy": pe_all.to_dict()}}
         return SelectionResponse(
             winners=winners,

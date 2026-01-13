@@ -75,7 +75,7 @@
       "selection": {
         "top_n": 10,
         "threshold": 0.45,
-        "min_momentum_score": 0.1,
+        "min_momentum_score": -0.05,
         "selection_mode": "v3.4"
       },
       "risk": {
@@ -83,7 +83,7 @@
       },
       "backtest": {
         "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio,adaptive",
-        "profiles": "min_variance,hrp,max_sharpe,barbell,equal_weight,risk_parity,market,benchmark",
+        "profiles": "min_variance,hrp,max_sharpe,barbell,equal_weight,risk_parity,market,benchmark,market_neutral",
         "benchmark_symbols": ["BINANCE:ETHUSD.P", "AMEX:SPY"],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
@@ -96,7 +96,7 @@
         "feat_dynamic_selection": false,
         "feat_short_direction": true,
         "entropy_max_threshold": 0.999,
-        "efficiency_min_threshold": 0.05,
+        "efficiency_min_threshold": 0.01,
         "hurst_random_walk_min": 0.48,
         "hurst_random_walk_max": 0.52,
         "feat_predictability_vetoes": true,
@@ -105,6 +105,7 @@
         "use_robust_correlation": true,
         "feat_directional_returns": true,
         "feat_dynamic_direction": true,
+        "feat_market_neutral": true,
         "kappa_shrinkage_threshold": 15000.0,
         "default_shrinkage_intensity": 0.01,
         "adaptive_fallback_profile": "erc"

@@ -7,8 +7,8 @@ from typing import Any, Dict, List, cast
 
 import pandas as pd
 
+from tradingview_scraper.portfolio_engines import build_engine
 from tradingview_scraper.portfolio_engines.base import EngineRequest
-from tradingview_scraper.portfolio_engines.engines import build_engine
 from tradingview_scraper.regime import MarketRegimeDetector
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import get_df_hash

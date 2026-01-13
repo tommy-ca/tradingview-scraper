@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.selection_engines import SelectionEngineV3
 from tradingview_scraper.selection_engines.base import SelectionRequest
-from tradingview_scraper.selection_engines.engines import SelectionEngineV3
 
 
 def test_selection_v3_predictability_vetoes():
@@ -46,7 +46,7 @@ def test_selection_v3_predictability_vetoes():
 
     from tradingview_scraper.settings import FeatureFlags
 
-    with patch("tradingview_scraper.selection_engines.engines.get_settings") as mock_get:
+    with patch("tradingview_scraper.selection_engines.get_settings") as mock_get:
         mock_get.return_value.features = FeatureFlags(feat_predictability_vetoes=True)
         response = engine.select(returns, raw_candidates, stats_df=None, request=request)
 
@@ -94,7 +94,7 @@ def test_selection_v3_feature_flags():
     from tradingview_scraper.settings import FeatureFlags
 
     # 1. Flag OFF (Default)
-    with patch("tradingview_scraper.selection_engines.engines.get_settings") as mock_get:
+    with patch("tradingview_scraper.selection_engines.get_settings") as mock_get:
         mock_get.return_value.features = FeatureFlags(feat_predictability_vetoes=False)
         response = engine.select(returns, raw_candidates, stats_df=None, request=request)
         # Should NOT be vetoed for entropy
@@ -104,7 +104,7 @@ def test_selection_v3_feature_flags():
         assert "NOISY" in winners or "NOISY" not in response.vetoes
 
     # 2. Flag ON
-    with patch("tradingview_scraper.selection_engines.engines.get_settings") as mock_get:
+    with patch("tradingview_scraper.selection_engines.get_settings") as mock_get:
         # Lower threshold to ensure veto
         mock_get.return_value.features = FeatureFlags(feat_predictability_vetoes=True, entropy_max_threshold=0.5)
         response = engine.select(returns, raw_candidates, stats_df=None, request=request)
@@ -115,7 +115,7 @@ def test_selection_v3_feature_flags():
 
 def test_selection_v3_1_feature_flags():
     """Verify that V3.1 also respects the predictability feature flags."""
-    from tradingview_scraper.selection_engines.engines import SelectionEngineV3_1
+    from tradingview_scraper.selection_engines import SelectionEngineV3_1
 
     engine = SelectionEngineV3_1()
 
@@ -136,7 +136,7 @@ def test_selection_v3_1_feature_flags():
     from tradingview_scraper.settings import FeatureFlags
 
     # Flag ON
-    with patch("tradingview_scraper.selection_engines.engines.get_settings") as mock_get:
+    with patch("tradingview_scraper.selection_engines.get_settings") as mock_get:
         mock_get.return_value.features = FeatureFlags(feat_predictability_vetoes=True, entropy_max_threshold=0.5)
         response = engine.select(returns, raw_candidates, stats_df=None, request=request)
         assert "NOISY" in response.vetoes

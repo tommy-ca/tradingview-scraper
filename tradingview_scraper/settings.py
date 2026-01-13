@@ -41,6 +41,7 @@ class FeatureFlags(BaseModel):
     feat_selection_logmps: bool = False
     feat_directional_returns: bool = False
     feat_dynamic_direction: bool = False
+    feat_market_neutral: bool = False
 
     # Predictability Thresholds
     entropy_max_threshold: float = 0.9

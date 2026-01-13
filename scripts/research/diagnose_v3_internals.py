@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from scripts.natural_selection import run_selection
-from tradingview_scraper.selection_engines.engines import get_robust_correlation
+from tradingview_scraper.selection_engines import get_robust_correlation
 from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")

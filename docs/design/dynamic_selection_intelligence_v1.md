@@ -56,5 +56,30 @@ To improve maintainability and testability, the portfolio engine layer has been 
         - `skfolio.py`, `riskfolio.py`, `pypfopt.py`, `cvx.py`: 3rd-party library adapters.
         - `adaptive.py`: Regime-aware meta-engine logic.
 
-### 8.2 Testing Strategy
-This modularity allows for independent unit testing of individual optimization models. The `BaseRiskEngine` interface ensures that all adapters provide consistent input/output behavior, allowing for seamless backend swapping during tournaments.
+## 9. Performance Recovery & Factor Hardening (v1.4)
+Analysis of previous results showed that aggressive stability hardening and small winner pools ($N < 5$) led to "Metric Collisions" where diverse solvers converged to Equal Weight.
+
+### 9.1 Toxicity Hard-Stop
+To prevent alpha dilution, we enforce a quality-gate on HTR relaxation. If the best asset in a cluster has an Entropy $> 0.999$, Stage 3 recruitment is skipped. This ensures the portfolio remains a collection of شناسایی identifiable trends.
+
+### 9.2 Backend Purity & Hybrid Barbell
+By refactoring the portfolio layer into modular adapters and removing silent fallbacks, each engine now provides a unique mathematical signature. The `barbell` strategy has been upgraded to a "Hybrid" model, where the engine-native optimizer is applied to the core layer, restoring strategy-specific alpha views.
+
+### 9.3 Pool Expansion
+Relaxing the momentum hurdle to $-0.05$ and the entropy ceiling to $0.999$ ensures that the portfolio engines always have sufficient degrees of freedom ($N \ge 15$) to differentiate their optimization solutions.
+
+## 15. Recursive Weight Flattening (v2.0)
+To bridge the gap between abstract Strategy Optimization and physical asset execution, the platform implements a recursive aggregation chain.
+
+### 15.1 The Weight Chain
+1.  **Solver Layer (Pillar 3)**: Output is $w_{strat\_i}$, the weight of the $i$-th strategy stream.
+2.  **Synthesis Layer (Pillar 2)**: Each stream $i$ maps to a set of underlying assets with logic-specific factors.
+3.  **Physical Layer (Execution)**: The Orchestrator flattens these weights:
+    $$Weight_{Asset,j} = \sum_i (w_{strat\_i} \times Factor_{asset\_j, i})$$
+
+### 15.2 Directional Handling
+Directionality is handled via **Synthetic Factors**:
+- If Atom $i$ is `LONG` Asset $j$: $Factor = 1.0$
+- If Atom $i$ is `SHORT` Asset $j$: $Factor = -1.0$
+- **Net Exposure**: The resulting `Net_Weight` represents the actual dollar position to be executed, while `Weight` represents the absolute capital allocation.
+

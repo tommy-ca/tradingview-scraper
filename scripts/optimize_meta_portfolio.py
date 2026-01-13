@@ -9,8 +9,8 @@ from typing import Optional, cast
 import pandas as pd
 
 sys.path.append(os.getcwd())
+from tradingview_scraper.portfolio_engines import build_engine
 from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
-from tradingview_scraper.portfolio_engines.engines import build_engine
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 

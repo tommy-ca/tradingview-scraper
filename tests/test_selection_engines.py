@@ -2,8 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tradingview_scraper.selection_engines import SelectionRequest, SelectionResponse, get_selection_engine
-from tradingview_scraper.selection_engines.engines import SelectionEngineV2, SelectionEngineV2_0, SelectionEngineV3
+from tradingview_scraper.selection_engines import SelectionEngineV2, SelectionEngineV2_0, SelectionEngineV3, SelectionRequest, SelectionResponse, get_selection_engine
 
 
 def test_get_selection_engine():

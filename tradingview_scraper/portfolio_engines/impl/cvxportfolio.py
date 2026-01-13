@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 import importlib.util
 import logging
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, cast
+
 import numpy as np
 import pandas as pd
 
-from tradingview_scraper.portfolio_engines.base import EngineRequest, EngineResponse, ProfileName, _effective_cap, _enforce_cap_series
+from tradingview_scraper.portfolio_engines.base import EngineRequest, EngineResponse, _effective_cap, _enforce_cap_series
 from tradingview_scraper.portfolio_engines.impl.custom import CustomClusteredEngine
 
 logger = logging.getLogger(__name__)
@@ -20,16 +22,18 @@ class CVXPortfolioEngine(CustomClusteredEngine):
     def is_available(cls) -> bool:
         return bool(importlib.util.find_spec("cvxportfolio"))
 
+    def optimize(self, *, returns: pd.DataFrame, clusters: Dict[str, List[str]], meta: Optional[Dict[str, Any]] = None, stats: Optional[pd.DataFrame] = None, request: EngineRequest) -> EngineResponse:
+        return super().optimize(returns=returns, clusters=clusters, meta=meta, stats=stats, request=request)
+
     def _optimize_cluster_weights(self, *, universe, request) -> pd.Series:
         import cvxportfolio as cvx
 
-        # HRP/Risk-Parity not natively implemented in CVXPortfolio wrapper yet
         if request.profile in ["hrp", "risk_parity", "erc"]:
-            return super()._optimize_cluster_weights(universe=universe, request=request)
+            raise ValueError(f"CVXPortfolio does not natively support profile {request.profile}")
 
         X = universe.cluster_benchmarks.copy().replace([np.inf, -np.inf], np.nan).dropna(how="any")
         if X.empty:
-            return super()._optimize_cluster_weights(universe=universe, request=request)
+            raise ValueError("CVXPortfolio received empty cluster benchmarks after NaN cleaning")
 
         X = X.clip(lower=-0.5, upper=0.5)
         n = X.shape[1]
@@ -47,6 +51,12 @@ class CVXPortfolioEngine(CustomClusteredEngine):
         cons = [cvx.LongOnly(), cvx.LeverageLimit(1.0)]
         if hasattr(cvx, "MaxWeights"):
             cons.append(cvx.MaxWeights(cap))
+
+        # CR-290: Market Neutrality Constraint
+        if request.market_neutral and request.benchmark_returns is not None:
+            # Beta neutrality can be complex in CVXPortfolio native DSL
+            # For now, we fallback to our custom solver which has the explicit beta constraint
+            raise ValueError("CVXPortfolio native Market Neutrality not yet implemented; use custom or skfolio")
 
         try:
             X_cvx = X.copy()
@@ -67,5 +77,6 @@ class CVXPortfolioEngine(CustomClusteredEngine):
             )
             res_s = weights.reindex(X.columns).fillna(0.0).astype(float) if isinstance(weights, pd.Series) else pd.Series(weights, index=X.columns).fillna(0.0).astype(float)
             return _enforce_cap_series(res_s, cap)
-        except Exception:
-            return super()._optimize_cluster_weights(universe=universe, request=request)
+        except Exception as e:
+            logger.error(f"CVXPortfolio native optimization failed: {e}")
+            raise

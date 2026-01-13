@@ -2,26 +2,23 @@
 
 This document provides a comprehensive guide for AI agents working on the TradingView Scraper quantitative platform. It codifies the institutional workflows, risk engine logic, and implementation standards developed for multi-asset portfolio management.
 
-## 1. Core Pipeline Workflow
+## 1. The 3-Pillar Architecture
+The platform is organized into three orthogonal pillars to ensure logical purity and numerical stability.
 
-The entire production lifecycle is unified under the `make flow-production` target. Agents should adhere to this sequence to ensure data integrity and de-risked allocation.
+### Pillar 1: Universe Selection (Filtering)
+- **Standard**: HTR v3.4.2 (Hierarchical Threshold Relaxation).
+- **Goal**: Recruit a high-hygiene subset of assets with validated secular history.
+- **Clustering**: Performed on raw asset returns to ensure factor diversity in the candidate pool.
 
-### The 15-Step Production Sequence
-1.  **Cleanup**: Wipe incremental artifacts (`make clean-run`).
-2.  **Composition & Discovery**: Execute layered scanners (`make scan-run`).
-3.  **Aggregation**: Consolidate scans into Raw Pool (`make data-prep-raw`).
-4.  **Metadata Enrichment**: Synchronize with institutional catalogs and apply defaults.
-5.  **Natural Selection**: Darwinian filtering (Log-MPS 3.2) with **Synthetic Long Normalization**.
-6.  **High-Integrity Prep**: Fetch 500-day secular history.
-7.  **Health Audit**: Validate 100% gap-free alignment using Market-Day normalization (+4h shift).
-8.  **Self-Healing**: Automated recovery loop if gaps found (`make data-repair`).
-9.  **Persistence Analysis**: Research trend and mean-reversion persistent duration (`make research-persistence`).
-10. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
-11. **Regime Detection**: Multi-factor state analysis.
-12. **Optimization**: Direction-Blind allocation on synthetic longs (`make port-optimize`).
-13. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`).
-14. **Reporting**: Deep Forensic Audit & QuantStats Tear-sheets (`make port-report`).
-15. **Audit Verification**: Final cryptographic signature check.
+### Pillar 2: Strategy Synthesis (Alpha Generation)
+- **The Strategy Atom**: Smallest unit of alpha, defined as `(Asset, Logic)`. Each atom MUST have exactly ONE logic.
+- **Synthetic Long Normalization**: SHORT return streams are inverted ($R_{syn} = -1 \times R_{raw}$) to ensure positive-alpha bias for solvers.
+- **Composition**: Atoms can be ensembled into complex strategies (e.g., Long/Short pairs).
+
+### Pillar 3: Portfolio Allocation (Risk Layer)
+- **Decision-Naive Solvers**: Mathematical engines (`skfolio`, `riskfolio`) that optimize provided streams.
+- **Synthetic Hierarchical Clustering**: Clustering is performed on *synthesized* return streams to identify logic-space correlations.
+- **Constraint Delegation**: Targets like **Market Neutrality** are handled as native solver constraints ($|w^T\beta| \le 0.15$), ensuring global optimality across all atoms.
 
 ---
 
@@ -110,6 +107,7 @@ The platform supports multiple selection architectures, evaluated via head-to-he
 
 ### Guiding Rule
 Always prefer **Selection v3.2** for maximum alpha and regime-aware robustness. Use **Selection v2.1** for conservative "Core" profiles where drawdown minimization is the primary objective.
+
 
 ---
 

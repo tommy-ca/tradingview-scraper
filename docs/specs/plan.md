@@ -13,7 +13,7 @@ This document codifies the institutional requirements and design specifications 
 - **Normalization**: +4h shift for market-day alignment (20:00-23:59 UTC).
 
 ### 2.2 Selection Architecture (The Alpha Core)
-- **Primary Model (v3.2)**: Log-Multiplicative Probability Scoring (Log-MPS).
+- **Primary Model (v3.4)**: Stabilized HTR Standard.
 - **Secondary Model (v2.1)**: Additive Rank-Sum (CARS 2.1) for drawdown protection.
 - **Predictability Vetoes**: Integrated Entropy, Hurst, and Efficiency filters.
 - **Universe Diversity**: Multi-sleeve support (Instruments, ETFs, Crypto).
@@ -39,112 +39,57 @@ This document codifies the institutional requirements and design specifications 
 
 ## 4. Development Plan (Current Sprint)
 
-### Phase 100: TDD Hardening & Feature Flags (COMPLETED)
-- [x] **TDD**: Implemented unit tests for Directional Purity and Dynamic Direction logic.
-- [x] **Infra**: Gated experimental features behind feature flags in `TradingViewScraperSettings`.
-- [x] **Audit**: Window-by-window forensic audit of risk profiles with deep ledger tracking.
-- [x] **Analysis**: Comparative study of HRP failure modes (Crypto vs Institutional ETF).
+### Phases 100-117: (Archived - See docs/specs/archive/phases_100_117.md)
+*Includes Refactor, HTR v3.4 implementation, Numerical Hardening, and Master Tournament Calibration.*
 
-### Phase 101: Synthetic Long Normalization & Logic Sync (COMPLETED)
-- [x] **Logic**: Moved directional inversion to the data normalization layer prior to selection/allocation.
-- [x] **Engine**: Audited `engines.py` to remove direction-aware code paths; models are now direction-naive.
-- [x] **Backtest**: Verified simulators correctly reconstruct `Net_Weight` from normalized outputs.
-- [x] **Docs**: Updated Requirements (v3.3.1) and Design Section 22.
+### Phase 118: Regime Sensitivity & Directional Alignment Audit (COMPLETED)
+- [x] **Regime Metric Audit**: Verified `MarketRegimeDetector` internal weighting.
+- [x] **Directional Purity**: Implemented **Synthetic Long Normalization (CR-260)**.
+- [x] **Alignment Analysis**: Confirmed return inversion allows solvers to correctly treat falling-price assets as alpha contributors.
 
-### Phase 102: Deep Forensic reporting & Full Matrix Audit (COMPLETED)
-- [x] **Report**: Developed `generate_deep_report.py` for human-readable window-by-window analysis.
-- [x] **Hardening**: Increased Permutation Entropy resolution (Order=5, 120 permutations) to fix false-positive noise vetoes.
-- [x] **Accuracy**: Fixed percentage scaling and restored missing risk metrics (Vol/DD) in tournament summaries.
-- [x] **Robustness**: Implemented Annualized Return Clipping (-99.99%) to prevent mathematical anomalies in high-drawdown regimes.
-- [x] **Traceability**: Enabled full return series persistence (`PERSIST_RETURNS=1`) for bit-perfect auditability.
-- [x] **Verification**: Confirmed bit-perfect replayability of all portfolios from ledger context.
+### Phase 119: Synthetic Directional Hardening & Strategy Synthesis (COMPLETED)
+- [x] **Simulated Directional Mapping**: Updated `backtest_simulators.py` to correctly report "Net Exposure" for Synthetic Longs.
+- [x] **Atomic Strategy Interface**: Defined `synthesis.py` for "Synthesized Return Streams".
+- [x] **Optuna Regime Calibration**: Implemented `scripts/calibrate_regime_detector.py`.
+- [x] **Multi-Scale Composing**: Standardized logic to compose atom strategies into a unified matrix.
 
-### Phase 103: System Sign-Off & Q1 2026 Freeze (COMPLETED)
-- [x] **Release**: Created git tag `v3.3.1-certified`.
-- [x] **Docs**: Final synchronization of Requirements, Design, and Agent Guide.
-- [x] **Ledger**: Verified zero-error status across the final audit chain.
-- [x] **Stability**: Hardened numerical pipelines (std/var) with `ddof=0` and explicit length guards. Suppressed residual 3rd-party RuntimeWarnings.
-- [x] **Hardening**: Implemented Annualized Return Clipping (-99.99%) for extreme regimes.
-- [x] **Protocol**: Implemented Selection Scarcity Protocol (SSP) for robust multi-stage fallbacks (Max-Sharpe -> Min-Var -> EW).
+### Phase 120: Strategy-Centric Architectural Pivot (COMPLETED)
+- [x] **Architecture Reorg**: Decoupled decision logic from engines; moved to `BacktestOrchestrator`.
+- [x] **Purified Portfolio Engines**: All engines are now "decision-naive," operating on synthesized streams.
+- [x] **Strategy Synthesis Layer**: Initial implementation in `synthesis.py` and `BacktestOrchestrator`.
+- [x] **Meta-Orchestrator**: Controller now manages regime-to-profile mapping.
+- [x] **Validation Run**: Run `v3_4_strategy_pivot` verified 100% solver stability in the new 3-pillar design.
 
-### Phase 104: Optimization Engine Refinement (COMPLETED)
-- [x] **Riskfolio HRP**: Analyze divergence (-0.95 correlation). Result: **Deprecate for production**. Riskfolio engine now warns and falls back or is used only for research.
-- [x] **PyPortfolioOpt**: Investigate `max_sharpe` warning with L2 regularization. Action: **Suppressed warning** in engine wrapper to maintain consistent API behavior while acknowledging solver limitations.
-- [x] **Adaptive Logging**: Review `AdaptiveMetaEngine` logging verbosity. Action: **Reduced to DEBUG** level to eliminate log spam during backtests.
-- [x] **Engine Consolidation**: Evaluate redundancy. Result: `skfolio` and `custom` are primary; `riskfolio` is secondary/experimental.
+### Phase 121: Strategy Composition & Atomic Ensembles (COMPLETED)
+- [x] **Complex Strategy Definition**: Defined schemas for Strategy Atoms (Asset, Logic, TimeScale).
+- [x] **Architecture Reorg**: Split selection layer into `impl/` modules.
+- [x] **Purified Backtest Engine**: Orchestrator now manages the 3-pillar workflow (Selection -> Synthesis -> Allocation).
 
-### Phase 105: Crypto Production Re-Validation & TDD Hardening (COMPLETED)
-- [x] **TDD Expansion**: Created comprehensive crypto-specific test suite.
-- [x] **Production Execution**: Executed `make flow-production PROFILE=crypto_production` with v3.3.1.
-- [x] **Window-by-Window Forensic Audit**: Analyzed selection funnel and optimization windows.
-- [x] **Learning Audit**: Identified winner sparsity issues (n < 4) causing solver instability.
-- [x] **Deep Forensic Review**: Generated forensic reports for Run ID: 20260112-075640.
-- [x] **Documentation Sync**: Updated requirements with CR-210 and CR-211.
+### Phase 122: Constraint-Based Allocation & Synthetic Clustering (COMPLETED)
+- [x] **Market Neutral Constraint (CR-290)**: Refactored `market_neutral` from a Profile into a native Allocation Constraint in `custom.py`.
+- [x] **Synthetic Hierarchical Clustering (CR-291)**: Implemented hierarchical clustering on synthesized return streams in `backtest_engine.py`.
+- [x] **3-Pillar Orchestration**: Fully decoupled Selection, Synthesis, and Allocation.
 
-### Phase 106: Selection Funnel Relaxation & Solver Optimization (COMPLETED)
-- [x] **Veto Audit**: Analyzed specific veto counts; identified "High Entropy" and "Low Efficiency" as primary bottlenecks in early windows.
-- [x] **Threshold Relaxation Experiment**:
-  - [x] Relaxed `entropy_max_threshold` to 1.0 (disabled).
-  - [x] Adjusted `efficiency_min_threshold` to 0.0.
-  - [x] Widen `hurst_random_walk` to [0.4, 0.6].
-- [x] **Selection Target Validation**: Implemented "Balanced Selection" fallback in `engines.py` ensuring min 15 candidates.
-- [x] **Solver Stability Verification**: Confirmed zero `nan` failures in late windows (12+) across all engines.
-- [x] **Specification Update**: Codified the "Balanced Selection" standard as CR-212 in `crypto_sleeve_requirements_v1.md`.
+### Phase 123: Logic Integrity & Forensic Verification (COMPLETED)
+- [x] **Selection Stage Purification**: Refactored `_select_v3_core` to strictly separate HTR stages.
+- [x] **Constraint Stress Test**: Verified beta-neutrality enforcement in `custom.py`.
+- [x] **Baseline Universe Audit**: Confirmed `baseline` engine passes raw universe correctly.
+- [x] **Unified Documentation Sync**: Finalized design docs for v3.4.2.
 
-### Phase 107: Dynamic Selection Intelligence & Root Cause Remediation (COMPLETED)
-- [x] **Worktree Cleanup**: Performed atomic commits to stabilize selection/optimization codebase (v3.4-alpha).
-- [x] **HTR Implementation**: Developed `SelectionEngineV3_3` with the 4-stage Hierarchical Threshold Relaxation loop.
-  - [x] Stage 1: Strict Vetoes (Institutional Defaults).
-  - [x] Stage 2: 20% Spectral Relaxation.
-  - [x] Stage 3: Cluster Representation Floor (Force 1 per factor).
-  - [x] Stage 4: Alpha Leader Fallback (Balanced Selection).
-- [x] **History-Aware Metric Scaling**: Adjusted `predictability.py` to handle short history by returning `None` instead of noise.
-- [x] **Metadata Fallback Standard**: Improved `enrich_candidates_metadata.py` heuristics to provide robust defaults (CR-213).
-- [x] **Validation Run**: Executed `v3_3_htr_stress_3` crypto audit verifying HTR successfully reached Stage 3 under extreme constraints.
+### Phase 124: Pillar Hardening & Atom Purity Standard (COMPLETED)
+- [x] **Atom Purity Audit**: Enforced "One Logic per Atom" in `synthesis.py`.
+- [x] **Recursive Weight Trace**: Verified the mapping from Strategy Weights -> Atom Weights -> Physical Weights.
+- [x] **Barbell Rationale Codification**: Formally defined `barbell` as a **Pillar 3 Risk Profile** (Capital Segmentation).
+- [x] **Dual-Layer Clustering Audit**: Confirmed synthetic hierarchical clustering identifies uncorrelated alpha factors.
 
+### Phase 125: Strategy Atom Hardening & Directional Integrity (IN PROGRESS)
+- [ ] **Directional Atom Interface**: Standardize `(Asset, Logic, Direction)` as the atomic return stream. [IN_PROGRESS]
+- [ ] **Weight Flattening Guard**: Implement a verification step in the orchestrator to ensure $\sum w_{net} \approx \text{Target Exposure}$ after asset aggregation.
+- [ ] **Barbell Refactoring**: Move `barbell` capital segmentation logic out of Synthesis and into the `custom` Portfolio Engine.
+- [ ] **Market Neutral Constraint Hardening**: Finalize the beta-tolerance scaling ($0.15 \rightarrow 0.05$) based on universe density.
+- [ ] **Comprehensive Pillar Audit**: Trace a single trade from Scanner Signal -> Selection Veto -> Strategy Synthesis -> Portfolio Weight -> Simulator Realization.
 
-
-
-### Phase 108: Candidate Selection & Risk Profile Forensic Audit (COMPLETED)
-- [x] **Window-by-Window Funnel Analysis**: Validated candidate survival rates and HTR recruitment stages using `audit_htr_windows.py`.
-- [x] **Risk Profile Validation**: Confirmed stable optimization for `min_variance`, `hrp`, and `barbell` across 20+ windows in stress-test run `v3_3_htr_stress_13`.
-- [x] **Numerical Stability**: Implemented Ridge Correlation (0.99*Corr + 0.01*I) in `engines.py` to bound Kappa under 2,000 for standard windows.
-- [x] **Data Integrity**: Enforced 70% coverage gate in `cluster_adapter.py` followed by zero-filling to ensure solver success for sparse crypto histories.
-- [x] **Risk Matrix Audit**: Generated full engine/profile performance matrix for `v3_4_final_stable_metrics`.
-- [ ] **Sleeve Correlation Audit**: Validate intra-sleeve orthogonality and meta-diversification for meta-portfolio readiness.
-- [ ] **Fractal Matrix Optimization**: Implement meta-portfolio allocation across orthogonal sleeves.
-- [x] **Gross/Net Reporting**: Unified reporting for meta-portfolio exposure.
-
-### Phase 109: Numerical Hardening & Configurable Stability (COMPLETED)
-- [x] **Configurable Hardening**: Added `kappa_shrinkage_threshold`, `default_shrinkage_intensity`, and `adaptive_fallback_profile` to settings and manifest.
-- [x] **Dynamic Ridge Scaling**: Implemented adaptive diagonal loading in `engines.py` to bound Kappa < 5000.
-- [x] **Adaptive Engine Refinement**: Updated `AdaptiveMetaEngine` to default to **Equal Risk Contribution (ERC)** fallback.
-- [x] **Audit**: Captured full engine/profile performance matrix for `v3_4_final_stable_metrics`. Avg Sharpe stabilized at ~0.55.
-
-### Phase 110: Alpha Recovery & Factor Hardening (COMPLETED)
-- [x] **Toxicity Hard-Stop (CR-230)**: Implemented 0.995 entropy ceiling for Stage 3/4 recruits.
-- [x] **Shrinkage Calibration**: Raised `kappa_shrinkage_threshold` to 15,000 and implemented Ledoit-Wolf baseline.
-- [x] **Alpha Restoration**: Run `v3_4_alpha_recovery_v3` confirmed return to peak Sharpe (4.28) in favorable windows.
-- [x] **Bug Fixes**: Resolved variable name mismatches and recruitment deduplication bugs.
-
-### Phase 111: TDD Validation of Modular Portfolio Architecture (COMPLETED)
-- [x] **Architecture Audit**: Documented the new directory-based engine structure in Design Docs.
-- [x] **Interface Testing**: Verified `BaseRiskEngine` compliance across all adapters.
-- [x] **Factory Testing**: Verified `build_engine` correctly routes to modular impls.
-- [x] **Stability Testing**: Implemented regression tests for Dynamic Ridge Scaling and Toxicity Hard-Stop.
-- [x] **Alpha Recovery Validation**: Run `v3_4_alpha_recovery_v5` confirmed 100% solver success with restored conviction.
-
-### Phase 112: Selection Engine Refactor & Metric Forensic Audit (COMPLETED)
-- [x] **Modular Selection Split**: Refactored `selection_engines/engines.py` into `impl/` directory (v2, v2.1, v3, v3.2, v3.4).
-- [x] **Forensic Metric Audit**: Identified the root cause of identical Sharpe ratios (Shared Inheritance & Meta-Engine Redundancy).
-- [x] **Adaptive Fix**: Refactored `AdaptiveMetaEngine` to properly propagate sub-solver context and provide transparent backend mapping.
-- [x] **Tournament Optimization**: Updated `backtest_engine.py` to only execute the `adaptive` profile once per window, eliminating redundant computations and collisions.
-- [x] **TDD Selection**: Created `tests/test_selection_engine_factory.py` and verified 100% factory routing accuracy.
-- [x] **Validation Run**: Executed `v3_4_2_final` tournament confirming unique, regime-specific performance for each meta-model.
-
-### Phase 113: Multi-Sleeve Meta-Portfolio Integration (PENDING)
+**Learning Focus**: Confirm that "Atomization" allows for 100% transparent attribution of risk back to logic type and asset identity.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.1) - Phase 112 In Progress
-
-
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.3) - Phase 125 In Progress
