@@ -213,7 +213,14 @@ class BacktestEngine:
                     elif actual_profile == "barbell":
                         target_engine = "custom"
 
-                    opt_ctx = {"window_index": i, "engine": target_engine, "profile": profile, "regime": regime_name, "actual_profile": actual_profile}
+                    opt_ctx = {
+                        "window_index": i,
+                        "engine": target_engine,
+                        "profile": profile,
+                        "regime": regime_name,
+                        "actual_profile": actual_profile,
+                        "selection_mode": current_mode,
+                    }
                     try:
                         engine = build_engine(target_engine)
                         if ledger:
@@ -270,7 +277,13 @@ class BacktestEngine:
 
                         # 5. Simulation
                         for sim_name in sim_names:
-                            sim_ctx = {"window_index": i, "engine": target_engine, "profile": profile, "simulator": sim_name}
+                            sim_ctx = {
+                                "window_index": i,
+                                "engine": target_engine,
+                                "profile": profile,
+                                "simulator": sim_name,
+                                "selection_mode": current_mode,
+                            }
                             try:
                                 simulator = build_simulator(sim_name)
                                 if ledger:

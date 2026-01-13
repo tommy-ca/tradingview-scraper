@@ -32,16 +32,13 @@ class InstitutionalAuditor:
     def __init__(self, run_id_pattern: str = "*", output_prefix: str = "institutional_audit"):
         self.run_id_pattern = run_id_pattern
         self.output_prefix = output_prefix
-        self.all_simulation_rows: List[Dict[str, Any]] = []
-        self.all_selection_data: Dict[str, Dict[int, Dict[str, Any]]] = {}  # run_id -> win_idx -> data
+        self.rows: List[Dict[str, Any]] = []
 
     def find_runs(self) -> List[Path]:
         runs_dir = Path("artifacts/summaries/runs")
         if not runs_dir.exists():
             logger.error("Runs directory not found.")
             return []
-
-        # Support both specific ID and wildcard
         if "*" in self.run_id_pattern:
             return sorted(list(runs_dir.glob(self.run_id_pattern)))
         else:
@@ -54,6 +51,9 @@ class InstitutionalAuditor:
             val = metrics.get(k)
             if val is not None:
                 try:
+                    # Handle both float and strings like "15.5%"
+                    if isinstance(val, str) and "%" in val:
+                        return float(val.replace("%", "")) / 100.0
                     return float(val)
                 except (ValueError, TypeError):
                     continue
@@ -65,42 +65,58 @@ class InstitutionalAuditor:
             return
 
         run_id = run_path.name
-        self.all_selection_data[run_id] = {}
+        run_selection_mode = "unknown"
 
+        # Pass 1: Genesis & Config (Run-level metadata)
         with open(audit_file, "r") as f:
             for line in f:
                 try:
                     entry = json.loads(line)
-                    ctx = entry.get("context", {})
-                    win_idx = ctx.get("window_index")
+                    if entry.get("type") == "genesis":
+                        config = entry.get("config", {})
+                        run_selection_mode = str(config.get("selection_mode", run_selection_mode))
+                        break
+                except Exception:
+                    continue
 
-                    # 1. Capture Selection (Window-wide)
-                    if entry.get("step") == "backtest_select" and entry.get("status") == "success":
-                        self.all_selection_data[run_id][win_idx] = {
-                            "winners": entry.get("data", {}).get("winners_meta", []),
-                            "audit": entry.get("data", {}).get("pipeline_audit", []),
-                            "engine": ctx.get("engine", "unknown"),
-                        }
+        # Directory name fallback for selection mode
+        if run_selection_mode == "unknown" and "_" in run_id:
+            run_selection_mode = run_id.split("_")[-1]
 
-                    # 2. Capture Simulation Results
+        # Pass 2: Results (Per-window metrics)
+        with open(audit_file, "r") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
                     if entry.get("step") == "backtest_simulate" and entry.get("status") == "success":
+                        ctx = entry.get("context", {})
                         met = entry.get("outcome", {}).get("metrics", {})
 
-                        # Institutional Key Aliasing Protocol (Standard v3.5.7)
-                        sharpe = self._get_metric(met, ["sharpe", "Sharpe", "avg_window_sharpe"])
-                        ann_ret = self._get_metric(met, ["annualized_return", "AnnRet", "Return (%)", "return"])
-                        max_dd = self._get_metric(met, ["max_drawdown", "MaxDD", "MaxDD (%)"])
-                        vol = self._get_metric(met, ["annualized_vol", "realized_vol", "Vol (%)", "volatility"])
+                        # 1. Identify Context
+                        # Use context if available, otherwise look for short-keys in metrics
+                        engine = str(ctx.get("engine") or met.get("eng") or "unknown")
+                        profile = str(ctx.get("profile") or met.get("prof") or "unknown")
+                        simulator = str(ctx.get("simulator") or met.get("sim") or "unknown")
+                        win_idx = int(ctx.get("window_index", 0))
+
+                        # Selection mode detection: Context -> Genesis -> RunID
+                        selection_mode = str(ctx.get("selection_mode") or run_selection_mode)
+
+                        # 2. Extract Metrics using robust aliasing
+                        sharpe = self._get_metric(met, ["sharpe", "Sharpe", "avg_window_sharpe", "sharpe_ratio"])
+                        ann_ret = self._get_metric(met, ["annualized_return", "AnnRet", "Return (%)", "return", "total_return"])
+                        max_dd = self._get_metric(met, ["max_drawdown", "MaxDD", "MaxDD (%)", "drawdown"])
+                        vol = self._get_metric(met, ["annualized_vol", "realized_vol", "Vol (%)", "volatility", "annualized_volatility"])
                         turnover = self._get_metric(met, ["turnover", "Turnover (%)", "turnover_rate"])
 
-                        self.all_simulation_rows.append(
+                        self.rows.append(
                             {
                                 "RunID": run_id,
+                                "Selection": selection_mode,
+                                "Engine": engine,
+                                "Profile": profile,
+                                "Simulator": simulator,
                                 "Window": win_idx,
-                                "Selection": run_id.split("_")[-1] if "_" in run_id else "unknown",
-                                "Engine": ctx.get("engine"),
-                                "Profile": ctx.get("profile"),
-                                "Simulator": ctx.get("simulator"),
                                 "Sharpe": sharpe,
                                 "AnnRet": ann_ret,
                                 "MaxDD": max_dd,
@@ -112,83 +128,104 @@ class InstitutionalAuditor:
                     continue
 
     def generate_report(self):
-        df = pd.DataFrame(self.all_simulation_rows)
-        if df.empty:
+        if not self.rows:
             print("# ❌ No Institutional Audit Data Found")
             return
 
-        # Institutional Metric Calculations
+        df = pd.DataFrame(self.rows)
+
+        # Data Hygiene: Filter out windows with effectively no results
+        # We only keep rows where Sharpe is non-zero OR return is non-zero
+        # (Actually keeping all rows to show the full matrix, even failed ones)
+
         def stability_score(x):
+            """Institutional Stability: Mean / StdDev. Measures reliability of the alpha."""
             m = float(x.mean())
             s = float(x.std())
-            return m / (s + 1e-9) if not pd.isna(s) and s > 0 else 0.0
+            if s <= 1e-9:
+                return 1.0 if abs(m) > 0 else 0.0
+            return m / s
 
         print("\n# 🏛️ INSTITUTIONAL STABLE PERFORMANCE MATRIX (v3.5.7)")
         print(f"**Generated**: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("> Note: Only successful simulation windows with non-zero metrics are included in statistical averages.")
+        print(f"**Scope**: Scanned {len(df['RunID'].unique())} runs | Total {len(df)} successful simulation windows.")
+        print("> Note: All metrics are averages across rebalance windows.")
 
-        # Filter out "junk" data points where return or sharpe is exactly 0.0 (indicates logging failure)
-        # We define validity as having at least one non-zero core risk metric
-        valid_df = df[(df["Sharpe"] != 0.0) | (df["AnnRet"] != 0.0) | (df["MaxDD"] != 0.0)].copy()
-
-        if valid_df.empty:
-            logger.warning("No valid (non-zero) performance data points found. Using full dataset.")
-            valid_df = df
-
-        # Group by Selection x Profile x Engine x Simulator to ensure distinct backends aren't merged
-        matrix = valid_df.groupby(["Selection", "Profile", "Engine", "Simulator"]).agg(
-            {"Sharpe": ["mean", stability_score, "count"], "AnnRet": "mean", "MaxDD": ["mean", "min"], "Vol": "mean", "Turnover": "mean"}
+        # Aggregation
+        # We group by Simulator as well to avoid merging heterogeneous simulation methods
+        group_cols = ["Selection", "Profile", "Engine", "Simulator"]
+        matrix = df.groupby(group_cols).agg(
+            {
+                "Sharpe": ["mean", stability_score, "count"],
+                "AnnRet": "mean",
+                "MaxDD": ["mean", "min"],
+                "Vol": "mean",
+                "Turnover": "mean",
+            }
         )
 
-        # Flatten columns
+        # Flatten multi-index columns
         matrix.columns = ["Sharpe (μ)", "Stability (μ/σ)", "Windows", "AnnRet (μ)", "MaxDD (μ)", "MaxDD (tail)", "Vol (μ)", "Turnover (μ)"]
         matrix = matrix.reset_index()
 
-        # Add Volatility Accuracy
+        # Volatility Accuracy (Closeness to target risk bands)
         def vol_acc(row):
             target = VOL_BENCHMARKS.get(str(row["Profile"]), 0.50)
             realized = float(row["Vol (μ)"])
             if realized <= 0:
                 return 0.0
-            return 1.0 - min(1.0, abs(realized - target) / target)
+            return 1.0 - min(1.0, abs(realized - target) / (target + 1e-9))
 
         matrix["Vol Accuracy"] = matrix.apply(vol_acc, axis=1)
+
+        # Institutional Conviction: High Sharpe * High Stability
         matrix["Conviction"] = matrix["Sharpe (μ)"] * matrix["Stability (μ/σ)"]
-        matrix = matrix.sort_values(by="Conviction", ascending=False)
 
-        # Formatting
+        # Sort by Selection then Conviction
+        matrix = matrix.sort_values(by=["Selection", "Conviction"], ascending=[True, False])
+
+        # Formatting for display
         display_df = matrix.copy()
-        display_df["AnnRet (μ)"] = display_df["AnnRet (μ)"].apply(lambda x: f"{x:.1%}")
-        display_df["MaxDD (μ)"] = display_df["MaxDD (μ)"].apply(lambda x: f"{x:.1%}")
-        display_df["MaxDD (tail)"] = display_df["MaxDD (tail)"].apply(lambda x: f"{x:.1%}")
-        display_df["Vol Accuracy"] = display_df["Vol Accuracy"].apply(lambda x: f"{x:.1%}")
 
+        def fmt_percent(x):
+            return f"{x:.1%}" if not pd.isna(x) else "0.0%"
+
+        def fmt_float(x):
+            return f"{x:.3f}" if not pd.isna(x) else "0.000"
+
+        display_df["AnnRet (μ)"] = display_df["AnnRet (μ)"].apply(fmt_percent)
+        display_df["MaxDD (μ)"] = display_df["MaxDD (μ)"].apply(fmt_percent)
+        display_df["MaxDD (tail)"] = display_df["MaxDD (tail)"].apply(fmt_percent)
+        display_df["Vol Accuracy"] = display_df["Vol Accuracy"].apply(fmt_percent)
+        display_df["Sharpe (μ)"] = display_df["Sharpe (μ)"].apply(fmt_float)
+        display_df["Stability (μ/σ)"] = display_df["Stability (μ/σ)"].apply(lambda x: f"{x:.2f}")
+        display_df["Vol (μ)"] = display_df["Vol (μ)"].apply(lambda x: f"{x:.2f}")
+        display_df["Turnover (μ)"] = display_df["Turnover (μ)"].apply(lambda x: f"{x:.2f}")
+
+        pd.set_option("display.max_rows", None)
         print(display_df.drop(columns=["Conviction"]).to_markdown(index=False))
 
-        print("\n## 📊 Institutional Risk Profile Volatility Standards")
-        print("Each profile is calibrated to a specific volatility band to ensure behavioral consistency.")
-        print("| Profile | Target Vol | Behavioral Rationale |")
-        print("| :--- | :--- | :--- |")
-        print("| **MinVar / MarketNeutral** | **0.35** | Minimizes absolute variance; prioritizes capital preservation. |")
-        print("| **HRP / Risk Parity** | **0.45 - 0.50** | Equalizes risk across clusters; resilient to idiosyncratic shocks. |")
-        print("| **Equal Weight** | **0.60** | Naive exposure; captures broad system beta. |")
-        print("| **Max Sharpe** | **0.90** | Aggressive alpha pursuit; accepts higher concentration and tail risk. |")
-
+        # 🔍 Window Forensic & Anomaly Audit
         print("\n## 🔍 Anomaly Detection & Outlier Audit")
 
-        # 1. Crash Windows (Window MaxDD < -30%)
+        # 1. Crash Detection
         crashes = df[df["MaxDD"] < -0.30]
         if not crashes.empty:
             print(f"### 🚨 Crash Events Detected ({len(crashes)})")
-            # Use cast to DataFrame to help type checker if needed, but 'by' is the standard way
-            print(pd.DataFrame(crashes)[["RunID", "Window", "Profile", "MaxDD"]].sort_values(by="MaxDD", ascending=True).head(20).to_markdown(index=False))
+            # Force cast or wrap to satisfy type checker
+            c_df = pd.DataFrame(crashes)
+            c_sorted = c_df[["RunID", "Window", "Profile", "MaxDD"]].sort_values(by="MaxDD", ascending=True)
+            print(c_sorted.head(15).to_markdown(index=False))
 
-        # 2. Sharpe Outliers (Unstable Highs)
-        unstable = df[df["Sharpe"] > 10.0]
+        # 2. Extreme Sharpe Outliers (Potential math divergence)
+        unstable = df[df["Sharpe"].abs() > 10.0]
         if not unstable.empty:
-            print(f"### ⚠️ Sharpe Outliers Detected ({len(unstable)})")
-            print(pd.DataFrame(unstable)[["RunID", "Window", "Profile", "Sharpe"]].sort_values(by="Sharpe", ascending=False).to_markdown(index=False))
+            print("### ⚠️ Unstable Sharpe Outliers (|Sharpe| > 10)")
+            u_df = pd.DataFrame(unstable)
+            u_sorted = u_df[["RunID", "Window", "Profile", "Sharpe"]].sort_values(by="Sharpe", ascending=False)
+            print(u_sorted.to_markdown(index=False))
 
+        # 📈 Volatility Band Compliance
         print("\n## 📈 Volatility Compliance Trace")
         vol_summary = matrix.groupby("Profile")["Vol (μ)"].mean()
         for prof_obj, realized_val in vol_summary.items():
@@ -196,7 +233,7 @@ class InstitutionalAuditor:
             realized = float(realized_val)
             target = VOL_BENCHMARKS.get(prof, 0.50)
             if realized <= 0:
-                print(f"- **{prof}**: No valid Vol data found.")
+                print(f"- **{prof}**: No valid realized volatility found.")
                 continue
             status = "✅" if abs(realized - target) < 0.20 else "⚠️ DRIFT"
             print(f"- **{prof}**: Target {target:.2f} | Realized {realized:.2f} | {status}")
@@ -212,7 +249,7 @@ class InstitutionalAuditor:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run-id", default="*", help="Run ID or pattern (default: *)")
+    parser.add_argument("--run-id", default="*", help="Run ID pattern (e.g. 'full_sys_*')")
     parser.add_argument("--prefix", default="institutional_audit", help="Output filename prefix")
     args = parser.parse_args()
 

@@ -121,12 +121,24 @@ This document codifies the institutional requirements and design specifications 
 - [x] **SHORT Integrity Audit**: Verified 100% directional accuracy across 4,180 strategy atom implementations.
 - [x] **Volatility Band Verification**: Validated target risk bands (MinVar: 0.35, HRP: 0.45, MaxSharpe: 0.90).
 
-### Phase 148: Tail-Risk Hard-Stop & Circuit Breaker (IN PROGRESS)
-- [ ] **Flash-Crash Circuit Breaker**: Implement automated shift to Cash or EW-Stable when window drawdown > 50%. [IN_PROGRESS]
-- [ ] **HRP Hardening**: Align `custom` engine bisection logic with `skfolio` branch-variance standard to close the performance gap.
-- [ ] **Market Neutral Standard**: Formalize the use of `market_neutral` as a constraint across all alpha-driven profiles.
+### Phase 148: Tail-Risk Mitigation & Regime Hardening (COMPLETED)
+- [x] **Tail-Risk Selection Alpha**: Integrated Skewness, Kurtosis, and CVaR into the v4 Selection Pipeline.
+- [x] **Regime Detector Enhancement**: Updated `MarketRegimeDetector` with Fat-Tail Awareness.
+- [x] **Flash-Crash Mitigation**: Implemented Profile-Specific Ridge Loading for `max_sharpe`.
+- [x] **Requirements Update**: Codified the "Outlier Survival" standard (CR-620).
+
+### Phase 149: Forensic Reporting & Schema Stabilization (COMPLETED)
+- [x] **Audit Script Overhaul**: Standardized `stable_institutional_audit.py` with robust metric aliasing and selection detection.
+- [x] **Numeric Type Hardening**: Patched `backtest_engine.py` to ensure `numpy` types are preserved in the ledger.
+- [x] **Volatility Compliance Audit**: Implemented automated drift detection for risk profile volatility bands.
+- [x] **Crash Event Trace**: Added window-by-window forensic trace for outlier identification (e.g. Window 220).
+
+### Phase 150: Institutional Scaling & Meta-Portfolio Readiness (PLANNED)
+- [ ] **Meta-Sleeve Ingestion**: Finalize the join logic for Crypto + TradFi sleeves.
+- [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage.
+- [ ] **Production Standard Cutover**: Promote v4 to primary selection mode.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.7) - Forensic Audit Complete
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.7) - Forensic Standard Finalized
 
 
