@@ -116,22 +116,17 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Volatility Band Audit**: Finalized expected Vol rates per profile (MinVar: 0.35, HRP: 0.45, MaxSharpe: 0.90).
 
 ### Phase 147: Deep Forensic Audit & Institutional Tooling (COMPLETED)
-- [x] **Comprehensive Audit Script**: Developed `comprehensive_audit_v4.py` for automated window-by-window validation.
-- [x] **Anomaly Detection Hardening**: Implemented automated outlier detection for Leverage and Sharpe variance.
+- [x] **Comprehensive Audit Script**: Developed `stable_institutional_audit.py` for definitive cross-run benchmarking.
+- [x] **Anomaly Detection**: Identified "Window 220" and "Window 300" flash-crash events.
 - [x] **SHORT Integrity Audit**: Verified 100% directional accuracy across 4,180 strategy atom implementations.
-- [x] **Volatility Band Verification**: Validated target volatility bands (MinVar: 0.35, HRP: 0.45, MaxSharpe: 0.90) against real production data.
+- [x] **Volatility Band Verification**: Validated target risk bands (MinVar: 0.35, HRP: 0.45, MaxSharpe: 0.90).
 
-### Phase 148: Tail-Risk Mitigation & Regime Hardening (COMPLETED)
-- [x] **Tail-Risk Selection Alpha**: Integrated Skewness, Kurtosis, and CVaR into the v4 Selection Pipeline (CR-630).
-- [x] **Regime Detector Enhancement**: Updated `MarketRegimeDetector` with Fat-Tail Awareness and Stress-Axis weighting.
-- [x] **Flash-Crash Mitigation**: Implemented Profile-Specific Ridge Loading (CR-600) to stabilize `max_sharpe` in high-dispersion regimes.
-- [x] **Requirements Update**: Codified the "Outlier Survival" standard (CR-620).
-
-### Phase 149: Institutional Scaling & Meta-Portfolio Readiness (PLANNED)
-- [ ] **Meta-Sleeve Ingestion**: Finalize the join logic for Crypto + TradFi sleeves.
-- [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage.
-- [ ] **Production Standard Cutover**: Promote v4 to primary selection mode.
+### Phase 148: Tail-Risk Hard-Stop & Circuit Breaker (IN PROGRESS)
+- [ ] **Flash-Crash Circuit Breaker**: Implement automated shift to Cash or EW-Stable when window drawdown > 50%. [IN_PROGRESS]
+- [ ] **HRP Hardening**: Align `custom` engine bisection logic with `skfolio` branch-variance standard to close the performance gap.
+- [ ] **Market Neutral Standard**: Formalize the use of `market_neutral` as a constraint across all alpha-driven profiles.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.7) - Tail-Risk Hardening Complete
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.7) - Forensic Audit Complete
+
 

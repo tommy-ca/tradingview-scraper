@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
+import numpy as np
 import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -284,7 +285,10 @@ class BacktestEngine:
                                 elif hasattr(sim_results, "metrics"):
                                     metrics = getattr(sim_results, "metrics", {})
 
-                                sanitized_metrics = {k: v for k, v in metrics.items() if isinstance(v, (int, float, str, bool, type(None)))}
+                                sanitized_metrics = {}
+                                for k, v in metrics.items():
+                                    if isinstance(v, (int, float, np.number, str, bool, type(None))):
+                                        sanitized_metrics[k] = float(v) if isinstance(v, (np.number, float, int)) else v
 
                                 if ledger:
                                     ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=sanitized_metrics, context=sim_ctx)

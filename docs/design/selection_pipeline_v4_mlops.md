@@ -135,8 +135,20 @@ Institutional verification is now standardized via automated per-window trace:
 - **Volatility Anchors**: Ensures profiles remain within their risk bands (MinVar: 0.35, HRP: 0.45, MaxSharpe: 0.90).
 - **Outlier Quarantine**: Automated identification of "Flash Crash" windows to trigger safety protocols.
 
-## 16. Tail-Risk Mitigation (CR-630)
-The v4 pipeline integrates high-order statistical moments to improve robustness:
-- **Skewness & Kurtosis**: Penalizes assets with asymmetric return distributions or "fat tails" that increase the probability of extreme losses.
-- **Conditional Value at Risk (CVaR)**: Directly measures the expected loss in the worst 5% of scenarios, providing a more conservative risk estimate than standard deviation.
-- **Integration**: These metrics are used as both selection features in `InferenceStage` and regime indicators in `MarketRegimeDetector`.
+## 17. Risk Profile Benchmarks & Volatility Bands
+To ensure behavioral consistency across different market regimes, the system enforces target volatility bands for each risk profile:
+
+| Profile | Target Volatility | Behavioral Standard |
+| :--- | :--- | :--- |
+| **MinVar / MarketNeutral** | **0.35** | Conservative, focused on capital preservation and beta minimization. |
+| **HRP / Risk Parity** | **0.45 - 0.50** | Balanced, focused on equalizing risk contribution across factor clusters. |
+| **Equal Weight** | **0.60** | Baseline, accepting full system variance from the selected pool. |
+| **Max Sharpe** | **0.90** | Aggressive, maximizing risk-adjusted return through factor concentration. |
+
+### 17.1 Volatility Drift (Anomalies)
+The `stable_institutional_audit.py` script automatically monitors realized volatility against these benchmarks. Significant deviations (> 0.25) are flagged as "DRIFT" anomalies, usually indicating a failure of the covariance estimator or extreme asset-level variance.
+
+## 18. Market Neutrality (Constraint vs Profile)
+While "Market Neutral" exists as a selectable profile for backward compatibility, it is internally implemented as a **Linear Constraint** on the portfolio beta:
+- **As a Profile**: It defaults to a "Beta-Neutralized Minimum Variance" objective.
+- **As a Constraint**: It can be applied to *any* profile (e.g., MaxSharpe Neutral, HRP Neutral). This allow the system to pursue high-conviction alpha signals while maintaining a zero-beta footprint.
