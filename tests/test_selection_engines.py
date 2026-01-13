@@ -2,18 +2,18 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tradingview_scraper.selection_engines import SelectionEngineV2, SelectionEngineV2_0, SelectionEngineV3, SelectionRequest, SelectionResponse, get_selection_engine
+from tradingview_scraper.selection_engines import SelectionEngineV2, SelectionEngineV2_0, SelectionEngineV3, SelectionRequest, SelectionResponse, build_selection_engine
 
 
 def test_get_selection_engine():
     """Verify engine factory retrieves the correct classes."""
-    assert isinstance(get_selection_engine("v2.0"), SelectionEngineV2_0)
-    assert isinstance(get_selection_engine("v2"), SelectionEngineV2)
-    assert isinstance(get_selection_engine("v3"), SelectionEngineV3)
-    assert isinstance(get_selection_engine("legacy"), SelectionEngineV2_0)
+    assert isinstance(build_selection_engine("v2.0"), SelectionEngineV2_0)
+    assert isinstance(build_selection_engine("v2"), SelectionEngineV2)
+    assert isinstance(build_selection_engine("v3"), SelectionEngineV3)
+    assert isinstance(build_selection_engine("legacy"), SelectionEngineV2_0)
 
     with pytest.raises(ValueError):
-        get_selection_engine("unknown_engine")
+        build_selection_engine("unknown_engine")
 
 
 @pytest.fixture
@@ -88,5 +88,6 @@ def test_v3_veto_isolation(sample_data):
     symbols = [w["symbol"] for w in response.winners]
     assert "S1" in symbols
     assert "S2" not in symbols
-    assert len(response.warnings) > 0
-    assert any("Missing metadata" in w for w in response.warnings)
+    # Verify veto reason
+    assert "S2" in response.vetoes
+    assert any("Missing metadata" in v for v in response.vetoes["S2"])
