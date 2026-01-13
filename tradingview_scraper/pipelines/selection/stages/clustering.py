@@ -2,7 +2,7 @@ import logging
 from typing import Dict, List
 
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
-from tradingview_scraper.selection_engines.base import get_hierarchical_clusters
+from tradingview_scraper.utils.clustering import get_hierarchical_clusters
 
 logger = logging.getLogger("pipelines.selection.clustering")
 

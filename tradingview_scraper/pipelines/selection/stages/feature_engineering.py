@@ -4,7 +4,11 @@ import numpy as np
 import pandas as pd
 
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
-from tradingview_scraper.selection_engines.impl.v3_mps import calculate_efficiency_ratio, calculate_hurst_exponent, calculate_permutation_entropy
+from tradingview_scraper.utils.predictability import (
+    calculate_efficiency_ratio,
+    calculate_hurst_exponent,
+    calculate_permutation_entropy,
+)
 from tradingview_scraper.utils.scoring import calculate_liquidity_score
 
 logger = logging.getLogger("pipelines.selection.feature_engineering")
