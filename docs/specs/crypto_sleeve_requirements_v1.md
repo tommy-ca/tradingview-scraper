@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-13) - Deep Audit Standard v3.4.4.
+**Production Certified** (2026-01-13) - Deep Audit Standard v3.4.5.
 
 ---
 
@@ -55,6 +55,8 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-312 | MUST | ✅ | **History-Aware Sanitization**: The data preparation layer MUST enforce a configurable history floor (min_days_floor) and zero-variance filter to eliminate statistically insignificant assets before optimization. |
 | CR-320 | MUST | ✅ | **Pass-through Baseline**: The system MUST provide a `baseline` engine that passes ALL valid candidates to quantify the "Gross Alpha" of the entire selection funnel. |
 | CR-321 | MUST | ✅ | **Structural Baseline**: The system MUST provide a `liquid_htr` engine that performs hierarchical clustering but selects Top-N by liquidity (Value.Traded), isolating the "Statistical Alpha" added by Log-MPS scoring. |
+| CR-330 | MUST | ✅ | **End-to-End Traceability**: Every production decision MUST be traceable from the initial L4 scanner signal through Identity Deduplication, Cluster Assignment, and final Portfolio Weighting. |
+| CR-331 | MUST | ✅ | **Factor-Preserving Selection**: The selection pipeline MUST prioritize the highest-conviction Log-MPS representatives *within* each hierarchical cluster to ensure diversification across discovered alpha factors. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---

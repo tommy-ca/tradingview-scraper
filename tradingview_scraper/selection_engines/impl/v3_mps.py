@@ -91,6 +91,10 @@ class SelectionEngineV3(BaseSelectionEngine):
                     regime_all.loc[s] = stats_df.loc[s, "Regime_Survival_Score"]
 
         af_all = af_all * (returns.count() / 252.0).clip(upper=1.0)
+
+        # Pillar 1: Discovery Metadata Preservation
+        adx_all = pd.Series({s: float(candidate_map.get(s, {}).get("adx") or 0) for s in returns.columns})
+
         mps_metrics = {
             "momentum": mom_all,
             "stability": stab_all,
@@ -100,6 +104,7 @@ class SelectionEngineV3(BaseSelectionEngine):
             "efficiency": er_all,
             "entropy": (1.0 - pe_all.fillna(1.0)).clip(0, 1),
             "hurst_clean": (1.0 - (hurst_all.fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1),
+            "adx": adx_all,
         }
         methods = {
             "survival": "cdf",
@@ -110,6 +115,7 @@ class SelectionEngineV3(BaseSelectionEngine):
             "efficiency": "cdf",
             "entropy": "rank",
             "hurst_clean": "rank",
+            "adx": "cdf",
         }
 
         max_f = float(frag_all.max())
@@ -294,7 +300,18 @@ class SelectionEngineV3_2(SelectionEngineV3_1):
 
     def __init__(self):
         super().__init__()
-        self.spec_version, self.weights = "3.2", {"momentum": 1.0, "stability": 1.0, "liquidity": 1.0, "antifragility": 1.0, "survival": 1.0, "efficiency": 1.0}
+        self.spec_version, self.weights = (
+            "3.2",
+            {
+                "momentum": 1.0,
+                "stability": 1.0,
+                "liquidity": 1.0,
+                "antifragility": 1.0,
+                "survival": 1.0,
+                "efficiency": 1.0,
+                "adx": 1.0,
+            },
+        )
 
     def select(self, returns, raw_candidates, stats_df, request):
         s = get_settings()

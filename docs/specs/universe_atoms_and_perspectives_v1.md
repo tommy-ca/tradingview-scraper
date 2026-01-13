@@ -1,6 +1,38 @@
 # Universe “Atoms” & Multi-Perspective Portfolio Building (v1)
-**Status**: Proposal
-**Date**: 2026-01-05
+**Status**: Production Standard
+**Date**: 2026-01-13 (Standardized in Phase 130)
+
+## 10. End-to-End Selection Pipeline Standard (v2.0)
+To ensure institutional reproducibility, the platform implements a standardized six-stage selection funnel.
+
+### 10.1 Stage 1: Multi-Sleeve Discovery
+- **Input**: L4 Scanners (Momentum, Trend, MeanReversion).
+- **Process**: Unified data ingestion into the Lakehouse.
+
+### 10.2 Stage 2: Canonical Consolidation
+- **Process**: Deduplication by economic identity.
+- **Rule**: Selection of the most liquid venue (Value.Traded) for the "Raw Pool."
+- **Artifact**: `portfolio_candidates.json` (The Raw Pool).
+
+### 10.3 Stage 3: Metadata-Aware Filtering (Pillar 1)
+- **Process**: Multiplicative Probability Scoring (Log-MPS).
+- **Factors**: Momentum, Stability, Liquidity, Antifragility, Survival, Efficiency, Entropy, Hurst, and Trend-Conviction (ADX).
+
+### 10.4 Stage 4: Factor-Based Partitioning (Clustering)
+- **Process**: Hierarchical Clustering (Ward Linkage) on raw return correlations.
+- **Standard**: Identifies logical alpha clusters in price-space.
+
+### 10.5 Stage 5: Conviction-Weighted Recruitment
+- **Rule**: Select Top-N (default: 3) highest Log-MPS performers *within* each cluster.
+- **Purity**: Ensures the highest conviction representatives for every identified factor.
+
+### 10.6 Stage 6: Recursive Strategy Synthesis (Pillar 2)
+- **Process**: Generation of Strategy Atoms `(Asset, Logic, Direction)`.
+- **Normalization**: SHORT inversion ($R_{syn} = -1 \times R_{raw}$) to prepare for Pillar 3.
+
+## 11. Traceability & Audit Standards
+- **Non-Negotiable**: Every stage MUST emit decision records to `audit.jsonl`.
+- **Traceability**: A single ticker must be traceable from the initial L4 signal to its final portfolio weight.
 
 ## 0. Intent
 We want the platform to build portfolios not only from **low-correlated assets**, but also from:

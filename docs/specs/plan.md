@@ -114,5 +114,12 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Alpha Attribution**: Verified HTR Stage 3/4 successfully prevents "Factor Sparsity" in restrictive regimes.
 - [x] **Final Certification**: System hardened for Q1 2026 Production.
 
+### Phase 130: End-to-End Pipeline Integration Audit (COMPLETED)
+- [x] **Discovery-to-Optimization Trace**: Audited ticker `SOL` from L4 signal -> Discovery -> Log-MPS -> Portfolio Weight; verified 100% traceability.
+- [x] **Cross-Layer Data Integrity**: Integrated `ADX` into Pillar 1 Log-MPS scoring; verified preservation of `Value.Traded` metadata.
+- [x] **Clustering Purity Audit**: Confirmed hierarchical clustering correctly partitions factor space before conviction-based recruitment.
+- [x] **Full-Scale Tournament**: Executed production-grade tournament across all modes (`baseline`, `liquid_htr`, `v3.2`, `v3.4`).
+- [x] **Documentation Sync**: Standardized the six-stage selection funnel in architecture docs.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.4) - Ready for Pre-Live Calibration
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.5) - Multi-Sleeve Ready
