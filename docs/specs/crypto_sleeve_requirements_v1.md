@@ -57,6 +57,10 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-321 | MUST | ✅ | **Structural Baseline**: The system MUST provide a `liquid_htr` engine that performs hierarchical clustering but selects Top-N by liquidity (Value.Traded), isolating the "Statistical Alpha" added by Log-MPS scoring. |
 | CR-330 | MUST | ✅ | **End-to-End Traceability**: Every production decision MUST be traceable from the initial L4 scanner signal through Identity Deduplication, Cluster Assignment, and final Portfolio Weighting. |
 | CR-331 | MUST | ✅ | **Factor-Preserving Selection**: The selection pipeline MUST prioritize the highest-conviction Log-MPS representatives *within* each hierarchical cluster to ensure diversification across discovered alpha factors. |
+| CR-400 | MUST | ✅ | **Stateless Pipeline Stages**: All v4 selection stages MUST be stateless. They receive a `SelectionContext` and return a modified `SelectionContext`. |
+| CR-401 | MUST | ✅ | **Data Immutability**: The original `RawPool` input MUST never be modified; all enrichments are added as new columns or metadata layers in the context. |
+| CR-402 | MUST | ✅ | **Schema-Validated Handover**: Every pipeline stage transition MUST be validated by a strict schema (Pydantic) to ensure end-to-end data integrity. |
+| CR-403 | MUST | ✅ | **Pipeline Modularity**: The v4 pipeline architecture MUST support the hot-swapping of `ConvictionScorer` models without re-implementing clustering or selection logic. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---

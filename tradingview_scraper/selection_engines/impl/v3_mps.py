@@ -270,7 +270,7 @@ class SelectionEngineV3(BaseSelectionEngine):
             for s, score in others.items():
                 winners.append({**candidate_map.get(s, {"symbol": s, "direction": "LONG"}), "alpha_score": float(score), "selection_note": "Added via Balanced Selection fallback"})
 
-        metrics = {"alpha_scores": alpha_scores_clean.to_dict(), "kappa": kappa, "shrinkage": shrinkage, "raw_metrics": {"entropy": pe_all.to_dict()}}
+        metrics = {"alpha_scores": alpha_scores_clean.to_dict(), "kappa": kappa, "shrinkage": shrinkage, "raw_metrics": {k: v.to_dict() for k, v in mps_metrics.items()}}
         return SelectionResponse(
             winners=winners,
             audit_clusters=audit_clusters,
@@ -325,4 +325,5 @@ class SelectionEngineV3_2(SelectionEngineV3_1):
         floor, log_score = 1e-9, pd.Series(0.0, index=frag_penalty.index)
         for n, p in probs.items():
             log_score += self.weights.get(n, 1.0) * np.log(p.fillna(0.5).clip(lower=floor))
+
         return cast(pd.Series, np.exp(log_score + np.log((1.0 - frag_penalty).clip(lower=floor))))

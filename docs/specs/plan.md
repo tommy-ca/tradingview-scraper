@@ -121,5 +121,28 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Full-Scale Tournament**: Executed production-grade tournament across all modes (`baseline`, `liquid_htr`, `v3.2`, `v3.4`).
 - [x] **Documentation Sync**: Standardized the six-stage selection funnel in architecture docs.
 
+### Phase 131: MLOps-Centric Pipeline Foundation (v4) (COMPLETED)
+- [x] **Infrastructure Definition**: Implemented `BasePipelineStage` and `SelectionContext` schemas (Pydantic).
+- [x] **Data Ingestion Stage**: Created `IngestionStage` to fetch L4 artifacts into the v4 context.
+- [x] **Feature Engineering Stage**: Implemented `FeatureEngineeringStage` for stateless alpha factor calculation.
+- [x] **Shadow Execution Test**: Verified v4 foundation via `scripts/test_v4_foundation.py`.
+
+### Phase 132: Modular Inference & Clustering (v4) (COMPLETED)
+- [x] **Conviction Scorer**: Implemented stateless `InferenceStage` using `utils.scoring` logic.
+- [x] **Factor Bucketizer**: Implemented unsupervised `ClusteringStage` wrapping Ward Linkage logic.
+- [x] **Parity Audit Script**: Validated 100% Score Parity between v3.4 and v4 using `audit_v4_parity.py`.
+- [x] **Forensic Fix**: Patched `SelectionEngineV3_2` to report all calculated metrics for auditability.
+
+### Phase 133: Policy Controller & HTR v4 (IN PROGRESS)
+- [ ] **Selection Controller**: Implement the HTR relaxation loop as a stateless policy manager.
+- [ ] **Strategy Atom Synthesis**: Finalize the Pillar 2 handover within the v4 pipeline.
+- [ ] **Champion/Challenger Run**: Parallel tournament comparing v3.4 (Legacy) vs v4 (MLOps).
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.5) - Multi-Sleeve Ready
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.5) - Phase 133 In Progress
+- [ ] **Selection Controller**: Implement the HTR relaxation loop as a stateless policy manager.
+- [ ] **Strategy Atom Synthesis**: Finalize the Pillar 2 handover within the v4 pipeline.
+- [ ] **Champion/Challenger Run**: Parallel tournament comparing v3.4 (Legacy) vs v4 (MLOps).
+
+---
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.5) - Phase 132 In Progress
