@@ -145,5 +145,10 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Shadow Mode**: Enabled `v4` shadow execution in production tournaments.
 - [x] **Deprecation**: Identified `selection_engines/impl` legacy code for future deprecation.
 
+### Phase 135: Legacy Deprecation & v4 Cutover (PLANNED)
+- [ ] **Validation Period**: Confirm v4 stability and alpha parity after 1 week of shadow runs.
+- [ ] **Cutover**: Promote `v4` pipeline to be the default selection engine.
+- [ ] **Cleanup**: Remove `v3.x` legacy engines from the codebase.
+
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.5) - Phase 134 Complete (v4 Shadow Mode Active)

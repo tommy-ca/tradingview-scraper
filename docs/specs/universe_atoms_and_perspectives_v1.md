@@ -29,10 +29,12 @@ To ensure institutional reproducibility, the platform implements a standardized 
 ### 10.6 Stage 6: Recursive Strategy Synthesis (Pillar 2)
 - **Process**: Generation of Strategy Atoms `(Asset, Logic, Direction)`.
 - **Normalization**: SHORT inversion ($R_{syn} = -1 \times R_{raw}$) to prepare for Pillar 3.
+- **Implementation**: Handled by `SynthesisStage` in the v4 MLOps pipeline.
 
 ## 11. Traceability & Audit Standards
 - **Non-Negotiable**: Every stage MUST emit decision records to `audit.jsonl`.
 - **Traceability**: A single ticker must be traceable from the initial L4 signal to its final portfolio weight.
+- **v4 Compliance**: The `SelectionContext` audit trail satisfies this requirement by logging every stage transition.
 
 ## 0. Intent
 We want the platform to build portfolios not only from **low-correlated assets**, but also from:
