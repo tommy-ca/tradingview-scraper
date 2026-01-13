@@ -43,8 +43,8 @@ def build_clustered_universe(*, returns: pd.DataFrame, clusters: Dict[str, Any],
     thresh = len(returns) * 0.7
     valid_cols = [s for s in avail if returns[s].count() >= thresh]
     if not valid_cols:
-        counts = cast(pd.Series, returns[avail].count())
-        if not counts.empty:
+        counts = returns[avail].count()
+        if isinstance(counts, pd.Series) and not counts.empty:
             max_c = float(counts.max())
             valid_cols = [s for s in avail if float(counts[s]) >= max_c * 0.8]
 

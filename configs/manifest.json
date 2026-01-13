@@ -105,7 +105,7 @@
         "use_robust_correlation": true,
         "feat_directional_returns": true,
         "feat_dynamic_direction": true,
-        "feat_market_neutral": true,
+        "feat_market_neutral": false,
         "kappa_shrinkage_threshold": 15000.0,
         "default_shrinkage_intensity": 0.01,
         "adaptive_fallback_profile": "erc"

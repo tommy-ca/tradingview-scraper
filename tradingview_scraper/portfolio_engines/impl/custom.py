@@ -246,7 +246,10 @@ class CustomClusteredEngine(BaseRiskEngine):
                 p_w /= p_w.sum()
 
         betas = None
-        if request.market_neutral and request.benchmark_returns is not None:
+        s_obj = get_settings()
+        is_neutral = request.market_neutral and s_obj.features.feat_market_neutral
+
+        if is_neutral and request.benchmark_returns is not None:
             from tradingview_scraper.utils.synthesis import calculate_beta
 
             betas = np.array([calculate_beta(X[col], request.benchmark_returns) for col in X.columns])
@@ -263,7 +266,7 @@ class CustomClusteredEngine(BaseRiskEngine):
             prev_weights=p_w,
             l2_gamma=l2,
             betas=betas,
-            market_neutral=request.market_neutral,
+            market_neutral=is_neutral,
         )
         return _safe_series(w, X.columns)
 

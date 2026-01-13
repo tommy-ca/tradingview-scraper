@@ -4,25 +4,26 @@
 Quantitative optimization engines (Convex Solvers) are mathematically designed to find optimal positive weights for positive expected returns. Handling `SHORT` directions requires a transformation that aligns "Price Decline" with "Positive Alpha."
 
 ## 2. Synthetic Long Normalization
-We implement **Synthetic Long Normalization** to allow direction-naive solvers to handle short-biased strategies.
+We implement **Synthetic Long Normalization** to allow direction-naive solvers to handle short-biased atoms.
 
 ### 2.1 The Transformation
-Before the returns matrix is passed to any `BaseRiskEngine`, assets tagged with `direction: SHORT` undergo return inversion:
-$$R_{syn} = -1 \times R_{raw}$$
+In **Pillar 2 (Synthesis)**, Strategy Atoms tagged with `direction: SHORT` undergo return inversion:
+$$R_{syn} = -1 \times R_{raw} \times Signal_{logic}$$
 
 ### 2.2 Numerical Impact
-1. **Positive Expected Return**: A falling asset ($R_{raw} < 0$) produces a positive synthetic return ($R_{syn} > 0$), making it attractive to the solver.
-2. **Covariance Stability**: Inverting returns preserves the variance but flips the sign of the covariance relative to other assets. This correctly identifies the short position as a diversifier or hedge.
-3. **Constraint Integrity**: The solver operates in a "Long-Only" space (weights $\ge 0$), which is significantly more stable than allowing negative weights in 3rd party libraries.
+1. **Positive Expected Return**: A falling asset ($R_{raw} < 0$) with a positive logic signal produces a positive synthetic return ($R_{syn} > 0$), making it attractive to the solver.
+2. **Covariance Stability**: Inverting returns preserves the variance but flips the sign of the covariance relative to other atoms. This correctly identifies the short atom as a diversifier or hedge in logic-space.
+3. **Constraint Integrity**: The solver operates in a "Long-Only" strategy space (weights $\ge 0$), which is significantly more stable than allowing negative weights in 3rd party optimization libraries.
 
 ## 3. Realization & Mapping
-While the solver sees a "Long" position, the backtest simulator and implementation layer must map this back to the physical asset.
+While the solver sees a "Long" position in a strategy atom, the backtest simulator and implementation layer must map this back to the physical asset.
 
 ### 3.1 Weight Reporting
-- **Synthetic Weight ($W_{syn}$)**: The weight returned by the solver (always $\ge 0$).
+- **Strategy Weight ($W_{strat}$)**: The weight returned by the solver for the atom (always $\ge 0$).
 - **Net Weight ($W_{net}$)**: 
-  - If Direction = LONG: $W_{net} = W_{syn}$
-  - If Direction = SHORT: $W_{net} = -1 \times W_{syn}$
+    - Calculated during **Weight Flattening**: $W_{net} = \sum (W_{strat, i} \times Factor_i)$
+    - $Factor = 1.0$ for LONG atoms, $-1.0$ for SHORT atoms.
+
 
 ### 3.2 Realized Return Calculation
 The backtest simulator must calculate PnL using the raw returns and net weights:

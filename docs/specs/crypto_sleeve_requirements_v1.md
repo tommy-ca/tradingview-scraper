@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-11) - Deep Audit Standard v3.3.1.
+**Production Certified** (2026-01-13) - Deep Audit Standard v3.4.3.
 
 ---
 
@@ -49,6 +49,7 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-290 | MUST | ✅ | **Market Neutral Constraint**: Market neutrality is a native optimization constraint (not a profile), enabling beta-hedged Max-Sharpe/HRP portfolios. |
 | CR-291 | MUST | ✅ | **Synthetic Hierarchical Clustering**: The Allocation layer performs hierarchical clustering on synthesized return streams to identify uncorrelated alpha factors. |
 | CR-292 | MUST | ✅ | **Pillar 3 Strategy Status**: The `barbell` strategy is classified as a **Risk Profile** (Pillar 3) because it manages capital segmentation across provided alpha streams. |
+| CR-300 | MUST | ✅ | **Experimental Guardrails**: High-impact experimental constraints (e.g., Market Neutrality) MUST be gated by feature flags (`feat_market_neutral`) and default to OFF for institutional stability. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---

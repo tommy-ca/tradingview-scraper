@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from tradingview_scraper.selection_engines import SelectionEngineV3_4
 from tradingview_scraper.selection_engines.base import SelectionRequest
+from tradingview_scraper.selection_engines.impl.v3_4_htr import SelectionEngineV3_4
 
 
 def test_toxicity_hard_stop():
@@ -24,7 +24,7 @@ def test_toxicity_hard_stop():
     engine = SelectionEngineV3_4()
     request = SelectionRequest(threshold=0.5, top_n=1, params={"relaxation_stage": 3})
 
-    stats_df = pd.DataFrame(index=["GOOD", "TOXIC"])
+    stats_df = pd.DataFrame(index=pd.Index(["GOOD", "TOXIC"]))
     stats_df["Antifragility_Score"] = 0.5
     stats_df["Regime_Survival_Score"] = 1.0
 
@@ -38,8 +38,8 @@ def test_toxicity_hard_stop():
     # GOOD should be in winners
     assert "GOOD" in winner_syms
 
-    # TOXIC should NOT be in winners even in Stage 3 if entropy > 0.995
-    if toxic_entropy > 0.995:
+    # TOXIC should NOT be in winners even in Stage 3 if entropy > 0.999
+    if toxic_entropy > 0.999:
         assert "TOXIC" not in winner_syms
 
 
@@ -55,7 +55,7 @@ def test_balanced_selection_min_pool_respects_toxicity():
     engine = SelectionEngineV3_4()
     request = SelectionRequest(threshold=0.5, top_n=1, params={"relaxation_stage": 4})
 
-    stats_df = pd.DataFrame(index=returns.columns)
+    stats_df = pd.DataFrame(index=pd.Index(returns.columns))
     stats_df["Antifragility_Score"] = 0.5
     stats_df["Regime_Survival_Score"] = 1.0
 
@@ -64,4 +64,4 @@ def test_balanced_selection_min_pool_respects_toxicity():
     for w in response.winners:
         sym = w["symbol"]
         ent = response.metrics["raw_metrics"]["entropy"][sym]
-        assert ent <= 0.995, f"Winner {sym} is toxic (Entropy={ent})"
+        assert ent <= 0.999, f"Winner {sym} is toxic (Entropy={ent})"

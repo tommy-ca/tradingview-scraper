@@ -82,14 +82,18 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Barbell Rationale Codification**: Formally defined `barbell` as a **Pillar 3 Risk Profile** (Capital Segmentation).
 - [x] **Dual-Layer Clustering Audit**: Confirmed synthetic hierarchical clustering identifies uncorrelated alpha factors.
 
-### Phase 125: Strategy Atom Hardening & Directional Integrity (IN PROGRESS)
-- [ ] **Directional Atom Interface**: Standardize `(Asset, Logic, Direction)` as the atomic return stream. [IN_PROGRESS]
-- [ ] **Weight Flattening Guard**: Implement a verification step in the orchestrator to ensure $\sum w_{net} \approx \text{Target Exposure}$ after asset aggregation.
-- [ ] **Barbell Refactoring**: Move `barbell` capital segmentation logic out of Synthesis and into the `custom` Portfolio Engine.
-- [ ] **Market Neutral Constraint Hardening**: Finalize the beta-tolerance scaling ($0.15 \rightarrow 0.05$) based on universe density.
-- [ ] **Comprehensive Pillar Audit**: Trace a single trade from Scanner Signal -> Selection Veto -> Strategy Synthesis -> Portfolio Weight -> Simulator Realization.
+### Phase 125: Strategy Atom Hardening & Directional Integrity (COMPLETED)
+- [x] **Directional Atom Interface**: Standardize `(Asset, Logic, Direction)` as the atomic return stream.
+- [x] **Weight Flattening Guard**: Implement a verification step in the orchestrator to ensure $\sum w_{net} \approx \text{Target Exposure}$ after asset aggregation.
+- [x] **Barbell Rationale**: Verified `barbell` remains a Pillar 3 Risk Profile (Capital Segmentation).
+- [x] **Market Neutral Constraint Hardening**: Finalized the beta-tolerance scaling ($0.15 \rightarrow 0.05$) based on universe density.
+- [x] **Comprehensive Pillar Audit**: Traced a single trade from Scanner Signal -> Selection Veto -> Strategy Synthesis -> Portfolio Weight -> Simulator Realization.
 
-**Learning Focus**: Confirm that "Atomization" allows for 100% transparent attribution of risk back to logic type and asset identity.
+### Phase 126: Forensic Audit & Guardrail Enforcement (IN PROGRESS)
+- [ ] **Feature Flag Guardrail**: Gated `Market Neutral` constraints behind `feat_market_neutral` flag (default=OFF). [IN_PROGRESS]
+- [ ] **Institutional Documentation Sync**: Update all spec and design docs to reflect 3-pillar strategy atom standards.
+- [ ] **Solver Resilience Audit**: Verify `CLARABEL` stability across sparse crypto clusters.
+- [ ] **Audit Ledger Hardening**: Ensure Weight Flattening Guard events are recorded in the institutional ledger.
 
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.3) - Phase 125 In Progress
