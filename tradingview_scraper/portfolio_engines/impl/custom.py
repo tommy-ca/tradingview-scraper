@@ -279,7 +279,21 @@ class CustomClusteredEngine(BaseRiskEngine):
         if "Antifragility_Score" not in stats_l.columns:
             return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["Antifragility_Score missing"]
 
-        stats_l["Cluster_ID"] = stats_l["Symbol"].apply(lambda s: universe.symbol_to_cluster.get(str(s)))
+        # CR-271: Map physical symbols in stats to strategy IDs in universe (3-Pillar Synthesis)
+        s2c = universe.symbol_to_cluster
+        sym_to_strat = {}
+        for strat_id in universe.returns.columns:
+            for phys in stats_l["Symbol"].tolist():
+                if strat_id.startswith(f"{phys}_"):
+                    sym_to_strat[str(phys)] = str(strat_id)
+
+        # Replace physical symbols with strategy IDs to ensure 'flatten_weights' works downstream
+        stats_l["Symbol"] = stats_l["Symbol"].apply(lambda s: sym_to_strat.get(str(s), s))
+
+        def get_cluster(sym):
+            return s2c.get(str(sym))
+
+        stats_l["Cluster_ID"] = stats_l["Symbol"].apply(get_cluster)
         stats_l = stats_l.dropna(subset=["Cluster_ID"])
         if stats_l.empty:
             return pd.DataFrame(columns=pd.Index(["Symbol", "Weight"])), {"backend": "custom"}, ["no mapping"]

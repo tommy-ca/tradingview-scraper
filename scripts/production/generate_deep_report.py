@@ -251,7 +251,7 @@ def generate_report(run_id: str):
 
     report = [
         f"# Deep Full Analysis & Audit Report (Run: {run_id})",
-        "**Status**: 🟢 PRODUCTION CERTIFIED (v3.4.6)",
+        "**Status**: 🟢 PRODUCTION CERTIFIED (v3.5.3)",
         f"**Date**: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "\n## 1. Five-Stage Funnel Trace",
         "Tracing signal retention from discovery to optimized winner pool.",
