@@ -37,6 +37,11 @@ class SelectionContext(BaseModel):
 
     # Stage 5: Policy Pruning
     winners: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Stage 6: Synthesis
+    strategy_atoms: List[Any] = Field(default_factory=list)  # List[StrategyAtom]
+    composition_map: Dict[str, Dict[str, float]] = Field(default_factory=dict)
+
     audit_trail: List[Dict[str, Any]] = Field(default_factory=list)
 
     def log_event(self, stage: str, event: str, data: Optional[Dict[str, Any]] = None):

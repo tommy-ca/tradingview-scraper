@@ -131,15 +131,22 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Conviction Scorer**: Implemented stateless `InferenceStage` using `utils.scoring` logic.
 - [x] **Factor Bucketizer**: Implemented unsupervised `ClusteringStage` wrapping Ward Linkage logic.
 - [x] **Parity Audit Script**: Validated 100% Score Parity between v3.4 and v4 using `audit_v4_parity.py`.
-- [x] **Forensic Fix**: Patched `SelectionEngineV3_2` to report all calculated metrics for auditability.
+- [x] **Forensic Fix**: Patched `SelectionEngineV3_2` to correctly report all calculated metrics for auditability.
 
-### Phase 133: Policy Controller & HTR v4 (IN PROGRESS)
-- [ ] **Selection Controller**: Implement the HTR relaxation loop as a stateless policy manager.
-- [ ] **Strategy Atom Synthesis**: Finalize the Pillar 2 handover within the v4 pipeline.
-- [ ] **Champion/Challenger Run**: Parallel tournament comparing v3.4 (Legacy) vs v4 (MLOps).
+### Phase 133: Policy Controller & HTR v4 (COMPLETED)
+- [x] **Selection Controller**: Implemented `SelectionPolicyStage` for Top-N recruitment and veto application.
+- [x] **Pipeline Orchestrator**: Implemented `SelectionPipeline` to manage the HTR relaxation loop and stage execution.
+- [x] **Strategy Atom Synthesis**: Implemented `SynthesisStage` to finalize Pillar 2 handover.
+- [x] **Integration Test**: Verified full pipeline execution via `scripts/test_v4_pipeline.py`.
+
+### Phase 134: Champion/Challenger Production Rollout (IN PROGRESS)
+- [ ] **Dual-Run Config**: Update `BacktestOrchestrator` to support running v4 alongside v3.4.
+- [ ] **Shadow Mode**: Run v4 in shadow mode for 1 week of production tournaments.
+- [ ] **Deprecation**: Plan deprecation of `selection_engines/impl` legacy code.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.5) - Phase 133 In Progress
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.5) - Phase 134 Ready
+
 - [ ] **Selection Controller**: Implement the HTR relaxation loop as a stateless policy manager.
 - [ ] **Strategy Atom Synthesis**: Finalize the Pillar 2 handover within the v4 pipeline.
 - [ ] **Champion/Challenger Run**: Parallel tournament comparing v3.4 (Legacy) vs v4 (MLOps).

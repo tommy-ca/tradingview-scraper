@@ -46,11 +46,25 @@ Every run generates an `audit.jsonl` that follows the standard ML tracking schem
 - **Artifacts**: Link to the generated `portfolio_candidates.json`.
 
 ## 6. Implementation Strategy (The HTR Controller)
-The **Hierarchical Threshold Relaxation (HTR)** logic is moved from recursion into a **Policy Controller**.
-1. Initialize Pipeline with Stage 1 parameters.
-2. Execute Pipeline.
-3. Inspect `WinningUniverse`.
-4. If $N < 15$ and Relaxation Limit not reached:
-    - Update parameters for next stage.
-    - Re-run from **Inference Stage** (preserving earlier features).
-5. Output final manifest.
+The **Hierarchical Threshold Relaxation (HTR)** logic is moved from recursion into a **Pipeline Orchestrator**.
+
+### 6.1 `SelectionPipeline` (Orchestrator)
+A high-level controller that manages the stage execution graph and HTR loop.
+
+**Logic Flow:**
+1.  **Initialize**: Load data (Stage 1) and calculate features (Stage 2). This is done ONCE.
+2.  **Loop (HTR Stages 1-4)**:
+    *   Set `SelectionContext.params` for current stage (e.g., `relaxation_stage=1`).
+    *   Execute **Inference** (Stage 3).
+    *   Execute **Partitioning** (Stage 4).
+    *   Execute **Policy** (Stage 5).
+    *   **Check**: If `len(winners) >= 15`, break loop.
+3.  **Finalize**: Execute **Synthesis** (Stage 6).
+
+### 6.2 `SelectionPolicyStage` (Stage 5)
+Responsible for the *single-pass* recruitment logic:
+- Apply hard vetoes (Entropy, Efficiency, Metadata).
+- Rank candidates by `alpha_score` within each cluster.
+- Select Top-N per cluster.
+- Handle "Representative Forcing" if `relaxation_stage >= 3`.
+- Handle "Balanced Fallback" if `relaxation_stage >= 4`.
