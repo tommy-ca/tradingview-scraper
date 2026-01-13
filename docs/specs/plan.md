@@ -89,11 +89,18 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Market Neutral Constraint Hardening**: Finalized the beta-tolerance scaling ($0.15 \rightarrow 0.05$) based on universe density.
 - [x] **Comprehensive Pillar Audit**: Traced a single trade from Scanner Signal -> Selection Veto -> Strategy Synthesis -> Portfolio Weight -> Simulator Realization.
 
-### Phase 126: Forensic Audit & Guardrail Enforcement (IN PROGRESS)
-- [ ] **Feature Flag Guardrail**: Gated `Market Neutral` constraints behind `feat_market_neutral` flag (default=OFF). [IN_PROGRESS]
-- [ ] **Institutional Documentation Sync**: Update all spec and design docs to reflect 3-pillar strategy atom standards.
-- [ ] **Solver Resilience Audit**: Verify `CLARABEL` stability across sparse crypto clusters.
-- [ ] **Audit Ledger Hardening**: Ensure Weight Flattening Guard events are recorded in the institutional ledger.
+### Phase 126: Forensic Audit & Guardrail Enforcement (COMPLETED)
+- [x] **Feature Flag Guardrail**: Gated `Market Neutral` constraints behind `feat_market_neutral` flag (default=OFF).
+- [x] **Institutional Documentation Sync**: Updated all spec and design docs to reflect 3-pillar strategy atom standards.
+- [x] **Hardened toxicity tests**: Verified 0.999 entropy ceiling in `test_selection_hardening.py`.
+- [x] **Address linting issues**: Cleaned up bare excepts and type diagnostics.
+
+### Phase 127: Selection Funnel & Clustering Audit (IN PROGRESS)
+- [ ] **Discovery Stage Audit**: Review `select_top_universe.py` for identity grouping accuracy across venues. [IN_PROGRESS]
+- [ ] **Clustering Logic Review**: Audit hierarchical clustering in `SelectionEngineV3` (Ward linkage, distance metrics).
+- [ ] **Top N Selection Purity**: Ensure Top N per cluster correctly prioritizes Log-MPS conviction while maintaining factor diversity.
+- [ ] **Scanned Universe Selection Review**: Trace how L4 scanner outputs are filtered before entering the "Raw Pool."
+- [ ] **Requirements Update**: Codify the "Canonical Consolidation" standard for multi-venue assets.
 
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.4.3) - Phase 125 In Progress

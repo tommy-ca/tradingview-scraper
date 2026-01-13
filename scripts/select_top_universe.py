@@ -75,11 +75,16 @@ def get_asset_identity(symbol: str, asset_class: str = "") -> str:
             return parts[0]
 
         # Heuristic for base/quote (e.g. BTCUSDT -> BTC)
-        for quote in ["USDT", "USDC", "USD", "BUSD", "DAI", "EUR", "GBP"]:
-            if clean.endswith(quote) and len(clean) > len(quote):
-                base = clean[: -len(quote)]
-                return base
-
+        # Iteratively strip common stable and fiat quotes
+        quotes = ["USDT", "USDC", "BUSD", "DAI", "FDUSD", "TUSD", "USDS", "USD", "EUR", "GBP", "JPY"]
+        changed = True
+        while changed:
+            changed = False
+            for quote in quotes:
+                if clean.endswith(quote) and len(clean) > len(quote):
+                    clean = clean[: -len(quote)]
+                    changed = True
+                    break
         return clean
     except Exception:
         return symbol
@@ -293,9 +298,6 @@ def select_top_universe(mode: str = "raw"):
         )
 
     output_file = "data/lakehouse/portfolio_candidates.json"
-    if mode == "raw":
-        output_file = "data/lakehouse/portfolio_candidates_raw.json"
-
     with open(output_file, "w") as f_out:
         json.dump(output_universe, f_out, indent=2)
 

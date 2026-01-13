@@ -68,6 +68,17 @@ By refactoring the portfolio layer into modular adapters and removing silent fal
 ### 9.3 Pool Expansion
 Relaxing the momentum hurdle to $-0.05$ and the entropy ceiling to $0.999$ ensures that the portfolio engines always have sufficient degrees of freedom ($N \ge 15$) to differentiate their optimization solutions.
 
+## 10. Top-N Cluster Selection Logic (v2.1)
+To ensure factor diversity while maintaining alpha conviction, the selection engine implements a **Dual-Layer Filter**.
+
+### 10.1 Hierarchical Factor Mapping
+The engine performs hierarchical clustering (Ward Linkage) on the raw return correlations of the candidate pool. This identifies latent factor groupings (e.g., Meme coins, AI tokens, DeFi anchors) based on price action rather than metadata tags.
+
+### 10.2 Intra-Cluster Conviction Ranking
+Within each identified cluster, candidates are ranked by their **Log-MPS Conviction Score**.
+- **The Top-N Rule**: Only the top $N$ (default: 3) highest-conviction assets per cluster are recruited for the final portfolio.
+- **Directional Diversity**: Ranking is performed separately for `LONG` and `SHORT` directions within the cluster to ensure balanced factor exposure in multi-directional profiles.
+
 ## 15. Recursive Weight Flattening (v2.0)
 To bridge the gap between abstract Strategy Optimization and physical asset execution, the platform implements a recursive aggregation chain.
 

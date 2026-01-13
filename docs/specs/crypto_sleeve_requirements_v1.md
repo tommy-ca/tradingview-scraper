@@ -50,6 +50,9 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-291 | MUST | ✅ | **Synthetic Hierarchical Clustering**: The Allocation layer performs hierarchical clustering on synthesized return streams to identify uncorrelated alpha factors. |
 | CR-292 | MUST | ✅ | **Pillar 3 Strategy Status**: The `barbell` strategy is classified as a **Risk Profile** (Pillar 3) because it manages capital segmentation across provided alpha streams. |
 | CR-300 | MUST | ✅ | **Experimental Guardrails**: High-impact experimental constraints (e.g., Market Neutrality) MUST be gated by feature flags (`feat_market_neutral`) and default to OFF for institutional stability. |
+| CR-310 | MUST | ✅ | **Canonical Consolidation**: The Discovery stage MUST deduplicate symbols by economic identity (e.g., BTC, GC) across multiple venues, selecting the most liquid implementation to prevent fragmentation in the "Raw Pool." |
+| CR-311 | MUST | ✅ | **Top-N Cluster Purity**: The selection engine MUST prioritize candidates by Log-MPS conviction score within each hierarchical cluster, ensuring the highest conviction representatives for each identified alpha factor. |
+| CR-312 | MUST | ✅ | **History-Aware Sanitization**: The data preparation layer MUST enforce a configurable history floor (min_days_floor) and zero-variance filter to eliminate statistically insignificant assets before optimization. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable "Deep Forensic Report" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 ---
