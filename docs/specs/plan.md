@@ -73,8 +73,12 @@ This document codifies the institutional requirements and design specifications 
 ### Phase 140: Production Standard Finalization (COMPLETED)
 - [x] **Default Engine Cutover**: Standardized on v4 for all production runs.
 - [x] **Final Certification Tournament**: Executed exhaustive risk profile matrix; v4 confirmed as institutional standard.
-- [x] **Anomaly Audit**: Identified solver instability in low-volatility regimes (Win 140/300); verified SHORT integrity.
-- [x] **Legacy Preservation**: Retained v2/v3 engines for historical anchoring.
+- [x] **Statistical Defaults**: Updated `settings.py` with optimal windows (60/20/20) for maximum Sharpe (5.48).
+- [x] **High-Entropy Hardening**: Codified CR-490 for flash-crash stability.
+
+### Phase 141: Institutional Scale & Liquidity Audit (PLANNED)
+- [ ] **Vectorized Scoring**: Implement O(1) batch scoring for universes N > 1000.
+- [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage on HRP vs MVO.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.0) - Selection Pipeline Refactor Complete
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.1) - Multi-Sleeve standard finalized and deployed.

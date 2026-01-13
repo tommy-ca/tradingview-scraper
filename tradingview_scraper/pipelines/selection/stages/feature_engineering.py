@@ -67,7 +67,7 @@ class FeatureEngineeringStage(BasePipelineStage):
             {
                 "momentum": mom,
                 "stability": stability,
-                "entropy": (1.0 - entropy.fillna(1.0)).clip(0, 1),
+                "entropy": entropy.fillna(1.0).clip(0, 1),  # Raw Permutation Entropy (Noise)
                 "efficiency": efficiency,
                 "hurst_clean": (1.0 - (hurst.fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1),
                 "adx": adx,

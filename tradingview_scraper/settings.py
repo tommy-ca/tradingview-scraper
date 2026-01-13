@@ -43,6 +43,7 @@ class FeatureFlags(BaseModel):
     feat_dynamic_direction: bool = False
     feat_market_neutral: bool = False
     feature_lookback: int = 120
+    selection_mode: str = "v4"
 
     # Predictability Thresholds
     entropy_max_threshold: float = 0.9
@@ -232,8 +233,8 @@ class TradingViewScraperSettings(BaseSettings):
     max_clusters: int = 25
 
     # Backtest
-    train_window: int = 180
-    test_window: int = 40
+    train_window: int = 60
+    test_window: int = 20
     step_size: int = 20
     backtest_simulator: str = "custom"
     backtest_simulators: str = "custom,cvxportfolio,vectorbt"

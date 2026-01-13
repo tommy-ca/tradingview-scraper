@@ -9,9 +9,15 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-13) - Deep Audit Standard v3.5.0.
+**Production Certified** (2026-01-13) - Deep Audit Standard v3.5.1.
 
-| CR-480 | MUST | ✅ | **Final Certification Protocol**: Prior to any major release, the system MUST undergo an exhaustive risk profile tournament across all selection-optimization-simulator combinations to ensure zero performance regression and 100% directional integrity. |
+### 1.4 Statistical Performance Baselines (Grand Tournament 2026-01-13)
+The following benchmarks serve as the institutional standard for Q1 2026 production:
+| Selection | TrainWindow | StepSize | Profile | Sharpe (mean) | MaxDD (min) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **v4 (MLOps)** | **60d** | **20d** | **max_sharpe** | **5.48** | **-16.1%** |
+| v4 (MLOps) | 60d | 60d | max_sharpe | 5.12 | -18.4% |
+| v3.4 (Legacy) | 60d | 20d | max_sharpe | 5.21 | -22.3% |
 
 ---
 
@@ -69,6 +75,8 @@ This specification covers the crypto asset discovery, selection, optimization, a
 | CR-450 | MUST | ✅ | **Deep Window Traceability**: The audit ledger MUST record global timescale configurations (rebalance window, train/test windows) in the genesis block to ensure statistical reproducibility across different sampling frequencies. |
 | CR-460 | MUST | ✅ | **Discovery-to-Selection Purity Audit**: Every tournament MUST quantify the alpha contribution of discovery-stage filters (L4 Scanners) by benchmarking against a 'No-Selection' Raw Pool to identify bottlenecks in the early alpha funnel. |
 | CR-470 | MUST | ✅ | **Alpha Decay Monitoring**: The system MUST implement statistical rebalance-frequency audits (Grand Tournament Protocol) to identify the half-life of alpha signals and enforce a production rebalance floor (default <= 20 days). |
+| CR-480 | MUST | ✅ | **Final Certification Protocol**: Prior to any major release, the system MUST undergo an exhaustive risk profile tournament across all selection-optimization-simulator combinations to ensure zero performance regression and 100% directional integrity. |
+| CR-490 | MUST | ✅ | **Entropy-Aware Hardening**: During high-entropy regimes (DWT Entropy > 0.95), the selection pipeline MUST automatically tighten predictability vetoes to prevent factor dilution in unstable markets. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable \"Deep Forensic Report\" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 

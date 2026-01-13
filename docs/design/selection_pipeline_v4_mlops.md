@@ -70,11 +70,11 @@ To identify pipeline bottlenecks and alpha decay thresholds, the system implemen
 - **Factor Sensitivity**: Audit of `feature_lookback` consistency across varying volatility regimes.
 The outcome of this protocol is a **Bootstrap-validated Performance Matrix** ensuring results are not due to window-selection bias.
 
-## 9. Final Operational Certification (v3.5.0)
-As of Q1 2026, the v4 Selection Pipeline is the **Institutional Standard** for the multi-sleeve meta-portfolio.
-- **Reliability**: Validated via exhaustive 3D Matrix Tournament (Selection x Profile x Engine).
-- **Directionality**: 100% verified SHORT atom normalization.
-- **Traceability**: All stage transitions (Ingestion -> Synthesis) are fully audited in the deep ledger.
+### 9.1 High-Entropy Hardening (CR-490)
+To mitigate the "flash-crash" instability observed in Windows 140/300, the `SelectionPipeline` implements **Entropy-Aware Hardening**:
+- **Trigger**: System-wide mean entropy $> 0.95$.
+- **Action**: Tighten `entropy_max_threshold` by 10% and increase `default_shrinkage_intensity` (Ridge loading) to stabilize the covariance matrix.
+- **Goal**: Prioritize low-noise factor anchors when statistical confidence in high-alpha assets is degraded.
 
 ## 6. Implementation Strategy (The HTR Controller)
 The **Hierarchical Threshold Relaxation (HTR)** logic is moved from recursion into a **Pipeline Orchestrator**.

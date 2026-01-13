@@ -86,6 +86,14 @@ class SelectionPipeline:
             logger.info(f"--- HTR Stage {stage} ---")
             context.params["relaxation_stage"] = stage
 
+            # CR-490: Entropy-Aware Hardening
+            if not context.feature_store.empty:
+                avg_entropy = float(context.feature_store["entropy"].mean())
+                if avg_entropy > 0.95:
+                    logger.warning(f"High-Entropy Regime detected ({avg_entropy:.4f}). Tightening vetoes (CR-490).")
+                    base_ent = context.params.get("entropy_max_threshold", self.settings.features.entropy_max_threshold)
+                    context.params["entropy_max_threshold"] = base_ent * 0.9
+
             if stage == 2:
                 base_ent = self.settings.features.entropy_max_threshold
                 base_eff = self.settings.features.efficiency_min_threshold
