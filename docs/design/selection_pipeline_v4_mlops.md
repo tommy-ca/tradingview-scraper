@@ -53,9 +53,14 @@ The v4 pipeline has been validated across a multi-dimensional risk matrix (MaxSh
 
 ### 5.5 Grand Tournament Standard (v3.4.6)
 Institutional validation now requires a head-to-head tournament against the `v3.4` champion engine. Success criteria include:
-- **Zero Bankruptcy**: 100% survival across all stress windows (v4 outperformed baseline in Q1 2026 audit).
+- **Zero Bankruptcy**: 100% survival across all stress windows.
 - **Telemetry Purity**: Verifiable structured events in `data.pipeline_audit`.
 - **Logic Preservation**: Match legacy alpha signatures while improving modularity.
+
+## 6. System Coexistence & Benchmarking
+To ensure long-term statistical integrity, v4 is designed to coexist with legacy engines.
+- **Legacy Preservation**: Files in `selection_engines/impl/v3_*.py` are frozen to serve as immutable benchmarks.
+- **Versioning**: Tournament logs must explicitly tag the `spec_version` (e.g., `4.0-mlops` vs `3.4`) to prevent cross-contamination in meta-analysis.
 
 ## 6. Implementation Strategy (The HTR Controller)
 The **Hierarchical Threshold Relaxation (HTR)** logic is moved from recursion into a **Pipeline Orchestrator**.
