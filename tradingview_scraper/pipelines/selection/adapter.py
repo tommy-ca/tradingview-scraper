@@ -62,13 +62,9 @@ class SelectionPipelineAdapter(BaseSelectionEngine):
         # Let's implement the adapter assuming `run_with_data` exists, then I update Pipeline.
 
         # Map Request Params
-        overrides = {
-            "top_n": request.top_n,
-            "cluster_threshold": request.threshold,
-            "max_clusters": request.max_clusters,
-            "relaxation_stage": request.params.get("relaxation_stage", 1),
-            **request.params,
-        }
+        overrides = {"top_n": request.top_n, "cluster_threshold": request.threshold, "max_clusters": request.max_clusters, **request.params}
+        # Only set relaxation_stage if explicitly provided in request.params
+        # Otherwise let the pipeline loop internally
 
         # Execute
         # We need to inject returns and raw_candidates.

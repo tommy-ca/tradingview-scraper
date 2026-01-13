@@ -62,12 +62,17 @@ class BacktestEngine:
 
     def load_data(self):
         rets_path = self.lakehouse / "returns_matrix.parquet"
+        rets_path_pkl = self.lakehouse / "portfolio_returns.pkl"
         stats_path = self.lakehouse / "antifragility_stats.parquet"
         stats_path_json = self.lakehouse / "antifragility_stats.json"
         meta_path = self.lakehouse / "portfolio_candidates.json"
 
-        if rets_path.exists():
+        # Prioritize larger returns matrix if multiple exist
+        if rets_path_pkl.exists():
+            self.returns = pd.read_pickle(rets_path_pkl)
+        elif rets_path.exists():
             self.returns = pd.read_parquet(rets_path)
+
         if stats_path.exists():
             self.stats = pd.read_parquet(stats_path)
         elif stats_path_json.exists():
