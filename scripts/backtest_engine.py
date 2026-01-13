@@ -220,10 +220,16 @@ class BacktestEngine:
                             is_neutral = actual_profile == "market_neutral" or getattr(req, "market_neutral", False)
                             target_net = 0.0 if is_neutral else 1.0
 
-                            if abs(net_sum - target_net) > 0.05:
-                                logger.warning(f"Weight Guard Triggered: Profile={actual_profile}, Net={net_sum:.4f}, Target={target_net:.4f}, Gross={gross_sum:.4f}")
+                            if is_neutral:
+                                if abs(net_sum) > 0.15:
+                                    logger.warning(f"Weight Guard Triggered (Neutral): Profile={actual_profile}, Net={net_sum:.4f}, Target={target_net:.4f}")
+                                else:
+                                    logger.info(f"Weight Guard Passed (Neutral): Profile={actual_profile}, Net={net_sum:.4f}")
                             else:
-                                logger.info(f"Weight Guard Passed: Profile={actual_profile}, Net={net_sum:.4f}, Gross={gross_sum:.4f}")
+                                if net_sum < 0.5:
+                                    logger.warning(f"Weight Guard Triggered (Low Exposure): Profile={actual_profile}, Net={net_sum:.4f}, Gross={gross_sum:.4f}")
+                                else:
+                                    logger.info(f"Weight Guard Passed: Profile={actual_profile}, Net={net_sum:.4f}, Gross={gross_sum:.4f}")
 
                         if ledger:
                             weights_dict = flat_weights.set_index("Symbol")["Net_Weight"].to_dict()

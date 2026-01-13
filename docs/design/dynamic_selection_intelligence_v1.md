@@ -79,6 +79,17 @@ Within each identified cluster, candidates are ranked by their **Log-MPS Convict
 - **The Top-N Rule**: Only the top $N$ (default: 3) highest-conviction assets per cluster are recruited for the final portfolio.
 - **Directional Diversity**: Ranking is performed separately for `LONG` and `SHORT` directions within the cluster to ensure balanced factor exposure in multi-directional profiles.
 
+## 11. Baseline Selection Standards (v2.2)
+To quantify the impact of statistical selection, the platform utilizes two distinct baseline standards.
+
+### 11.1 Pass-through Baseline (`baseline`)
+Passes ALL raw candidates sanctioned by discovery. This quantifies the "Gross Selection Alpha" of the entire funnel, including liquidity and hygiene filters.
+
+### 11.2 Structural Baseline (`liquid_htr`)
+Performs hierarchical clustering and HTR relaxation exactly like the production engines, but picks the Top-N per cluster based on **Liquidity** (`Value.Traded`) instead of Log-MPS conviction.
+- **Purpose**: Isolate "Clustering Alpha" (diversification benefit) from "Statistical Alpha" (predictive conviction).
+- **Justification**: Differentiates whether performance gains are due to purely reducing the pool size ($N=200 \rightarrow 20$) or due to picking superior assets within each cluster.
+
 ## 15. Recursive Weight Flattening (v2.0)
 To bridge the gap between abstract Strategy Optimization and physical asset execution, the platform implements a recursive aggregation chain.
 

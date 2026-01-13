@@ -70,7 +70,7 @@ def main():
     parser.add_argument("--run-id-prefix", default=f"calib_{datetime.datetime.now().strftime('%m%d_%H%M')}")
     args = parser.parse_args()
 
-    selection_modes = ["baseline", "v3.4"]
+    selection_modes = ["baseline", "liquid_htr", "v3.2", "v3.4"]
     run_ids = {}
 
     for mode in selection_modes:
