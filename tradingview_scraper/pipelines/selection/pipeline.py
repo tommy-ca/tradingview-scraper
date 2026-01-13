@@ -39,6 +39,80 @@ class SelectionPipeline:
         self.policy = SelectionPolicyStage()
         self.synthesis = SynthesisStage()
 
+    def run_with_data(self, returns_df: Any, raw_candidates: Any, overrides: Optional[Dict[str, Any]] = None) -> SelectionContext:
+        """
+        Execute pipeline with in-memory data (Adapter Mode).
+        Bypasses IngestionStage file loading.
+        """
+        logger.info(f"Starting Selection Pipeline Run (Adapter Mode): {self.run_id}")
+
+        # 1. Initialize Context
+        params = {
+            "feature_lookback": 120,
+            "cluster_threshold": 0.7,
+            "max_clusters": 25,
+            "top_n": 2,
+        }
+        if overrides:
+            params.update(overrides)
+
+        context = SelectionContext(run_id=self.run_id, params=params)
+
+        # 2. Inject Data
+        context.returns_df = returns_df
+        context.raw_pool = raw_candidates
+        context.log_event("Ingestion", "DataInjected", {"n_candidates": len(raw_candidates)})
+
+        # 3. Execute rest of pipeline (Skipping Ingestion)
+        context = self.feature_eng.execute(context)
+
+        # HTR Loop
+        final_stage = 1
+        for stage in [1, 2, 3, 4]:
+            # Respect requested relaxation stage if provided in overrides
+            # If adapter passed explicit relaxation_stage, use it and don't loop?
+            # Or treat it as starting stage?
+            # Legacy engine behavior: single pass at requested stage.
+            # So if overrides has 'relaxation_stage', we might want to respect that.
+
+            # Logic: If 'relaxation_stage' is in overrides, we set current stage to it.
+            # But the loop iterates 1..4.
+            # If we want to support single-stage execution (legacy style), we should check.
+
+            req_stage = int(overrides.get("relaxation_stage", 0)) if overrides else 0
+            if req_stage > 0 and stage != req_stage:
+                continue
+
+            logger.info(f"--- HTR Stage {stage} ---")
+            context.params["relaxation_stage"] = stage
+
+            if stage == 2:
+                base_ent = self.settings.features.entropy_max_threshold
+                base_eff = self.settings.features.efficiency_min_threshold
+                context.params["entropy_max_threshold"] = min(1.0, base_ent * 1.2)
+                context.params["efficiency_min_threshold"] = base_eff * 0.8
+
+            if context.inference_outputs.empty:
+                context = self.inference.execute(context)
+            if not context.clusters:
+                context = self.clustering.execute(context)
+
+            context = self.policy.execute(context)
+
+            n_winners = len(context.winners)
+            if n_winners >= 15:
+                final_stage = stage
+                break
+
+            final_stage = stage
+
+            # If we were forced to a specific stage, break after one pass
+            if req_stage > 0:
+                break
+
+        context = self.synthesis.execute(context)
+        return context
+
     def run(self, overrides: Optional[Dict[str, Any]] = None) -> SelectionContext:
         """
         Execute the full selection pipeline with HTR loop.

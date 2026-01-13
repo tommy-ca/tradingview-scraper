@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Type
 
+from tradingview_scraper.pipelines.selection.adapter import SelectionPipelineAdapter
 from tradingview_scraper.selection_engines.base import BaseSelectionEngine, SelectionRequest, SelectionResponse, get_hierarchical_clusters, get_robust_correlation
 
 from .impl.baseline import BaselineSelectionEngine
@@ -18,6 +19,8 @@ SELECTION_ENGINES: Dict[str, Type[BaseSelectionEngine]] = {
     "v3.1": SelectionEngineV3_1,
     "v3.2": SelectionEngineV3_2,
     "v3.4": SelectionEngineV3_4,
+    "v4": SelectionPipelineAdapter,
+    "v4_pipeline": SelectionPipelineAdapter,
     "baseline": BaselineSelectionEngine,
     "liquid_htr": SelectionEngineLiquidHTR,
     "legacy": SelectionEngineV2_0,  # Alias for backward compatibility
