@@ -228,6 +228,7 @@ class BacktestEngine:
                             default_shrinkage_intensity=float(config.features.default_shrinkage_intensity),
                             adaptive_fallback_profile=str(config.features.adaptive_fallback_profile),
                             benchmark_returns=bench_rets,  # For market_neutral
+                            market_neutral=(actual_profile == "market_neutral"),
                         )
 
                         # Market profile needs the full pool, others use synthesized strategies

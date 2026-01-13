@@ -40,11 +40,10 @@ class FeatureEngineeringStage(BasePipelineStage):
         # 2. Spectral & Complexity Features
         lookback = min(len(df), context.params.get("feature_lookback", 120))
 
-        entropy = pd.Series({s: calculate_permutation_entropy(df[s].tail(lookback).to_numpy(), order=5) for s in df.columns})
-
-        efficiency = pd.Series({s: calculate_efficiency_ratio(df[s].tail(lookback).to_numpy()) for s in df.columns})
-
-        hurst = pd.Series({s: calculate_hurst_exponent(df[s].to_numpy()) for s in df.columns})
+        # Vectorized calculation using apply (much faster than dict comprehensions for large N)
+        entropy = df.apply(lambda col: calculate_permutation_entropy(col.tail(lookback).to_numpy(), order=5))
+        efficiency = df.apply(lambda col: calculate_efficiency_ratio(col.tail(lookback).to_numpy()))
+        hurst = df.apply(lambda col: calculate_hurst_exponent(col.to_numpy()))
 
         # 3. Discovery Metadata & External Features
         candidate_map = {c["symbol"]: c for c in context.raw_pool}

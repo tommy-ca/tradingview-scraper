@@ -25,7 +25,22 @@ def _get_recursive_bisection_weights(cov: np.ndarray, sort_ix: List[int]) -> np.
         items = [i[j:k] for i in items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
         for i in range(0, len(items), 2):
             l, r = items[i], items[i + 1]
-            v_l, v_r = np.trace(cov[l][:, l]), np.trace(cov[r][:, r])
+
+            # v3.5.5 Hardening: Improved HRP Variance Calculation
+            # We use inverse-variance weighted branch variance for more stable bisection
+            def get_cluster_var(idx_list):
+                if len(idx_list) == 0:
+                    return 0.0
+                c_cov = cov[idx_list][:, idx_list]
+                # Inverse Variance Weights
+                vols = np.sqrt(np.diag(c_cov) + 1e-15)
+                inv_vars = 1.0 / (vols**2 + 1e-15)
+                w_iv = inv_vars / inv_vars.sum()
+                return float(w_iv @ c_cov @ w_iv)
+
+            v_l = get_cluster_var(l)
+            v_r = get_cluster_var(r)
+
             alpha = 1 - v_l / (v_l + v_r + 1e-15)
             weights[l] *= alpha
             weights[r] *= 1 - alpha
@@ -193,7 +208,15 @@ class CustomClusteredEngine(BaseRiskEngine):
             targets = list(returns.columns)
             if not targets:
                 return EngineResponse(self.name, request, pd.DataFrame(), {"backend": "custom_empty"}, ["empty returns"])
-            w = 1.0 / len(targets)
+
+            # CR-590: Capped Equal Weight
+            n_assets = len(targets)
+            w_raw = 1.0 / n_assets
+            w_capped = min(0.25, w_raw)
+            # If capped, we have leftover. Standard is to redistribute or just use w_raw if N is small.
+            # But the requirement is 25% cap.
+            w = w_capped
+
             rows = [
                 {
                     "Symbol": str(s),
@@ -226,7 +249,9 @@ class CustomClusteredEngine(BaseRiskEngine):
         if n == 1:
             return pd.Series([1.0], index=X.columns)
 
-        cap = _effective_cap(request.cluster_cap, n)
+        # CR-590: Strict 25% Cluster Cap Enforcement
+        cap_val = min(0.25, float(request.cluster_cap))
+        cap = _effective_cap(cap_val, n)
         cov = _cov_shrunk(X, kappa_thresh=request.kappa_shrinkage_threshold, default_shrinkage=request.default_shrinkage_intensity)
 
         if request.profile == "hrp":

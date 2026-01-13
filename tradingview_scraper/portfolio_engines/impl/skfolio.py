@@ -65,7 +65,9 @@ class SkfolioEngine(CustomClusteredEngine):
             # Skfolio supports linear constraints, but for now we fallback to custom
             raise ValueError("Skfolio native Market Neutrality not yet implemented")
 
-        cap = _effective_cap(request.cluster_cap, n)
+        # CR-590: Strict 25% Cluster Cap Enforcement
+        cap_val = min(0.25, float(request.cluster_cap))
+        cap = _effective_cap(cap_val, n)
         try:
             if "max_weights" in inspect.signature(model.__class__).parameters:
                 model.set_params(max_weights=cap)

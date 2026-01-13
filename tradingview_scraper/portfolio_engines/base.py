@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 # Updated ProfileName: Removed 'market_neutral' as it's now a constraint
-ProfileName = Literal["min_variance", "hrp", "max_sharpe", "barbell", "equal_weight", "benchmark", "market", "adaptive", "risk_parity", "erc"]
+ProfileName = Literal["min_variance", "hrp", "max_sharpe", "barbell", "equal_weight", "benchmark", "market", "adaptive", "risk_parity", "erc", "market_neutral"]
 
 
 class EngineUnavailableError(RuntimeError):

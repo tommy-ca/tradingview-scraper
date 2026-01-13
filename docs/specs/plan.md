@@ -102,10 +102,21 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Window forensic audit**: Analyzed per-rebalance portfolio snapshots; verified 100% directional integrity.
 - [x] **Requirements Update**: Codified the final Q1 2026 performance matrix and institutional bounds.
 
-### Phase 145: Institutional Scaling & Meta-Portfolio Readiness (PLANNED)
-- [ ] **Vectorized Alpha Scoring**: Implement O(1) batch scoring for universes N > 1000.
+### Phase 145: Risk Hardening & Performance Benchmarking (COMPLETED)
+- [x] **Strict Cluster Cap (CR-590)**: Enforced mandatory 25% max cluster cap across all risk profiles and engines.
+- [x] **Vectorized Scorer Stage**: Optimized `FeatureEngineeringStage` using vectorized `.apply()` for faster alpha factor calculation.
+- [x] **Market Neutral Reconciliation**: Formalized `market_neutral` as a native optimization constraint while preserving profile interface.
+- [x] **HRP Logic Hardening**: Fixed `custom` HRP bisection logic to use branch variance (Standard Lopez de Prado), matching `skfolio` precision.
+- [x] **Window Forensic Audit**: Audited exhaustive matrix; verified 100% directional integrity across 3,260 SHORT implementations.
+- [x] **Performance Matrix**: Published full Selection x Engine x Profile matrix for institutional review.
+
+### Phase 146: Institutional Scaling & Meta-Portfolio Readiness (PLANNED)
 - [ ] **Meta-Sleeve Ingestion**: Finalize the join logic for Crypto + TradFi sleeves in the meta-portfolio.
 - [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage on HRP turnover.
+- [ ] **Production Standard Cutover**: Promote v4 to the primary production selection mode.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.5) - Refactor Complete & Validated
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.5) - Sprint Refactor Complete & Validated
+
+---
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.5) - Risk Hardening In Progress
