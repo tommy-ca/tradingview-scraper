@@ -110,7 +110,18 @@ The `SelectionPolicyStage` utilizes discovery metadata to enforce sector-level l
 - **Constraint**: No single sector can exceed 40% of the recruited winner pool.
 - **Implementation**: The HTR loop prunes low-conviction assets within over-concentrated sectors during recruitment, ensuring the final portfolio remains uncorrelated across different industry verticals.
 
-## 12. Final Operational Certification (v3.5.3)
+## 13. Advanced Allocation Strategies (Pillar 3)
+
+### 13.1 Market Neutral as a Constraint (CR-570)
+In the v4 architecture, Market Neutrality is decoupled from Alpha Generation. 
+- **Mechanism**: The Portfolio Engine applies a linear constraint on the portfolio beta relative to a benchmark (e.g., BTC or SPY).
+- **Benefit**: Allows the solver to select the most "alpha-dense" atoms while maintaining a neutral footprint, avoiding the liquidity-constrained bottleneck of manual pair-trading.
+
+### 13.2 Barbell Antifragility Mapping (CR-580)
+The `barbell` strategy segments capital into "Core" (Antifragile) and "Aggressor" (High-Conviction) layers.
+- **Synthesis Mapping**: Because optimization happens in "Strategy Space" (Atoms), the engine explicitly maps Strategy IDs (e.g., `BTC_mom_LONG`) back to physical stats (e.g., `BTC` Antifragility Score) to ensure the Core layer truly contains the most resilient assets.
+
+## 14. Final Operational Certification (v3.5.4)
 As of Q1 2026, the v4 Selection Pipeline is the **Institutional Standard** for the multi-sleeve meta-portfolio.
 - **Reliability**: Validated via exhaustive 3D Matrix Tournament (Selection x Profile x Engine).
 - **Directionality**: 100% verified SHORT atom normalization.

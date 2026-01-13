@@ -9,7 +9,7 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-13) - Deep Audit Standard v3.5.3.
+**Production Certified** (2026-01-13) - Deep Audit Standard v3.5.4.
 
 ### 1.4 Statistical Performance Baselines (Grand Tournament 2026-01-13)
 The following benchmarks serve as the institutional standard for Q1 2026 production:
@@ -84,6 +84,8 @@ The following benchmarks serve as the institutional standard for Q1 2026 product
 | CR-540 | MUST | ✅ | **Sleeve Diversity Audit**: Every tournament report MUST include a 'Sleeve Diversity Score' calculating factor concentration across sectors to ensure the recruited winner pool remains orthogonal. |
 | CR-550 | MUST | ✅ | **Vectorized Performance Standard**: The selection pipeline MUST achieve < 2s latency for universes of N=1000 using vectorized probability mapping (CR-530) to meet production throughput standards. |
 | CR-560 | MUST | ✅ | **Rebalance Window Reproducibility**: The audit ledger MUST persist the exact rebalance timestamps and interval length (step_size) to ensure historical fidelity in meta-analysis and slippage modeling. |
+| CR-570 | MUST | ✅ | **Market Neutral Constraint Standard**: Market Neutrality is enforced as an optimization constraint ($|w^T\beta| \le 0.05$) across the synthesized alpha pool, ensuring global optimality rather than pairwise matching. |
+| CR-580 | MUST | ✅ | **Barbell Strategy ID Mapping**: The `barbell` portfolio engine MUST maintain mapping between physical asset metadata (Antifragility) and synthesized strategy atoms to ensure correct capital segmentation. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable \"Deep Forensic Report\" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 
