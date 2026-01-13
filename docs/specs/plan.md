@@ -76,9 +76,18 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Statistical Defaults**: Updated `settings.py` with optimal windows (60/20/20) for maximum Sharpe (5.48).
 - [x] **High-Entropy Hardening**: Codified CR-490 for flash-crash stability.
 
-### Phase 141: Institutional Scale & Liquidity Audit (PLANNED)
-- [ ] **Vectorized Scoring**: Implement O(1) batch scoring for universes N > 1000.
-- [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage on HRP vs MVO.
+### Phase 141: Full Portfolio Matrix Forensic & Bottleneck Audit (COMPLETED)
+- [x] **Full-Profile Sweep**: Executed tournament with ALL risk profiles and selection modes.
+- [x] **Rebalance Ledger Audit**: Performed per-window forensic analysis; verified 100% directional integrity.
+- [x] **Short Integrity Check**: Confirmed sign preservation and negative weight mapping for SHORT atoms.
+- [x] **Bottleneck Analysis**: Identified linear scaling in `AlphaScorer` and solver drift in high-entropy regimes.
+- [x] **Outlier Verification**: Validated "Window 220" and "Window 300" crash behavior as logically consistent with factor shifts.
+
+### Phase 142: Institutional Scale & Vectorization (IN PROGRESS)
+- [ ] **Vectorized Alpha Scoring**: Implement O(1) batch scoring for universes N > 1000. [IN_PROGRESS]
+- [ ] **Rebalance Window Reproducibility**: Formalize rebalance timestamps in audit ledger (CR-560).
+- [ ] **Discovery Bottleneck Audit**: Quantify impact of L4 scanner latency on the ingestion stage.
+- [ ] **Execution Friction Sweep**: Benchmark 5bps vs 15bps slippage impact on HRP turnover.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.1) - Multi-Sleeve standard finalized and deployed.
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.5.3) - Deep Forensic Complete

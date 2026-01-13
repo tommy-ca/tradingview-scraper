@@ -99,3 +99,13 @@ Responsible for the *single-pass* recruitment logic:
 - Select Top-N per cluster.
 - Handle "Representative Forcing" if `relaxation_stage >= 3`.
 - Handle "Balanced Fallback" if `relaxation_stage >= 4`.
+
+## 10. Vectorized Probability Mapping (CR-530)
+To support institutional scaling ($N > 1000$), the `AlphaScorer` utilizes vectorized probability mapping:
+- **Broadcasting**: Normalization methods (CDF, Z-Score) are applied across the entire feature matrix in a single `numpy` operation.
+- **Complexity**: Reduces selection latency from $O(N)$ to $O(1)$ effectively, ensuring real-time responsiveness even with massive candidate pools.
+
+## 11. Sector-Aware Diversification (CR-540)
+The `SelectionPolicyStage` utilizes discovery metadata to enforce sector-level limits:
+- **Constraint**: No single sector can exceed 40% of the recruited winner pool.
+- **Implementation**: The HTR loop prunes low-conviction assets within over-concentrated sectors during recruitment, ensuring the final portfolio remains uncorrelated across different industry verticals.

@@ -77,6 +77,13 @@ The following benchmarks serve as the institutional standard for Q1 2026 product
 | CR-470 | MUST | ✅ | **Alpha Decay Monitoring**: The system MUST implement statistical rebalance-frequency audits (Grand Tournament Protocol) to identify the half-life of alpha signals and enforce a production rebalance floor (default <= 20 days). |
 | CR-480 | MUST | ✅ | **Final Certification Protocol**: Prior to any major release, the system MUST undergo an exhaustive risk profile tournament across all selection-optimization-simulator combinations to ensure zero performance regression and 100% directional integrity. |
 | CR-490 | MUST | ✅ | **Entropy-Aware Hardening**: During high-entropy regimes (DWT Entropy > 0.95), the selection pipeline MUST automatically tighten predictability vetoes to prevent factor dilution in unstable markets. |
+| CR-500 | MUST | ✅ | **Per-Rebalance Portfolio Snapshots**: The audit ledger MUST record the full portfolio composition (Symbols, Weights, Directions) at every rebalance window to enable deep forensic attribution and slippage analysis. |
+| CR-510 | MUST | ✅ | **Outlier Forensic Audit**: Every production run MUST undergo an automated outlier audit that identifies and justifies any statistically extreme Sharpe (>10) or Drawdown (<-30%) events at the window level. |
+| CR-520 | MUST | ✅ | **Global Timescale Traceability**: The audit ledger MUST record all active timescales (train/test/rebalance/lookback) in the genesis block to ensure statistical reproducibility across different sampling frequencies. |
+| CR-530 | MUST | ✅ | **Parallel Alpha Scoring**: For large candidate pools (N > 1000), the selection pipeline MUST utilize vectorized probability mapping to ensure selection latency remains within institutional bounds (< 2 seconds). |
+| CR-540 | MUST | ✅ | **Sleeve Diversity Audit**: Every tournament report MUST include a 'Sleeve Diversity Score' calculating factor concentration across sectors to ensure the recruited winner pool remains orthogonal. |
+| CR-550 | MUST | ✅ | **Vectorized Performance Standard**: The selection pipeline MUST achieve < 2s latency for universes of N=1000 using vectorized probability mapping (CR-530) to meet production throughput standards. |
+| CR-560 | MUST | ✅ | **Rebalance Window Reproducibility**: The audit ledger MUST persist the exact rebalance timestamps and interval length (step_size) to ensure historical fidelity in meta-analysis and slippage modeling. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable \"Deep Forensic Report\" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 
