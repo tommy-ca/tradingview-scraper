@@ -113,6 +113,8 @@ def test_policy_stage(dummy_context):
             "efficiency": [0.9, 0.8, 0.7],
             "survival": [1.0, 1.0, 1.0],
             "momentum": [0.1, 0.2, 0.3],  # Used for direction default
+            "kurtosis": [5.0, 10.0, 15.0],
+            "stability": [1.0, 1.0, 1.0],
         },
         index=["BTC", "ETH", "SOL"],
     )
@@ -162,7 +164,9 @@ def test_pipeline_integration(mock_settings, dummy_context):
     mock_settings.return_value.features.weights_global = {"momentum": 1.0, "adx": 1.0}
     mock_settings.return_value.features.entropy_max_threshold = 0.99
     mock_settings.return_value.features.efficiency_min_threshold = 0.01
+    mock_settings.return_value.features.feature_lookback = 60
     mock_settings.return_value.benchmark_symbols = []
+    mock_settings.return_value.top_n = 3
 
     pipeline = SelectionPipeline(run_id="test_int", candidates_path=str(cands_path), returns_path=str(returns_path))
 

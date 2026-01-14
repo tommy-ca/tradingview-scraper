@@ -52,6 +52,14 @@ def get_hierarchical_clusters(returns: pd.DataFrame, threshold: float = 0.5, max
         return np.array([1]), np.array([])
 
     link = sch.linkage(squareform(avg_dist, checks=False), method="ward")
-    cluster_ids = sch.fcluster(link, t=threshold, criterion="distance") if threshold > 0 else sch.fcluster(link, t=max_clusters, criterion="maxclust")
+
+    # CR-650: Hard-Bounded Cluster Resolution
+    # We prioritize the distance threshold but enforce max_clusters as a hard ceiling
+    cluster_ids = sch.fcluster(link, t=threshold, criterion="distance")
+    n_generated = len(np.unique(cluster_ids))
+
+    if n_generated > max_clusters:
+        # Fallback to maxclust to ensure factor aggregation
+        cluster_ids = sch.fcluster(link, t=max_clusters, criterion="maxclust")
 
     return cluster_ids, link

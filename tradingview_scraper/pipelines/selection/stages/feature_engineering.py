@@ -48,7 +48,7 @@ class FeatureEngineeringStage(BasePipelineStage):
         # Tail Risk Features (CR-630)
         from scipy.stats import kurtosis, skew
 
-        skewness = df.apply(lambda col: float(skew(col.dropna().to_numpy())) if len(col.dropna()) > 2 else 0.0)
+        skewness = df.apply(lambda col: float(abs(skew(col.dropna().to_numpy()))) if len(col.dropna()) > 2 else 0.0)
         kurt = df.apply(lambda col: float(kurtosis(col.dropna().to_numpy())) if len(col.dropna()) > 2 else 0.0)
         # CVaR (Expected Shortfall) at 95% confidence
         cvar = df.apply(lambda col: col[col <= col.quantile(0.05)].mean() if len(col.dropna()) > 20 else -0.1)

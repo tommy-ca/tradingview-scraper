@@ -110,6 +110,12 @@ The `SelectionPolicyStage` utilizes discovery metadata to enforce sector-level l
 - **Constraint**: No single sector can exceed 40% of the recruited winner pool.
 - **Implementation**: The HTR loop prunes low-conviction assets within over-concentrated sectors during recruitment, ensuring the final portfolio remains uncorrelated across different industry verticals.
 
+## 12. Bounded Cluster Resolution (CR-650)
+The Partitioning stage (Stage 4) is the bridge between Alpha and Risk. To prevent "Factor Over-Fitting" and ensure stable risk budgeting:
+- **Constraint**: A hard ceiling of **25 clusters** is enforced for all production sleeves.
+- **Rationale**: Prevents idiosyncratic noise from creating single-asset clusters, ensuring that branch variance calculations in HRP/MinVar engines are statistically significant.
+- **Fallback**: If the distance threshold (0.7) generates $> 25$ clusters, the engine automatically switches to `maxclust` pruning to reach the institutional target.
+
 ## 13. Advanced Allocation Strategies (Pillar 3)
 
 ### 13.1 Market Neutral as a Constraint (CR-570)
@@ -121,19 +127,25 @@ In the v4 architecture, Market Neutrality is decoupled from Alpha Generation.
 The `barbell` strategy segments capital into "Core" (Antifragile) and "Aggressor" (High-Conviction) layers.
 - **Synthesis Mapping**: Because optimization happens in "Strategy Space" (Atoms), the engine explicitly maps Strategy IDs (e.g., `BTC_mom_LONG`) back to physical stats (e.g., `BTC` Antifragility Score) to ensure the Core layer truly contains the most resilient assets.
 
-## 14. Final Operational Certification (v3.5.7)
+### 13.3 Hardened Simulation Bounds (CR-660)
+To prevent mathematical drift in high-volatility regimes:
+- **Liquidation Floor**: If Window MaxDD reaches -100%, the strategy is marked as "Liquidated" and subsequent returns for that run are locked at 0.
+- **TWR Normalization**: The `stable_institutional_audit.py` script utilizes Time-Weighted Return (TWR) compounding to provide a realistic benchmark of the investor experience across sequential rebalances.
+
+## 14. Final Operational Certification (v3.6.1)
 As of Q1 2026, the v4 Selection Pipeline is the **Institutional Standard** for the multi-sleeve meta-portfolio.
 - **Reliability**: Validated via exhaustive 3D Matrix Tournament (Selection x Profile x Engine).
-- **Hardened Allocation**: Enforced mandatory 25% max cluster weight (CR-590).
+- **Hardened Allocation**: Enforced mandatory 25% max cluster weight (CR-590) and bounded resolution (CR-650).
 - **Directionality**: 100% verified SHORT atom normalization.
 - **Traceability**: All stage transitions audited via `comprehensive_audit_v4.py`.
 - **Statistical Benchmark**: Achieved Mean Sharpe 5.48 with 60/20/20 configuration.
 
-## 15. Deep Forensic Audit Methodology
+## 15. Deep Forensic Audit Methodology (v3.6.1)
 Institutional verification is now standardized via automated per-window trace:
 - **Directional Trace**: Verifies sign preservation across thousands of strategy atom implementations.
 - **Volatility Anchors**: Ensures profiles remain within their risk bands (MinVar: 0.35, HRP: 0.45, MaxSharpe: 0.90).
 - **Outlier Quarantine**: Automated identification of "Flash Crash" windows to trigger safety protocols.
+- **Funnel Trace**: Traces candidates from Discovery (N=110) to Selection (N=20) to ensure high-conviction recruitment.
 
 ## 17. Risk Profile Benchmarks & Volatility Bands
 To ensure behavioral consistency across different market regimes, the system enforces target volatility bands for each risk profile:
@@ -148,7 +160,14 @@ To ensure behavioral consistency across different market regimes, the system enf
 ### 17.1 Volatility Drift (Anomalies)
 The `stable_institutional_audit.py` script automatically monitors realized volatility against these benchmarks. Significant deviations (> 0.25) are flagged as "DRIFT" anomalies, usually indicating a failure of the covariance estimator or extreme asset-level variance.
 
-## 18. Market Neutrality (Constraint vs Profile)
-While "Market Neutral" exists as a selectable profile for backward compatibility, it is internally implemented as a **Linear Constraint** on the portfolio beta:
-- **As a Profile**: It defaults to a "Beta-Neutralized Minimum Variance" objective.
-- **As a Constraint**: It can be applied to *any* profile (e.g., MaxSharpe Neutral, HRP Neutral). This allow the system to pursue high-conviction alpha signals while maintaining a zero-beta footprint.
+## 19. Strategic Risk Delegation (CR-640)
+To maintain the logical purity of the 3-Pillar architecture, strategic constraints like **Directional Balance** (LONG/SHORT exposure caps) are delegated to **Pillar 3 (Allocation)**:
+- **Pillar 1 (Selection)**: Focuses on alpha conviction and asset-level statistical hygiene (Kurtosis, Volatility).
+- **Pillar 3 (Allocation)**: Enforces portfolio-level risk policy. Strategies requiring balance (e.g., Market Neutral) implement directional caps as explicit solver constraints.
+- **Benefit**: Prevents the alpha funnel from prematurely pruning high-conviction signals based on arbitrary global limits, allowing for more flexible strategy-specific risk management.
+
+## 20. Tail-Risk Mitigation (CR-630)
+The v4 pipeline integrates high-order statistical moments and hard volatility caps:
+- **Fat-Tail Veto**: Hard veto for assets with **Kurtosis > 20**, identifying extreme "jump-risk" candidates.
+- **Volatility Hard-Cap**: Assets exceeding **250% annualized volatility** are automatically vetoed (CR-631).
+- **CVaR Penalization**: Assets with extreme Conditional Value at Risk are down-weighted in the Log-MPS scoring logic to prioritize stable alpha.

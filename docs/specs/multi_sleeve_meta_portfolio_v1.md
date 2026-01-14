@@ -1,5 +1,5 @@
 # Specification: Multi-Sleeve Meta-Portfolio (v1)
-> **Status:** [SPEC] Fractal Risk Architecture (v1.3)
+> **Status:** [SPEC] Fractal Risk Architecture (v1.4) - 2026-01-14
 > **Conceptual Note:** Meta-portfolio sleeves are treated as profile-matrices. The meta-layer recursively reuses risk profiles (e.g., Meta-MinVar over sub-MinVar portfolios) to ensure philosophy consistency across the capital stack.
 
 ## 1. Objective
@@ -26,7 +26,7 @@ The crypto sleeve has unique requirements due to its 24x7 trading calendar and m
 - Multi-exchange (BINANCE/OKX/BYBIT/BITGET) available for research only
 
 **Predictability Thresholds**:
-- Entropy acceptance: 0.995-0.999 (higher than TradFi due to microstructure noise)
+- Entropy acceptance: 0.900-0.950 (Hard veto at 0.999 per CR-631)
 - Hurst random-walk zone: 0.48-0.52
 
 **Backtesting Parameters**:
@@ -55,24 +55,24 @@ The crypto sleeve has unique requirements due to its 24x7 trading calendar and m
 ### 3.1 Return Vectors
 Return series for meta-allocation must be exported to `artifacts/meta/returns/<profile>.pkl` for each participating sleeve.
 
-### 3.2 The Parity Constraint Mandate
+### 3.2 The Parity Constraint Mandate (v1.4)
 To ensure statistical validity in inter-sleeve HRP, all constituent sleeves must adhere to the **Parity Constraint**:
-1.  **Temporal Parity**: Sleeves must share identical `lookback_days` (default 500d), `train_window` (default 180d), and `test_window` (default 40d).
-2.  **Selection Parity**: All sleeves must use the same `selection_mode` version (standardized on v3.2) and share `feat_selection_logmps` and `feat_predictability_vetoes` settings.
+1.  **Temporal Parity**: Sleeves must share identical `lookback_days` (default 500d), `train_window` (default 60d), and `test_window` (default 20d).
+2.  **Selection Parity**: All sleeves must use the same `selection_mode` version (standardized on **v4 MLOps**) and share `feat_selection_logmps` and `feat_predictability_vetoes` settings.
 3.  **Fidelity Parity**: Backtest simulators (e.g., `cvxportfolio`) and slippage/commission models must be consistent across the meta-boundary.
 
-### 3.3 Institutional Parity Matrix (v1.1)
+### 3.3 Institutional Parity Matrix (v1.2)
 Participating sleeves in a `meta_production` run must demonstrate a **100% Parameter Overlap** in their `resolved_manifest.json` for the following blocks:
-- `features`: Selection engine version and alpha feature flags.
+- `features`: Selection engine version (v4) and alpha feature flags.
 - `selection`: Quality thresholds and momentum gates.
-- `backtest`: Simulation horizons and friction models.
+- `backtest`: Simulation horizons (60/20/20) and friction models.
 
 ### 3.4 Crypto Sleeve Parity Exceptions
 The crypto sleeve has documented exceptions to the standard parity matrix:
 
 | Parameter | TradFi Value | Crypto Value | Rationale |
 |-----------|--------------|--------------|-----------|
-| `entropy_max_threshold` | 0.995 | 0.999 | Higher noise tolerance for crypto microstructure |
+| `entropy_max_threshold` | 0.950 | 0.999 | Higher noise tolerance for crypto microstructure |
 | `backtest_slippage` | 0.0005 | 0.001 | Higher volatility and wider spreads |
 | `backtest_commission` | 0.0001 | 0.0004 | Typical CEX maker/taker fees |
 | `feat_dynamic_selection` | true | false | Crypto benefits from stable universe due to rapid regime changes |
@@ -101,7 +101,7 @@ To prevent over-concentration in any single sleeve:
 - **Correlation Benefit**: The Meta-Portfolio must show lower volatility than the best individual sleeve. (Verified: Inter-sleeve correlation of **0.10** observed).
 - **Reproducibility**: The meta-allocation must be logged in the `audit.jsonl` of the meta-run.
 - **Integrity**: Zero tolerance for weekend padding or calendar drift. (Verified via `audit_data_integrity.py`).
-- **Crypto Calendar**: Crypto sleeve must use inner join with TradFi sleeves; no zero-fill padding for weekends.
+- **TWR Benchmarking**: Annualized returns must be calculated using Time-Weighted Return (TWR) to handle high-volatility compounding artifacts.
 - **Weight Bounds**: All sleeves must be within 5%-50% weight range in final meta-allocation.
 
 ## 6. Audit Logs (Sample Trace)

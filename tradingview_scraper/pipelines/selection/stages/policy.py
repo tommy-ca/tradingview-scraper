@@ -32,7 +32,7 @@ class SelectionPolicyStage(BasePipelineStage):
         scores = context.inference_outputs["alpha_score"]
         features = context.feature_store
         clusters = context.clusters
-        candidate_map = {c["symbol"]: c for c in context.raw_pool}
+        candidate_map = {str(c["symbol"]): c for c in context.raw_pool}
 
         relaxation_stage = int(params.get("relaxation_stage", 1))
         top_n = int(params.get("top_n", 2))
@@ -41,109 +41,103 @@ class SelectionPolicyStage(BasePipelineStage):
         disqualified = self._apply_vetoes(features, candidate_map, settings, params)
 
         # 3. Recruitment Loop
-        selected_symbols: Set[str] = set()
+        # We perform initial recruitment into a buffer, then prune for diversity and size
+        recruitment_buffer: Set[str] = set()
 
         # Cluster Recruitment
         for cid, symbols in clusters.items():
-            non_vetoed = [s for s in symbols if s not in disqualified]
+            non_vetoed = [str(s) for s in symbols if str(s) not in disqualified]
+            ranked = sorted(non_vetoed, key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
 
-            # Sort by Alpha Score
-            ranked = sorted(non_vetoed, key=lambda s: scores.get(s, -1.0), reverse=True)
-
-            # Select Top N
-            recruits = ranked[:top_n]
+            # Select Top N per cluster
+            recruitment_buffer.update(ranked[:top_n])
 
             # STAGE 3: Force Representative if Cluster Empty
-            if not recruits and relaxation_stage >= 3 and symbols:
-                # Find best even if vetoed (unless strictly toxic)
-                # v3 Logic: "Find best representative in cluster that isn't hard-vetoed"
-                # For v4, let's look at all symbols in cluster, sort by score
-                # But we must respect HARD toxicity (Entropy > 0.999)
-                all_ranked = sorted(symbols, key=lambda s: scores.get(s, -1.0), reverse=True)
+            if not ranked[:top_n] and relaxation_stage >= 3 and symbols:
+                all_ranked = sorted([str(s) for s in symbols], key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
                 for s in all_ranked:
-                    ent = features.loc[s, "entropy"] if s in features.index else 1.0
+                    ent = float(features.loc[s, "entropy"]) if s in features.index else 1.0
                     if ent <= 0.999:
-                        recruits.append(s)
+                        recruitment_buffer.add(s)
                         break
 
-            selected_symbols.update(recruits)
-
         # STAGE 4: Balanced Fallback
-        # If pool < 15, fill from global top score list
-        if len(selected_symbols) < 15 and relaxation_stage >= 4:
-            needed = 15 - len(selected_symbols)
-            # Global rank of valid non-selected assets
+        if len(recruitment_buffer) < 15 and relaxation_stage >= 4:
+            needed = 15 - len(recruitment_buffer)
             valid_pool = [
-                s
+                str(s)
                 for s in scores.index
-                if s not in selected_symbols
-                and s not in disqualified
-                # Ensure simple toxicity check
-                and (features.loc[s, "entropy"] if s in features.index else 1.0) <= 0.999
+                if str(s) not in recruitment_buffer and str(s) not in disqualified and (float(features.loc[str(s), "entropy"]) if str(s) in features.index else 1.0) <= 0.999
             ]
+            global_ranked = sorted(valid_pool, key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
+            recruitment_buffer.update(global_ranked[:needed])
 
-            global_ranked = sorted(valid_pool, key=lambda s: scores.get(s, -1.0), reverse=True)
-            fallback_recruits = global_ranked[:needed]
-            selected_symbols.update(fallback_recruits)
-            logger.info(f"Stage 4 Fallback: Recruited {len(fallback_recruits)} assets.")
-
-        # 4. Finalize Winners
+        # 4. Finalize Winners & Apply Pool Sizing (Pillar 1)
         winners = []
-        for s in selected_symbols:
-            meta = candidate_map.get(s, {"symbol": s})
-            # Inject calculated alpha score for downstream use
-            meta["alpha_score"] = float(scores.get(s, 0.0))
-            # Determine direction (Default LONG for now, v3 does dynamic direction)
-            # v4 Logic: We use the direction from discovery (raw_pool) or default LONG
-            # If we need dynamic direction, it should be a separate stage or part of this one?
-            # v3 does dynamic direction based on momentum sign if enabled.
-            # Let's check params
-            if params.get("dynamic_direction", True):
-                mom = features.loc[s, "momentum"] if s in features.index else 0.0
-                meta["direction"] = "LONG" if mom >= 0 else "SHORT"
 
+        # Sort buffer by absolute conviction
+        sorted_buffer = sorted(list(recruitment_buffer), key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
+
+        # Institutional Cap: Max 25 assets to maintain high weight fidelity
+        # Delegation: Directional balance and other risk constraints are handled in Pillar 3
+        target_size = min(25, len(sorted_buffer))
+        final_selected = sorted_buffer[:target_size]
+
+        for s in final_selected:
+            meta = candidate_map.get(s, {"symbol": s}).copy()
+            meta["alpha_score"] = float(scores.get(s, 0.0))
+            mom = float(features.loc[s, "momentum"]) if s in features.index else 0.0
+            meta["direction"] = "LONG" if mom >= 0 else "SHORT"
             winners.append(meta)
 
         context.winners = winners
-        context.log_event(self.name, "SelectionComplete", {"stage": relaxation_stage, "n_winners": len(winners), "n_vetoed": len(disqualified)})
+        n_shorts_final = len([w for w in winners if w["direction"] == "SHORT"])
+        logger.info(f"Policy Result: {len(winners)} winners recruited ({n_shorts_final} shorts).")
+        context.log_event(self.name, "SelectionComplete", {"stage": relaxation_stage, "n_winners": len(winners), "n_vetoed": len(disqualified), "n_shorts": n_shorts_final})
 
         return context
 
     def _apply_vetoes(self, features: pd.DataFrame, candidate_map: Dict[str, Any], settings: Any, params: Dict[str, Any]) -> Set[str]:
-        disqualified = set()
+        disqualified: Set[str] = set()
 
         # Thresholds
-        t_entropy = params.get("entropy_max_threshold", settings.features.entropy_max_threshold)
-        t_efficiency = params.get("efficiency_min_threshold", settings.features.efficiency_min_threshold)
+        t_entropy = float(params.get("entropy_max_threshold", settings.features.entropy_max_threshold))
+        t_efficiency = float(params.get("efficiency_min_threshold", settings.features.efficiency_min_threshold))
 
-        for s in features.index:
+        for s_idx in features.index:
+            s = str(s_idx)
             # 1. Metadata Vetoes
             meta = candidate_map.get(s, {})
             if any(f not in meta for f in ["tick_size", "lot_size", "price_precision"]):
                 # Allow if benchmark? v3 logic exempts benchmarks.
-                # Let's assume standard rigor first.
                 pass
 
             # 2. Predictability Vetoes (if enabled)
             if settings.features.feat_predictability_vetoes:
-                ent = features.loc[s, "entropy"]
-                eff = features.loc[s, "efficiency"]
+                ent = float(features.loc[s, "entropy"])
+                eff = float(features.loc[s, "efficiency"])
+                kurt = float(features.loc[s, "kurtosis"])
+                asset_vol_inv = float(features.loc[s, "stability"])
+                vol_val = 1.0 / (asset_vol_inv + 1e-9)
 
                 if ent > t_entropy:
                     disqualified.add(s)
                 if eff < t_efficiency:
                     disqualified.add(s)
+                # CR-630: Tail Risk Hardening
+                if kurt > 20.0:  # Institutional "Fat Tail" limit
+                    disqualified.add(s)
+                if vol_val > 2.5:  # Hard cap on asset-level volatility (250%)
+                    disqualified.add(s)
 
             # 3. Regime Veto (Darwinian)
-            # context.feature_store["survival"] is the prob, NOT the raw score?
-            # v3 checks: if regime_all[s] < 0.1.
-            # In FeatureEngineeringStage, 'survival' = regime_all. So yes.
-            surv = features.loc[s, "survival"]
+            surv = float(features.loc[s, "survival"])
             if surv < 0.1:
                 disqualified.add(s)
 
         # Benchmark Exemption
-        for b in settings.benchmark_symbols:
+        for b_idx in settings.benchmark_symbols:
+            b = str(b_idx)
             if b in disqualified:
                 disqualified.remove(b)
 

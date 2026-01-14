@@ -160,7 +160,15 @@ class BacktestEngine:
             if ledger:
                 # CR-420: Structured Telemetry Segregation
                 # Extract pipeline audit from metrics to keep scalar KPIs clean
-                metrics_payload = {"n_winners": len(winners_syms), "winners": winners_syms, **selection.metrics}
+                metrics_payload = {
+                    "n_universe_symbols": len(self.returns.columns),
+                    "n_refinement_candidates": len(train_rets.columns),
+                    "n_discovery_candidates": len(raw_cands),
+                    "n_winners": len(winners_syms),
+                    "winners": winners_syms,
+                    **selection.metrics,
+                }
+
                 pipeline_audit = metrics_payload.pop("pipeline_audit", None)
 
                 data_payload = {
@@ -226,6 +234,11 @@ class BacktestEngine:
                         if ledger:
                             ledger.record_intent("backtest_optimize", opt_ctx, input_hashes={})
 
+                        # Hardened Ridge for MaxSharpe (CR-600)
+                        default_shrinkage = float(config.features.default_shrinkage_intensity)
+                        if actual_profile == "max_sharpe":
+                            default_shrinkage = max(default_shrinkage, 0.15)
+
                         req = EngineRequest(
                             profile=actual_profile,
                             engine=target_engine,
@@ -233,7 +246,7 @@ class BacktestEngine:
                             market_environment=regime_name,
                             cluster_cap=0.25,
                             kappa_shrinkage_threshold=float(config.features.kappa_shrinkage_threshold),
-                            default_shrinkage_intensity=float(config.features.default_shrinkage_intensity),
+                            default_shrinkage_intensity=default_shrinkage,
                             adaptive_fallback_profile=str(config.features.adaptive_fallback_profile),
                             benchmark_returns=bench_rets,  # For market_neutral
                             market_neutral=(actual_profile == "market_neutral"),

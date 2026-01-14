@@ -70,7 +70,8 @@ def calculate_mps_score(metrics: Dict[str, pd.Series], weights: Optional[Dict[st
 def map_to_probability(series: pd.Series, method: str = "rank", sigma: float = 3.0) -> pd.Series:
     """
     Maps raw metrics to a [0, 1] probability space.
-    - rank: [0.01, 1.0] relative percentile.
+    - rank: [0.01, 1.0] relative percentile (smaller is worse).
+    - rank_desc: [1.0, 0.01] relative percentile (larger is worse).
     - logistic: S-curve based on Z-score.
     - zscore: Standardized distance clipped at sigma units.
     - minmax: Linear scaling relative to window extrema.
@@ -80,9 +81,14 @@ def map_to_probability(series: pd.Series, method: str = "rank", sigma: float = 3
         return series
 
     if method == "rank":
-        # Percentile rank [0.01, 1.0] - Avoid absolute zero to prevent total collapse from noise
+        # Percentile rank [0.01, 1.0]
         ranks = rankdata(series.fillna(series.min()))
         return pd.Series(0.01 + (0.99 * (ranks - 1) / (len(ranks) - 1 if len(ranks) > 1 else 1)), index=series.index)
+
+    elif method == "rank_desc":
+        # Inverse Percentile rank [1.0, 0.01]
+        ranks = rankdata(series.fillna(series.max()))
+        return pd.Series(1.0 - (0.99 * (ranks - 1) / (len(ranks) - 1 if len(ranks) > 1 else 1)), index=series.index)
 
     elif method == "logistic":
         # S-curve mapping

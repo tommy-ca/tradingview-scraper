@@ -20,23 +20,23 @@ class InferenceStage(BasePipelineStage):
         return "Inference"
 
     def __init__(self, weights: Optional[Dict[str, float]] = None):
-        # Default Weights (v3.5.7 Standard)
+        # Default Weights (v3.5.9 Standard)
         self.weights = weights or {
-            "momentum": 1.0,
+            "momentum": 1.5,
             "stability": 1.0,
-            "liquidity": 1.0,
+            "liquidity": 0.5,
             "entropy": 1.0,
-            "efficiency": 1.0,
-            "hurst_clean": 1.0,
+            "efficiency": 0.5,
+            "hurst_clean": 0.5,
             "adx": 1.0,
             "survival": 1.0,
-            "antifragility": 1.0,
-            "skew": 0.5,
-            "kurtosis": 0.5,
+            "antifragility": 0.5,
+            "skew": 0.5,  # Penalize asymmetry via rank_desc
+            "kurtosis": 1.0,  # Heavily penalize fat tails via rank_desc
             "cvar": 1.0,
         }
 
-        # Mapping Methods (v3.5.7 Standard)
+        # Mapping Methods (v3.5.9 Standard)
         self.methods = {
             "survival": "cdf",
             "liquidity": "cdf",
@@ -47,8 +47,8 @@ class InferenceStage(BasePipelineStage):
             "entropy": "rank",
             "hurst_clean": "rank",
             "adx": "cdf",
-            "skew": "rank",
-            "kurtosis": "rank",
+            "skew": "rank_desc",  # Larger absolute skew is worse
+            "kurtosis": "rank_desc",  # Larger kurtosis is worse
             "cvar": "cdf",
         }
 

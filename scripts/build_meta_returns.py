@@ -77,18 +77,26 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
                 logger.warning(f"Could not find a specific run for profile {s_profile}. Skipping.")
                 continue
 
-            # Target the specific profile's return stream
-            # Optimized filenames: cvxportfolio_skfolio_<prof>.pkl
-            f_name = f"cvxportfolio_skfolio_{prof}.pkl"
-            p = run_path / "data" / "returns" / f_name
+            # Robust file discovery: Search for any backend that produced the target profile returns
+            returns_dir = run_path / "data" / "returns"
+            target_file = None
 
-            if not p.exists():
-                # Fallback to standard filename if the profile was different
-                p = run_path / "data" / "returns" / "cvxportfolio_skfolio_barbell.pkl"
+            if returns_dir.exists():
+                # Prefer skfolio if multiple exist, but accept any
+                matching_files = list(returns_dir.glob(f"*_{prof}.pkl"))
+                if matching_files:
+                    # Sort to ensure deterministic selection (prefer shorter names or specific backends)
+                    matching_files.sort(key=lambda x: ("skfolio" not in x.name, x.name))
+                    target_file = matching_files[0]
+                else:
+                    # Fallback to any barbell if specific profile missing (legacy support)
+                    fallbacks = list(returns_dir.glob("*_barbell.pkl"))
+                    if fallbacks:
+                        target_file = fallbacks[0]
 
-            if p.exists():
-                logger.info(f"  [{s_id}] Found returns: {p.name}")
-                s_rets = pd.read_pickle(p)
+            if target_file and target_file.exists():
+                logger.info(f"  [{s_id}] Found returns: {target_file.name}")
+                s_rets = pd.read_pickle(target_file)
                 if isinstance(s_rets, pd.Series):
                     s_rets = s_rets.to_frame(s_id)
                 else:
