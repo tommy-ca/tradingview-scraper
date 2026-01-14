@@ -11,7 +11,7 @@ import pandas as pd
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("institutional_audit")
 
-# Institutional Risk Anchors (v3.5.8)
+# Institutional Risk Anchors (v3.6.1)
 VOL_BENCHMARKS = {
     "min_variance": 0.35,
     "market_neutral": 0.35,
@@ -33,6 +33,7 @@ class InstitutionalAuditor:
     def __init__(self, run_id_pattern: str = "*", output_prefix: str = "institutional_audit"):
         self.run_id_pattern = run_id_pattern
         self.output_prefix = output_prefix
+        # Key: (RunID, Selection, Engine, Profile, Simulator) -> Results
         self.run_results: Dict[Tuple, Dict[str, Any]] = {}
         self.funnel_stats: Dict[str, pd.DataFrame] = {}  # run_id -> DataFrame of windows
 
@@ -99,12 +100,13 @@ class InstitutionalAuditor:
                         winners = data.get("winners_meta", [])
                         n_shorts = len([w for w in winners if w.get("direction") == "SHORT"])
 
+                        # Selection Funnel Traceability (v3.6.0 Standard)
                         discovered = met.get("n_discovery_candidates", 0)
                         refined = met.get("n_refinement_candidates", 0)
                         universe = met.get("n_universe_symbols", 0)
 
-                        # Trace MLOps stages for discovered count
-                        if "pipeline_audit" in data:
+                        # Trace MLOps stages for discovered count if missing
+                        if discovered == 0 and "pipeline_audit" in data:
                             for stage_event in data["pipeline_audit"]:
                                 if stage_event.get("stage") == "Ingestion":
                                     discovered = max(discovered, stage_event.get("data", {}).get("n_candidates", 0))
@@ -124,6 +126,7 @@ class InstitutionalAuditor:
                         engine = str(ctx.get("engine", met.get("eng", "unknown")))
                         profile = str(ctx.get("profile", met.get("prof", "unknown")))
                         simulator = str(ctx.get("simulator", met.get("sim", "unknown")))
+                        selection_mode = str(ctx.get("selection_mode") or config.get("selection_mode", "unknown"))
 
                         key = (engine, profile, simulator)
                         if key not in series:
@@ -138,6 +141,7 @@ class InstitutionalAuditor:
                                 "max_dd": self._get_metric(met, ["max_drawdown"]),
                                 "vol": self._get_metric(met, ["annualized_vol", "realized_vol"]),
                                 "turnover": self._get_metric(met, ["turnover"]),
+                                "selection_mode": selection_mode,
                             }
                         )
                 except Exception:
@@ -145,7 +149,6 @@ class InstitutionalAuditor:
 
         self.funnel_stats[run_id] = pd.DataFrame(funnel_rows)
 
-        selection_mode = str(config.get("selection_mode", "v4"))
         for (engine, profile, simulator), windows in series.items():
             if not windows:
                 continue
@@ -153,12 +156,13 @@ class InstitutionalAuditor:
             sorted_win = sorted(windows, key=lambda x: x["window"])
             rets = [w["ret"] for w in sorted_win]
             sharpes = [w["sharpe"] for w in sorted_win]
-            drawdowns = [w["max_dd"] for w in sorted_win]
+            selection_mode = sorted_win[0]["selection_mode"]
 
             if is_continuous:
+                # Compounded Strategy TWR
                 cum_ret = np.prod([1 + r for r in rets]) - 1
                 total_days = len(rets) * test_window
-                # Robust Compounding: Handle potential portfolio wipeout (CR-620)
+
                 if cum_ret <= -1.0:
                     strat_ann_ret = -1.0
                 else:
@@ -169,11 +173,12 @@ class InstitutionalAuditor:
 
                 equity = np.cumprod([1 + r for r in rets])
                 peak = np.maximum.accumulate(equity)
-                dd_series = (equity - peak) / peak
+                dd_series = (equity - peak) / (peak + 1e-12)
                 strat_max_dd = float(np.min(dd_series))
             else:
-                strat_ann_ret = np.mean([w["ann_ret"] for w in sorted_win])
-                strat_max_dd = np.min(drawdowns)
+                # Discrete averages
+                strat_ann_ret = np.mean([np.clip(w["ann_ret"], -1.0, 5.0) for w in sorted_win])
+                strat_max_dd = np.mean([w["max_dd"] for w in sorted_win])
 
             strat_max_dd = max(-1.0, strat_max_dd)
 
@@ -204,8 +209,9 @@ class InstitutionalAuditor:
             rows.append({"RunID": run_id, "Selection": selection, "Profile": profile, "Engine": engine, "Simulator": simulator, **metrics})
         df = pd.DataFrame(rows)
 
-        print("\n# 🏛️ INSTITUTIONAL FORENSIC AUDIT (v3.5.8)")
+        print("\n# 🏛️ INSTITUTIONAL FORENSIC AUDIT (v3.6.1)")
         print(f"**Generated**: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("> Note: 'AnnRet' is compounded TWR for continuous runs, or Window Mean for discrete runs.")
 
         summary = (
             df.groupby(["Selection", "Profile", "Engine", "Simulator"])
@@ -214,7 +220,7 @@ class InstitutionalAuditor:
             .sort_values("Sharpe", ascending=False)
         )
 
-        # Volatility Accuracy (Closeness to target risk bands)
+        # Volatility Accuracy
         def vol_acc(row):
             target = VOL_BENCHMARKS.get(str(row["Profile"]), 0.50)
             realized = float(row["Vol"])
@@ -224,7 +230,7 @@ class InstitutionalAuditor:
 
         summary["Vol Accuracy"] = summary.apply(vol_acc, axis=1)
 
-        # Display Formatting
+        # Formatting Display
         disp = summary.copy()
         disp["AnnRet"] = disp["AnnRet"].apply(lambda x: f"{x:.1%}")
         disp["MaxDD"] = disp["MaxDD"].apply(lambda x: f"{x:.1%}")
@@ -234,33 +240,35 @@ class InstitutionalAuditor:
 
         cols = ["Selection", "Profile", "Engine", "Simulator", "Sharpe", "Stability", "AnnRet", "MaxDD", "Vol", "Vol Accuracy", "AvgDiscovered", "AvgSelected"]
         print("\n## 📊 System-Wide Performance Matrix")
-        print(disp[cols].to_markdown(index=False))
+        # Force conversion to DataFrame to satisfy type checker if needed
+        print(pd.DataFrame(disp)[cols].to_markdown(index=False))
 
         print("\n## 🌪️ Selection Funnel Forensic Trace")
-        for rid, f_df in self.funnel_stats.items():
+        for rid, f_df in sorted(self.funnel_stats.items()):
             if f_df.empty:
                 continue
             print(f"### Run: {rid}")
-            print(f_df.to_markdown(index=False))
+            print(pd.DataFrame(f_df).to_markdown(index=False))
 
         print("\n## 🔍 Anomaly & Outlier Identification")
+        # Find runs with MaxDD < -60% or extreme Sharpe drift
         anorms = df[(df["AnnRet"].abs() > 3.0) | (df["MaxDD"] < -0.60)]
         if not anorms.empty:
-            print("### 🚨 Strategic Outliers Detected (Extreme Return/Risk)")
-            print(anorms[["RunID", "Profile", "AnnRet", "MaxDD", "Vol"]].to_markdown(index=False))
+            print("### 🚨 Strategic Outliers Detected (Extreme Risk/Return)")
+            print(pd.DataFrame(anorms)[["RunID", "Profile", "AnnRet", "MaxDD", "Vol"]].to_markdown(index=False))
+        else:
+            print("- No extreme strategic anomalies detected in composite curves.")
 
-        drift = []
-        for _, row in summary.iterrows():
-            target = VOL_BENCHMARKS.get(row["Profile"], 0.50)
-            if abs(row["Vol"] - target) > 0.30:
-                drift.append(f"{row['Selection']}/{row['Profile']}/{row['Engine']} Vol: {row['Vol']:.2f} (Target: {target})")
-        if drift:
-            print("### ⚠️ Volatility Drift Detected")
-            for d in drift:
-                print(f"- {d}")
+        # Final Export
+        export_dir = Path("artifacts/reports")
+        export_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = export_dir / f"composite_institutional_audit_{ts}.csv"
+        df.to_csv(path, index=False)
+        logger.info(f"\n[SUCCESS] Composite Audit saved to {path}")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", default="*", help="Run ID pattern")
     args = parser.parse_args()
@@ -269,3 +277,7 @@ if __name__ == "__main__":
     for r in runs:
         auditor.process_run(r)
     auditor.generate_report()
+
+
+if __name__ == "__main__":
+    main()

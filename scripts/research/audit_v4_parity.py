@@ -3,6 +3,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+import pandas.io.common
 
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 from tradingview_scraper.pipelines.selection.stages.clustering import ClusteringStage
@@ -28,22 +29,23 @@ def audit_parity():
     returns_path_pkl = "data/lakehouse/portfolio_returns.pkl"
     returns_path_parquet = "data/lakehouse/returns_matrix.parquet"
 
-    if pd.io.common.file_exists(returns_path_pkl):
+    returns_df = None
+    returns_path = ""
+
+    if pandas.io.common.file_exists(returns_path_pkl):
         try:
             returns_path = returns_path_pkl
             returns_df = pd.read_pickle(returns_path)
         except Exception as e:
             logger.warning(f"Failed to read pickle {returns_path}: {e}. Falling back to dummy generation.")
             returns_df = None
-    elif pd.io.common.file_exists(returns_path_parquet):
+    elif pandas.io.common.file_exists(returns_path_parquet):
         try:
             returns_path = returns_path_parquet
             returns_df = pd.read_parquet(returns_path)
         except Exception as e:
             logger.warning(f"Failed to read parquet {returns_path}: {e}. Falling back to dummy generation.")
             returns_df = None
-    else:
-        returns_df = None
 
     if returns_df is None:
         # Generate dummy data if not found (for CI/CD robustness)
@@ -53,9 +55,9 @@ def audit_parity():
             cands = json.load(f)
 
         # Limit to 50 assets for speed if generating dummy
-        syms = [c["symbol"] for c in cands[:50]]
+        syms = [str(c["symbol"]) for c in cands[:50]]
         dates = pd.date_range("2023-01-01", periods=252)
-        returns_df = pd.DataFrame(np.random.normal(0, 0.02, (252, len(syms))), index=dates, columns=syms)
+        returns_df = pd.DataFrame(np.random.normal(0, 0.02, (252, len(syms))), index=dates, columns=pd.Index(syms))
         # Mocking file existence logic in IngestionStage requires actual file or refactor
         # For now, let's just pass the dataframe directly to v3 and handle v4 ingestion carefully
         returns_path = "data/lakehouse/audit_dummy_returns.csv"
