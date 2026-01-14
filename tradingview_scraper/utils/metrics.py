@@ -100,7 +100,18 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
     # CR-215: Standard annualization can produce nonsensical > -100% results if mean return is extremely negative.
     # We clip to -0.9999 to represent near-total wipeout without breaking forensic audit scale.
     ann_factor = _get_annualization_factor(rets)
-    annualized_return = float(np.clip(rets.mean() * ann_factor, -0.9999, 100.0))
+
+    # Improved annualization for short-term windows (prevents 700%+ artifacts)
+    # If the window is short, simple projection of mean return can be misleading.
+    # We prefer compounding: (1 + total_return)^(AnnFactor/N) - 1
+    # But for N < AnnFactor (e.g. 20 days), this can be volatile.
+    # We stick to the standard: (1 + geom_mean)^AnnFactor - 1
+
+    geom_mean = float((1 + total_return) ** (1 / n_obs)) - 1
+    annualized_return = float((1 + geom_mean) ** ann_factor - 1)
+
+    # Clip for sanity in reports
+    annualized_return = float(np.clip(annualized_return, -0.9999, 100.0))
 
     # Daily performance components
     vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
