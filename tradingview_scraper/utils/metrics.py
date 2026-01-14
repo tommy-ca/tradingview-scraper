@@ -96,50 +96,22 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
     if n_obs == 0:
         return empty_res
 
-    total_return = (1 + rets).prod() - 1
-    # CR-215: Standard annualization can produce nonsensical > -100% results if mean return is extremely negative.
-    # We clip to -0.9999 to represent near-total wipeout without breaking forensic audit scale.
-    ann_factor = _get_annualization_factor(rets)
-
-    # Improved annualization for short-term windows (prevents 700%+ artifacts)
-    # If the window is short, simple projection of mean return can be misleading.
-    # We prefer compounding: (1 + total_return)^(AnnFactor/N) - 1
-    # But for N < AnnFactor (e.g. 20 days), this can be volatile.
-    # We stick to the standard: (1 + geom_mean)^AnnFactor - 1
-
-    geom_mean = float((1 + total_return) ** (1 / n_obs)) - 1
-    annualized_return = float((1 + geom_mean) ** ann_factor - 1)
-
-    # Clip for sanity in reports
-    annualized_return = float(np.clip(annualized_return, -0.9999, 100.0))
-
-    # Daily performance components
-    vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
-    realized_vol = vol_daily * math.sqrt(ann_factor)
-
-    max_drawdown = calculate_max_drawdown(rets)
-
-    if n_obs < MIN_OBSERVATIONS:
-        res = empty_res.copy()
-        res.update(
-            {
-                "total_return": float(total_return),
-                "annualized_return": float(annualized_return),
-                "realized_vol": float(realized_vol),
-                "max_drawdown": float(max_drawdown),
-            }
-        )
-        return res
-
     try:
         import quantstats as qs
 
         rets_j = _apply_jitter(rets)
+        ann_factor = _get_annualization_factor(rets)
 
-        # QuantStats metrics
-        realized_vol_qs = float(qs.stats.volatility(rets, periods=ann_factor))
+        # QuantStats metrics (Proven methods)
+        total_return = float(qs.stats.comp(rets))
+        annualized_return = float(qs.stats.cagr(rets, periods=ann_factor))
+        # CR-215: Clip extreme wipeouts
+        annualized_return = float(np.clip(annualized_return, -0.9999, 100.0))
+
+        realized_vol = float(qs.stats.volatility(rets, periods=ann_factor))
         sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
-        max_drawdown_qs = float(qs.stats.max_drawdown(rets))
+        max_drawdown = float(qs.stats.max_drawdown(rets))
+
         var_95 = float(qs.stats.value_at_risk(rets_j, sigma=1, confidence=0.95))
 
         # Guard for CVaR calculation to avoid Mean of empty slice warning
@@ -152,26 +124,32 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
             cvar_95 = var_95
 
         sortino = float(qs.stats.sortino(rets, rf=0, periods=ann_factor))
-        # Avoid division-by-zero RuntimeWarning inside QuantStats when max drawdown is 0.
-        calmar = float(annualized_return) / (abs(max_drawdown_qs) + 1e-12)
+        calmar = float(qs.stats.calmar(rets, periods=ann_factor))
         omega = float(qs.stats.omega(rets))
 
         return {
-            "total_return": float(total_return),
-            "annualized_return": float(annualized_return),
-            "realized_vol": float(realized_vol_qs),
-            "annualized_vol": float(realized_vol_qs),
-            "sharpe": float(sharpe),
-            "max_drawdown": float(max_drawdown_qs),
-            "var_95": float(var_95),
-            "cvar_95": float(cvar_95),
+            "total_return": total_return,
+            "annualized_return": annualized_return,
+            "realized_vol": realized_vol,
+            "annualized_vol": realized_vol,
+            "sharpe": sharpe,
+            "max_drawdown": max_drawdown,
+            "var_95": var_95,
+            "cvar_95": cvar_95,
             "sortino": sortino,
             "calmar": calmar,
             "omega": omega,
         }
     except Exception as e:
         logger.debug(f"QuantStats failed: {e}")
+        ann_factor = _get_annualization_factor(rets)
+        total_return = (1 + rets).prod() - 1
+        geom_mean = float((1 + total_return) ** (1 / n_obs)) - 1
+        annualized_return = float(np.clip((1 + geom_mean) ** ann_factor - 1, -0.9999, 100.0))
+        vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
+        realized_vol = vol_daily * math.sqrt(ann_factor)
         sharpe = (rets.mean() * ann_factor) / (realized_vol + 1e-9)
+        max_drawdown = calculate_max_drawdown(rets)
         return {
             "total_return": float(total_return),
             "annualized_return": float(annualized_return),

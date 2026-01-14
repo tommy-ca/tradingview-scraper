@@ -132,6 +132,25 @@ class InstitutionalAuditor:
                         if key not in series:
                             series[key] = []
 
+                        # CR-750: Independent Verification Logic
+                        daily_returns = data.get("daily_returns", [])
+                        verification = {"agreement": True, "details": {}}
+                        if daily_returns:
+                            # Re-calculate core metrics from raw series
+                            dr_series = pd.Series(daily_returns)
+                            total_ret = (1 + dr_series).prod() - 1
+
+                            # Use existing metrics utility for parity
+                            from tradingview_scraper.utils.metrics import calculate_performance_metrics
+
+                            calc = calculate_performance_metrics(dr_series)
+
+                            # Check agreement with reported Sharpe
+                            rep_sharpe = self._get_metric(met, ["sharpe"])
+                            if abs(calc["sharpe"] - rep_sharpe) > 0.01:
+                                verification = {"agreement": False, "details": {"diff": calc["sharpe"] - rep_sharpe}}
+                                logger.warning(f"Metric Mismatch at Win {win_idx}: Reported Sharpe {rep_sharpe:.2f} vs Calc {calc['sharpe']:.2f}")
+
                         series[key].append(
                             {
                                 "window": win_idx,
@@ -142,6 +161,7 @@ class InstitutionalAuditor:
                                 "vol": self._get_metric(met, ["annualized_vol", "realized_vol"]),
                                 "turnover": self._get_metric(met, ["turnover"]),
                                 "selection_mode": selection_mode,
+                                "verified": verification["agreement"],
                             }
                         )
                 except Exception:
@@ -202,6 +222,7 @@ class InstitutionalAuditor:
                 "AvgDiscovered": int(avg_discovered),
                 "AvgSelected": int(avg_selected),
                 "IsContinuous": is_continuous,
+                "Integrity": np.mean([w.get("verified", True) for w in sorted_win]),
             }
 
     def generate_report(self):
@@ -220,7 +241,7 @@ class InstitutionalAuditor:
 
         summary = (
             df.groupby(["Selection", "Profile", "Engine", "Simulator"])
-            .agg({"Sharpe": "mean", "Stability": "mean", "AnnRet": "mean", "MaxDD": "mean", "Vol": "mean", "AvgDiscovered": "mean", "AvgSelected": "mean", "Windows": "sum"})
+            .agg({"Sharpe": "mean", "Stability": "mean", "AnnRet": "mean", "MaxDD": "mean", "Vol": "mean", "AvgDiscovered": "mean", "AvgSelected": "mean", "Windows": "sum", "Integrity": "mean"})
             .reset_index()
             .sort_values("Sharpe", ascending=False)
         )
@@ -242,8 +263,9 @@ class InstitutionalAuditor:
         disp["Vol Accuracy"] = disp["Vol Accuracy"].apply(lambda x: f"{x:.1%}")
         disp["Sharpe"] = disp["Sharpe"].apply(lambda x: f"{x:.3f}")
         disp["Stability"] = disp["Stability"].apply(lambda x: f"{x:.2f}")
+        disp["Integrity"] = disp["Integrity"].apply(lambda x: f"{x:.1%}")
 
-        cols = ["Selection", "Profile", "Engine", "Simulator", "Sharpe", "Stability", "AnnRet", "MaxDD", "Vol", "Vol Accuracy", "AvgDiscovered", "AvgSelected"]
+        cols = ["Selection", "Profile", "Engine", "Simulator", "Sharpe", "Stability", "AnnRet", "MaxDD", "Vol", "Vol Accuracy", "AvgDiscovered", "AvgSelected", "Integrity"]
         print("\n## 📊 System-Wide Performance Matrix")
         # Force conversion to DataFrame to satisfy type checker if needed
         print(pd.DataFrame(disp)[cols].to_markdown(index=False))

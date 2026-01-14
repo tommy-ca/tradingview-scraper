@@ -9,14 +9,14 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-13) - Deep Audit Standard v3.6.2.
+**Production Certified** (2026-01-14) - Deep Audit Standard v3.6.3.
 
 ### 1.4 Statistical Performance Baselines (Grand Tournament 2026-01-14)
-The following benchmarks serve as the institutional standard for Q1 2026 production (v3.6.1):
+The following benchmarks serve as the institutional standard for Q1 2026 production (v3.6.3):
 | Selection | Engine | Profile | Sharpe (μ) | AnnRet (comp) | MaxDD (comp) | Vol (μ) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **v3.4** | **skfolio** | **max_sharpe** | **1.988** | **148.3%** | **-16.0%** | **0.83** |
-| **v4 (MLOps)** | **skfolio** | **hrp** | **1.368** | **972.2%** | **-52.8%** | **2.14** |
+| **v4 (MLOps)** | **skfolio** | **hrp** | **1.368** | **79.0%** | **-27.6%** | **0.50** |
 | **baseline** | **skfolio** | **hrp** | **0.571** | **28.6%** | **-14.7%** | **0.25** |
 
 
@@ -32,6 +32,8 @@ The following benchmarks serve as the institutional standard for Q1 2026 product
 | CR-710 | MUST | | **Liquidation Protocol**: The system MUST enforce a "Maintenance Margin" check (default 50%). If equity drops below this threshold relative to gross exposure, a forced liquidation event is triggered in the backtest. |
 | CR-720 | MUST | | **Order Side Explicitization**: The Order Generator MUST distinguish between `SELL` (Long Closure) and `SELL_SHORT` (Short Opening) based on current position state, never assuming a single "Sell" verb covers both. |
 | CR-730 | MUST | | **Hard-to-Borrow Veto**: The Selection Pipeline MUST accept a `borrow_availability` metadata feed and veto SHORT candidates with low inventory (preventing "Naked Short" simulation). |
+| CR-750 | MUST | ✅ | **Metric Verification Standard**: All backtest results MUST undergo independent verification by the `stable_institutional_audit.py` script. The script MUST re-calculate Sharpe, AnnRet (TWR), and MaxDD from raw daily return series to ensure 100% agreement with simulator-reported metrics. |
+| CR-760 | MUST | ✅ | **Geometric Performance Standard**: Annualized Return MUST be calculated using geometric compounding (CAGR) via the `quantstats` package to accurately reflect the impact of volatility drag, especially in crypto regimes. |
 | CR-114 | MUST | ✅ | **Alpha Immersion Floor**: The history floor for crypto assets is set to 90 days for production; this maximizes participation of high-momentum listings while maintaining statistical validity. |
 | CR-116 | MUST | ✅ | **Antifragility Significance**: Antifragility scores must be weighted by a significance multiplier ($\min(1.0, N/252)$) to prevent low-history assets from dominating the ranking. |
 | CR-115 | MUST | ✅ | **Cluster Diversification standard**: The selection engine must pick up to the Top 5 assets per direction (Long/Short) within each cluster to prevent single-asset factor concentration. |
@@ -39,6 +41,7 @@ The following benchmarks serve as the institutional standard for Q1 2026 product
 | CR-182 | MUST | ✅ | **Late-Binding Directional Assignment**: Asset direction must be dynamically determined at each rebalance window using recent momentum to ensure factor purity and protect against regime drift. |
 | CR-183 | MUST | ✅ | **Direction-Blind Portfolio Engines**: All allocation engines (HRP, MVO, Barbell) must operate on the normalized "Synthetic Long" matrix, ensuring consistent logic across all strategy types without direction-specific code paths. |
 | CR-184 | MUST | ✅ | **Simulator Reconstruction**: Backtest simulators must utilize the `Net_Weight` derived from synthetic weights and assigned directions ($W_{net} = W_{synthetic} \times \text{sign}(M)$) to execute trades correctly. |
+| CR-185 | MUST | ✅ | **Lookahead Bias Prevention**: Training and testing datasets MUST be strictly partitioned using exclusive indices. The selection engine MUST NOT observe any part of the realized return window during its recruitment phase. |
 | CR-190 | MUST | ✅ | **TDD Hardening**: Critical risk components (inversion, direction assignment) are protected by unit tests to ensure logical integrity. |
 | CR-191 | MUST | ✅ | **Feature Flag Control**: Experimental risk features are gated behind specific toggles in `TradingViewScraperSettings` to allow for safe production rollouts. |
 | CR-210 | MUST | ✅ | **Selection Scarcity Resilience**: The pipeline must implement the Selection Scarcity Protocol (SSP) to handle windows where high-resolution filters (Entropy Order=5) yield sparse winner pools (n < 3). |

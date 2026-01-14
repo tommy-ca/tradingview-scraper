@@ -1,5 +1,3 @@
-import argparse
-import datetime
 import hashlib
 import json
 import logging
@@ -87,6 +85,7 @@ class BacktestEngine:
                 self.metadata = {c["symbol"]: c for c in raw_meta}
 
     def run_tournament(self, **kwargs) -> Dict:
+        print("DEBUG: run_tournament called")
         from tradingview_scraper.settings import get_settings
 
         config = get_settings()
@@ -102,6 +101,7 @@ class BacktestEngine:
 
         returns_to_use = self.returns.dropna(how="all")
         total_len = len(returns_to_use)
+        logger.info(f"Tournament Started: {total_len} rows available.")
 
         # Pillar 2: Synthesis Layer Initialization
         synthesizer = StrategySynthesizer()
@@ -130,12 +130,14 @@ class BacktestEngine:
 
         results = []
         for i in range(train_window, total_len - test_window, step_size):
-            window_start = returns_to_use.index[i - train_window]
-            window_end = returns_to_use.index[i]
-            test_end = returns_to_use.index[i + test_window]
+            # Pillar 1: High-Precision Window Slicing (CR-185)
+            # train_rets: [i-train_window, i) -> Data up to but excluding 'today'
+            # test_rets: [i, i+test_window) -> Realized returns starting 'today'
+            train_rets = returns_to_use.iloc[i - train_window : i]
+            test_rets = returns_to_use.iloc[i : i + test_window]
 
-            train_rets = returns_to_use.loc[window_start:window_end]
-            test_rets = returns_to_use.loc[window_end:test_end]
+            if train_rets.empty or test_rets.empty:
+                continue
 
             # 1. Market Regime detection
             regime_resp = detector_to_use.detect_regime(train_rets)
@@ -317,7 +319,16 @@ class BacktestEngine:
                                         sanitized_metrics[k] = float(v) if isinstance(v, (np.number, float, int)) else v
 
                                 if ledger:
-                                    ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=sanitized_metrics, context=sim_ctx)
+                                    # CR-750: Capture daily returns for independent verification
+                                    # We move structured data to 'data' and keep metrics for scalars
+                                    data_payload = {"daily_returns": []}
+                                    daily_rets = metrics.get("daily_returns")
+                                    if isinstance(daily_rets, pd.Series):
+                                        data_payload["daily_returns"] = daily_rets.values.tolist()
+                                    elif isinstance(daily_rets, list):
+                                        data_payload["daily_returns"] = daily_rets
+
+                                    ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=sanitized_metrics, data=data_payload, context=sim_ctx)
 
                                 results.append({"window": i, "engine": target_engine, "profile": profile, "simulator": sim_name, "metrics": sanitized_metrics})
                             except Exception as e_sim:
@@ -328,29 +339,3 @@ class BacktestEngine:
                             ledger.record_outcome(step="backtest_optimize", status="error", output_hashes={}, metrics={"error": str(e)}, context=opt_ctx)
 
         return {"tournament_results": results}
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", default="research", choices=["research", "production"])
-    parser.add_argument("--profile", default="crypto_production")
-    parser.add_argument("--train-window", type=int)
-    parser.add_argument("--test-window", type=int)
-    parser.add_argument("--step-size", type=int)
-    parser.add_argument("--selection-mode", help="Override selection mode")
-    parser.add_argument("--profiles", help="Comma-separated list of risk profiles")
-    parser.add_argument("--engines", help="Comma-separated list of portfolio engines")
-    parser.add_argument("--simulators", help="Comma-separated list of backtest simulators")
-    args = parser.parse_args()
-
-    os.environ.setdefault("TV_RUN_ID", datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-    logging.basicConfig(level=logging.INFO)
-    engine = BacktestEngine()
-
-    profiles = [p.strip() for p in args.profiles.split(",")] if args.profiles else None
-    engines = [e.strip() for e in args.engines.split(",")] if args.engines else None
-    simulators = [s.strip() for s in args.simulators.split(",")] if args.simulators else None
-
-    engine.run_tournament(
-        train_window=args.train_window, test_window=args.test_window, step_size=args.step_size, selection_mode=args.selection_mode, profiles=profiles, engines=engines, simulators=simulators
-    )

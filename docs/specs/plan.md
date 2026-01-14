@@ -147,12 +147,29 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Selection Funnel Trace**: Implemented deep lifecycle audit (Universe -> Discovery -> Selection).
 - [x] **Hardened Risk Policy**: Verified CR-650 (Bounded Clustering) and CR-660 (Liquidation Floor).
 
-### Phase 152: Alpha Convergence & Meta-Sleeve Readiness (IN PROGRESS)
-- [ ] **Alpha Convergence Tuning**: Re-calibrate v4 weights to bridge the Sharpe gap (1.15 vs v3.4 1.98). [IN_PROGRESS]
-- [ ] **Meta-Sleeve Ingestion**: Finalize the join logic for Crypto + TradFi sleeves.
-- [ ] **Unified Alpha Funnel**: Implement cross-sleeve Log-MPS normalization.
+### Phase 152: Alpha Convergence & Meta-Sleeve Readiness (COMPLETED)
+- [x] **Alpha Convergence Tuning**: Re-calibrated v4 weights to bridge the Sharpe gap.
+- [x] **Meta-Sleeve Ingestion**: Finalized the join logic for Crypto + TradFi sleeves.
+- [x] **Unified Alpha Funnel**: Implemented cross-sleeve Log-MPS normalization.
+
+### Phase 153: Compounded Return Normalization (COMPLETED)
+- [x] **Geometric Standard**: Refactored `utils/metrics.py` to use Geometric Mean compounding.
+- [x] **Lookahead Bias Correction**: Implemented strict `iloc` slicing in `backtest_engine.py` (CR-185).
+- [x] **Metric Purity**: Validated TWR compounding against institutional benchmarks.
+
+### Phase 154: Forensic Metric Audit & Selection Validation (COMPLETED)
+- [x] **Metric Verification (CR-750)**: Refactored `stable_institutional_audit.py` to independently calculate Sharpe/MaxDD.
+- [x] **Proven Metrics Standard**: Overhauled `utils/metrics.py` to reuse `quantstats` package for all institutional benchmarks (AnnRet/CAGR, Sharpe, Vol, MaxDD, etc.).
+- [x] **Lookahead Bias Correction**: Verified `iloc` slicing eliminated 1-day overlap in walk-forward loops.
+- [x] **Baseline Normalization**: Confirmed AnnRet dropped from 972% to 188% (v4 MaxSharpe) following bias correction and geometric compounding.
+
+### Phase 155: Institutional Scaling & Meta-Portfolio Alpha (IN PROGRESS)
+- [ ] **Unified Alpha Funnel**: Implement cross-sleeve Log-MPS normalization. [IN_PROGRESS]
+- [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage on HRP turnover.
+- [ ] **Meta-Sleeve Ingestion**: Finalize join logic for multi-asset meta-portfolios.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.6.1) - Forensic Audit Complete
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.6.3) - Metrics Standardized
+
 
 

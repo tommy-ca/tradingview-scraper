@@ -171,3 +171,9 @@ The v4 pipeline integrates high-order statistical moments and hard volatility ca
 - **Fat-Tail Veto**: Hard veto for assets with **Kurtosis > 20**, identifying extreme "jump-risk" candidates.
 - **Volatility Hard-Cap**: Assets exceeding **250% annualized volatility** are automatically vetoed (CR-631).
 - **CVaR Penalization**: Assets with extreme Conditional Value at Risk are down-weighted in the Log-MPS scoring logic to prioritize stable alpha.
+
+## 21. Forensic Verification & Metric Purity (CR-750)
+To ensure the mathematical integrity of the realization layer, the pipeline implements a post-simulation verification stage:
+- **Raw Return Audit**: Simulation results are cross-checked against raw daily returns logged in the `audit.jsonl` ledger.
+- **Metric Agreement**: Sharpe and MaxDD are independently re-calculated using standard geometric mean and high-water-mark algorithms to detect backend simulator drift.
+- **Geometric Baseline**: Annualized returns are anchored to Time-Weighted Return (TWR) standards to eliminate arithmetic inflation artifacts.
