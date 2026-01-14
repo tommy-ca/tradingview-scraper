@@ -153,7 +153,12 @@ class InstitutionalAuditor:
             if not windows:
                 continue
 
-            sorted_win = sorted(windows, key=lambda x: x["window"])
+            # Filter out windows with no index (should be rare)
+            valid_windows = [w for w in windows if w.get("window") is not None]
+            if not valid_windows:
+                continue
+
+            sorted_win = sorted(valid_windows, key=lambda x: int(x["window"]))
             rets = [w["ret"] for w in sorted_win]
             sharpes = [w["sharpe"] for w in sorted_win]
             selection_mode = sorted_win[0]["selection_mode"]

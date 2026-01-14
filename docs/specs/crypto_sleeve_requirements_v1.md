@@ -25,10 +25,13 @@ The following benchmarks serve as the institutional standard for Q1 2026 product
 
 ## 2. Functional Requirements
 
-### 2.11 Dynamic Regime Adaptation & Risk Hardening
+### 2.12 Short Selling & Margin Standards
 | Requirement ID | Priority | Status | Description |
 |----------------|----------|--------|-------------|
-| CR-110 | MUST | ✅ | **Regime Analysis V3**: Analyze returns for Tail Risk (MaxDD, VaR) and Alpha Potential (Momentum, Dispersion). |
+| CR-700 | MUST | | **Borrow Cost Simulation**: Simulators MUST apply a dynamic borrow fee (default 0.01% daily) to all negative-weight positions to model the cost of leverage and inventory scarcity. |
+| CR-710 | MUST | | **Liquidation Protocol**: The system MUST enforce a "Maintenance Margin" check (default 50%). If equity drops below this threshold relative to gross exposure, a forced liquidation event is triggered in the backtest. |
+| CR-720 | MUST | | **Order Side Explicitization**: The Order Generator MUST distinguish between `SELL` (Long Closure) and `SELL_SHORT` (Short Opening) based on current position state, never assuming a single "Sell" verb covers both. |
+| CR-730 | MUST | | **Hard-to-Borrow Veto**: The Selection Pipeline MUST accept a `borrow_availability` metadata feed and veto SHORT candidates with low inventory (preventing "Naked Short" simulation). |
 | CR-114 | MUST | ✅ | **Alpha Immersion Floor**: The history floor for crypto assets is set to 90 days for production; this maximizes participation of high-momentum listings while maintaining statistical validity. |
 | CR-116 | MUST | ✅ | **Antifragility Significance**: Antifragility scores must be weighted by a significance multiplier ($\min(1.0, N/252)$) to prevent low-history assets from dominating the ranking. |
 | CR-115 | MUST | ✅ | **Cluster Diversification standard**: The selection engine must pick up to the Top 5 assets per direction (Long/Short) within each cluster to prevent single-asset factor concentration. |
