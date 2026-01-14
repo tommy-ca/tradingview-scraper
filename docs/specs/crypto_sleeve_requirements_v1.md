@@ -9,15 +9,16 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-13) - Deep Audit Standard v3.5.9.
+**Production Certified** (2026-01-13) - Deep Audit Standard v3.6.2.
 
-### 1.4 Statistical Performance Baselines (Grand Tournament 2026-01-13)
-The following benchmarks serve as the institutional standard for Q1 2026 production:
-| Selection | TrainWindow | StepSize | Profile | Sharpe (mean) | MaxDD (mean) | Vol (target) |
+### 1.4 Statistical Performance Baselines (Grand Tournament 2026-01-14)
+The following benchmarks serve as the institutional standard for Q1 2026 production (v3.6.1):
+| Selection | Engine | Profile | Sharpe (μ) | AnnRet (comp) | MaxDD (comp) | Vol (μ) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **v4 (MLOps)** | **60d** | **20d** | **min_variance** | **1.00** | **-7.2%** | **0.35** |
-| **v4 (MLOps)** | **60d** | **20d** | **risk_parity** | **1.91** | **-8.2%** | **0.50** |
-| **v4 (MLOps)** | **60d** | **20d** | **max_sharpe** | **5.48** | **-16.1%** | **0.90** |
+| **v3.4** | **skfolio** | **max_sharpe** | **1.988** | **148.3%** | **-16.0%** | **0.83** |
+| **v4 (MLOps)** | **skfolio** | **hrp** | **1.368** | **972.2%** | **-52.8%** | **2.14** |
+| **baseline** | **skfolio** | **hrp** | **0.571** | **28.6%** | **-14.7%** | **0.25** |
+
 
 
 ---

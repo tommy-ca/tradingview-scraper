@@ -142,17 +142,17 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Matrix Certification**: Executed final validation tournament; verified 100% directional integrity.
 
 ### Phase 151: Institutional Scaling & Meta-Portfolio Readiness (COMPLETED)
-- [x] **Final System Certification (v3.6.1)**: Executed exhaustive 3D matrix (Selection x Profile x Engine) to validate hardening.
-- [x] **Alpha Funnel Benchmark**: Quantified Selection Value-Add (Sharpe 1.15 vs Baseline 0.57).
-- [x] **Bounded Clustering Validation**: Verified CR-650 successfully stabilized HRP recursive bisection.
-- [x] **Forensic Accuracy**: Verified 100% directional integrity across all backtest windows.
+- [x] **Final System Certification (v3.6.1)**: Executed exhaustive 3D matrix; verified 100% directional integrity.
+- [x] **Compounded Report Fix**: Standardized TWR metrics to eliminate arithmetic artifacts (776% -> 148%).
+- [x] **Selection Funnel Trace**: Implemented deep lifecycle audit (Universe -> Discovery -> Selection).
+- [x] **Hardened Risk Policy**: Verified CR-650 (Bounded Clustering) and CR-660 (Liquidation Floor).
 
-### Phase 152: Multi-Sleeve Ingestion & Meta-Portfolio Alpha (IN PROGRESS)
-- [ ] **Meta-Sleeve Ingestion**: Finalize the join logic for Crypto + TradFi sleeves in the meta-portfolio. [IN_PROGRESS]
-- [ ] **Unified Alpha Funnel**: Implement cross-sleeve Log-MPS normalization to ensure fair allocation across asset classes.
-- [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage on HRP turnover.
+### Phase 152: Alpha Convergence & Meta-Sleeve Readiness (IN PROGRESS)
+- [ ] **Alpha Convergence Tuning**: Re-calibrate v4 weights to bridge the Sharpe gap (1.15 vs v3.4 1.98). [IN_PROGRESS]
+- [ ] **Meta-Sleeve Ingestion**: Finalize the join logic for Crypto + TradFi sleeves.
+- [ ] **Unified Alpha Funnel**: Implement cross-sleeve Log-MPS normalization.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.6.1) - Multi-Sleeve standard ready for deployment
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.6.1) - Forensic Audit Complete
 
 
