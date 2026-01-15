@@ -5,14 +5,15 @@ trend:
   direction: "short"
   logic: "AND"
   adx: { enabled: false }
-  recommendation: { enabled: true, min: -0.1 }
+  recommendation: { enabled: false }
 filters:
   - { left: "Value.Traded", operation: "greater", right: 50000000 }
+  - { left: "type", operation: "equal", right: "swap" }
   - { left: "name", operation: "match", right: ".P$" }
   - { left: "Recommend.All", operation: "less", right: -0.1 }
 sort_by: Recommend.All
 sort_order: asc
-limit: 50
+limit: 100
 export_metadata:
   symbol: perp_rating_all_short
   data_category: strategy_alpha

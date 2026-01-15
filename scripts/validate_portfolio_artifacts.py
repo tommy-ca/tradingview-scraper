@@ -155,10 +155,24 @@ class PortfolioAuditor:
             candidates = json.load(f)
 
         returns_file = RETURNS_FILE if mode == "selected" else RETURNS_RAW_FILE
+        if not os.path.exists(returns_file):
+            # Fallback to parquet
+            parquet_file = returns_file.replace(".pkl", ".parquet")
+            if os.path.exists(parquet_file):
+                returns_file = parquet_file
+            else:
+                # Try common name
+                common_parquet = os.path.join(LAKEHOUSE_PATH, "returns_matrix.parquet")
+                if os.path.exists(common_parquet):
+                    returns_file = common_parquet
+
         returns_symbols = set()
         if os.path.exists(returns_file):
             try:
-                returns_df = pd.read_pickle(returns_file)
+                if returns_file.endswith(".parquet"):
+                    returns_df = pd.read_parquet(returns_file)
+                else:
+                    returns_df = pd.read_pickle(returns_file)
                 if isinstance(returns_df, pd.DataFrame):
                     returns_symbols = set(returns_df.columns)
             except Exception:
@@ -172,7 +186,12 @@ class PortfolioAuditor:
 
         for c in candidates:
             raw_symbol = c["symbol"]
-            symbol = self._resolve_candidate_symbol(str(raw_symbol), interval="1d", returns_symbols=returns_symbols)
+            # Atoms have format Asset_Logic_Direction
+            # If logic is present, raw_symbol might be the atom_id if called from certain contexts
+            # But the catalog needs the PHYSICAL symbol.
+            physical_symbol = str(c.get("symbol", ""))
+
+            symbol = self._resolve_candidate_symbol(physical_symbol, interval="1d", returns_symbols=returns_symbols)
             meta = self.catalog.get_instrument(symbol)
             profile = get_symbol_profile(symbol, meta)
 

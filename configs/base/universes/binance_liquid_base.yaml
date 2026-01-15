@@ -1,0 +1,37 @@
+# L1: Broad Liquid Universe for Binance
+base_preset: ../templates/crypto_perp.yaml
+exchanges: ["BINANCE"]
+
+# Institutional Volume Floor ($1M for base recruitment, scanners will tighten to $20M/$50M)
+volume:
+  value_traded_min: 1000000
+
+# Disable trend gates for pure universe selection
+trend:
+  logic: "OR"
+  adx: {enabled: false}
+  recommendation: {enabled: false}
+  momentum: {enabled: false}
+
+# Stage 1: Liquidity Pool (Broad fetch)
+prefilter_limit: 1000
+sort_by: Value.Traded
+sort_order: desc
+exclude_symbols: ["BINANCE:PAXGUSDT.P"]
+
+# Relaxed name match to capture all Perps/Spots before filtering.
+# Specific scanners will filter for .P$ or Spot quotes.
+filters:
+  - {left: "Value.Traded", operation: "greater", right: 1000000}
+
+# Stage 2: Base Universe Constraint
+base_universe_limit: 500
+base_universe_sort_by: Value.Traded
+
+# Stage 3: Final Selection (Broad enough for all scanners)
+final_sort_by: Value.Traded
+final_sort_order: desc
+limit: 500
+
+export_metadata:
+  data_category: universe_base

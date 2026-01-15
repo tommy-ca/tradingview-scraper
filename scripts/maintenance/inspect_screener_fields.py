@@ -22,13 +22,15 @@ def inspect_fields():
         "Perf.W",
         "Perf.1M",
         "Perf.3M",
+        "volume_change",
+        "type",
     ]
 
     # Try one by one for risky fields? No, batch.
 
     print(f"Requesting columns: {columns}")
 
-    filters = [{"left": "exchange", "operation": "equal", "right": "BINANCE"}, {"left": "name", "operation": "equal", "right": "SOLUSDT"}]
+    filters = [{"left": "exchange", "operation": "equal", "right": "BINANCE"}, {"left": "type", "operation": "equal", "right": "spot"}, {"left": "name", "operation": "nmatch", "right": ".P$"}]
 
     try:
         result = screener.screen(market="crypto", filters=filters, columns=columns, limit=1)

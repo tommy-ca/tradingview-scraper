@@ -180,7 +180,9 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Comprehensive Discovery Audit**: All 12 rating scanners now utilize `binance_liquid_base.yaml` for exhaustive candidate capture (Top 200 liquid universe). [COMPLETED]
 - [x] **Feature Expansion (ROC)**: Added `ROC` (Rate of Change) to requested fields for momentum analysis. [COMPLETED]
 - [x] **Institutional Liquidity Hardening**: Updated Binance Spot floor to >$20M and Perp floor to >$50M with explicit `type` filtering (Spot/Swap). [COMPLETED]
-- [x] **Meta-Sleeve Ingestion**: Finalized join logic with robust UTC index alignment and dilution guards.
+- [x] **Pure Discovery Audit**: Stripped discovery scanners of non-liquidity/non-rating filters. Tightened Buy/Sell to strictly exclude Neutrals (Thresholds: 0.1 / -0.1). [COMPLETED]
+- [x] **Exhaustive Recruitment Audit**: Verified recruitment of 108 distinct atoms across orthogonal rating strategies with strictly positive/negative sentiment. [COMPLETED]
+- [x] **Meta-Sleeve Ingestion**: Finalized join logic with robust UTC index alignment and dilution guards. [COMPLETED]
 
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.7.2) - Liquidity Hardened

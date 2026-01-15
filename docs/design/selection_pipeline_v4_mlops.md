@@ -186,9 +186,9 @@ As of v3.7.2, the selection pipeline has been hardened with institutional liquid
     - **Spot**: $20M USD 24h Volume.
 - **Factor Enrichment**: 
     - Integration of TradingView `Recommend.All`, `Recommend.MA`, `ROC` (Rate of Change), and `Volatility.D` into the Log-MPS scoring engine.
-- **Manifest Abstraction**: 
-    - Discovery is now partitioned into **Strategies** (e.g., `rating_ma`, `rating_osc`) within the manifest.
-    - **Logic Injection**: Strategy names are automatically injected as the `logic` field for all discovered assets.
+- **Pure Discovery Model**:
+    - Discovery scanners are stripped of technical gates (ADX, Momentum) to maximize recruitment breadth. Filtering is delegated to the selection stage.
+    - **Sentiment Floors**: Strictly `> 0.1` (LONG) or `< -0.1` (SHORT) to prioritize high-conviction signals.
 - **Strategy Atoms**: 
     - The system supports the persistence of multiple orthogonal "Strategy Atoms" for the same physical asset (indexed as `Asset_Logic_Direction`).
 - **Recruitment Depth**: 

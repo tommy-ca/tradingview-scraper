@@ -86,7 +86,9 @@ class BacktestEngine:
         rets_path_pkl = self.lakehouse / "portfolio_returns.pkl"
         stats_path = self.lakehouse / "antifragility_stats.parquet"
         stats_path_json = self.lakehouse / "antifragility_stats.json"
-        meta_path = self.lakehouse / "portfolio_candidates.json"
+        meta_path = self.lakehouse / "portfolio_meta.json"
+        if not meta_path.exists():
+            meta_path = self.lakehouse / "portfolio_candidates.json"
 
         # Prioritize larger returns matrix if multiple exist
         if rets_path_pkl.exists():
@@ -104,7 +106,16 @@ class BacktestEngine:
         if meta_path.exists():
             with open(meta_path, "r") as f:
                 raw_meta = json.load(f)
-                self.metadata = {c["symbol"]: c for c in raw_meta}
+                if isinstance(raw_meta, dict):
+                    # Handle portfolio_meta.json dictionary format
+                    self.metadata = {}
+                    for s, m in raw_meta.items():
+                        if isinstance(m, dict):
+                            m["symbol"] = s
+                            self.metadata[s] = m
+                elif isinstance(raw_meta, list):
+                    # Handle portfolio_candidates.json list format
+                    self.metadata = {c["symbol"]: c for c in raw_meta if "symbol" in c}
 
     def run_tournament(self, **kwargs) -> Dict:
         print("DEBUG: run_tournament called")

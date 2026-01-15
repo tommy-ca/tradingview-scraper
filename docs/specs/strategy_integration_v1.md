@@ -35,11 +35,13 @@ Scanners must emit candidates with enriched technical ratings from TradingView.
 ### 4.1 technical_rating_scanner
 - **Source**: TradingView `Recommend.All`, `Recommend.MA`, `Recommend.Other`.
 - **Ranking Logic**:
-    - **LONG**: `Recommend.All > 0.5` AND `Recommend.MA > 0.5`.
-    - **SHORT**: `Recommend.All < -0.5` AND `Recommend.MA < -0.5`.
+    - **LONG**: `Recommend.* >= 0.1` (Captures "Buy" and "Strong Buy", excluding Neutrals).
+    - **SHORT**: `Recommend.* <= -0.1` (Captures "Sell" and "Strong Sell", excluding Neutrals).
 - **Institutional Liquidity Floors**:
-    - **Perpetuals**: `Value.Traded > 50M USD`.
-    - **Spot**: `Value.Traded > 20M USD`.
+    - **Perpetuals**: `Value.Traded > 50,000,000 USD`.
+    - **Spot**: `Value.Traded > 20,000,000 USD`.
+- **Discovery Strategy**:
+    - Scanners rely exclusively on liquidity floors and extreme rating scores. No secondary technical filters (ADX, etc.) are applied at this stage.
 - **Discovery Sorting**: 
     - Scanners must sort by `Recommend.All` during discovery to ensure the most extreme sentiment signals are recruited first.
     - **LONG**: `sort_by: Recommend.All, order: desc`.

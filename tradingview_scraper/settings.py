@@ -73,6 +73,8 @@ class FeatureFlags(BaseModel):
         "entropy": 0.0322,
         "hurst_clean": 0.3485,
         "adx": 1.0,
+        "recommend_all": 1.0,
+        "recommend_ma": 1.0,
         "skew": 0.5,
         "kurtosis": 0.5,
         "cvar": 1.0,

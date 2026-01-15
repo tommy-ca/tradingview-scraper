@@ -57,6 +57,9 @@ class FeatureEngineeringStage(BasePipelineStage):
         candidate_map = {c["symbol"]: c for c in context.raw_pool}
 
         adx = pd.Series({s: float(candidate_map.get(s, {}).get("adx") or 0) for s in df.columns})
+        rec_all = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_all") or 0) for s in df.columns})
+        rec_ma = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_ma") or 0) for s in df.columns})
+        rec_other = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_other") or 0) for s in df.columns})
 
         # Use v3 standardized liquidity scoring (normalized to $500M)
         liquidity = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in df.columns})
@@ -78,6 +81,9 @@ class FeatureEngineeringStage(BasePipelineStage):
                 "efficiency": efficiency,
                 "hurst_clean": (1.0 - (hurst.fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1),
                 "adx": adx,
+                "recommend_all": rec_all,
+                "recommend_ma": rec_ma,
+                "recommend_other": rec_other,
                 "liquidity": liquidity,
                 "antifragility": af_all,
                 "survival": regime_all,

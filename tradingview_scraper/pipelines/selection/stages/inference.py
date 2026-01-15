@@ -29,6 +29,8 @@ class InferenceStage(BasePipelineStage):
             "efficiency": 0.5,
             "hurst_clean": 0.5,
             "adx": 1.0,
+            "recommend_all": 1.0,
+            "recommend_ma": 1.0,
             "survival": 1.0,
             "antifragility": 0.5,
             "skew": 0.5,  # Penalize asymmetry via rank_desc
@@ -47,6 +49,8 @@ class InferenceStage(BasePipelineStage):
             "entropy": "rank_desc",
             "hurst_clean": "rank",
             "adx": "cdf",
+            "recommend_all": "rank",
+            "recommend_ma": "rank",
             "skew": "rank_desc",  # Larger absolute skew is worse
             "kurtosis": "rank_desc",  # Larger kurtosis is worse
             "cvar": "cdf",

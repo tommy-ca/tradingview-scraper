@@ -7,11 +7,12 @@ trend:
   adx: { enabled: false }
 filters:
   - { left: "Value.Traded", operation: "greater", right: 50000000 }
+  - { left: "type", operation: "equal", right: "swap" }
   - { left: "name", operation: "match", right: ".P$" }
   - { left: "Recommend.Other", operation: "greater", right: 0.1 }
 sort_by: Recommend.Other
 sort_order: desc
-limit: 50
+limit: 100
 export_metadata:
   symbol: perp_rating_osc_long
   data_category: strategy_alpha

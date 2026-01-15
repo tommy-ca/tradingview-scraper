@@ -59,6 +59,20 @@
         "top_n": 2,
         "threshold": 0.5,
         "selection_mode": "v4"
+      },
+      "discovery": {
+        "enabled_markets": ["america", "crypto"],
+        "strategies": {
+          "trend_following": {
+            "scanners": [
+              "scanners/tradfi/sp500_trend",
+              "scanners/crypto/binance_spot_long_trend"
+            ],
+            "interval": "1d",
+            "ingestion_depth": 500,
+            "strict_health": true
+          }
+        }
       }
     },
     "canary": {
@@ -130,7 +144,7 @@
       "discovery": {
         "enabled_markets": ["crypto"],
         "strategies": {
-          "crypto_alpha": {
+          "trend_following": {
             "scanners": [
               "scanners/crypto/binance_spot_long_trend",
               "scanners/crypto/binance_spot_short_trend",
@@ -138,7 +152,14 @@
               "scanners/crypto/binance_perp_short_trend",
               "scanners/crypto/binance_perp_secular_short",
               "scanners/crypto/binance_perp_long_mtf",
-              "scanners/crypto/binance_perp_short_mtf",
+              "scanners/crypto/binance_perp_short_mtf"
+            ],
+            "interval": "1d",
+            "ingestion_depth": 500,
+            "strict_health": true
+          },
+          "vol_breakout": {
+            "scanners": [
               "scanners/crypto/vol_breakout"
             ],
             "interval": "1d",

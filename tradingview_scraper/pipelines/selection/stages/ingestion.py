@@ -31,7 +31,20 @@ class IngestionStage(BasePipelineStage):
             raise FileNotFoundError(f"Candidates manifest not found: {self.candidates_path}")
 
         with open(self.candidates_path, "r") as f:
-            context.raw_pool = json.load(f)
+            raw_data = json.load(f)
+
+        # Handle both list and dict formats
+        if isinstance(raw_data, list):
+            context.raw_pool = raw_data
+        elif isinstance(raw_data, dict):
+            # If it's a dict from portfolio_meta.json, convert to list of symbols with metadata
+            context.raw_pool = []
+            for sym, meta in raw_data.items():
+                if isinstance(meta, dict):
+                    meta["symbol"] = sym
+                    context.raw_pool.append(meta)
+        else:
+            context.raw_pool = []
 
         # 2. Load Returns
         if not os.path.exists(self.returns_path):
@@ -42,7 +55,11 @@ class IngestionStage(BasePipelineStage):
             if ext == ".parquet":
                 context.returns_df = pd.read_parquet(self.returns_path)
             elif ext in [".pkl", ".pickle"]:
-                context.returns_df = pd.read_pickle(self.returns_path)
+                data = pd.read_pickle(self.returns_path)
+                if isinstance(data, pd.Series):
+                    context.returns_df = data.to_frame()
+                else:
+                    context.returns_df = data
             else:
                 context.returns_df = pd.read_csv(self.returns_path, index_col=0, parse_dates=True)
 
