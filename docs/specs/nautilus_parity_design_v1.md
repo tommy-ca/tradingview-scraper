@@ -53,7 +53,7 @@ A dedicated script `scripts/validate_nautilus_parity.py` validates parity on **N
 4.  **Turnover**: Must match `(Sum(|Delta|) / 2)` standard.
 
 ## 6. Audit & Troubleshooting
-- **Engine Health Check**: Use `tests/test_nautilus_parity.py` to verify that the simulator produces non-zero returns on synthetic data.
+- **Validation**: Use `scripts/validate_nautilus_parity.py --run-id <ID>` to verify a specific run.
 - **Common Failures**:
     - **Flat Returns (0.00%)**: Indicates a failure in `_get_nav()` to retrieve cash or positions. Check logs for "Failed to get cash balance".
-    - **High Divergence**: Indicates a mismatch in friction settings (`backtest_slippage`) or timestamp alignment between the vectorized and event-driven engines.
+    - **High Divergence**: Indicates a mismatch in friction settings (`backtest_slippage`) or timestamp alignment between the vectorized and event-driven engines. Ensure Pre-Start Priming is active in `nautilus_adapter.py`.

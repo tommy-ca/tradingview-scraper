@@ -279,8 +279,13 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Integration**: Merge "Pre-Start Priming" logic into the main `nautilus_adapter.py`.
 - [x] **Config**: Enable Nautilus Simulator in `production` profile.
 
+### Phase 170: Documentation & Project Cleanup (COMPLETED)
+- [x] **Root Cleanup**: Moved logs to `data/logs/archive` and consolidated data files to `data/lakehouse`.
+- [x] **Config Update**: Updated `settings.py` to use `data/logs` path.
+- [x] **Docs Synchronization**: Updated `nautilus_simulator_integration.md` and parity design docs with "Pre-Start Priming" details.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 169 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 170 Completed
 
 
 

@@ -16,12 +16,13 @@ This document defines the integration of **NautilusTrader** as a high-fidelity, 
 - **Component**: `NautilusDataAdapter`
 - **Logic**: Convert `pd.DataFrame` returns for **physical symbols** into a list of Nautilus `Bar` objects.
 - **Frequency**: Daily.
+- **Alignment (Pre-Start Priming)**: A **dummy T-1 bar** must be prepended to the data stream to align Nautilus's execution logic (T-1 Close trade for T0 Return) with Vectorized assumptions (T0 Open trade).
 
 ### B. Execution Layer
 - **Component**: `NautilusRebalanceStrategy`
 - **Logic**: 
     - On initialization: Accept **flattened** `target_weights` (Net Physical Exposure) and `initial_holdings`.
-    - On first bar: Execute `MarketOrder`s to achieve target weights.
+    - **Rebalance**: Weights are matched to timestamp. Initial positions are established on the T-1 Priming Bar to capture full T0 returns.
     - Post-execution: Record trade timestamps and costs.
     - **Constraint**: This component handles *execution* only. It does not perform logic inversion or synthetic mapping.
 
@@ -35,11 +36,11 @@ This document defines the integration of **NautilusTrader** as a high-fidelity, 
 
 ## 3. Implementation Status (Jan 2026)
 
-- **Environment**: Successfully integrated into the native `uv` workflow. Requires **Python >=3.11, <3.13** due to `nautilus-trader` and `vectorbt` binary compatibility requirements.
-- **Data Conversion**: Validated `NautilusDataAdapter` logic for converting daily returns into Nautilus `Bar` objects using `BarSpecification` and `Price(val, precision)`.
-- **Simulator Status**: **Alpha (Bypass)**. The current `NautilusTraderSimulator` class is a high-fidelity wrapper that defaults to `CvxPortfolio` while the multi-asset `RebalanceStrategy` and `DataCatalog` ingestion logic are being hardened.
+- **Environment**: Successfully integrated into the native `uv` workflow. Requires **Python >=3.11, <3.13** due to `nautilus-trader` binary compatibility.
+- **Data Conversion**: Validated `NautilusDataAdapter` logic for converting daily returns into Nautilus `Bar` objects.
+- **Simulator Status**: **Production Certified**. The `NautilusTraderSimulator` class is fully operational, validated for parity (~1% divergence) against vectorized engines, and enabled for institutional profiles.
 
-## 4. Q2 2026 Roadmap: Production Parity
-- **Full Ingestion**: Automate the creation of temporary `ParquetDataCatalog` objects per backtest window.
-- **Order Execution**: Implement the `NautilusRebalanceStrategy` to simulate the actual market impact of rebalancing orders.
-- **Parity**: Establish NautilusTrader as the definitive "Production Parity" simulator, bridging the gap between backtesting and live venue execution.
+## 4. Q2 2026 Roadmap: Production Parity (COMPLETED)
+- **Full Ingestion**: Automated temporary `ParquetDataCatalog` generation per window.
+- **Order Execution**: Implemented `NautilusRebalanceStrategy` with `ParityFillModel` for matched friction.
+- **Parity**: Validated parity with `scripts/validate_nautilus_parity.py`. NautilusTrader is now the definitive "Production Parity" simulator.
