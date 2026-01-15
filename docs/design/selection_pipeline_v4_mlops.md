@@ -176,4 +176,12 @@ The v4 pipeline integrates high-order statistical moments and hard volatility ca
 To ensure the mathematical integrity of the realization layer, the pipeline implements a post-simulation verification stage:
 - **Raw Return Audit**: Simulation results are cross-checked against raw daily returns logged in the `audit.jsonl` ledger.
 - **Metric Agreement**: Sharpe and MaxDD are independently re-calculated using standard geometric mean and high-water-mark algorithms to detect backend simulator drift.
-- **Geometric Baseline**: Annualized returns are anchored to Time-Weighted Return (TWR) standards to eliminate arithmetic inflation artifacts.
+- **Geometric Baseline**: Annualized returns are anchored to Compound Annual Growth Rate (CAGR) standards to eliminate arithmetic inflation artifacts.
+
+## 22. End-to-End Funnel Traceability (CR-790)
+The selection pipeline maintains a 100% auditable record of the candidate universe:
+- **Universe**: Total assets in the lakehouse.
+- **Refinement**: Assets passing history floors and variance checks.
+- **Discovery**: Candidates successfully matched with discovery metadata (L4 scanners).
+- **Selection**: Final winners passing statistical and predictability vetoes.
+This trace allows for the identification of alpha leakage points where high-conviction candidates might be prematurely pruned.

@@ -100,12 +100,26 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
                 if isinstance(s_rets, pd.Series):
                     s_rets = s_rets.to_frame(s_id)
                 else:
+                    # In case of multi-column, pick first.
+                    # CVXPortfolio result DF usually has 'returns' as first col.
                     s_rets = s_rets.iloc[:, 0].to_frame(s_id)
+
+                # Robust Index Alignment (UTC Naive)
+                s_rets.index = pd.to_datetime(s_rets.index)
+                if s_rets.index.tz is not None:
+                    s_rets.index = s_rets.index.tz_convert(None)
 
                 if meta_df.empty:
                     meta_df = s_rets
                 else:
+                    # Inner join handles the calendar intersection (TradFi vs Crypto)
+                    # as mandated in AGENTS.md Section 8.
+                    original_len = len(meta_df)
                     meta_df = meta_df.join(s_rets, how="inner")
+                    new_len = len(meta_df)
+
+                    if new_len < (original_len * 0.5):
+                        logger.warning(f"  [{s_id}] Heavy alpha dilution: join reduced history by {original_len - new_len} days.")
 
                 sleeve_metadata.append({"id": s_id, "profile": s_profile, "run_id": run_path.name, "run_path": str(run_path)})
             else:

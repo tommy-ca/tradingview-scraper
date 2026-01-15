@@ -20,9 +20,31 @@ from tradingview_scraper.risk import AntifragilityAuditor
 from tradingview_scraper.selection_engines import build_selection_engine
 from tradingview_scraper.selection_engines.base import SelectionRequest, get_hierarchical_clusters
 from tradingview_scraper.utils.audit import AuditLedger
+from tradingview_scraper.utils.metrics import _get_annualization_factor
 from tradingview_scraper.utils.synthesis import StrategySynthesizer
 
 logger = logging.getLogger("backtest_engine")
+
+
+def persist_tournament_artifacts(results: Dict[str, Any], output_dir: Path):
+    """Saves tournament metrics and windows to disk for analysis."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    target_path = output_dir / "tournament_results.json"
+    try:
+        with open(target_path, "w") as f:
+
+            def _default(obj):
+                if isinstance(obj, (pd.DataFrame, pd.Series)):
+                    return {}
+                if isinstance(obj, (np.integer, np.floating)):
+                    return obj.item()
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return str(obj)
+
+            json.dump(results, f, indent=2, default=_default)
+    except Exception as e:
+        logger.error(f"Failed to save tournament artifacts: {e}")
 
 
 class BacktestOrchestrator:
@@ -321,10 +343,11 @@ class BacktestEngine:
                                 if ledger:
                                     # CR-750: Capture daily returns for independent verification
                                     # We move structured data to 'data' and keep metrics for scalars
-                                    data_payload = {"daily_returns": []}
+                                    data_payload: Dict[str, Any] = {"daily_returns": []}
                                     daily_rets = metrics.get("daily_returns")
                                     if isinstance(daily_rets, pd.Series):
                                         data_payload["daily_returns"] = daily_rets.values.tolist()
+                                        data_payload["ann_factor"] = _get_annualization_factor(daily_rets)
                                     elif isinstance(daily_rets, list):
                                         data_payload["daily_returns"] = daily_rets
 
@@ -338,4 +361,4 @@ class BacktestEngine:
                         if ledger:
                             ledger.record_outcome(step="backtest_optimize", status="error", output_hashes={}, metrics={"error": str(e)}, context=opt_ctx)
 
-        return {"tournament_results": results}
+        return {"results": results}

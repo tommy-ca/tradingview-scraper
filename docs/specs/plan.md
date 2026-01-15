@@ -163,13 +163,20 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Lookahead Bias Correction**: Verified `iloc` slicing eliminated 1-day overlap in walk-forward loops.
 - [x] **Baseline Normalization**: Confirmed AnnRet dropped from 972% to 188% (v4 MaxSharpe) following bias correction and geometric compounding.
 
-### Phase 155: Institutional Scaling & Meta-Portfolio Alpha (IN PROGRESS)
-- [ ] **Unified Alpha Funnel**: Implement cross-sleeve Log-MPS normalization. [IN_PROGRESS]
-- [ ] **Execution Friction Audit**: Quantify impact of 10bps vs 5bps slippage on HRP turnover.
-- [ ] **Meta-Sleeve Ingestion**: Finalize join logic for multi-asset meta-portfolios.
+### Phase 154: Forensic Metric Audit & Selection Validation (COMPLETED)
+- [x] **Metric Verification (CR-750)**: Refactored `stable_institutional_audit.py` to independently calculate Sharpe/MaxDD.
+- [x] **Proven Metrics Standard**: Overhauled `utils/metrics.py` to reuse `quantstats` package for all institutional benchmarks.
+- [x] **Lookahead Bias Correction**: Verified `iloc` slicing eliminated 1-day overlap in walk-forward loops.
+- [x] **Baseline Normalization**: Confirmed AnnRet dropped from 972% to 101% following bias correction and geometric compounding.
+
+### Phase 155: Institutional Scaling & Final Certification (IN PROGRESS)
+- [x] **Data Pipeline Audit**: Verified `prepare_portfolio_data.py` data hygiene and funnel metrics.
+- [x] **Deep Forensic Funnel Trace**: Implemented Stage-by-Stage candidate tracking (Universe -> Selection).
+- [ ] **Final v3.6.4 Certification**: Rerun exhaustive tournament (60/20/20) with verified metrics and 100% data alignment. [IN_PROGRESS]
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.6.3) - Metrics Standardized
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.6.4) - Final Validation In Progress
+
 
 
 

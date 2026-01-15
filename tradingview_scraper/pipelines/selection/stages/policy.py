@@ -41,25 +41,42 @@ class SelectionPolicyStage(BasePipelineStage):
         disqualified = self._apply_vetoes(features, candidate_map, settings, params)
 
         # 3. Recruitment Loop
-        # We perform initial recruitment into a buffer, then prune for diversity and size
         recruitment_buffer: Set[str] = set()
 
         # Cluster Recruitment
         for cid, symbols in clusters.items():
             non_vetoed = [str(s) for s in symbols if str(s) not in disqualified]
-            ranked = sorted(non_vetoed, key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
+            if not non_vetoed:
+                # STAGE 3: Force Representative if Cluster Empty
+                if relaxation_stage >= 3 and symbols:
+                    all_ranked = sorted([str(s) for s in symbols], key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
+                    for s in all_ranked:
+                        ent = float(features.loc[s, "entropy"]) if s in features.index else 1.0
+                        if ent <= 0.999:
+                            recruitment_buffer.add(s)
+                            break
+                continue
 
-            # Select Top N per cluster
-            recruitment_buffer.update(ranked[:top_n])
+            # Identity-Based Deduplication (CR-231)
+            # Ensures we don't pick multiple logic-atoms for the same asset in one cluster
+            id_to_best: Dict[str, str] = {}
+            for s in non_vetoed:
+                ident = str(candidate_map.get(s, {}).get("identity", s))
+                if ident not in id_to_best or float(scores.get(s, -1.0)) > float(scores.get(id_to_best[ident], -1.0)):
+                    id_to_best[ident] = s
+            uniques = list(id_to_best.values())
 
-            # STAGE 3: Force Representative if Cluster Empty
-            if not ranked[:top_n] and relaxation_stage >= 3 and symbols:
-                all_ranked = sorted([str(s) for s in symbols], key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
-                for s in all_ranked:
-                    ent = float(features.loc[s, "entropy"]) if s in features.index else 1.0
-                    if ent <= 0.999:
-                        recruitment_buffer.add(s)
-                        break
+            # Directional Recruitment (Pillar 1 Parity with v3.4)
+            # Pick Top-N per direction per cluster
+            longs = [s for s in uniques if (float(features.loc[s, "momentum"]) if s in features.index else 0.0) >= 0]
+            shorts = [s for s in uniques if (float(features.loc[s, "momentum"]) if s in features.index else 0.0) < 0]
+
+            if longs:
+                ranked_longs = sorted(longs, key=lambda s: float(scores.get(s, -1.0)), reverse=True)
+                recruitment_buffer.update(ranked_longs[:top_n])
+            if shorts:
+                ranked_shorts = sorted(shorts, key=lambda s: float(scores.get(s, -1.0)), reverse=True)
+                recruitment_buffer.update(ranked_shorts[:top_n])
 
         # STAGE 4: Balanced Fallback
         if len(recruitment_buffer) < 15 and relaxation_stage >= 4:

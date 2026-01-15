@@ -44,7 +44,7 @@ class InferenceStage(BasePipelineStage):
             "stability": "rank",
             "antifragility": "rank",
             "efficiency": "cdf",
-            "entropy": "rank",
+            "entropy": "rank_desc",
             "hurst_clean": "rank",
             "adx": "cdf",
             "skew": "rank_desc",  # Larger absolute skew is worse

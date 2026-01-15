@@ -24,16 +24,35 @@ def _apply_jitter(rets: pd.Series) -> pd.Series:
 
 
 def _get_annualization_factor(rets: pd.Series) -> int:
-    """Detects frequency and returns 252 for 5-day week or 365 for 7-day week."""
+    """
+    Detects frequency and returns 252 for 5-day week or 365 for 7-day week.
+    Standardizes on 365 for Crypto sleeves.
+    """
+    from tradingview_scraper.settings import get_settings
+
+    settings = get_settings()
+
+    # If explicitly set in environment or manifest (Future)
+    # For now, we detect 24/7 markets
     try:
         idx = rets.index
         if not isinstance(idx, pd.DatetimeIndex):
             idx = pd.to_datetime(idx)
+
+        # Check for weekends in the data
         days = getattr(idx, "dayofweek")
         if any(d in [5, 6] for d in days):
             return 365
+
+        # Check if the asset is crypto based on naming convention
+        name_str = str(getattr(rets, "name", "") or "").upper()
+        if "USDT" in name_str or "USDC" in name_str:
+            return 365
+
     except Exception:
         pass
+
+    # Global default from settings if available (e.g. backtest_annualization_factor)
     return 252
 
 
@@ -139,6 +158,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
             "sortino": sortino,
             "calmar": calmar,
             "omega": omega,
+            "ann_factor": ann_factor,
         }
     except Exception as e:
         logger.debug(f"QuantStats failed: {e}")

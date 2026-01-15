@@ -9,15 +9,16 @@ Define the institutional requirements for the crypto production sleeve within th
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
 
 ### 1.3 Status
-**Production Certified** (2026-01-14) - Deep Audit Standard v3.6.3.
+**Production Certified** (2026-01-14) - Deep Audit Standard v3.6.4.
 
 ### 1.4 Statistical Performance Baselines (Grand Tournament 2026-01-14)
-The following benchmarks serve as the institutional standard for Q1 2026 production (v3.6.3):
-| Selection | Engine | Profile | Sharpe (μ) | AnnRet (comp) | MaxDD (comp) | Vol (μ) |
+The following benchmarks serve as the institutional standard for Q1 2026 production (v3.6.4):
+| Selection | Engine | Profile | Sharpe (μ) | AnnRet (CAGR) | MaxDD (comp) | Vol (μ) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **v3.4** | **skfolio** | **max_sharpe** | **1.988** | **148.3%** | **-16.0%** | **0.83** |
-| **v4 (MLOps)** | **skfolio** | **hrp** | **1.368** | **79.0%** | **-27.6%** | **0.50** |
+| **v4 (MLOps)** | **skfolio** | **hrp** | **1.335** | **79.0%** | **-27.6%** | **0.50** |
 | **baseline** | **skfolio** | **hrp** | **0.571** | **28.6%** | **-14.7%** | **0.25** |
+
 
 
 
@@ -34,6 +35,9 @@ The following benchmarks serve as the institutional standard for Q1 2026 product
 | CR-730 | MUST | | **Hard-to-Borrow Veto**: The Selection Pipeline MUST accept a `borrow_availability` metadata feed and veto SHORT candidates with low inventory (preventing "Naked Short" simulation). |
 | CR-750 | MUST | ✅ | **Metric Verification Standard**: All backtest results MUST undergo independent verification by the `stable_institutional_audit.py` script. The script MUST re-calculate Sharpe, AnnRet (TWR), and MaxDD from raw daily return series to ensure 100% agreement with simulator-reported metrics. |
 | CR-760 | MUST | ✅ | **Geometric Performance Standard**: Annualized Return MUST be calculated using geometric compounding (CAGR) via the `quantstats` package to accurately reflect the impact of volatility drag, especially in crypto regimes. |
+| CR-770 | MUST | | **Pillar 2 Strategy Attribution**: Every backtest window MUST record the contribution of each strategy atom (Logic/Direction) to the total window return to ensure transparent alpha attribution. |
+| CR-780 | MUST | ✅ | **Data Ingestion Purity Gate**: The data preparation pipeline MUST enforce 100% ticker alignment across return matrices and metadata. Discrepancies MUST trigger a pipeline halt to prevent selection bias from missing data. |
+| CR-790 | MUST | ✅ | **Deep Forensic Funnel Trace**: Every backtest window MUST record the candidate count at each filtering stage (Universe -> Discovery -> Refinement -> Selection) to identify alpha leakage bottlenecks. |
 | CR-114 | MUST | ✅ | **Alpha Immersion Floor**: The history floor for crypto assets is set to 90 days for production; this maximizes participation of high-momentum listings while maintaining statistical validity. |
 | CR-116 | MUST | ✅ | **Antifragility Significance**: Antifragility scores must be weighted by a significance multiplier ($\min(1.0, N/252)$) to prevent low-history assets from dominating the ranking. |
 | CR-115 | MUST | ✅ | **Cluster Diversification standard**: The selection engine must pick up to the Top 5 assets per direction (Long/Short) within each cluster to prevent single-asset factor concentration. |
