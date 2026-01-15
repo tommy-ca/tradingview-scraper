@@ -2,7 +2,6 @@
 # Uses crypto-specific hygiene with relaxed entropy thresholds
 base_preset: ../hygiene/institutional_crypto.yaml
 markets: ["crypto"]
-include_perps_only: true
 exclude_stable_bases: true
 quote_priority: ["USDT", "USDC", "USD"]
 export_metadata:

@@ -2,8 +2,6 @@
 # Base: market=futures, top 100 by volume (after type filter), sort volume, limited to US exchanges
 markets: ["futures"]
 exchanges: ["CME", "CBOT", "COMEX", "NYMEX"]
-include_perps_only: false
-exclude_perps: false
 columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
   min: 5000

@@ -1,9 +1,6 @@
 # Layer 2: Multi-Exchange Top 50 Dated Base
 base_preset: presets/base_crypto_spot.yaml
 exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
-include_dated_futures_only: true
-exclude_perps: true
-exclude_dated_futures: false
 
 # Dated futures are often illiquid, but we keep the $5M floor for institutional safety
 volume:

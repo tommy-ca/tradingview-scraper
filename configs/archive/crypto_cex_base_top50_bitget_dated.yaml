@@ -2,10 +2,6 @@ markets:
 - crypto
 exchanges:
 - BITGET
-include_perps_only: false
-exclude_perps: true
-include_dated_futures_only: true
-allowed_spot_quotes:
 - USDT
 - USDC
 - USD
@@ -58,10 +54,8 @@ final_sort_by: Value.Traded
 final_sort_order: desc
 dedupe_by_symbol: true
 attach_perp_counterparts: false
-base_from_spot_only: false
 ensure_symbols: []
 exclude_stable_bases: true
-prefer_perps: false
 perp_exchange_priority:
 - BINANCE
 - OKX
@@ -78,5 +72,4 @@ timeout: 10
 export:
   enabled: false
   type: json
-exclude_dated_futures: false
 base_universe_sort_by: Value.Traded

@@ -2,8 +2,6 @@
 markets: ["futures"]
 exchanges: ["COMEX", "NYMEX"]
 include_symbols: []
-exclude_perps: false
-include_perps_only: false
 columns: ["name", "close", "volume", "change", "Recommend.All", "ADX", "Volatility.D", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
   min: 100

@@ -6,9 +6,7 @@ exchanges: ["BINANCE"]
 markets: ["crypto"]
 
 # Disable all L2-L4 custom filters to ensure pure liquidity discovery
-include_perps_only: false
 exclude_stable_bases: false
-include_dated_futures_only: false
 
 # Institutional Volume Floor (Broad $1M recruitment)
 volume:

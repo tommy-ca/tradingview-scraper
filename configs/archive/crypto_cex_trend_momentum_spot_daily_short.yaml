@@ -1,10 +1,6 @@
 # Crypto CEX spot daily trend momentum - short
 markets: ["crypto"]
 exchanges: ["BINANCE", "OKX", "BYBIT", "BITGET"]
-include_perps_only: false
-exclude_perps: true
-base_from_spot_only: true
-allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
 columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
   min: 0
@@ -46,4 +42,3 @@ export:
 export_metadata:
   symbol: crypto_spot_short
   data_category: universe_selector
-exclude_dated_futures: true

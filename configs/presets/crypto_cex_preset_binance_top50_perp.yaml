@@ -2,10 +2,6 @@ exchanges:
 - BINANCE
 markets:
 - crypto
-include_perps_only: true
-exclude_perps: false
-exclude_dated_futures: true
-base_from_spot_only: false
 volume:
   min: 0
   value_traded_min: 1500000
@@ -52,7 +48,6 @@ ensure_symbols:
 - BINANCE:AVAXUSDT.P
 - BINANCE:TRXUSDT.P
 exclude_stable_bases: true
-prefer_perps: true
 perp_exchange_priority:
 - BINANCE
 - OKX
@@ -68,7 +63,6 @@ timeout: 10
 export:
   enabled: false
   type: json
-allowed_spot_quotes:
 - USDT
 - USDC
 - USD

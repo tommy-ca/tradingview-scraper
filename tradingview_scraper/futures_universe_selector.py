@@ -259,10 +259,6 @@ class SelectorConfig(BaseModel):
     #   fall back to static_symbols when the screener returns no rows.
     static_mode: bool = False
     static_symbols: List[str] = Field(default_factory=list)
-    include_perps_only: bool = False
-    exclude_perps: bool = False
-    exclude_dated_futures: bool = False
-    include_dated_futures_only: bool = False
     columns: List[str] = Field(
         default_factory=lambda: [
             "name",
@@ -303,15 +299,11 @@ class SelectorConfig(BaseModel):
     prefilter_limit: Optional[int] = None
     dedupe_by_symbol: bool = True
     group_duplicates: bool = False
-    base_from_spot_only: bool = False
     attach_perp_counterparts: bool = False
     quote_priority: List[str] = Field(default_factory=lambda: ["USDT", "USDC", "FDUSD", "BUSD", "DAI", "USD"])
-    allowed_spot_quotes: List[str] = Field(default_factory=list)
     include_stable_bases: bool = False
-    base_currencies: List[str] = Field(default_factory=list)  # Filter by base currency
     ensure_symbols: List[str] = Field(default_factory=list)
     exclude_stable_bases: bool = False
-    prefer_perps: bool = False
     perp_exchange_priority: List[str] = Field(default_factory=list)
     market_cap_file: Optional[str] = None
     market_cap_limit: Optional[int] = None
@@ -994,29 +986,6 @@ class FuturesUniverseSelector:
             if self.config.exclude_stable_bases and base_symbol in STABLE_BASES:
                 continue
 
-            is_perp = symbol.endswith(".P")
-            is_dated = self._is_dated_symbol(symbol)
-
-            if self.config.include_dated_futures_only and not is_dated:
-                continue
-            if self.config.exclude_dated_futures and is_dated:
-                continue
-
-            if self.config.allowed_spot_quotes and not is_perp:
-                _, quote = self._extract_base_quote(symbol)
-                if not quote or quote not in self.config.allowed_spot_quotes:
-                    continue
-
-            if self.config.base_currencies and not is_perp:
-                base, _ = self._extract_base_quote(symbol)
-                if not base or base not in self.config.base_currencies:
-                    continue
-
-            if self.config.include_perps_only and not is_perp:
-                continue
-            if self.config.exclude_perps and is_perp:
-                continue
-
             if include_set:
                 base_match = base_symbol in include_set
                 if symbol not in include_set and not base_match:
@@ -1253,10 +1222,6 @@ class FuturesUniverseSelector:
                 # Prefer current if its liquidity is at least 30% of candidate
                 if best_value > candidate_value * 0.3:
                     better = False
-                else:
-                    # Current is much less liquid than candidate, maybe switch?
-                    # If ranks are different, we stick to priority unless it's extreme
-                    pass
 
             if better:
                 best_by_base[base] = row
@@ -1268,17 +1233,8 @@ class FuturesUniverseSelector:
                 continue
 
             # 2. Prefer Linear Perps over Inverse Perps (if both are perps) handled by quote priority mostly
-            # 3. Perp vs Spot preference
-            if self.config.prefer_perps:
-                cand_perp = self._is_perp(symbol)
-                best_perp = self._is_perp(current.get("symbol", ""))
-                if cand_perp and not best_perp:
-                    best_by_base[base] = row
-                    continue
-                if best_perp and not cand_perp:
-                    continue
 
-            # 4. Exchange Rank preference
+            # 3. Exchange Rank preference
             if exchange_rank(symbol) < exchange_rank(current.get("symbol", "")):
                 # Only switch if liquidity is comparable
                 if candidate_value > best_value * 0.5:
@@ -1359,22 +1315,7 @@ class FuturesUniverseSelector:
         return sorted(candidates, key=candidate_key)[0]
 
     def _attach_perp_counterparts(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        spot_rows: List[Dict[str, Any]] = []
-        for r in rows:
-            symbol = r.get("symbol", "")
-            if self.config.base_from_spot_only:
-                if self._is_perp(symbol):
-                    continue
-                base, quote = self._extract_base_quote(symbol)
-                if not (base and quote):
-                    continue
-                if self.config.allowed_spot_quotes and quote not in self.config.allowed_spot_quotes:
-                    continue
-                spot_rows.append(r)
-            else:
-                if not self._is_perp(symbol):
-                    spot_rows.append(r)
-
+        spot_rows: List[Dict[str, Any]] = [r for r in rows if not self._is_perp(r.get("symbol", ""))]
         perp_rows = [r for r in rows if self._is_perp(r.get("symbol", ""))]
 
         spot_unique = self._dedupe_by_base(spot_rows)
@@ -1415,12 +1356,8 @@ class FuturesUniverseSelector:
 
             product = None
             if "crypto" in markets_lower:
-                if self.config.include_perps_only:
-                    product = "PERP"
-                elif self.config.exclude_perps:
-                    product = "SPOT"
-                else:
-                    product = "CRYPTO"
+                all_perps = all(self._is_perp(r.get("symbol", "")) for r in data) if data else False
+                product = "PERP" if all_perps else "CRYPTO"
             elif "futures" in markets_lower:
                 product = "FUTURES"
             elif "forex" in markets_lower:

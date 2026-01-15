@@ -2,6 +2,5 @@
 base_preset: ../hygiene/institutional.yaml
 markets: ["futures"]
 exchanges: ["COMEX", "NYMEX"]
-include_dated_futures_only: true
 export_metadata:
   data_category: futures_metals

@@ -1,9 +1,5 @@
 # Layer 1: Base Crypto Perp Universe (Institutional Tradability)
 base_preset: base_crypto_spot.yaml
-include_perps_only: true
-exclude_perps: false
-base_from_spot_only: false
-prefer_perps: true
 perp_exchange_priority: ["BINANCE", "OKX", "BYBIT", "BITGET"]
 quote_priority: ["USDT", "USDC", "FDUSD", "BUSD", "DAI", "USD"]
 

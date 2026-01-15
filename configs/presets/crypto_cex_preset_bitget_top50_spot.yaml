@@ -2,11 +2,6 @@ exchanges:
 - BITGET
 markets:
 - crypto
-include_perps_only: false
-exclude_perps: true
-exclude_dated_futures: true
-base_from_spot_only: true
-allowed_spot_quotes:
 - USDT
 - USDC
 - USD
@@ -59,7 +54,6 @@ ensure_symbols:
 - BITGET:AVAXUSDT
 - BITGET:TRXUSDT
 exclude_stable_bases: true
-prefer_perps: false
 perp_exchange_priority:
 - BINANCE
 - OKX

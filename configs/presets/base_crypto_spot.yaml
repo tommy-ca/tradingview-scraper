@@ -1,9 +1,5 @@
 # Layer 1: Base Crypto Spot Universe (Institutional Tradability)
 markets: ["crypto"]
-include_perps_only: false
-exclude_perps: true
-exclude_dated_futures: true
-base_from_spot_only: true
 
 # Liquidity Guard: Matches the $10M Baseline for Discovery
 volume:

@@ -2,7 +2,6 @@
 base_preset: ../templates/crypto_spot.yaml
 exchanges: ["BINANCE"]
 # High-quality institutional quotes only
-allowed_spot_quotes: ["USDT", "USDC", "USD", "FDUSD", "TUSD", "DAI"]
 
 # Override volume floor for Spot ($500K)
 volume:

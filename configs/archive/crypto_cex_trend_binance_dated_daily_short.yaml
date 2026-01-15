@@ -1,10 +1,6 @@
 # Crypto CEX dated futures trend (daily) – Binance only, short
 markets: ["crypto"]
 exchanges: ["BINANCE"]
-include_perps_only: false
-exclude_perps: true
-include_dated_futures_only: true
-allowed_spot_quotes: [USDT, USD, USDC, FDUSD, BUSD]
 columns: ["name", "close", "volume", "Value.Traded", "market_cap_calc", "change", "Recommend.All", "ADX", "Volatility.D", "Volatility.W", "Volatility.M", "Perf.W", "Perf.1M", "Perf.3M", "ATR"]
 volume:
   min: 0
@@ -36,7 +32,6 @@ final_sort_order: desc
 dedupe_by_symbol: true
 ensure_symbols: []
 exclude_stable_bases: true
-prefer_perps: false
 perp_exchange_priority: [BINANCE, OKX, BYBIT, BITGET]
 prefilter_limit: 50
 limit: 50
@@ -47,4 +42,3 @@ export:
   enabled: false
   type: json
 base_universe_limit: 50
-exclude_dated_futures: false
