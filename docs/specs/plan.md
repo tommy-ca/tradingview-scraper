@@ -284,8 +284,15 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Config Update**: Updated `settings.py` to use `data/logs` path.
 - [x] **Docs Synchronization**: Updated `nautilus_simulator_integration.md` and parity design docs with "Pre-Start Priming" details.
 
+### Phase 171: Cross-Factor Data Preparation (COMPLETED)
+- [x] **Scan & Fetch (All Long)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_all_long`.
+- [x] **Scan & Fetch (All Short)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_all_short`.
+- [x] **Scan & Fetch (MA Long)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_ma_long`.
+- [x] **Scan & Fetch (MA Short)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_ma_short`.
+- [x] **Validation**: Ensure `returns_matrix.parquet` is populated and healthy for all profiles.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 170 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 171 Completed
 
 
 
