@@ -37,4 +37,6 @@ columns:
   - "change"
   - "Volatility.D"
   - "Volatility.W"
+  - "volume_change"
+  - "ROC"
   - "market_cap_calc"

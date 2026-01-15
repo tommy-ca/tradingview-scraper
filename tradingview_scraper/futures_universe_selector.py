@@ -80,6 +80,8 @@ DEFAULT_COLUMNS = [
     "volume",
     "change",
     "Recommend.All",
+    "Recommend.MA",
+    "Recommend.Other",
     "Value.Traded",
     "ADX",
     "Volatility.D",
@@ -261,7 +263,26 @@ class SelectorConfig(BaseModel):
     exclude_perps: bool = False
     exclude_dated_futures: bool = False
     include_dated_futures_only: bool = False
-    columns: List[str] = Field(default_factory=lambda: DEFAULT_COLUMNS.copy())
+    columns: List[str] = Field(
+        default_factory=lambda: [
+            "name",
+            "description",
+            "sector",
+            "close",
+            "volume",
+            "change",
+            "Recommend.All",
+            "Recommend.MA",
+            "Recommend.Other",
+            "Value.Traded",
+            "ADX",
+            "Volatility.D",
+            "Perf.W",
+            "Perf.1M",
+            "Perf.3M",
+            "ATR",
+        ]
+    )
     volume: VolumeConfig = Field(default_factory=VolumeConfig)
     volatility: VolatilityConfig = Field(default_factory=VolatilityConfig)
     recent_perf: RecentPerfConfig = Field(default_factory=RecentPerfConfig)
@@ -464,7 +485,18 @@ def load_config(
 class FuturesUniverseSelector:
     """Selector orchestrating Screener + post-filters for futures."""
 
-    REQUIRED_COLUMNS = ["name", "close", "volume", "change", "Recommend.All"]
+    REQUIRED_COLUMNS = [
+        "name",
+        "close",
+        "volume",
+        "change",
+        "Recommend.All",
+        "Recommend.MA",
+        "Recommend.Other",
+        "Volatility.D",
+        "volume_change",
+        "ROC",
+    ]
 
     def __init__(
         self,
@@ -955,6 +987,7 @@ class FuturesUniverseSelector:
         filtered: List[Dict[str, Any]] = []
         for row in rows:
             symbol = row.get("symbol", "").upper()
+
             exchange = self._extract_exchange(symbol)
             base_symbol = self._base_symbol(symbol)
 

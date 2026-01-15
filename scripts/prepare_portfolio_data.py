@@ -149,18 +149,28 @@ def prepare_portfolio_universe():
             returns = df.pct_change().dropna()
 
             with lock:
-                price_data[symbol] = returns
-                alpha_meta[symbol] = {
+                # Atom Key: Asset_Logic_Direction
+                atom_id = f"{symbol}_{candidate.get('logic', 'trend')}_{candidate.get('direction', 'LONG')}"
+                price_data[atom_id] = returns
+                alpha_meta[atom_id] = {
+                    "symbol": symbol,
                     "description": candidate.get("description", "N/A"),
                     "sector": candidate.get("sector", "N/A"),
                     "adx": candidate.get("adx", 0),
                     "close": candidate.get("close", 0),
                     "atr": candidate.get("atr", 0),
+                    "volatility_d": candidate.get("volatility_d", 0),
+                    "volume_change_pct": candidate.get("volume_change_pct", 0),
+                    "roc": candidate.get("roc", 0),
                     "value_traded": candidate.get("value_traded", 0),
+                    "logic": candidate.get("logic", "trend"),
                     "direction": candidate.get("direction", "LONG"),
                     "market": candidate.get("market", "UNKNOWN"),
                     "identity": candidate.get("identity", symbol),
                     "is_benchmark": candidate.get("is_benchmark", False),
+                    "recommend_all": candidate.get("recommend_all"),
+                    "recommend_ma": candidate.get("recommend_ma"),
+                    "recommend_other": candidate.get("recommend_other"),
                 }
         except Exception as e:
             skipped_errors.append(symbol)
@@ -192,7 +202,7 @@ def prepare_portfolio_universe():
     all_dates = pd.to_datetime(all_dates_raw, utc=True)
     returns_df = pd.DataFrame(index=all_dates)
 
-    for symbol, rets in price_data.items():
+    for atom_id, rets in price_data.items():
         # Ensure index is timezone-aware DatetimeIndex (UTC) to prevent downstream index errors
         if not isinstance(rets.index, pd.DatetimeIndex):
             rets.index = pd.to_datetime(rets.index)
@@ -206,7 +216,7 @@ def prepare_portfolio_universe():
         # CR-181: Directional Normalization (Data Layer)
         # Store only RAW returns in the lakehouse.
         # Sign inversion is now handled dynamically by the analysis/allocation engines.
-        returns_df[symbol] = rets
+        returns_df[atom_id] = rets
 
     # Drop rows where ALL non-crypto assets are missing (e.g., weekends for TradFi)
     profiles = {symbol: get_symbol_profile(symbol) for symbol in returns_df.columns}

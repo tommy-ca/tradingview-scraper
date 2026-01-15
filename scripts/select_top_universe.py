@@ -3,7 +3,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import pandas as pd
 
@@ -156,6 +156,16 @@ def select_top_universe(mode: str = "raw"):
 
         # Prefer embedded metadata; fall back to filename heuristics.
         file_direction = "SHORT" if "_short" in f.lower() else "LONG"
+        file_logic = "trend"
+        if "_rating_all" in f.lower():
+            file_logic = "rating_all"
+        elif "_rating_ma" in f.lower():
+            file_logic = "rating_ma"
+        elif "_rating_osc" in f.lower():
+            file_logic = "rating_osc"
+        elif "_vol_breakout" in f.lower():
+            file_logic = "vol_breakout"
+
         meta_direction = meta.get("direction") or (meta.get("trend") or {}).get("direction")
         if isinstance(meta_direction, str) and meta_direction.strip():
             candidate = meta_direction.strip().upper()
@@ -218,29 +228,31 @@ def select_top_universe(mode: str = "raw"):
         for i in items:
             if isinstance(i, dict) and "symbol" in i:
                 i["_direction"] = file_direction
+                i["_logic"] = file_logic
                 i["_category"] = category
                 i["_asset_class"] = get_asset_class(category, i["symbol"])
                 i["_identity"] = get_asset_identity(i["symbol"], i["_asset_class"])
                 all_items.append(i)
 
-    # 2. Basic Deduplication by Symbol (First pass)
-    unique_symbols = {}
+    # 2. Basic Deduplication by Atom (Symbol + Logic + Direction)
+    # Allows the same physical asset to be recruited under different alpha modules.
+    unique_atoms = {}
     for item in all_items:
-        sym = item["symbol"]
-        if sym not in unique_symbols:
-            unique_symbols[sym] = item
+        key = (item["symbol"], item["_logic"], item["_direction"])
+        if key not in unique_atoms:
+            unique_atoms[key] = item
 
-    # 3. Canonical Consolidation (Best Venue per Identity based on Liquidity)
-    identity_groups: Dict[str, List[Dict[str, Any]]] = {}
-    for item in unique_symbols.values():
-        ident = item["_identity"]
-        if ident not in identity_groups:
-            identity_groups[ident] = []
-        identity_groups[ident].append(item)
+    # 3. Canonical Consolidation (Best Venue per Identity per Logic per Direction)
+    identity_groups: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
+    for item in unique_atoms.values():
+        ident_key = (item["_identity"], item["_logic"], item["_direction"])
+        if ident_key not in identity_groups:
+            identity_groups[ident_key] = []
+        identity_groups[ident_key].append(item)
 
     merged_pool = []
     redundancy_count = 0
-    for ident, group in identity_groups.items():
+    for ident_key, group in identity_groups.items():
         if len(group) > 1:
             redundancy_count += len(group) - 1
 
@@ -248,14 +260,14 @@ def select_top_universe(mode: str = "raw"):
         group.sort(key=lambda x: float(x.get("Value.Traded", 0) or 0), reverse=True)
         primary = group[0]
 
-        # Track alternatives
+        # Track alternatives (other venues for the SAME logic/direction)
         primary["implementation_alternatives"] = [
             {"symbol": x["symbol"], "market": x["_category"], "asset_class": x["_asset_class"], "value_traded": float(x.get("Value.Traded", 0) or 0)} for x in group[1:]
         ]
 
         merged_pool.append(primary)
 
-    audit_data["merging"] = {"total_unique_identities": len(merged_pool), "redundant_symbols_merged": redundancy_count}
+    audit_data["merging"] = {"total_unique_atoms": len(merged_pool), "redundant_venues_merged": redundancy_count}
 
     # 4. Global Pool Limit (Relaxed for Downstream Clustering)
     # We no longer calculate _alpha_score here; we rely on Value.Traded for discovery-stage priority
@@ -286,11 +298,18 @@ def select_top_universe(mode: str = "raw"):
                 "value_traded": item.get("Value.Traded", 0),
                 "adx": item.get("ADX", 0),
                 "atr": item.get("ATR", 0),
+                "volatility_d": item.get("Volatility.D", 0),
+                "volume_change_pct": item.get("volume_change", 0),
+                "roc": item.get("ROC", 0),
+                "recommend_all": item.get("Recommend.All"),
+                "recommend_ma": item.get("Recommend.MA"),
+                "recommend_other": item.get("Recommend.Other"),
                 # Include performance fields for Log-MPS
                 "Perf.W": item.get("Perf.W"),
                 "Perf.1M": item.get("Perf.1M"),
                 "Perf.3M": item.get("Perf.3M"),
                 "Perf.6M": item.get("Perf.6M"),
+                "logic": item["_logic"],
                 "direction": item["_direction"],
                 "alpha_score": 1.0,  # Placeholder, Log-MPS will calculate real statistical score
                 "implementation_alternatives": item.get("implementation_alternatives", []),

@@ -20,3 +20,6 @@ columns:
   - "Perf.W"
   - "Perf.1M"
   - "Perf.3M"
+  - "Volatility.D"
+  - "volume_change"
+  - "ROC"

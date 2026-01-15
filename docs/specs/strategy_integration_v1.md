@@ -26,7 +26,23 @@ Scanners must emit candidates with enriched technical ratings from TradingView.
     - **SHORT**: `sort_by: Recommend.All, order: asc`.
 - **Output**: A candidates manifest containing ratings and intended direction.
 
-## 4. Pipeline Integration
+## 4. Tier 2 Alpha Features (Enrichment)
+To enable advanced scoring and risk partitioning in the Selection Pipeline, the following fields are persisted but not used for discovery-stage filtering.
+
+### 4.1 volatility_d (Volatility.D)
+- **Source**: TradingView daily trailing volatility.
+- **Usage**: Used in `PartitioningStage` to prevent high-volatility atoms from dominating risk-parity clusters.
+
+### 4.2 volume_change_pct (volume_change)
+- **Source**: TradingView 24h volume change percentage.
+- **Usage**: Used in `InferenceStage` as a "Momentum Confirmation" multiplier; positive volume spikes confirm the conviction of rating signals.
+
+### 4.3 rate_of_change (ROC)
+- **Source**: TradingView Rate of Change indicator.
+- **Usage**: Used in `InferenceStage` as a core momentum feature to capture the velocity of price movement over the standard lookback period.
+
+## 5. Pipeline Integration
+
 ### 4.1 Data Persistence
 Technical ratings must be preserved from the **Discovery** stage through the **Lakehouse** and into the **Inference** stage.
 - **Lakehouse Metadata**: `portfolio_meta.json` must store ratings as features.
