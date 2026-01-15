@@ -178,15 +178,20 @@ To ensure the mathematical integrity of the realization layer, the pipeline impl
 - **Metric Agreement**: Sharpe and MaxDD are independently re-calculated using standard geometric mean and high-water-mark algorithms to detect backend simulator drift.
 - **Geometric Baseline**: Annualized returns are anchored to Compound Annual Growth Rate (CAGR) standards to eliminate arithmetic inflation artifacts.
 
-## 23. Performance & Institutional Scaling (v3.7.0 Update)
-As of v3.7.0, the selection pipeline has been hardened with institutional liquidity floors and enriched with momentum velocity:
+## 23. Performance & Institutional Scaling (v3.7.2 Update)
+As of v3.7.2, the selection pipeline has been hardened with institutional liquidity floors and a hierarchical strategy abstraction:
 
 - **Liquidity Floors**: 
     - **Perpetuals**: $50M USD 24h Volume (Value.Traded).
     - **Spot**: $20M USD 24h Volume.
 - **Factor Enrichment**: 
     - Integration of TradingView `Recommend.All`, `Recommend.MA`, `ROC` (Rate of Change), and `Volatility.D` into the Log-MPS scoring engine.
-    - **Modular Strategies**: Discovery is now partitioned into **Strategies** (e.g., `rating_ma`, `rating_osc`) within the manifest.
-    - **Strategy Atoms**: Each discovery strategy generates a unique logic atom, allowing the same physical asset to be ensembled across multiple orthogonal signals.
-- **Champion Performance (HRP)**: Sharpe 1.56 (Enriched v3.7.0 Baseline), AnnRet 79%, MaxDD -27.6%.
+- **Manifest Abstraction**: 
+    - Discovery is now partitioned into **Strategies** (e.g., `rating_ma`, `rating_osc`) within the manifest.
+    - **Logic Injection**: Strategy names are automatically injected as the `logic` field for all discovered assets.
+- **Strategy Atoms**: 
+    - The system supports the persistence of multiple orthogonal "Strategy Atoms" for the same physical asset (indexed as `Asset_Logic_Direction`).
+- **Recruitment Depth**: 
+    - Scanner limits increased to **100 candidates** per strategy to ensure a sufficiently deep pool for the HTR relaxation loop.
+- **Champion Performance (HRP)**: Sharpe 1.56 (v3.7.0 Baseline), AnnRet 79%, MaxDD -27.6%.
 

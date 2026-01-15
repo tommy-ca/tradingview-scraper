@@ -177,11 +177,13 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Data Enrichment**: Added `Volatility.D` and `volume_change` (24h) persistence for selection scoring.
 - [x] **Logic Preservation**: Consolidator now treats different ranking strategies as unique atoms (Symbol_Logic_Direction).
 - [x] **Strategy Layer Abstraction**: Manifest schema refactored to group scanners under named **Strategies** with automatic logic injection. [COMPLETED]
+- [x] **Comprehensive Discovery Audit**: All 12 rating scanners now utilize `binance_liquid_base.yaml` for exhaustive candidate capture (Top 200 liquid universe). [COMPLETED]
 - [x] **Feature Expansion (ROC)**: Added `ROC` (Rate of Change) to requested fields for momentum analysis. [COMPLETED]
+- [x] **Institutional Liquidity Hardening**: Updated Binance Spot floor to >$20M and Perp floor to >$50M with explicit `type` filtering (Spot/Swap). [COMPLETED]
 - [x] **Meta-Sleeve Ingestion**: Finalized join logic with robust UTC index alignment and dilution guards.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.7.0) - Momentum Velocity Enriched (ROC)
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.7.2) - Liquidity Hardened
 
 
 

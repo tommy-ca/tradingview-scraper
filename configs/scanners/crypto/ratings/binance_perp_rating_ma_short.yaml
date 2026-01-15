@@ -1,0 +1,17 @@
+# Binance Perp - MA Rating - SHORT
+base_preset: ../../../base/universes/binance_liquid_base.yaml
+volume: { value_traded_min: 50000000 }
+trend:
+  direction: "short"
+  logic: "AND"
+  adx: { enabled: false }
+filters:
+  - { left: "Value.Traded", operation: "greater", right: 50000000 }
+  - { left: "name", operation: "match", right: ".P$" }
+  - { left: "Recommend.MA", operation: "less", right: -0.1 }
+sort_by: Recommend.MA
+sort_order: asc
+limit: 50
+export_metadata:
+  symbol: perp_rating_ma_short
+  data_category: strategy_alpha
