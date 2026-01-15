@@ -8,7 +8,6 @@ trend:
 filters:
   - { left: "Value.Traded", operation: "greater", right: 20000000 }
   - { left: "type", operation: "equal", right: "spot" }
-  - { left: "name", operation: "nmatch", right: ".P$" }
   - { left: "name", operation: "match", right: "^((?!.P$).)*$" }
   - { left: "Recommend.MA", operation: "less", right: -0.1 }
 sort_by: Recommend.MA

@@ -1,34 +1,41 @@
-# L1: Broad Liquid Universe for Binance
-base_preset: ../templates/crypto_perp.yaml
-exchanges: ["BINANCE"]
+# L1: Truly Agnostic Binance Liquid Universe
+# Base preset is minimal hygiene (columns only)
+base_preset: ../hygiene/institutional_crypto.yaml
 
-# Institutional Volume Floor ($1M for base recruitment, scanners will tighten to $20M/$50M)
+exchanges: ["BINANCE"]
+markets: ["crypto"]
+
+# Disable all L2-L4 custom filters to ensure pure liquidity discovery
+include_perps_only: false
+exclude_stable_bases: false
+include_dated_futures_only: false
+
+# Institutional Volume Floor (Broad $1M recruitment)
 volume:
   value_traded_min: 1000000
 
-# Disable trend gates for pure universe selection
+# Disable all technical trend gates
 trend:
   logic: "OR"
   adx: {enabled: false}
   recommendation: {enabled: false}
   momentum: {enabled: false}
+  osc: {enabled: false}
+  volatility: {enabled: false}
 
-# Stage 1: Liquidity Pool (Broad fetch)
+# Stage 1: Liquidity Pool
 prefilter_limit: 1000
 sort_by: Value.Traded
 sort_order: desc
-exclude_symbols: ["BINANCE:PAXGUSDT.P"]
 
-# Relaxed name match to capture all Perps/Spots before filtering.
-# Specific scanners will filter for .P$ or Spot quotes.
-filters:
-  - {left: "Value.Traded", operation: "greater", right: 1000000}
+# Global Blacklist (Non-tradable artifacts)
+exclude_symbols: ["BINANCE:PAXGUSDT.P"]
 
 # Stage 2: Base Universe Constraint
 base_universe_limit: 500
 base_universe_sort_by: Value.Traded
 
-# Stage 3: Final Selection (Broad enough for all scanners)
+# Stage 3: Final Selection (Broad enough for all downstream strategy scanners)
 final_sort_by: Value.Traded
 final_sort_order: desc
 limit: 500

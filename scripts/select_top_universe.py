@@ -76,7 +76,7 @@ def get_asset_identity(symbol: str, asset_class: str = "") -> str:
 
         # Heuristic for base/quote (e.g. BTCUSDT -> BTC)
         # Iteratively strip common stable and fiat quotes
-        quotes = ["USDT", "USDC", "BUSD", "DAI", "FDUSD", "TUSD", "USDS", "USD", "EUR", "GBP", "JPY"]
+        quotes = ["USDT", "USDC", "BUSD", "DAI", "FDUSD", "TUSD", "USDS", "USD", "EUR", "GBP", "JPY", "IDR", "TRY", "UAH", "ARS", "BRL", "ZAR", "VND", "THB", "PHP"]
         changed = True
         while changed:
             changed = False
