@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -162,6 +162,9 @@ class BacktestEngine:
             ledger.record_genesis(config.run_id, config.profile, manifest_hash, config=audit_config)
 
         results = []
+        # Prepare return series accumulator
+        return_series: Dict[str, List[pd.Series]] = {}
+
         for i in range(train_window, total_len - test_window, step_size):
             # Pillar 1: High-Precision Window Slicing (CR-185)
             # train_rets: [i-train_window, i) -> Data up to but excluding 'today'
@@ -351,11 +354,19 @@ class BacktestEngine:
                                     if isinstance(v, (int, float, np.number, str, bool, type(None))):
                                         sanitized_metrics[k] = float(v) if isinstance(v, (np.number, float, int)) else v
 
+                                # Persistent Return Storage (CR-810)
+                                # Decoupled from ledger to ensure meta-allocation availability
+                                daily_rets = metrics.get("daily_returns")
+                                if isinstance(daily_rets, pd.Series):
+                                    key = f"{target_engine}_{sim_name}_{profile}"
+                                    if key not in return_series:
+                                        return_series[key] = []
+                                    return_series[key].append(daily_rets)
+
                                 if ledger:
                                     # CR-750: Capture daily returns for independent verification
                                     # We move structured data to 'data' and keep metrics for scalars
                                     data_payload: Dict[str, Any] = {"daily_returns": []}
-                                    daily_rets = metrics.get("daily_returns")
                                     if isinstance(daily_rets, pd.Series):
                                         data_payload["daily_returns"] = daily_rets.values.tolist()
                                         data_payload["ann_factor"] = _get_annualization_factor(daily_rets)
@@ -371,5 +382,23 @@ class BacktestEngine:
                     except Exception as e:
                         if ledger:
                             ledger.record_outcome(step="backtest_optimize", status="error", output_hashes={}, metrics={"error": str(e)}, context=opt_ctx)
+
+        # Save stitched return series
+        # We want to save to the RUN directory created for this tournament.
+        returns_out = run_dir / "data" / "returns"
+        returns_out.mkdir(parents=True, exist_ok=True)
+        for key, series_list in return_series.items():
+            try:
+                # Type safe concatenation for Series
+                full_series = pd.concat(series_list)
+                if isinstance(full_series, pd.Series):
+                    # Handle overlaps if any
+                    full_series = full_series[~full_series.index.duplicated(keep="first")]
+                    full_series.sort_index(inplace=True)
+                    out_path = returns_out / f"{key}.pkl"
+                    full_series.to_pickle(out_path)
+                    logger.info(f"Saved stitched returns to {out_path}")
+            except Exception as e:
+                logger.error(f"Failed to save returns for {key}: {e}")
 
         return {"results": results}

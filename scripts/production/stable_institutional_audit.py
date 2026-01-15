@@ -152,7 +152,7 @@ class InstitutionalAuditor:
                             # If ledger factor differs from detected factor, adjust calculation
                             if ledger_ann_factor and abs(calc.get("ann_factor", 0) - ledger_ann_factor) > 1:
                                 # Recalculate using ledger factor
-                                calc = calculate_performance_metrics(dr_series)  # Wait, I need a way to pass it.
+                                calc = calculate_performance_metrics(dr_series, periods=int(ledger_ann_factor))
                                 # For now, we log the factor mismatch
                                 pass
 

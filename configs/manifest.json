@@ -88,7 +88,9 @@
     "meta_production": {
       "description": "Multi-Sleeve Institutional Meta-Portfolio",
       "sleeves": [
-        { "id": "crypto", "profile": "crypto_production" },
+        { "id": "crypto_all", "profile": "crypto_rating_all" },
+        { "id": "crypto_ma", "profile": "crypto_rating_ma" },
+        { "id": "crypto_osc", "profile": "crypto_rating_osc" },
         { "id": "tradfi", "profile": "production_2026_q1" }
       ],
       "meta_allocation": {

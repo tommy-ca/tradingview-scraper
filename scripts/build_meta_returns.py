@@ -24,16 +24,28 @@ def find_latest_run_for_profile(profile: str) -> Optional[Path]:
     runs = sorted([d for d in runs_dir.iterdir() if d.is_dir()], key=lambda x: x.name, reverse=True)
 
     for run in runs:
+        # Priority 1: resolved_manifest.json
         manifest_path = run / "config" / "resolved_manifest.json"
         if manifest_path.exists():
             try:
                 with open(manifest_path, "r") as f:
                     manifest = json.load(f)
-                    # In resolved_manifest.json, 'profile' is usually at the root
                     if manifest.get("profile") == profile:
                         return run
             except Exception:
-                continue
+                pass
+
+        # Priority 2: audit.jsonl genesis entry
+        audit_path = run / "audit.jsonl"
+        if audit_path.exists():
+            try:
+                with open(audit_path, "r") as f:
+                    first_line = f.readline()
+                    entry = json.loads(first_line)
+                    if entry.get("type") == "genesis" and entry.get("profile") == profile:
+                        return run
+            except Exception:
+                pass
     return None
 
 

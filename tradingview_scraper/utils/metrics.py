@@ -67,7 +67,7 @@ def calculate_max_drawdown(series: pd.Series | np.ndarray) -> float:
     return float(drawdown.min())
 
 
-def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
+def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[int] = None) -> Dict[str, Any]:
     """
     Computes a standardized suite of performance metrics using QuantStats.
     """
@@ -119,7 +119,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
         import quantstats as qs
 
         rets_j = _apply_jitter(rets)
-        ann_factor = _get_annualization_factor(rets)
+        ann_factor = periods if periods is not None else _get_annualization_factor(rets)
 
         # QuantStats metrics (Proven methods)
         total_return = float(qs.stats.comp(rets))
@@ -162,7 +162,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.debug(f"QuantStats failed: {e}")
-        ann_factor = _get_annualization_factor(rets)
+        ann_factor = periods if periods is not None else _get_annualization_factor(rets)
         total_return = (1 + rets).prod() - 1
         geom_mean = float((1 + total_return) ** (1 / n_obs)) - 1
         annualized_return = float(np.clip((1 + geom_mean) ** ann_factor - 1, -0.9999, 100.0))
@@ -182,6 +182,7 @@ def calculate_performance_metrics(daily_returns: pd.Series) -> Dict[str, Any]:
             "sortino": 0.0,
             "calmar": 0.0,
             "omega": 0.0,
+            "ann_factor": ann_factor,
         }
 
 
