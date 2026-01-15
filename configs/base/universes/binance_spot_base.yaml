@@ -1,0 +1,15 @@
+# L1: Binance Spot Pure Liquidity Baseline
+base_preset: binance_liquid_base.yaml
+volume: { value_traded_min: 20000000 }
+filters:
+  - { left: "Value.Traded", operation: "greater", right: 20000000 }
+  - { left: "type", operation: "equal", right: "spot" }
+  - { left: "name", operation: "nmatch", right: ".P$" }
+sort_by: name
+sort_order: asc
+base_universe_sort_by: name
+final_sort_by: name
+limit: 500
+export_metadata:
+  symbol: binance_spot_base
+  data_category: universe_base

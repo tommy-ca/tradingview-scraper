@@ -40,8 +40,11 @@ Scanners must emit candidates with enriched technical ratings from TradingView.
 - **Institutional Liquidity Floors**:
     - **Perpetuals**: `Value.Traded > 50,000,000 USD`.
     - **Spot**: `Value.Traded > 20,000,000 USD`.
-- **Discovery Strategy**:
-    - Scanners rely exclusively on liquidity floors and extreme rating scores. No secondary technical filters (ADX, etc.) are applied at this stage.
+- **Base Universe Standard (L1)**:
+    - Discovery scanners must inherit from the audited base configurations:
+        - `binance_spot_base.yaml`: Enforces strictly **>$20M 24h Volume** and `type: spot`.
+        - `binance_perp_base.yaml`: Enforces strictly **>$50M 24h Volume** and `type: swap`.
+    - These base universes provide a truly agnostic, ranking-free pool of liquid instruments. No alpha-bias (ratings) or technical gates are applied at this stage to ensure 100% data density for downstream inference.
 - **Discovery Sorting**: 
     - Scanners must sort by `Recommend.All` during discovery to ensure the most extreme sentiment signals are recruited first.
     - **LONG**: `sort_by: Recommend.All, order: desc`.

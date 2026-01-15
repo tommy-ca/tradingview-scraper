@@ -1214,13 +1214,20 @@ class FuturesUniverseSelector:
             curr_q_rank = quote_priority_map.get(current_quote, 999)
 
             better = False
-            if cand_q_rank < curr_q_rank:
-                # Prefer candidate if its liquidity is at least 30% of best
-                if candidate_value > best_value * 0.3:
+            if isinstance(candidate_value, (int, float)) and isinstance(best_value, (int, float)):
+                if cand_q_rank < curr_q_rank:
+                    # Prefer candidate if its liquidity is at least 30% of best
+                    if candidate_value > best_value * 0.3:
+                        better = True
+                elif cand_q_rank > curr_q_rank:
+                    # Prefer current if its liquidity is at least 30% of candidate
+                    if best_value > candidate_value * 0.3:
+                        better = False
+            else:
+                # Non-numeric sort field (e.g. name): stick strictly to quote priority
+                if cand_q_rank < curr_q_rank:
                     better = True
-            elif cand_q_rank > curr_q_rank:
-                # Prefer current if its liquidity is at least 30% of candidate
-                if best_value > candidate_value * 0.3:
+                elif cand_q_rank > curr_q_rank:
                     better = False
 
             if better:

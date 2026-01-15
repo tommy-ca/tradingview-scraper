@@ -1,5 +1,5 @@
-# L1: Truly Agnostic Binance Liquid Universe
-# Base preset is minimal hygiene (columns only)
+# L0: Truly Agnostic Binance Liquid Root
+# Base preset is minimal institutional hygiene
 base_preset: ../hygiene/institutional_crypto.yaml
 
 exchanges: ["BINANCE"]
@@ -12,7 +12,7 @@ exclude_stable_bases: false
 volume:
   value_traded_min: 1000000
 
-# Disable all technical trend gates
+# Zero technical trend gates
 trend:
   logic: "OR"
   adx: {enabled: false}
@@ -21,19 +21,19 @@ trend:
   osc: {enabled: false}
   volatility: {enabled: false}
 
-# Stage 1: Liquidity Pool
+# Stage 1: Liquidity Pool (Neutral sorting by name to avoid bias)
 prefilter_limit: 1000
-sort_by: Value.Traded
-sort_order: desc
+sort_by: name
+sort_order: asc
 
-# Global Blacklist (Non-tradable artifacts)
+# Global Blacklist
 exclude_symbols: ["BINANCE:PAXGUSDT.P"]
 
 # Stage 2: Base Universe Constraint
 base_universe_limit: 500
 base_universe_sort_by: Value.Traded
 
-# Stage 3: Final Selection (Broad enough for all downstream strategy scanners)
+# Stage 3: Final Selection
 final_sort_by: Value.Traded
 final_sort_order: desc
 limit: 500

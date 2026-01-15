@@ -187,8 +187,9 @@ As of v3.7.2, the selection pipeline has been hardened with institutional liquid
 - **Factor Enrichment**: 
     - Integration of TradingView `Recommend.All`, `Recommend.MA`, `ROC` (Rate of Change), and `Volatility.D` into the Log-MPS scoring engine.
 - **Pure Discovery Model**:
-    - Discovery scanners are stripped of technical gates (ADX, Momentum) to maximize recruitment breadth. Filtering is delegated to the selection stage.
-    - **Sentiment Floors**: Strictly `> 0.1` (LONG) or `< -0.1` (SHORT) to prioritize high-conviction signals.
+    - Discovery scanners are stripped of technical gates (ADX, Momentum) and alpha-ranking to maximize recruitment breadth.
+    - **Baseline Purity**: L1 Base Scanners (Spot/Perp) enforce only liquidity floors and venue type, sorting by `name` to avoid early-stage selection bias.
+    - **Sentiment Floors**: Strictly `> 0.1` (LONG) or `< -0.1` (SHORT) in strategy-specific scanners to prioritize high-conviction signals.
 - **Strategy Atoms**: 
     - The system supports the persistence of multiple orthogonal "Strategy Atoms" for the same physical asset (indexed as `Asset_Logic_Direction`).
 - **Recruitment Depth**: 
