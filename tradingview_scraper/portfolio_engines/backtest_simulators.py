@@ -126,7 +126,13 @@ class ReturnsSimulator(BaseSimulator):
             p_ret_t = (current_weights * returns_t).sum()
 
             drift_weights = current_weights * (1 + returns_t)
-            drift_weights = drift_weights / drift_weights.sum()
+            # CR-824: Handle near-zero sum in mixed Long/Short portfolios to prevent scaling artifacts
+            w_sum = drift_weights.sum()
+            if abs(w_sum) > 1e-6:
+                drift_weights = drift_weights / w_sum
+            else:
+                # Fallback to absolute normalization or target weights if drift is degenerate
+                drift_weights = current_weights.copy()
 
             friction_t = 0.0
 
@@ -385,6 +391,14 @@ class NautilusSimulator(BaseSimulator):
     """Event-driven high-fidelity simulator using NautilusTrader (Placeholder)."""
 
     def simulate(self, returns: pd.DataFrame, weights_df: pd.DataFrame, initial_holdings: Optional[pd.Series] = None) -> Dict[str, Any]:
+        # Requirement: Physical Flattening
+        # Ensure we are not passing Strategy Atoms (e.g. "BINANCE:BTCUSDT_rating_ma_LONG") to the simulator.
+        if "Symbol" in weights_df.columns and not weights_df.empty:
+            sample_symbol = str(weights_df["Symbol"].iloc[0])
+            # Heuristic check for unflattened logic atoms
+            if "_rating_" in sample_symbol or "_logic_" in sample_symbol:
+                logger.warning(f"NautilusSimulator received potential Strategy Atom: {sample_symbol}. Ensure weights are flattened to physical symbols before simulation.")
+
         try:
             from tradingview_scraper.portfolio_engines.nautilus_adapter import run_nautilus_backtest
 

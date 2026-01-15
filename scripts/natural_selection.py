@@ -3,7 +3,6 @@ import hashlib
 import json
 import logging
 import os
-import shutil
 import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional, cast
@@ -13,7 +12,7 @@ import pandas as pd
 
 from tradingview_scraper.selection_engines import SelectionRequest, SelectionResponse, build_selection_engine
 from tradingview_scraper.settings import get_settings
-from tradingview_scraper.utils.audit import AuditLedger, get_df_hash  # type: ignore
+from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("natural_selection")
@@ -48,10 +47,10 @@ def run_selection(
 
 
 def natural_selection(
-    returns_path: str = "data/lakehouse/portfolio_returns.pkl",
-    meta_path: str = "data/lakehouse/portfolio_meta.json",
-    stats_path: str = "data/lakehouse/antifragility_stats.json",
-    output_path: str = "data/lakehouse/portfolio_candidates.json",
+    returns_path: Optional[str] = None,
+    meta_path: Optional[str] = None,
+    stats_path: Optional[str] = None,
+    output_path: Optional[str] = None,
     top_n_per_cluster: Optional[int] = None,
     dist_threshold: Optional[float] = None,
     max_clusters: int = 25,
@@ -59,6 +58,20 @@ def natural_selection(
     mode: Optional[str] = None,
 ):
     settings = get_settings()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    returns_path = returns_path or os.getenv("RETURNS_MATRIX", str(run_dir / "data" / "returns_matrix.parquet"))
+    meta_path = meta_path or os.getenv("PORTFOLIO_META", str(run_dir / "data" / "portfolio_meta.json"))
+    stats_path = stats_path or os.getenv("ANTIFRAGILITY_STATS", str(run_dir / "data" / "antifragility_stats.json"))
+    output_path = output_path or os.getenv("CANDIDATES_SELECTED", str(run_dir / "data" / "portfolio_candidates.json"))
+
+    # Audit File Isolation
+    default_audit = str(run_dir / "data" / "selection_audit.json")
+    run_audit_file = os.getenv("SELECTION_AUDIT", default_audit)
+
+    # Global audit file is only used as a fallback or shared history
+    shared_audit_file = "data/lakehouse/selection_audit.json"
 
     # Handle multiple modes
     modes = [m.strip() for m in (mode or settings.features.selection_mode).split(",") if m.strip()]
@@ -67,7 +80,6 @@ def natural_selection(
     threshold = dist_threshold if dist_threshold is not None else settings.threshold
     m_gate = min_momentum_score if min_momentum_score is not None else settings.min_momentum_score
 
-    run_dir = settings.prepare_summaries_run_dir()
     ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
 
     # Base Context
@@ -81,10 +93,15 @@ def natural_selection(
     }
 
     if not os.path.exists(returns_path) or not os.path.exists(meta_path):
-        logger.error("Data missing.")
+        logger.error(f"Required data missing: {returns_path} or {meta_path}")
         return
 
-    returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+    # Load returns (Parquet or Pickle)
+    if returns_path.endswith(".parquet"):
+        returns = pd.read_parquet(returns_path)
+    else:
+        returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+
     with open(meta_path, "r") as f_meta:
         meta_data = json.load(f_meta)
 
@@ -159,21 +176,26 @@ def natural_selection(
         sanitized_metrics = cast(Dict[str, Any], _sanitize(engine_metrics))
 
         # Update Audit File with selection info (Atomic + Locked)
-        run_audit_file = settings.run_config_dir / "selection_audit.json"
-        run_audit_file.parent.mkdir(parents=True, exist_ok=True)
+        # CR-831: Audit File Isolation
+        # run_audit_file is already defined at function start
         lock_file = str(run_audit_file) + ".lock"
         try:
             with open(lock_file, "w") as lf:
                 fcntl.flock(lf, fcntl.LOCK_EX)
                 audit_data = {}
-                if os.path.exists(AUDIT_FILE):
-                    try:
-                        with open(AUDIT_FILE, "r") as f:
-                            content = f.read().strip()
-                            if content:
-                                audit_data = json.loads(content)
-                    except Exception:
-                        pass
+                # Try reading from shared audit if it exists and run-level doesn't
+                # to maintain historical continuity
+                search_files = [run_audit_file, shared_audit_file]
+                for sf in search_files:
+                    if os.path.exists(sf):
+                        try:
+                            with open(sf, "r") as f:
+                                content = f.read().strip()
+                                if content:
+                                    audit_data = json.loads(content)
+                                    break
+                        except Exception:
+                            pass
 
                 current_selection_audit = {
                     "timestamp": datetime.now().isoformat(),
@@ -203,16 +225,12 @@ def natural_selection(
                     temp_name = tf.name
                 os.replace(temp_name, run_audit_file)
 
-                # Update shared lakehouse audit
-                os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
-                with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(AUDIT_FILE), delete=False) as tf:
+                # Update shared lakehouse audit (Optional)
+                os.makedirs(os.path.dirname(shared_audit_file), exist_ok=True)
+                with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(shared_audit_file), delete=False) as tf:
                     json.dump(audit_data, tf, indent=2)
                     temp_name = tf.name
-                os.replace(temp_name, AUDIT_FILE)
-
-                # ALSO: Copy to run-specific directory for provenance
-                run_audit = run_dir / "selection_audit.json"
-                shutil.copy2(AUDIT_FILE, run_audit)
+                os.replace(temp_name, shared_audit_file)
 
                 fcntl.flock(lf, fcntl.LOCK_UN)
         except Exception as e:

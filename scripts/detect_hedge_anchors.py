@@ -15,22 +15,40 @@ logger = logging.getLogger("hedge_detector")
 
 def detect_hedge_anchors():
     # 1. Load Data
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
-    clusters_path = "data/lakehouse/portfolio_clusters.json"
-    meta_path = "data/lakehouse/portfolio_meta.json"
+    settings = get_settings()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = "data/lakehouse/portfolio_returns.pkl"
+
+    default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
+    if not os.path.exists(default_clusters):
+        default_clusters = "data/lakehouse/portfolio_clusters.json"
+
+    default_meta = str(run_dir / "data" / "portfolio_meta.json")
+    if not os.path.exists(default_meta):
+        default_meta = "data/lakehouse/portfolio_meta.json"
+
+    returns_path = os.getenv("RETURNS_MATRIX", default_returns)
+    clusters_path = os.getenv("CLUSTERS_FILE", default_clusters)
+    meta_path = os.getenv("PORTFOLIO_META", default_meta)
 
     if not os.path.exists(returns_path) or not os.path.exists(clusters_path):
-        logger.error("Required data missing.")
+        logger.error(f"Required data missing: {returns_path} or {clusters_path}")
         return
 
-    # Use a safer way to read pickle
-    with open(returns_path, "rb") as f_in:
-        returns_raw = pd.read_pickle(f_in)
-
-    if not isinstance(returns_raw, pd.DataFrame):
-        returns = pd.DataFrame(returns_raw)
+    # Load returns (Parquet or Pickle)
+    if returns_path.endswith(".parquet"):
+        returns = pd.read_parquet(returns_path)
     else:
-        returns = returns_raw
+        with open(returns_path, "rb") as f_in:
+            returns_raw = pd.read_pickle(f_in)
+        if not isinstance(returns_raw, pd.DataFrame):
+            returns = pd.DataFrame(returns_raw)
+        else:
+            returns = returns_raw
 
     with open(clusters_path, "r") as f:
         clusters = cast(Dict[str, List[str]], json.load(f))

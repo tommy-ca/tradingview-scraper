@@ -147,5 +147,7 @@ Agents must ensure every production run adheres to the following five pillars:
 4.  **Directional Purity**: SHORT candidate returns must be inverted ($R_{synthetic} = -1 \times R_{raw}$) before optimization to ensure risk-parity engines (HRP/MinVar) correctly reward stable downward drift.
 5.  **Late-Binding Trend Enforcement**: Final asset direction is dynamically recalculated at rebalance-time using a 20-day momentum signal to ensure portfolio-regime alignment.
 
-### Blacklisted Assets
-- `BINANCE:PAXGUSDT.P`: Detached from gold tracking (correlation 0.44). Use `OKX:XAUTUSDT.P` for gold exposure.
+### 9. Numerical Stability & Reporting
+1.  **Stable Sum Gate**: Mixed-direction or Short-only portfolios MUST use the Stable Sum Gate in rebalance simulations to prevent division-by-near-zero return artifacts ($W_{sum} < 1e-6$).
+2.  **SSP Minimums**: Selection pipelines MUST enforce a 15-winner floor (SSP) to ensure optimizer rank stability and prevent profile convergence.
+3.  **Reporting Purity**: Reporting scripts must be "Identity-Aware" and defensive, utilizing `.get()` for all metadata lookups and restructuring flat tournament data into nested hierarchies for stable Markdown generation.

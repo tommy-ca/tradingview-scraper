@@ -240,6 +240,8 @@ class ScreenConfig(BaseModel):
 class ExportMetadata(BaseModel):
     symbol: str = "futures_universe"
     data_category: str = "universe_selector"
+    # Allow dynamic injection of extra metadata (e.g. logic, strategy_id)
+    model_config = {"extra": "allow"}
 
 
 class SelectorConfig(BaseModel):
@@ -813,6 +815,9 @@ class FuturesUniverseSelector:
             if rec_min is not None and rec_value is not None:
                 rec_pass = rec_value >= rec_min if is_long else rec_value <= rec_min
             checks["recommendation"] = rec_pass
+            # Debug Trace for high-rating assets
+            if abs(float(rec_value or 0)) > 0.5:
+                logger.debug(f"TRACE: Symbol={row.get('symbol')} Rec={rec_value} Min={rec_min} Pass={rec_pass}")
 
         if trend_cfg.adx.enabled:
             adx_min = trend_cfg.adx.min
@@ -1291,19 +1296,26 @@ class FuturesUniverseSelector:
         return self._aggregate_by_base(rows)
 
     def _sort_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        final_sorted = rows
-        if self.config.final_sort_by:
-            reverse = self.config.final_sort_order == "desc"
-            field = self.config.final_sort_by
+        # Use final_sort_by if set, otherwise fallback to sort_by
+        sort_field = self.config.final_sort_by or self.config.sort_by
+        if not sort_field:
+            return rows
 
-            def sort_key(row: Dict[str, Any]):
-                val = row.get(field)
-                if isinstance(val, (int, float)):
-                    return val
-                return float("-inf") if reverse else float("inf")
+        # Use final_sort_order if set, otherwise fallback to sort_order
+        order = self.config.final_sort_order if self.config.final_sort_by else self.config.sort_order
+        reverse = (order or "desc").lower() == "desc"
 
-            final_sorted = sorted(rows, key=sort_key, reverse=reverse)
-        return final_sorted
+        def sort_key(row: Dict[str, Any]):
+            val = row.get(sort_field)
+            if isinstance(val, (int, float)):
+                return val
+            # Handle non-numeric sorts (like name) safely
+            if isinstance(val, str):
+                return val
+            # Fallback for None or other types: push to end
+            return float("-inf") if reverse else float("inf")
+
+        return sorted(rows, key=sort_key, reverse=reverse)
 
     def _select_perp_candidate(self, base: str, perps: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         candidates = [p for p in perps if self._base_symbol(p.get("symbol", "")) == base]
@@ -1390,7 +1402,9 @@ class FuturesUniverseSelector:
                     "generated_at": datetime.now().isoformat(timespec="seconds"),
                     "selector": self.__class__.__name__,
                     "config_source": self.config.config_source,
-                    "export_symbol": self.config.export_metadata.symbol,
+                    # Merge all export metadata fields (including injected logic)
+                    **self.config.export_metadata.model_dump(),
+                    "export_symbol": self.config.export_metadata.symbol,  # Explicit override ensuring key presence
                     "data_category": self.config.export_metadata.data_category,
                     "direction": direction,
                     "product": product,

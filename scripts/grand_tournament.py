@@ -76,21 +76,26 @@ def run_research_sweep(
     profile: str,
     selection_modes: List[str],
     rebalance_modes: List[str],
-    engines: Optional[List[str]] = None,
-    profiles: Optional[List[str]] = None,
-    simulators: Optional[List[str]] = None,
     train_window: Optional[int] = None,
     test_window: Optional[int] = None,
     step_size: Optional[int] = None,
     cluster_cap: Optional[float] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    engines: Optional[List[str]] = None,
+    profiles: Optional[List[str]] = None,
+    simulators: Optional[List[str]] = None,
 ) -> str:
-    settings = get_settings()
-    # Force profile
-    settings.profile = profile
+    """Runs a matrix of research backtests in-process."""
+    # Ensure profile is set in environment so get_settings() can load it (CR-821)
+    if profile:
+        os.environ["TV_PROFILE"] = profile
 
+    # Clear cache to ensure fresh settings for the requested profile
+    get_settings.cache_clear()
+    settings = get_settings()
+
+    run_id = settings.run_id
     run_dir = settings.prepare_summaries_run_dir()
+
     log_path = settings.run_logs_dir / "grand_tournament_research.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -131,8 +136,7 @@ def run_research_sweep(
                         profiles=profiles,
                         simulators=simulators,
                         cluster_cap=cap,
-                        start_date=start_date,
-                        end_date=end_date,
+                        selection_mode=sel_mode,
                     )
 
                     cell_data_dir = settings.run_data_dir / "grand_4d" / reb_mode / sel_mode

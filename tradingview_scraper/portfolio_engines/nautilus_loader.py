@@ -85,7 +85,10 @@ class NautilusDataConverter:
             # print(f"DEBUG: to_nautilus_bars symbol={symbol_str} target_id={target_id}")
 
             for ts, ret in symbol_returns.items():
-                curr_price *= 1.0 + float(ret)
+                val = float(ret)
+                if pd.isna(val):
+                    val = 0.0
+                curr_price *= 1.0 + val
 
                 if HAS_NAUTILUS and Bar is not None:
                     ts_pd = pd.Timestamp(ts)

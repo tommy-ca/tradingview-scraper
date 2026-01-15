@@ -118,19 +118,25 @@ def get_asset_class(category: str, symbol: str = "") -> str:
     return "OTHER"
 
 
+from tradingview_scraper.settings import get_settings
+
+
 def select_top_universe(mode: str = "raw"):
     """
     Discovery Stage Consolidator.
     Groups results from all scanners, picks the most liquid venue per identity,
     and passes a broad "Raw Pool" to the Selection Engine.
     """
+    settings = get_settings()
+    run_dir = settings.prepare_summaries_run_dir()
+
     export_dir = _resolve_export_dir()
 
     # Support both legacy and new scanner naming conventions
     patterns = ["universe_selector_*.json", "strategy_selector_*.json", "strategy_alpha_*.json", "universe_foundation_*.json"]
     files = []
     for p in patterns:
-        files.extend([str(f) for f in export_dir.glob(p) if "_base_universe" not in f.name])
+        files.extend([f for f in export_dir.glob(p) if "_base_universe" not in f.name])
 
     # Type-hinted audit structure to satisfy linter
     audit_discovery: Dict[str, Any] = {"total_scanned_files": len(files), "categories": {}, "total_symbols_found": 0}
@@ -157,27 +163,30 @@ def select_top_universe(mode: str = "raw"):
         # 0. Context Mapping (Category extraction)
         category = str(meta.get("data_category", "UNKNOWN")).upper()
         if category == "UNKNOWN":
-            if "binance_perp" in f.lower():
+            if "binance_perp" in f.name.lower():
                 category = "BINANCE_PERP"
-            elif "binance_spot" in f.lower():
+            elif "binance_spot" in f.name.lower():
                 category = "BINANCE_SPOT"
 
         # 1. Prefer embedded metadata; fall back to filename heuristics.
-        file_direction = "SHORT" if "_short" in f.lower() else "LONG"
+        file_direction = "SHORT" if "_short" in f.name.lower() else "LONG"
         file_logic = "trend"
-        if "_rating_all" in f.lower():
+        if "_rating_all" in f.name.lower():
             file_logic = "rating_all"
-        elif "_rating_ma" in f.lower():
+        elif "_rating_ma" in f.name.lower():
             file_logic = "rating_ma"
-        elif "_rating_osc" in f.lower():
+        elif "_rating_osc" in f.name.lower():
             file_logic = "rating_osc"
-        elif "_vol_breakout" in f.lower():
+        elif "_vol_breakout" in f.name.lower():
             file_logic = "vol_breakout"
 
         meta_direction = meta.get("direction") or (meta.get("trend") or {}).get("direction")
         # Priority 1: logic field from manifest/config injection
         # Priority 2: filename heuristic
         meta_logic = meta.get("logic") or file_logic
+
+        # DEBUG:
+        print(f"DEBUG: Processing {f.name} - Logic: {meta_logic}")
 
         for i in items:
             if isinstance(i, dict) and "symbol" in i:
@@ -241,9 +250,16 @@ def select_top_universe(mode: str = "raw"):
     # Map to final format
     output_universe = []
     for item in final_candidates:
+        phys_sym = item["symbol"]
+        logic = item["_logic"]
+        direction = item["_direction"]
+        # CR-831: Canonical Atom Identity
+        atom_id = f"{phys_sym}_{logic}_{direction}"
+
         output_universe.append(
             {
-                "symbol": item["symbol"],
+                "symbol": atom_id,
+                "physical_symbol": phys_sym,
                 "description": item.get("description", item.get("name", "N/A")),
                 "sector": item.get("sector", "N/A"),
                 "market": item["_category"],
@@ -264,26 +280,29 @@ def select_top_universe(mode: str = "raw"):
                 "Perf.1M": item.get("Perf.1M"),
                 "Perf.3M": item.get("Perf.3M"),
                 "Perf.6M": item.get("Perf.6M"),
-                "logic": item["_logic"],
-                "direction": item["_direction"],
+                "logic": logic,
+                "direction": direction,
                 "alpha_score": 1.0,  # Placeholder, Log-MPS will calculate real statistical score
                 "implementation_alternatives": item.get("implementation_alternatives", []),
             }
         )
 
-    output_file = "data/lakehouse/portfolio_candidates.json"
+    # CR-831: Workspace Isolation
+    os.makedirs(run_dir / "data", exist_ok=True)
+    default_output = run_dir / "data" / ("portfolio_candidates_raw.json" if mode == "raw" else "portfolio_candidates.json")
+    output_file = os.getenv("CANDIDATES_RAW" if mode == "raw" else "CANDIDATES_SELECTED", str(default_output))
+
     with open(output_file, "w") as f_out:
         json.dump(output_universe, f_out, indent=2)
 
-    # Save audit trail
-    if not os.path.exists(os.path.dirname(AUDIT_FILE)):
-        os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
-
-    with open(AUDIT_FILE, "w") as f_audit:
+    # Save audit trail to run dir
+    default_audit = run_dir / "data" / "selection_audit.json"
+    run_audit_file = os.getenv("SELECTION_AUDIT", str(default_audit))
+    with open(run_audit_file, "w") as f_audit:
         json.dump(audit_data, f_audit, indent=2)
 
     logger.info(f"Saved {len(output_universe)} candidates to {output_file}")
-    logger.info(f"Audit log updated: {AUDIT_FILE}")
+    logger.info(f"Audit log updated: {run_audit_file}")
 
 
 if __name__ == "__main__":

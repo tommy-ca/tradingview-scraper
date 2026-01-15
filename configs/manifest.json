@@ -60,6 +60,9 @@
         "threshold": 0.5,
         "selection_mode": "v4"
       },
+      "backtest": {
+        "backtest_simulators": "cvxportfolio,vectorbt,nautilus"
+      },
       "discovery": {
         "enabled_markets": ["america", "crypto"],
         "strategies": {
@@ -100,6 +103,47 @@
         "max_weight": 0.50
       }
     },
+    "meta_benchmark": {
+      "description": "Meta-Portfolio Benchmark (Long + Short Rating All)",
+      "sleeves": [
+        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "long_all_baseline" },
+        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "short_all_baseline" }
+      ],
+      "meta_allocation": {
+        "engine": "custom",
+        "profile": "hrp",
+        "min_weight": 0.05,
+        "max_weight": 0.95
+      }
+    },
+    "meta_ma_benchmark": {
+      "description": "Meta-Portfolio MA Benchmark (Long + Short Rating MA)",
+      "sleeves": [
+        { "id": "long_ma", "profile": "binance_spot_rating_ma_long", "run_id": "long_ma_baseline" },
+        { "id": "short_ma", "profile": "binance_spot_rating_ma_short", "run_id": "short_ma_baseline" }
+      ],
+      "meta_allocation": {
+        "engine": "custom",
+        "profile": "hrp",
+        "min_weight": 0.05,
+        "max_weight": 0.95
+      }
+    },
+    "meta_super_benchmark": {
+      "description": "Cross-Factor Super-Meta (MA + ALL)",
+      "sleeves": [
+        { "id": "long_ma", "profile": "binance_spot_rating_ma_long", "run_id": "long_ma_baseline" },
+        { "id": "short_ma", "profile": "binance_spot_rating_ma_short", "run_id": "short_ma_baseline" },
+        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "long_all_baseline" },
+        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "short_all_baseline" }
+      ],
+      "meta_allocation": {
+        "engine": "custom",
+        "profile": "hrp",
+        "min_weight": 0.05,
+        "max_weight": 0.50
+      }
+    },
     "crypto_production": {
       "selection": {
         "top_n": 10,
@@ -118,7 +162,8 @@
         "backtest_commission": 0.0004,
         "train_window": 60,
         "test_window": 20,
-        "step_size": 20
+        "step_size": 20,
+        "backtest_simulators": "custom,cvxportfolio,vectorbt,nautilus"
       },
       "features": {
         "selection_mode": "v4",
@@ -141,7 +186,7 @@
       },
       "data": {
         "lookback_days": 500,
-        "min_days_floor": 20
+        "min_days_floor": 60
       },
       "discovery": {
         "enabled_markets": ["crypto"],
@@ -194,7 +239,7 @@
         "feat_directional_returns": true,
         "feat_dynamic_direction": true
       },
-      "data": { "lookback_days": 500, "min_days_floor": 20 },
+      "data": { "lookback_days": 500, "min_days_floor": 60 },
       "discovery": {
         "enabled_markets": ["crypto"],
         "strategies": {
@@ -235,7 +280,7 @@
         "feat_directional_returns": true,
         "feat_dynamic_direction": true
       },
-      "data": { "lookback_days": 500, "min_days_floor": 20 },
+      "data": { "lookback_days": 500, "min_days_floor": 60 },
       "discovery": {
         "enabled_markets": ["crypto"],
         "strategies": {
@@ -276,7 +321,7 @@
         "feat_directional_returns": true,
         "feat_dynamic_direction": true
       },
-      "data": { "lookback_days": 500, "min_days_floor": 20 },
+      "data": { "lookback_days": 500, "min_days_floor": 60 },
       "discovery": {
         "enabled_markets": ["crypto"],
         "strategies": {
@@ -290,6 +335,98 @@
             "interval": "1d",
             "ingestion_depth": 500,
             "strict_health": true
+          }
+        }
+      }
+    },
+    "binance_spot_rating_all_long": {
+      "description": "Binance Spot LONG only - Rating All (Exhaustive Matrix)",
+      "selection": { "top_n": 10, "threshold": 0.45, "selection_mode": "v4" },
+      "data": { "lookback_days": 500, "min_days_floor": 320 },
+      "backtest": {
+        "engines": "custom,skfolio,riskfolio",
+        "profiles": "hrp,min_variance,max_sharpe,equal_weight",
+        "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
+        "train_window": 252,
+        "test_window": 20,
+        "step_size": 20
+      },
+      "features": { "selection_mode": "v4", "feat_short_direction": false },
+      "discovery": {
+        "enabled_markets": ["crypto"],
+        "strategies": {
+          "rating_all_long": {
+            "scanners": ["scanners/crypto/ratings/binance_spot_rating_all_long"],
+            "interval": "1d"
+          }
+        }
+      }
+    },
+    "binance_spot_rating_all_short": {
+      "description": "Binance Spot SHORT only - Rating All (Exhaustive Matrix)",
+      "selection": { "top_n": 10, "threshold": 0.45, "selection_mode": "v4" },
+      "data": { "lookback_days": 500, "min_days_floor": 320 },
+      "backtest": {
+        "engines": "custom,skfolio,riskfolio",
+        "profiles": "hrp,min_variance,max_sharpe,equal_weight",
+        "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
+        "train_window": 252,
+        "test_window": 20,
+        "step_size": 20
+      },
+      "features": { "selection_mode": "v4", "feat_short_direction": true },
+      "discovery": {
+        "enabled_markets": ["crypto"],
+        "strategies": {
+          "rating_all_short": {
+            "scanners": ["scanners/crypto/ratings/binance_spot_rating_all_short"],
+            "interval": "1d"
+          }
+        }
+      }
+    },
+    "binance_spot_rating_ma_long": {
+      "description": "Binance Spot LONG only - Rating MA (Exhaustive Matrix)",
+      "selection": { "top_n": 10, "threshold": 0.45, "selection_mode": "v4" },
+      "data": { "lookback_days": 500, "min_days_floor": 320 },
+      "backtest": {
+        "engines": "custom,skfolio,riskfolio",
+        "profiles": "hrp,min_variance,max_sharpe,equal_weight",
+        "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
+        "train_window": 252,
+        "test_window": 20,
+        "step_size": 20
+      },
+      "features": { "selection_mode": "v4", "feat_short_direction": false },
+      "discovery": {
+        "enabled_markets": ["crypto"],
+        "strategies": {
+          "rating_ma_long": {
+            "scanners": ["scanners/crypto/ratings/binance_spot_rating_ma_long"],
+            "interval": "1d"
+          }
+        }
+      }
+    },
+    "binance_spot_rating_ma_short": {
+      "description": "Binance Spot SHORT only - Rating MA (Exhaustive Matrix)",
+      "selection": { "top_n": 10, "threshold": 0.45, "selection_mode": "v4" },
+      "data": { "lookback_days": 500, "min_days_floor": 320 },
+      "backtest": {
+        "engines": "custom,skfolio,riskfolio",
+        "profiles": "hrp,min_variance,max_sharpe,equal_weight",
+        "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
+        "train_window": 252,
+        "test_window": 20,
+        "step_size": 20
+      },
+      "features": { "selection_mode": "v4", "feat_short_direction": true },
+      "discovery": {
+        "enabled_markets": ["crypto"],
+        "strategies": {
+          "rating_ma_short": {
+            "scanners": ["scanners/crypto/ratings/binance_spot_rating_ma_short"],
+            "interval": "1d"
           }
         }
       }
@@ -325,7 +462,7 @@
       },
       "data": {
         "lookback_days": 500,
-        "min_days_floor": 20
+        "min_days_floor": 60
       },
       "discovery": {
         "enabled_markets": ["crypto"],

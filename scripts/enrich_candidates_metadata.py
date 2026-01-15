@@ -102,7 +102,10 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
     # 1. Synchronize with Returns Universe
     if os.path.exists(returns_path):
         try:
-            returns = pd.read_pickle(returns_path)
+            if returns_path.endswith(".parquet"):
+                returns = pd.read_parquet(returns_path)
+            else:
+                returns = pd.read_pickle(returns_path)
             active_symbols = returns.columns.tolist()
         except Exception as e:
             logger.error(f"Error loading returns matrix for enrichment: {e}")
@@ -205,9 +208,16 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
 
 
 def main() -> None:
+    settings = get_settings()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    default_candidates = str(run_dir / "data" / "portfolio_candidates_raw.json")
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+
     parser = argparse.ArgumentParser(description="Enrich candidate manifests with catalog and default metadata.")
-    parser.add_argument("--candidates", default="data/lakehouse/portfolio_candidates_raw.json", help="Path to the candidates JSON file to enrich")
-    parser.add_argument("--returns", default="data/lakehouse/portfolio_returns.pkl", help="Optional returns matrix to align against")
+    parser.add_argument("--candidates", default=os.getenv("CANDIDATES_RAW", default_candidates), help="Path to the candidates JSON file to enrich")
+    parser.add_argument("--returns", default=os.getenv("RETURNS_MATRIX", default_returns), help="Optional returns matrix to align against")
     args = parser.parse_args()
 
     enrich_metadata(candidates_path=args.candidates, returns_path=args.returns)

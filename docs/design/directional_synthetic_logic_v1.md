@@ -32,6 +32,12 @@ By substitution:
 $$PnL = (-1 \times W_{syn}) \times R_{raw} = W_{syn} \times (-1 \times R_{raw}) = W_{syn} \times R_{syn}$$
 This proves that optimizing on synthetic long returns is mathematically equivalent to shorting the raw asset.
 
+### 3.3 Simulation Boundary (Nautilus Parity)
+To maintain architectural purity, the **Nautilus Simulator** must be strictly "Logic-Agnostic".
+- **Input**: Flattened Physical Weights ($W_{net}$).
+- **Operation**: Execution of physical BUY/SELL orders.
+- **Prohibition**: The simulator must **NOT** perform logic inversion, handle "Strategy Atoms", or manage synthetic return streams. All mapping from Logic ($W_{syn}$) to Physical ($W_{net}$) must occur **upstream** in the Order Generator or Simulation Wrapper.
+
 ## 4. Risks & Mitigations
 - **Borrow Costs**: Shorting incurs costs. These must be modeled as a drag on $R_{syn}$ prior to optimization.
 - **Reporting Confusion**: Audit logs must clearly distinguish between $W_{syn}$ and $W_{net}$ to prevent "Inverse Exposure" hallucinations during forensic review.

@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, cast
 
@@ -116,9 +117,12 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
     returns_df: Optional[pd.DataFrame] = None
     if os.path.exists(returns_path):
         try:
-            raw_rets = pd.read_pickle(returns_path)
-            if isinstance(raw_rets, pd.DataFrame):
-                returns_df = raw_rets
+            if str(returns_path).endswith(".parquet"):
+                returns_df = pd.read_parquet(returns_path)
+            else:
+                raw_rets = pd.read_pickle(returns_path)
+                if isinstance(raw_rets, pd.DataFrame):
+                    returns_df = raw_rets
         except Exception:
             pass
 
@@ -268,7 +272,7 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
                 if len(desc) > 40:
                     desc = desc[:37] + "..."
 
-                md.append(f"| `{asset['Symbol']}` | {desc} | {asset['Cluster_ID']} | {weight:.2%} | `{bar}` | {direction} | {asset['Market']} |")
+                md.append(f"| `{asset['Symbol']}` | {desc} | {asset['Cluster_ID']} | {weight:.2%} | `{bar}` | {direction} | {asset.get('Market', 'UNKNOWN')} |")
 
         md.append("\n---")
 
@@ -300,13 +304,32 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
 
 if __name__ == "__main__":
     settings = get_settings()
-    settings.prepare_summaries_run_dir()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    default_optimized = run_dir / "data" / "portfolio_optimized_v2.json"
+    if not default_optimized.exists():
+        default_optimized = Path("data/lakehouse/portfolio_optimized_v2.json")
+
+    default_returns = run_dir / "data" / "returns_matrix.parquet"
+    if not default_returns.exists():
+        default_returns = Path("data/lakehouse/portfolio_returns.pkl")
+
+    default_candidates = run_dir / "data" / "portfolio_candidates.json"
+    if not default_candidates.exists():
+        default_candidates = Path("data/lakehouse/portfolio_candidates.json")
+
+    default_stats = run_dir / "data" / "antifragility_stats.json"
+    if not default_stats.exists():
+        default_stats = Path("data/lakehouse/antifragility_stats.json")
+
     out_p = settings.run_reports_dir / "portfolio" / "report.md"
     out_p.parent.mkdir(parents=True, exist_ok=True)
+
     generate_markdown_report(
-        "data/lakehouse/portfolio_optimized_v2.json",
-        "data/lakehouse/portfolio_returns.pkl",
-        "data/lakehouse/portfolio_candidates.json",
-        "data/lakehouse/antifragility_stats.json",
+        os.getenv("OPTIMIZED_FILE", str(default_optimized)),
+        os.getenv("RETURNS_MATRIX", str(default_returns)),
+        os.getenv("CANDIDATES_SELECTED", str(default_candidates)),
+        os.getenv("ANTIFRAGILITY_STATS", str(default_stats)),
         str(out_p),
     )

@@ -102,7 +102,71 @@ class ReportGenerator:
 
         self.meta = self.data.get("meta", {})
         self.all_results = self.data.get("results", {})
+        self._restructure_results_if_needed()
         self.benchmark = self._load_spy_benchmark()
+
+    def _restructure_results_if_needed(self):
+        """Restructures flat window results into a nested dictionary if needed."""
+        if isinstance(self.all_results, list):
+            logger.info("Restructuring flat tournament results for reporting...")
+            agg = {}
+            for res in self.all_results:
+                sim = res.get("simulator", "custom")
+                eng = res.get("engine", "custom")
+                prof = res.get("profile", "equal_weight")
+
+                sim_node = agg.setdefault(sim, {})
+                eng_node = sim_node.setdefault(eng, {})
+                prof_node = eng_node.setdefault(prof, {"windows": [], "summary": {}})
+
+                # Flatten metrics for report consumption (CR-827)
+                flattened_res = res.copy()
+                metrics = res.get("metrics", {})
+                for k, v in metrics.items():
+                    flattened_res[k] = v
+                    # Common aliases used in reporting
+                    if k == "annualized_vol":
+                        flattened_res["vol"] = v
+                    if k == "annualized_return":
+                        flattened_res["return"] = v
+                    if k == "max_drawdown":
+                        flattened_res["mdd"] = v
+
+                prof_node["windows"].append(flattened_res)
+
+            for sim in agg:
+                for eng in agg[sim]:
+                    for prof in agg[sim][eng]:
+                        node = agg[sim][eng][prof]
+                        windows = node["windows"]
+                        all_metrics = [w.get("metrics", {}) for w in windows]
+                        if not all_metrics:
+                            continue
+
+                        summary = {}
+                        # Common metrics to average
+                        metric_keys = set()
+                        for m in all_metrics:
+                            metric_keys.update(m.keys())
+
+                        for k in metric_keys:
+                            vals = [m[k] for m in all_metrics if k in m and isinstance(m[k], (int, float))]
+                            if vals:
+                                avg_val = sum(vals) / len(vals)
+                                summary[f"avg_window_{k}"] = avg_val
+                                summary[k] = avg_val
+                                # Provide aliases for summary keys as well
+                                if k == "annualized_vol":
+                                    summary["vol"] = avg_val
+                                if k == "annualized_return":
+                                    summary["return"] = avg_val
+                                if k == "max_drawdown":
+                                    summary["mdd"] = avg_val
+                                if k == "sharpe":
+                                    summary["avg_window_sharpe"] = avg_val
+
+                        node["summary"] = summary
+            self.all_results = agg
 
     def _detect_latest_run(self) -> Optional[str]:
         runs_dir = Path("artifacts/summaries/runs/")
@@ -211,11 +275,17 @@ class ReportGenerator:
             gen_sel = importlib.import_module("scripts.generate_selection_report")
             generate_selection_report = gen_sel.generate_selection_report
             logger.info("Generating Universe Selection Report...")
+
+            # CR-831: Workspace Isolation
+            audit_path = os.getenv("SELECTION_AUDIT", str(self.data_dir / "selection_audit.json"))
+            if not os.path.exists(audit_path):
+                audit_path = "data/lakehouse/selection_audit.json"
+
             event = self._get_latest_audit_event("natural_selection")
             audit_data = event["data"] if event and event.get("data") and "selection" in event["data"] else None
             out_p = self.reports_dir / "selection" / "report.md"
             out_p.parent.mkdir(parents=True, exist_ok=True)
-            generate_selection_report(audit_path="data/lakehouse/selection_audit.json", output_path=str(out_p), audit_data=audit_data)
+            generate_selection_report(audit_path=audit_path, output_path=str(out_p), audit_data=audit_data)
         except Exception as e:
             logger.error(f"Selection Report failed: {e}")
 
@@ -226,7 +296,12 @@ class ReportGenerator:
             analyze_c = importlib.import_module("scripts.analyze_clusters")
             analyze_clusters = analyze_c.analyze_clusters
             logger.info("Generating Hierarchical Cluster Analysis...")
-            c_path = "data/lakehouse/portfolio_clusters.json"
+
+            # CR-831: Workspace Isolation
+            c_path = os.getenv("CLUSTERS_FILE", str(self.data_dir / "portfolio_clusters.json"))
+            if not os.path.exists(c_path):
+                c_path = "data/lakehouse/portfolio_clusters.json"
+
             event = self._get_latest_audit_event("natural_selection")
             if event and event.get("data") and "portfolio_clusters" in event["data"]:
                 clusters = event["data"]["portfolio_clusters"]
@@ -235,7 +310,19 @@ class ReportGenerator:
                 with open(ledger_c_path, "w") as f:
                     json.dump(clusters, f, indent=2)
                 c_path = ledger_c_path
-            m_path = "data/lakehouse/portfolio_meta.json"
+
+            m_path = os.getenv("PORTFOLIO_META", str(self.data_dir / "portfolio_meta.json"))
+            if not os.path.exists(m_path):
+                m_path = "data/lakehouse/portfolio_meta.json"
+
+            r_path = os.getenv("RETURNS_MATRIX", str(self.data_dir / "returns_matrix.parquet"))
+            if not os.path.exists(r_path):
+                r_path = "data/lakehouse/portfolio_returns.pkl"
+
+            s_path = os.getenv("ANTIFRAGILITY_STATS", str(self.data_dir / "antifragility_stats.json"))
+            if not os.path.exists(s_path):
+                s_path = "data/lakehouse/antifragility_stats.json"
+
             if os.path.exists(c_path):
                 out_p = self.reports_dir / "research" / "cluster_analysis.md"
                 out_p.parent.mkdir(parents=True, exist_ok=True)
@@ -244,8 +331,8 @@ class ReportGenerator:
                 analyze_clusters(
                     clusters_path=str(c_path),
                     meta_path=str(m_path),
-                    returns_path="data/lakehouse/portfolio_returns.pkl",
-                    stats_path="data/lakehouse/antifragility_stats.json",
+                    returns_path=str(r_path),
+                    stats_path=str(s_path),
                     output_path=str(out_p),
                     image_path=str(plot_dir / "portfolio_clustermap.png"),
                     vol_image_path=str(plot_dir / "volatility_clustermap.png"),
@@ -603,6 +690,37 @@ class ReportGenerator:
                 "| :--- | :--- | :--- |",
                 "| Metadata Coverage | PASS | [Logs](logs/metadata_coverage.log) |",
                 "| Data Health | PASS | [Audit](reports/selection/data_health_selected.md) |",
+                "",
+                "## 🏥 Data Health Snapshot",
+            ]
+        )
+        # Inject data health table directly into index if possible (CR-828)
+        health_path = self.reports_dir / "selection" / "data_health_selected.md"
+        if not health_path.exists():
+            health_path = self.reports_dir / "selection" / "data_health_raw.md"
+
+        if health_path.exists():
+            try:
+                with open(health_path, "r") as f:
+                    lines = f.readlines()
+                # Find the summary table or first few lines
+                summary_start = -1
+                for i, line in enumerate(lines):
+                    if "## 📊 Summary by Status" in line:
+                        summary_start = i
+                        break
+
+                if summary_start != -1:
+                    md.extend(lines[summary_start : summary_start + 10])
+                else:
+                    md.append(f"Refer to detailed [Data Health Audit]({health_path.relative_to(self.summary_dir)})")
+            except Exception:
+                md.append("Data health details available in reports.")
+        else:
+            md.append("Data health audit pending or missing.")
+
+        md.extend(
+            [
                 "",
                 "## 🕵️ Forensic Navigation",
                 "- **Audit Ledger**: [audit.jsonl](audit.jsonl) (Cryptographically chained)",

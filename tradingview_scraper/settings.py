@@ -41,6 +41,7 @@ class FeatureFlags(BaseModel):
     feat_selection_logmps: bool = False
     feat_directional_returns: bool = False
     feat_dynamic_direction: bool = False
+    feat_short_direction: bool = True
     feat_market_neutral: bool = False
     feature_lookback: int = 120
     selection_mode: str = "v4"
@@ -207,6 +208,7 @@ class TradingViewScraperSettings(BaseSettings):
     # Infrastructure
     artifacts_dir: Path = Path("artifacts")
     lakehouse_dir: Path = Path("data/lakehouse")
+    logs_dir: Path = Path("data/logs")
     summaries_dir: Path | None = None
     manifest_path: Path = Path("configs/manifest.json")
     profile: str = Field(default_factory=lambda: os.getenv("TV_PROFILE") or "")

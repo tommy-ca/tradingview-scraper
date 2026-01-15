@@ -5,7 +5,6 @@ trend:
   logic: "AND"
   adx: { enabled: false }
 filters:
-  - { left: "name", operation: "match", right: "^((?!.P$).)*$" }
   - { left: "Recommend.MA", operation: "less", right: 0 }
 sort_by: Recommend.MA
 sort_order: asc

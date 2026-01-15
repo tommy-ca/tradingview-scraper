@@ -82,22 +82,49 @@ class BacktestEngine:
         self.orchestrator = BacktestOrchestrator(self)
 
     def load_data(self):
-        rets_path = self.lakehouse / "returns_matrix.parquet"
+        from tradingview_scraper.settings import get_settings
+
+        settings = get_settings()
+        run_dir = settings.prepare_summaries_run_dir()
+
+        # CR-831: Workspace Isolation
+        # Prioritize run-specific artifacts
+        default_rets = run_dir / "data" / "returns_matrix.parquet"
+        default_meta = run_dir / "data" / "portfolio_meta.json"
+        default_stats = run_dir / "data" / "antifragility_stats.json"
+
+        rets_path = Path(os.getenv("RETURNS_MATRIX", str(default_rets)))
+        # Fallback to shared lakehouse if run-specific doesn't exist
+        if not rets_path.exists():
+            rets_path = self.lakehouse / "returns_matrix.parquet"
+
         rets_path_pkl = self.lakehouse / "portfolio_returns.pkl"
-        stats_path = self.lakehouse / "antifragility_stats.parquet"
+
+        stats_path = Path(os.getenv("ANTIFRAGILITY_STATS", str(default_stats)))
+        if not stats_path.exists():
+            stats_path = self.lakehouse / "antifragility_stats.parquet"
+
         stats_path_json = self.lakehouse / "antifragility_stats.json"
-        meta_path = self.lakehouse / "portfolio_meta.json"
+
+        meta_path = Path(os.getenv("PORTFOLIO_META", str(default_meta)))
+        if not meta_path.exists():
+            meta_path = self.lakehouse / "portfolio_meta.json"
         if not meta_path.exists():
             meta_path = self.lakehouse / "portfolio_candidates.json"
 
-        # Prioritize larger returns matrix if multiple exist
-        if rets_path_pkl.exists():
+        # Prioritize run-specific matrix
+        if rets_path.exists() and rets_path.suffix == ".parquet":
+            self.returns = pd.read_parquet(rets_path)
+        elif rets_path_pkl.exists():
             self.returns = pd.read_pickle(rets_path_pkl)
         elif rets_path.exists():
-            self.returns = pd.read_parquet(rets_path)
+            self.returns = pd.read_pickle(rets_path)
 
         if stats_path.exists():
-            self.stats = pd.read_parquet(stats_path)
+            if stats_path.suffix == ".parquet":
+                self.stats = pd.read_parquet(stats_path)
+            else:
+                self.stats = pd.read_json(stats_path)
         elif stats_path_json.exists():
             self.stats = pd.read_json(stats_path_json)
             if "Symbol" in self.stats.columns:
@@ -180,10 +207,32 @@ class BacktestEngine:
             regime_name = regime_resp[0]
             logger.info(f"Window {i}: Regime: {regime_name}")
 
-            # 2. Pillar 1: Universe Selection
+            # Strategy Intent Filter (CR-820): Restrict pool to active manifest strategies
+            active_strategies = set((config.discovery.get("strategies") or {}).keys())
+
+            logger.info(f"DEBUG: Active Strategies: {active_strategies}")
+
+            raw_cands = []
+            for k, v in self.metadata.items():
+                if k not in train_rets.columns:
+                    continue
+
+                # If manifest defines specific strategies, filter the recruitment pool
+                if active_strategies:
+                    atom_logic = v.get("logic")
+                    if atom_logic not in active_strategies:
+                        # logger.info(f"DEBUG: Filtering {k} - logic {atom_logic} not in {active_strategies}")
+                        continue
+
+                raw_cands.append(v)
+
+            logger.info(f"DEBUG: Window {i} Pool Size: {len(raw_cands)}")
+            if len(raw_cands) > 0:
+                logics = sorted(list(set(c.get("logic") for c in raw_cands)))
+                logger.info(f"DEBUG: Pool Logics: {logics}")
+
             current_mode = selection_mode_override or str(config.features.selection_mode or "v3.4")
             selection_engine = build_selection_engine(current_mode)
-            raw_cands = [v for k, v in self.metadata.items() if k in train_rets.columns]
 
             sel_req = SelectionRequest(threshold=float(config.threshold), top_n=int(config.top_n), min_momentum_score=float(config.min_momentum_score), max_clusters=25)
             selection = selection_engine.select(train_rets, raw_cands, self.stats, sel_req)
@@ -388,17 +437,46 @@ class BacktestEngine:
         returns_out = run_dir / "data" / "returns"
         returns_out.mkdir(parents=True, exist_ok=True)
         for key, series_list in return_series.items():
+            if not series_list:
+                continue
             try:
                 # Type safe concatenation for Series
-                full_series = pd.concat(series_list)
-                if isinstance(full_series, pd.Series):
+                full_series_raw = pd.concat(series_list)
+                if isinstance(full_series_raw, pd.Series):
                     # Handle overlaps if any
-                    full_series = full_series[~full_series.index.duplicated(keep="first")]
-                    full_series.sort_index(inplace=True)
+                    full_series = full_series_raw[~full_series_raw.index.duplicated(keep="first")]
+                    if hasattr(full_series, "sort_index"):
+                        full_series = getattr(full_series, "sort_index")()
                     out_path = returns_out / f"{key}.pkl"
-                    full_series.to_pickle(out_path)
+                    full_series.to_pickle(str(out_path))
                     logger.info(f"Saved stitched returns to {out_path}")
             except Exception as e:
                 logger.error(f"Failed to save returns for {key}: {e}")
 
         return {"results": results}
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Tournament Backtest Engine")
+    parser.add_argument("--mode", choices=["production", "research"], default="research")
+    parser.add_argument("--train-window", type=int)
+    parser.add_argument("--test-window", type=int)
+    parser.add_argument("--step-size", type=int)
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+    engine = BacktestEngine()
+    tournament_results = engine.run_tournament(mode=args.mode, train_window=args.train_window, test_window=args.test_window, step_size=args.step_size)
+
+    from tradingview_scraper.settings import get_settings
+
+    config = get_settings()
+    run_dir = config.prepare_summaries_run_dir()
+    persist_tournament_artifacts(tournament_results, run_dir / "data")
+
+    print("\n" + "=" * 50)
+    print("TOURNAMENT COMPLETE")
+    print("=" * 50)

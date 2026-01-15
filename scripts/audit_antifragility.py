@@ -125,23 +125,37 @@ def calculate_regime_survival(returns: pd.DataFrame) -> pd.DataFrame:
 
 def audit_portfolio_fragility():
     # 1. Load Returns
-
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
-
-    meta_path = "data/lakehouse/portfolio_meta.json"
-
     settings = get_settings()
-
     run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = "data/lakehouse/portfolio_returns.pkl"
+
+    default_meta = str(run_dir / "data" / "portfolio_meta.json")
+    if not os.path.exists(default_meta):
+        default_meta = "data/lakehouse/portfolio_meta.json"
+
+    returns_path = os.getenv("RETURNS_MATRIX", default_returns)
+    meta_path = os.getenv("PORTFOLIO_META", default_meta)
+    output_path = os.getenv("ANTIFRAGILITY_STATS", str(run_dir / "data" / "antifragility_stats.json"))
 
     ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
 
     if not os.path.exists(returns_path):
-        logger.error("Returns matrix missing.")
-
+        logger.error(f"Returns matrix missing: {returns_path}")
         return
 
-    returns = pd.read_pickle(returns_path)
+    # Load returns (Parquet or Pickle)
+    if returns_path.endswith(".parquet"):
+        returns = pd.read_parquet(returns_path)
+    else:
+        returns = pd.read_pickle(returns_path)
+
+    if not os.path.exists(meta_path):
+        logger.error(f"Metadata missing: {meta_path}")
+        return
 
     with open(meta_path, "r") as f:
         meta = json.load(f)
@@ -225,8 +239,9 @@ def audit_portfolio_fragility():
     print(df.sort_values("Fragility_Score", ascending=False).head(10)[["Symbol", "Direction", "Fragility_Score", "Regime_Survival_Score", "Skew"]].to_string(index=False))
 
     # Save for Barbell Optimizer and Reporting
-    df.to_json("data/lakehouse/antifragility_stats.json")
-    print("\nSaved comprehensive risk stats to data/lakehouse/antifragility_stats.json")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_json(output_path, orient="records", indent=2)
+    print(f"\nSaved comprehensive risk stats to {output_path}")
 
     if ledger:
         ledger.record_outcome(

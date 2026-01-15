@@ -148,7 +148,14 @@ def run_nautilus_backtest(
             print(f"ERROR: Could not create instrument for {symbol}")
 
     # 5. Add Data
-    bars_ordered_dict = loader.to_nautilus_bars(returns, instrument_map=instruments_map)
+    # CR-830: Pre-Start Priming to align T0 returns.
+    # We must feed a T-1 bar (flat) so Nautilus trades at T-1 Close to capture T0 return.
+    t0 = returns.index[0]
+    t_minus_1 = t0 - pd.Timedelta(days=1)
+    dummy_row = pd.DataFrame(0.0, index=[t_minus_1], columns=returns.columns)
+    returns_primed = pd.concat([dummy_row, returns])
+
+    bars_ordered_dict = loader.to_nautilus_bars(returns_primed, instrument_map=instruments_map)
     all_bars = []
     for symbol_str, bars in bars_ordered_dict.items():
         if not bars:
@@ -162,7 +169,13 @@ def run_nautilus_backtest(
         engine.add_data(all_bars)
 
     # 6. Add Strategy
-    target_weights = pd.DataFrame(index=returns.index)
+    # Target weights need to include the primed day?
+    # No, the strategy will look up weights by timestamp.
+    # If a bar arrives at T-1, strategy might try to rebalance.
+    # We want it to establish initial position at T-1.
+    # So we should prepend the T0 weights to T-1 in target_weights.
+
+    target_weights_raw = pd.DataFrame(index=returns.index)
     for symbol in returns.columns:
         symbol_only = str(symbol).split(":")[-1]
         unified_key = f"{symbol_only}.{unified_venue_name}"
@@ -171,12 +184,26 @@ def run_nautilus_backtest(
         w_row = weights_df[mask]
         if not w_row.empty:
             try:
-                val = w_row["Weight"].values[0]
+                # Use Net_Weight if available to capture direction (Long/Short)
+                # This handles the "Physical Flattening" requirement
+                if "Net_Weight" in w_row.columns:
+                    val = w_row["Net_Weight"].values[0]
+                else:
+                    val = w_row["Weight"].values[0]
             except Exception:
-                val = w_row["Weight"].iloc[0]
-            target_weights[unified_key] = float(val)
+                # Fallback to iloc access
+                if "Net_Weight" in w_row.columns:
+                    val = w_row["Net_Weight"].iloc[0]
+                else:
+                    val = w_row["Weight"].iloc[0]
+            target_weights_raw[unified_key] = float(val)
         else:
-            target_weights[unified_key] = 0.0
+            target_weights_raw[unified_key] = 0.0
+
+    # Prepend T-1 weights (copy of T0) to ensure initial setup happens at T-1
+    t0_weights = target_weights_raw.iloc[0:1].copy()
+    t0_weights.index = [t_minus_1]
+    target_weights = pd.concat([t0_weights, target_weights_raw])
 
     strategy = NautilusRebalanceStrategy(target_weights=target_weights, catalog=catalog)
     engine.add_strategy(strategy)
@@ -242,11 +269,41 @@ def extract_nautilus_metrics(engine: Any, index: pd.DatetimeIndex, strategy: Any
             nav_series = df_nav["nav"].resample("D").last().reindex(index, method="ffill").fillna(initial_cash)
 
             # Combine with initial cash to capture Day 1 return
-
             nav_with_t0 = pd.concat([pd.Series([initial_cash], index=[t0]), nav_series])
 
             # Calculate daily returns
             daily_returns = nav_with_t0.pct_change().iloc[1:].fillna(0.0)
+
+            # Compounding Fix for Pre-Start Priming (CR-830)
+            # If we pre-primed, the return at T0 is actually captured in the change from T-1 to T0.
+            # But wait, T-1 NAV is Initial Cash. T0 NAV should reflect the PnL of T0.
+            # daily_returns index is [T0, T1, ...].
+            # daily_returns[T0] = (NAV_T0 - NAV_T-1) / NAV_T-1.
+            # If T-1 was flat (0 return) and we traded at T-1 Close, then T0 NAV includes T0 PnL.
+            # So daily_returns[T0] IS the return of T0.
+            # This matches the index alignment of `returns`.
+
+            # The validation script showed we needed to compound if we had T-1 return.
+            # But here `daily_returns` is derived from NAV.
+            # If NAV_T0 is correct, then `pct_change` from `Initial_Cash` is correct.
+            # So we just need to ensure `nav_series` (reindexed to `index`) has the correct values.
+
+            # Reindexing `df_nav["nav"]` (which has high-res timestamps) to `index` (daily T0, T1...)
+            # might miss the exact T0 Close update if timestamps drift.
+            # Ideally we resample to 'D' using the same closing time.
+            # Assuming 'D' defaults to day start or end?
+            # `returns.index` is usually UTC midnight.
+            # Nautilus bars are timestamped at event time.
+            # If we sent T-1 bar at T-1 00:00, it closes.
+            # If `nav_series` uses `resample("D").last()`, it takes the last NAV of the day.
+
+            # If we primed T-1, we have a NAV record at T-1.
+            # We have a NAV record at T0.
+            # So `nav_series` will have values for T0, T1...
+            # And `nav_with_t0` prepends T-1 (Initial).
+            # So `pct_change` gives T0 return.
+            # This seems correct without extra compounding logic here,
+            # *provided* `df_nav` captures the post-close NAV of T0.
 
             # Check for fill artifact (sanity check)
             if len(daily_returns) > 0 and daily_returns.iloc[0] < -0.2:

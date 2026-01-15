@@ -178,27 +178,43 @@ To ensure the mathematical integrity of the realization layer, the pipeline impl
 - **Metric Agreement**: Sharpe and MaxDD are independently re-calculated using standard geometric mean and high-water-mark algorithms to detect backend simulator drift.
 - **Geometric Baseline**: Annualized returns are anchored to Compound Annual Growth Rate (CAGR) standards to eliminate arithmetic inflation artifacts.
 
-## 23. Performance & Institutional Scaling (v3.7.2 Update)
-As of v3.7.2, the selection pipeline has been hardened with institutional liquidity floors and a hierarchical strategy abstraction:
+## 24. Strategy as an Asset & Meta-Allocation (v3.8.2 Update)
+As of v3.8.2, the platform implements a fractal optimization architecture where individual strategy outputs are treated as synthetic asset classes:
 
-- **Liquidity Floors**: 
-    - **Perpetuals**: $50M USD 24h Volume (Value.Traded).
-    - **Spot**: $20M USD 24h Volume.
-- **Factor Enrichment**: 
-    - Integration of TradingView `Recommend.All`, `Recommend.MA`, `ROC` (Rate of Change), and `Volatility.D` into the Log-MPS scoring engine.
-- **Pure Discovery Model**:
-    - Discovery scanners are stripped of technical gates (ADX, Momentum) and alpha-ranking to maximize recruitment breadth.
-    - **Baseline Purity**: L1 Base Scanners (Spot/Perp) enforce only liquidity floors and venue type, sorting by `name` or `Value.Traded` to avoid early-stage selection bias.
-    - **No Complex Logic**: Discovery scanners are prohibited from applying conditional filters or statistical pruning. All such logic is offloaded to the **Selection Policy Vetoes** to preserve funnel traceability.
-    - **Venue Isolation**: Spot and Perpetual outputs are strictly separated. The pipeline ensures that atoms from different venues do not contaminate each other's return streams or metadata.
-    - **Sentiment Floors**: Strictly `> 0.0` (LONG) or `< 0.0` (SHORT) in strategy-specific scanners to prioritize high-conviction signals.
+- **Granular Strategy Profiles**: Targeted profiles (e.g., `crypto_rating_all`, `crypto_rating_ma`) generate isolated equity curves for specific alpha logics.
+- **Decoupled Persistence**: Strategy-level return streams are persisted as standalone `.pkl` files, enabling meta-portfolio aggregation without re-running the underlying simulations.
+- **Fractal Optimization**: The Pillar 4 Meta-Allocation engine applies risk profiles (e.g., HRP) across these synthetic strategy assets to construct a global Meta-Portfolio.
+- **Metric Alignment**: Annualization factors are standardized (365 for crypto sleeves) across the entire stack, ensuring consistent Sharpe and Volatility benchmarks from asset-level to meta-portfolio level.
+- **Directional Modularity**: The system explicitly supports the generation of "Directional Alpha" return streams (Pure LONG or Pure SHORT). This modularity allows the Meta-Portfolio engine to balance overall exposure by treating a SHORT-only strategy as an asset that provides negative beta exposure.
 
-- **Strategy Atoms**: 
-    - The system supports the persistence of multiple orthogonal "Strategy Atoms" for the same physical asset (indexed as `Asset_Logic_Direction`).
-- **Recruitment Depth**: 
-    - Scanner limits increased to **100 candidates** per strategy to ensure a sufficiently deep pool for the HTR relaxation loop.
-- **Implementation Hygiene**:
-    - **Venue Purity**: Preference for USD-Stable quotes to eliminate regional fiat artifacts in technical ratings.
-    - **Velocity Bounds**: Explicit capping and audit flags for extreme momentum (ROC > 50%) to prevent recruitment of blow-off tops. (Reference Outlier: `FHEUSDT.P` with ROC > 100%).
-- **Champion Performance (HRP)**: Sharpe 1.56 (v3.7.0 Baseline), AnnRet 79%, MaxDD -27.6%.
+## 26. The Atom Identity Standard (CR-823)
+To support multi-strategy allocation across the same physical asset, the system utilizes a canonical **Atom ID** for all internal operations.
+- **Format**: `{Symbol}_{Logic}_{Direction}` (e.g., `BINANCE:BTCUSDT_rating_ma_LONG`).
+- **Persistence**: This ID is the primary key in the `returns_matrix.parquet` and `portfolio_returns.pkl`.
+- **Mapping Logic**: Scripts (e.g., `correlation_report.py`) must be "Atom-Aware" and resolve physical symbols back to their corresponding Atom IDs using discovery metadata.
+
+## 27. Metadata Hygiene & Null Logic Handling
+To ensure valid atom generation, the system enforces a strict "Truth or Trend" logic fallback:
+- **Rule**: If `logic` or `direction` is missing or explicitly `null` in metadata, it must be normalized to `trend` and `LONG` respectively.
+- **Implementation**: `meta.get('logic') or 'trend'` ensures that falsy values (None, "") are correctly handled, preventing the generation of corrupted keys like `Asset_None_Direction`.
+
+## 29. Selection Scarcity Protocol (SSP)
+To prevent mathematical degeneration in Pillar 3 Portfolio Engines (where HRP/MinVar/MaxSharpe collapse into identical results), the system enforces a strict **Winner Floor**.
+- **Requirement**: The v4 Selection Pipeline MUST recruit a minimum of **15 strategy atoms** for any production window.
+- **Enforcement**: If the `relaxation_stage` reaches 4 and `len(winners) < 15`, the pipeline triggers an **Absolute Scarcity Fallback**, ignoring non-metadata vetoes (Entropy, ROC) until the floor is met.
+- **Throughput Constraint**: If the total discovered pool (Ingestion) is less than 15, the SSP recruits the entire eligible universe. In these "Ultra-Sparse" scenarios ($N < 5$), profile convergence is expected and solvers will prioritize survival over optimization gain.
+
+## 30. Anomaly Detection: Portfolio Convergence
+A "Convergence Anomaly" occurs when distinct risk profiles produce identical weight distributions ($r > 0.999$).
+- **Detection**: The `audit_ledger_anomalies.py` utility flags windows where HRP and Max Sharpe produce identical weight vectors.
+- **Remediation**: Convergence is treated as a "Sparsity Warning." If persistent, the `top_n` or discovery liquidity floors must be relaxed.
+
+## 38. High-Fidelity Simulation: Physical Normalization (CR-832)
+To maintain compatibility with institutional execution engines (e.g., NautilusTrader), the simulation layer enforces a **Physical Normalization** standard.
+- **Constraint**: Execution engines often have strict regular expression guards for symbol formats, which typically disallow metadata-augmented strings like logical Atom IDs (`Asset_Logic_Direction`).
+- **Standard**: Before initiating a high-fidelity simulation or generating trade orders, all logical atoms MUST be flattened into their physical constituent assets.
+- **Consolidation Logic**:
+    - **Weights**: Sum the target weights of all atoms sharing the same `physical_symbol`.
+    - **Returns**: Utilize the returns series of the physical asset (which is shared across its logical atoms).
+- **Rationale**: This ensures the simulator acts upon tradeable exchange instruments while preserving the net intended exposure of the multi-strategy portfolio.
 

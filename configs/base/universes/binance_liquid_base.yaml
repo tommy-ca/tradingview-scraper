@@ -34,8 +34,6 @@ base_universe_limit: 500
 base_universe_sort_by: Value.Traded
 
 # Stage 3: Final Selection
-final_sort_by: Value.Traded
-final_sort_order: desc
 limit: 500
 
 export_metadata:

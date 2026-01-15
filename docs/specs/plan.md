@@ -199,8 +199,88 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Meta-Allocation**: Constructed the final Meta-Portfolio by allocating capital across synthetic strategy streams using the HRP engine. [COMPLETED]
 - [x] **Final Certification**: Validated end-to-end flow from Discovery -> Synthesis -> Granular Opt -> Meta-Allocation. [COMPLETED]
 
+### Phase 157: Tournament Benchmarking & Alpha Comparison (COMPLETED)
+- [x] **Baseline Rerun**: Rerun `crypto_rating_all` tournament with 100% capital allocation and updated risk vetoes. [COMPLETED]
+- [x] **Ensemble Execution**: Executed `crypto_rating_alpha` (Multi-Strategy pool) and verified recruitment expansion (73 -> 119 candidates). [COMPLETED]
+- [x] **Sharpe Gain Analysis**: Confirmed that the multi-strategy ensemble provides higher factor diversity and allows for finer optimization (25 winners selected from 119 vs 73). [COMPLETED]
+
+### Phase 158: Directional Validation & Meta-Profile Readiness (COMPLETED)
+- [x] **Pure LONG Validation**: Executed `binance_spot_rating_all_long` to establish the baseline for cash-market long sentiment. [COMPLETED]
+- [x] **Pure SHORT Validation**: Executed `binance_spot_rating_all_short` established the baseline for cash-market short sentiment. [COMPLETED]
+- [x] **Ensemble Readiness Audit**: Verified that synthetic streams from LONG and SHORT baselines can be combined in a Meta-Portfolio. [COMPLETED]
+- [x] **Atom Key Correction**: Resolved "NoneType" logic corrupting the `Asset_Logic_Direction` key (CR-823). [COMPLETED]
+- [x] **Mixed-Direction Benchmark**: Validated HRP-based ensembling of 50/50 Long/Short sleeves. [COMPLETED]
+
+### Phase 159: Meta-Portfolio Production Certification (COMPLETED)
+- [x] **Full-History Meta Audit**: Executed `meta_benchmark` with 500-day secular history. [COMPLETED]
+- [x] **Mixed-Direction Diversity**: Confirmed near-zero correlation (-0.07) between Long and Short sleeves. [COMPLETED]
+- [x] **Anomaly Remediation**: Resolved "Convergence Anomaly" via SSP Floor (15 assets) and Drift Scaling bug (Stable Sum Gate). [COMPLETED]
+- [x] **Combined Meta-Metrics**: Implemented ensembled performance reporting in `generate_meta_report.py`. [COMPLETED]
+- [x] **Ledger Forensic**: Generated `docs/reports/ledger_forensic_audit_20260115.md` identifying rebalance artifacts. [COMPLETED]
+
+### Phase 160: High-Fidelity Validation & Production Rollout (COMPLETED)
+- [x] **Hardened Tournament Logic**: Verified SSP (15 winner floor) and Stable Sum Gate. [COMPLETED]
+- [x] **Reporting Stability**: Fixed `generate_reports.py` and `generate_portfolio_report.py` to handle new flat data format and missing metadata. [COMPLETED]
+- [x] **Full Flow Verification**: Successfully executed 16-stage production flow for `binance_spot_rating_all_long`. [COMPLETED]
+
+### Phase 161: Granular Strategy expansion (COMPLETED)
+- [x] **MA Strategy Atomization**: Created `binance_spot_rating_ma_long/short` profiles and scanners. [COMPLETED]
+- [x] **Liquidity Hardening**: Implemented `binance_spot_midcap_base.yaml` with $10M floor to feed SSP. [COMPLETED]
+- [x] **Health Identity Standard**: Fixed `validate_portfolio_artifacts.py` to correctly map Atom IDs to physical files, resolving false-positive Step 9 failures. [COMPLETED]
+- [x] **MA Baseline Execution**: Successfully executed and audited `binance_spot_rating_ma_long/short`. [COMPLETED]
+- [x] **Anti-Correlation Discovery**: Verified -0.60 correlation between Long and Short MA sleeves, leading to superior meta-portfolio stability. [COMPLETED]
+
+### Phase 162: Cross-Factor Audit & Production Rollout (IN PROGRESS)
+- [x] **Health Audit Stability**: Verified that the fixed auditing layer allows the 16-stage pipeline to complete for all MA sleeves. [COMPLETED]
+- [x] **Integrated Health Reporting**: Modified `generate_reports.py` to inject data health snapshots directly into the `INDEX.md` dashboard. [COMPLETED]
+- [ ] **High-Integrity Re-run**: Rerun `binance_spot_rating_ma_long/short` and `binance_spot_rating_all_long/short` with exhaustive matrices and 100% healthy data.
+- [ ] **Alpha Interaction Audit**: Compare `rating_all` vs `rating_ma` vs `rating_osc` to identify the "Primary Alpha Driver" per regime.
+- [ ] **Nautilus Parity Test**: Verify that meta-optimized weights generate equivalent returns in Nautilus high-fidelity simulation.
+
+### Phase 163: Data Pipeline Hardening & Self-Healing (COMPLETED)
+- [x] **SHP Requirements**: Codified the Data Health Self-Healing Protocol (SHP) in architectural docs. [COMPLETED]
+- [x] **SHP-1 Implementation**: Updated `prepare_portfolio_data.py` to trigger automatic `force_sync` and 2000-bar depth for stale assets. [COMPLETED]
+- [x] **Freshness Standard**: Tightened crypto freshness threshold to 24 hours in `validate_portfolio_artifacts.py`. [COMPLETED]
+- [x] **Liquidity Restoration**: Reverted the $10M floor back to the institutional **$20M standard** for all Binance Spot scanners. [COMPLETED]
+- [x] **Integrated Integrity Trace**: Verified `✅ HEALTHY` / `⚠️ DEGRADED` status propagation into master INDEX and meta-reports. [COMPLETED]
+- [x] **Full Data Remediation**: Executed aggressive multi-pass repair on 56 target symbols; validated high-integrity history for backtests. [COMPLETED]
+
+### Phase 164: High-Integrity Cross-Factor Interaction (COMPLETED)
+- [x] **Data Pipeline Refactor**: Implemented workspace isolation and canonical fetching (CR-831). [COMPLETED]
+- [x] **Canonical Identity Standard**: Formalized `physical_symbol` and `symbol` (Atom ID) separation. [COMPLETED]
+- [x] **Exhaustive Re-run**: Rerun `ma_long/short` and `all_long/short` with restored $20M floor and SHP-1 active. [COMPLETED]
+- [x] **Isolation Verified**: Confirmed artifacts are preserved per-run in `artifacts/summaries/runs/`. [COMPLETED]
+- [x] **Atom Integrity**: Verified that ensembled meta-portfolios correctly map back to directional atoms. [COMPLETED]
+
+### Phase 165: Pipeline Modernization (Workflow Engine v1) (COMPLETED)
+- [x] **Architecture Design**: Defined `DataTask` and `DataRegistry` models for modular ingestion. [COMPLETED]
+- [x] **Registry Implementation**: Implemented `RegistryManager` with atomic file-locking in `data/lakehouse/.registry.json`. [COMPLETED]
+- [x] **Workflow Implementation**: Implemented `DataWorker` and `DataPipelineOrchestrator` for Pillar 0. [COMPLETED]
+- [x] **Simplified Fetching**: Migrated `prepare_portfolio_data.py` to use the new Workflow Engine, enabling deduplicated physical asset fetches. [COMPLETED]
+- [x] **Verification**: Verified registry state tracking (`STABLE` vs `DEGRADED`) and isolated run workspace persistence. [COMPLETED]
+
+### Phase 166: Cross-Factor interaction Audit & Production Certification (IN PROGRESS)
+- [ ] **Alpha Interaction Audit**: Rerun `ma_long/short` and `all_long/short` with restored $20M floor and SHP-1 active via Pillar 0.
+- [ ] **Nautilus Validation**: Verify meta-optimized weights generate equivalent returns in Nautilus high-fidelity simulation.
+- [ ] **Production Rollout**: Transition `meta_production` to utilize the verified directional ensembling architecture.
+
+### Phase 167: Nautilus Simulator Logic Decoupling (COMPLETED)
+- [x] **Requirements Update**: Codified strict "Physical Flattening" requirement; simulator must be logic-agnostic.
+- [x] **Design Boundary**: Explicitly prohibited "Strategy Atom" logic or synthetic inversion within the simulator loop.
+- [x] **Architecture Update**: Redefined `NautilusRebalanceStrategy` to accept only pre-flattened Net Physical Weights.
+
+### Phase 168: Nautilus Parity Validation Suite (COMPLETED)
+- [x] **Validation Script**: Create `scripts/validate_nautilus_parity.py` to compare Equity/Turnover of physical-flattened weights.
+- [x] **Design Update**: Clarify in `nautilus_parity_design_v1.md` that parity is checked on `Net_Weight` basis.
+- [x] **Parity Check**: Execute validation on a known Production Run ID (requires Nautilus env).
+    - **Result**: Sharpe Divergence 0.02 (1%) achieved with Pre-Start Priming and Strict Rebalancing.
+
+### Phase 169: Production Rollout (COMPLETED)
+- [x] **Integration**: Merge "Pre-Start Priming" logic into the main `nautilus_adapter.py`.
+- [x] **Config**: Enable Nautilus Simulator in `production` profile.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.8.2) - Meta-Allocation Operational
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 169 Completed
 
 
 

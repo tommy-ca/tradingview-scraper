@@ -6,7 +6,7 @@ from typing import cast
 import matplotlib
 
 matplotlib.use("Agg")  # Non-interactive backend
-import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.manifold import MDS
@@ -18,22 +18,36 @@ logger = logging.getLogger("factor_map")
 
 
 def generate_factor_map():
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
-    clusters_path = "data/lakehouse/portfolio_clusters.json"
-    stats_path = "data/lakehouse/antifragility_stats.json"
-
     settings = get_settings()
-    settings.prepare_summaries_run_dir()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = "data/lakehouse/portfolio_returns.pkl"
+
+    default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
+    if not os.path.exists(default_clusters):
+        default_clusters = "data/lakehouse/portfolio_clusters.json"
+
+    returns_path = os.getenv("RETURNS_MATRIX", default_returns)
+    clusters_path = os.getenv("CLUSTERS_FILE", default_clusters)
+    stats_path = os.getenv("ANTIFRAGILITY_STATS", str(run_dir / "data" / "antifragility_stats.json"))
     output_dir = settings.run_plots_dir / "risk"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "factor_map.png"
 
     if not os.path.exists(returns_path) or not os.path.exists(clusters_path):
-        logger.error("Required data missing for factor map.")
+        logger.error(f"Required data missing for factor map: {returns_path} or {clusters_path}")
         return
 
-    with open(returns_path, "rb") as f:
-        returns = cast(pd.DataFrame, pd.read_pickle(f))
+    # Load returns (Parquet or Pickle)
+    if returns_path.endswith(".parquet"):
+        returns = pd.read_parquet(returns_path)
+    else:
+        with open(returns_path, "rb") as f:
+            returns = cast(pd.DataFrame, pd.read_pickle(f))
+
     with open(clusters_path, "r") as f:
         clusters = json.load(f)
 

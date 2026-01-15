@@ -1,6 +1,7 @@
 # pyright: reportGeneralTypeIssues=false
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
@@ -61,8 +62,12 @@ def get_robust_correlation(returns: pd.DataFrame) -> pd.DataFrame:
 def load_returns(path: Path, min_col_frac: float, candidates_path: Optional[Path] = None) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Returns file not found: {path}")
-    with open(path, "rb") as f:
-        rets_raw = pd.read_pickle(f)
+
+    if str(path).endswith(".parquet"):
+        rets_raw = pd.read_parquet(path)
+    else:
+        with open(path, "rb") as f:
+            rets_raw = pd.read_pickle(f)
 
     if not isinstance(rets_raw, pd.DataFrame):
         rets = pd.DataFrame(rets_raw)
@@ -73,8 +78,22 @@ def load_returns(path: Path, min_col_frac: float, candidates_path: Optional[Path
     if candidates_path and candidates_path.exists():
         with open(candidates_path, "r") as f:
             candidates = json.load(f)
-        selected_syms = [c["symbol"] for c in candidates]
-        common = [s for s in selected_syms if s in rets.columns]
+        # CR-823: Atom-Aware Filtering
+        selected_ids = []
+        for c in candidates:
+            # Try full atom_id first (Asset_Logic_Direction)
+            sym = c["symbol"]
+            logic = c.get("logic") or "trend"
+            direction = c.get("direction") or "LONG"
+            atom_id = f"{sym}_{logic}_{direction}"
+            selected_ids.append(atom_id)
+
+        common = [s for s in selected_ids if s in rets.columns]
+        # Fallback to pure symbols if no atoms match (Legacy support)
+        if not common:
+            pure_syms = [c["symbol"] for c in candidates]
+            common = [s for s in pure_syms if s in rets.columns]
+
         rets = rets[common]
 
     # Drop columns with too many NaNs
@@ -171,8 +190,21 @@ def hrp_weights(rets: pd.DataFrame, linkage_method: str) -> pd.Series:
 
 def main():
     settings = get_settings()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = "data/lakehouse/portfolio_returns.pkl"
+
+    default_candidates = str(run_dir / "data" / "portfolio_candidates.json")
+    if not os.path.exists(default_candidates):
+        default_candidates = "data/lakehouse/portfolio_candidates.json"
+
+    default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
+
     parser = argparse.ArgumentParser(description="Generate correlation/HRP report")
-    parser.add_argument("--returns", default="data/lakehouse/portfolio_returns.pkl")
+    parser.add_argument("--returns", default=os.getenv("RETURNS_MATRIX", default_returns))
     parser.add_argument("--out-dir", default=None)
     parser.add_argument("--pair-cap", type=float, default=0.85)
     parser.add_argument("--pair-limit", type=int, default=20)
@@ -183,8 +215,8 @@ def main():
     parser.add_argument("--linkage", default="ward")
     parser.add_argument("--hrp", action="store_true", help="Emit HRP weights")
     parser.add_argument("--max-clusters", type=int, default=settings.max_clusters if hasattr(settings, "max_clusters") else 25, help="Target maximum number of clusters")
-    parser.add_argument("--out-clusters", default="data/lakehouse/portfolio_clusters.json", help="Path to save cluster JSON")
-    parser.add_argument("--candidates", default="data/lakehouse/portfolio_candidates.json", help="Path to selected candidates")
+    parser.add_argument("--out-clusters", default=os.getenv("CLUSTERS_FILE", default_clusters), help="Path to save cluster JSON")
+    parser.add_argument("--candidates", default=os.getenv("CANDIDATES_SELECTED", default_candidates), help="Path to selected candidates")
     args = parser.parse_args()
 
     if args.out_dir:

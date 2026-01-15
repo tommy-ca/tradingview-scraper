@@ -7,10 +7,10 @@ from typing import Any, Dict, List, Optional, cast
 import numpy as np
 import pandas as pd
 
-from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
 from tradingview_scraper.portfolio_engines import build_engine
+from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
 from tradingview_scraper.settings import get_settings
-from tradingview_scraper.utils.audit import AuditLedger, get_df_hash  # type: ignore
+from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("clustered_optimizer_v2")
@@ -38,16 +38,21 @@ class ClusteredOptimizerV2:
             self.ledger = AuditLedger(self.run_dir)
 
         # Explicitly cast to DataFrame to satisfy linter
-        with open(returns_path, "rb") as f_in:
-            df = cast(pd.DataFrame, pd.read_pickle(f_in))
-            # Ultra-robust forcing of naive index
-            try:
-                new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in df.index]
-                df.index = pd.DatetimeIndex(new_idx)
-            except Exception as e_idx:
-                logger.warning(f"Fallback indexing for returns: {e_idx}")
-                df.index = pd.to_datetime(df.index, utc=True).tz_convert(None)
-            self.returns = df
+        if str(returns_path).endswith(".parquet"):
+            df = pd.read_parquet(returns_path)
+        else:
+            with open(returns_path, "rb") as f_in:
+                df = cast(pd.DataFrame, pd.read_pickle(f_in))
+
+        # Ultra-robust forcing of naive index
+        try:
+            new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in df.index]
+            df.index = pd.DatetimeIndex(new_idx)
+        except Exception as e_idx:
+            logger.warning(f"Fallback indexing for returns: {e_idx}")
+            df.index = pd.to_datetime(df.index, utc=True).tz_convert(None)
+
+        self.returns = df
 
         with open(clusters_path, "r") as f:
             self.clusters = cast(Dict[str, List[str]], json.load(f))
@@ -96,11 +101,33 @@ class ClusteredOptimizerV2:
 if __name__ == "__main__":
     from tradingview_scraper.regime import MarketRegimeDetector
 
+    settings = get_settings()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    # Prioritize run-specific artifacts
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = "data/lakehouse/portfolio_returns.pkl"
+
+    default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
+    if not os.path.exists(default_clusters):
+        default_clusters = "data/lakehouse/portfolio_clusters.json"
+
+    default_meta = str(run_dir / "data" / "portfolio_meta.json")
+    if not os.path.exists(default_meta):
+        default_meta = "data/lakehouse/portfolio_meta.json"
+
+    returns_path = os.getenv("RETURNS_MATRIX", default_returns)
+    clusters_path = os.getenv("CLUSTERS_FILE", default_clusters)
+    meta_path = os.getenv("PORTFOLIO_META", default_meta)
+    stats_path = os.getenv("ANTIFRAGILITY_STATS", str(run_dir / "data" / "antifragility_stats.json"))
+
     optimizer = ClusteredOptimizerV2(
-        returns_path="data/lakehouse/portfolio_returns.pkl",
-        clusters_path="data/lakehouse/portfolio_clusters.json",
-        meta_path="data/lakehouse/portfolio_meta.json",
-        stats_path="data/lakehouse/antifragility_stats.json",
+        returns_path=returns_path,
+        clusters_path=clusters_path,
+        meta_path=meta_path,
+        stats_path=stats_path,
     )
 
     detector = MarketRegimeDetector()
@@ -226,8 +253,12 @@ if __name__ == "__main__":
         "metadata": {"generated_at": datetime.now().isoformat(), "cluster_cap": cap},
     }
 
-    output_path = "data/lakehouse/portfolio_optimized_v2.json"
-    with open(output_path, "w") as f:
+    # CR-831: Workspace Isolation
+    os.makedirs(run_dir / "data", exist_ok=True)
+    default_output = run_dir / "data" / "portfolio_optimized_v2.json"
+    final_output_path = os.getenv("OPTIMIZED_FILE", str(default_output))
+
+    with open(final_output_path, "w") as f:
         json.dump(output, f, indent=2)
 
-    logger.info(f"✅ Clustered Optimization V2 Complete. Saved to: {output_path}")
+    logger.info(f"✅ Clustered Optimization V2 Complete. Saved to: {final_output_path}")

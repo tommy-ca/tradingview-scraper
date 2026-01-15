@@ -20,25 +20,33 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("portfolio_data_prep")
 
 
+from tradingview_scraper.pipelines.data.orchestrator import DataPipelineOrchestrator
+
+
 def prepare_portfolio_universe():
     """
-    Preparation Stage.
-    Loads historical data for candidates sanctioned by the Discovery Consolidator.
-    Strictly follows the portfolio_candidates_raw.json manifest.
+    Preparation Stage (Pillar 0).
+    Orchestrates high-integrity ingestion and transformation using the Workflow Engine.
     """
-
     active_settings = get_settings()
     run_dir = active_settings.prepare_summaries_run_dir()
     ledger = AuditLedger(run_dir) if active_settings.features.feat_audit_ledger else None
 
     # 1. Load sanctioned candidates
-    preselected_file = os.getenv("CANDIDATES_FILE", "data/lakehouse/portfolio_candidates.json")
-    if not os.path.exists(preselected_file):
-        logger.warning(f"Sanctioned candidate manifest missing: {preselected_file}. Falling back to raw manifest.")
-        preselected_file = "data/lakehouse/portfolio_candidates_raw.json"
+    default_c_sel = str(run_dir / "data" / "portfolio_candidates.json")
+    default_c_raw = str(run_dir / "data" / "portfolio_candidates_raw.json")
+
+    preselected_file = os.getenv("CANDIDATES_FILE") or os.getenv("CANDIDATES_SELECTED")
+    if not preselected_file or not os.path.exists(preselected_file):
+        preselected_file = os.getenv("CANDIDATES_RAW") or default_c_raw
 
     if not os.path.exists(preselected_file):
-        logger.error("No candidate manifest found.")
+        preselected_file = "data/lakehouse/portfolio_candidates.json"
+        if not os.path.exists(preselected_file):
+            preselected_file = "data/lakehouse/portfolio_candidates_raw.json"
+
+    if not os.path.exists(preselected_file):
+        logger.error(f"No candidate manifest found at {preselected_file}")
         return
 
     logger.info(f"Loading candidates from {preselected_file}")
@@ -50,29 +58,151 @@ def prepare_portfolio_universe():
         return
 
     lookback_env = os.getenv("PORTFOLIO_LOOKBACK_DAYS")
-    fallback_lookback = os.getenv("LOOKBACK")
-    if lookback_env:
-        lookback_days = int(lookback_env)
-    elif fallback_lookback:
-        lookback_days = int(fallback_lookback)
-    else:
-        lookback_days = int(active_settings.resolve_portfolio_lookback_days())
+    lookback_days = int(lookback_env) if lookback_env else int(active_settings.resolve_portfolio_lookback_days())
+
+    # CR-831: Workspace Isolation
+    os.makedirs(run_dir / "data", exist_ok=True)
+    returns_path = os.getenv("PORTFOLIO_RETURNS_PATH", str(run_dir / "data" / "returns_matrix.parquet"))
+    meta_path = os.getenv("PORTFOLIO_META_PATH", str(run_dir / "data" / "portfolio_meta.json"))
+
+    # 2. Trigger Workflow Engine Ingestion (Pillar 0)
+    loader = PersistentDataLoader()
+    orchestrator = DataPipelineOrchestrator(loader)
+
+    force_sync = os.getenv("PORTFOLIO_FORCE_SYNC") == "1"
+    ingestion_summary = orchestrator.ingest_universe(universe, force_sync=force_sync, lookback_days=lookback_days)
 
     if ledger:
-        u_hash = hashlib.sha256(json.dumps(universe, sort_keys=True).encode()).hexdigest()
         ledger.record_intent(
-            step="data_prep",
-            params={"lookback_days": lookback_days},
-            input_hashes={"candidates_manifest": u_hash},
+            step="data_ingestion",
+            params={"lookback_days": lookback_days, "force_sync": force_sync},
+            input_hashes={"candidates": hashlib.sha256(json.dumps(universe).encode()).hexdigest()},
         )
 
-    # 2. Historical Data Fetching
-    # The system now only prepares data for symbols actually discovered by scanners.
-    # Benchmarks like SPY are added to the matrix by the BacktestEngine during testing
-    # if they are needed for baseline profiles.
-    logger.info(f"Portfolio Universe: {len(universe)} symbols.")
+    # 3. Alignment & Transformation (Pillar 0 -> Pillar 2 Bridge)
+    price_data = {}
+    alpha_meta = {}
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=lookback_days)
 
-    # 3. Fetch Historical Data
+    logger.info("Aligning return streams and generating atoms...")
+    for candidate in universe:
+        atom_id = candidate["symbol"]
+        phys_sym = candidate.get("physical_symbol") or atom_id
+
+        try:
+            df = loader.load(phys_sym, start_date, end_date, interval="1d")
+            if df.empty:
+                continue
+
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s").dt.date
+            df_series = df.set_index("timestamp")["close"]
+            returns = df_series.pct_change().dropna()
+
+            price_data[atom_id] = returns
+            alpha_meta[atom_id] = {
+                "symbol": phys_sym,
+                "description": candidate.get("description", "N/A"),
+                "sector": candidate.get("sector", "N/A"),
+                "adx": candidate.get("adx", 0),
+                "close": candidate.get("close", 0),
+                "atr": candidate.get("atr", 0),
+                "volatility_d": candidate.get("volatility_d", 0),
+                "volume_change_pct": candidate.get("volume_change", 0),
+                "roc": candidate.get("roc", 0),
+                "value_traded": candidate.get("value_traded", 0),
+                "logic": candidate.get("logic") or "trend",
+                "direction": candidate.get("direction") or "LONG",
+                "market": candidate.get("market", "UNKNOWN"),
+                "identity": candidate.get("identity", phys_sym),
+                "is_benchmark": candidate.get("is_benchmark", False),
+                "recommend_all": candidate.get("recommend_all"),
+                "recommend_ma": candidate.get("recommend_ma"),
+                "recommend_other": candidate.get("recommend_other"),
+            }
+        except Exception as e:
+            logger.error(f"Failed to transform {phys_sym} for atom {atom_id}: {e}")
+
+    # 4. Aligned Matrix Creation
+    if not price_data:
+        logger.error("No price data loaded. Aborting matrix creation.")
+        return
+
+    all_dates_raw = sorted(set().union(*(rets.index for rets in price_data.values())))
+    all_dates = pd.to_datetime(all_dates_raw, utc=True)
+    returns_df = pd.DataFrame(index=all_dates)
+
+    for atom_id, rets in price_data.items():
+        if not isinstance(rets.index, pd.DatetimeIndex):
+            rets.index = pd.to_datetime(rets.index)
+        idx_check = cast(Any, rets.index)
+        rets.index = idx_check.tz_localize("UTC") if idx_check.tz is None else idx_check.tz_convert("UTC")
+        returns_df[atom_id] = rets
+
+    # Standard filters (Weekend drop, History floor, Zero-variance)
+    profiles = {symbol: get_symbol_profile(symbol) for symbol in returns_df.columns}
+    tradfi_cols = [s for s, p in profiles.items() if p != DataProfile.CRYPTO]
+    if tradfi_cols:
+        returns_df = returns_df.loc[~returns_df[tradfi_cols].isna().all(axis=1)]
+
+    min_days = int(active_settings.min_days_floor)
+    if min_days > 0 and lookback_days >= min_days:
+        counts = returns_df.count()
+        short_history = [str(c) for c, v in counts.items() if v < min_days]
+        if short_history:
+            returns_df = returns_df.drop(columns=short_history)
+            logger.info(f"Dropped {len(short_history)} symbols due to insufficient history (< {min_days} days)")
+
+    variances = returns_df.var(ddof=0)
+    zero_vars = [str(c) for c, v in variances.items() if v == 0] if not isinstance(variances, (float, int)) else []
+    if zero_vars:
+        returns_df = returns_df.drop(columns=zero_vars)
+
+    # Persistence
+    alpha_meta = {s: alpha_meta[s] for s in returns_df.columns if s in alpha_meta}
+    logger.info(f"Writing returns matrix ({returns_df.shape}) to: {returns_path}")
+    if returns_path.endswith(".parquet"):
+        returns_df.to_parquet(returns_path)
+    else:
+        returns_df.to_pickle(returns_path)
+    with open(meta_path, "w") as f:
+        json.dump(alpha_meta, f, indent=2)
+
+    if ledger:
+        ledger.record_outcome(
+            step="data_ingestion",
+            status="success",
+            output_hashes={"returns_matrix": get_df_hash(returns_df)},
+            metrics={"shape": returns_df.shape, "n_symbols": len(returns_df.columns), "ingestion": ingestion_summary},
+        )
+
+    print("\n" + "=" * 50)
+    print("PORTFOLIO UNIVERSE PREPARED (Workflow-Centric)")
+    print("=" * 50)
+    print(f"Matrix Shape : {returns_df.shape}")
+
+    # CR-831: Workspace Isolation
+    # Default outputs to run-specific directory
+    os.makedirs(run_dir / "data", exist_ok=True)
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    default_meta = str(run_dir / "data" / "portfolio_meta.json")
+
+    returns_path = os.getenv("PORTFOLIO_RETURNS_PATH", default_returns)
+    meta_path = os.getenv("PORTFOLIO_META_PATH", default_meta)
+
+    # 2. Extract Canonical Symbols (Deduplicate Fetching)
+    # Mapping: Physical Symbol -> List of Candidates (Atoms)
+    physical_map = {}
+    for candidate in universe:
+        atom_id = candidate["symbol"]
+        # Use physical_symbol if provided (CR-831), fall back to symbol
+        phys_sym = candidate.get("physical_symbol", atom_id)
+
+        physical_map.setdefault(phys_sym, []).append(candidate)
+
+    logger.info(f"Portfolio Universe: {len(universe)} atoms across {len(physical_map)} physical assets.")
+
+    # 3. Fetch Historical Data (Canonical Pass)
     loader = PersistentDataLoader()
     end_date = datetime.now()
     start_date = end_date - timedelta(days=lookback_days)
@@ -107,84 +237,88 @@ def prepare_portfolio_universe():
     skipped_empty = []
     skipped_errors = []
 
-    def fetch_and_store(candidate):
-        symbol = candidate["symbol"]
+    def fetch_and_store(phys_sym, candidates_for_phys):
         local_loader = PersistentDataLoader(websocket_jwt_token=jwt_token)
 
-        # 1. Selective Sync Check
+        # 1. Selective Sync Check (SHP-1)
         is_stale = True
-        parquet_path = f"data/lakehouse/{symbol.replace(':', '_')}_1d.parquet"
+        parquet_path = f"data/lakehouse/{phys_sym.replace(':', '_')}_1d.parquet"
         if os.path.exists(parquet_path):
             mtime = os.path.getmtime(parquet_path)
-            # If updated in the last 12 hours, consider fresh for Daily data
+            # CR-829: Tighten freshness to 12 hours for proactive fetch
             if (time.time() - mtime) < (12 * 3600):
                 is_stale = False
 
         if do_backfill and (is_stale or force_sync):
             try:
-                # Deep Sync: request up to 1000 candles to ensure full coverage of 2025 and beyond
-                bf_depth = max(lookback_days + 50, 1000)
-                logger.info(f"Backfilling {symbol} (depth={bf_depth})...")
-                run_with_retry(lambda: local_loader.sync(symbol, interval="1d", depth=bf_depth, total_timeout=300), f"Backfill {symbol}")
+                # Deep Sync: request up to 2000 candles to ensure full coverage (SHP Standard)
+                bf_depth = max(lookback_days + 100, 2000)
+                logger.info(f"Backfilling {phys_sym} (depth={bf_depth})...")
+                run_with_retry(lambda: local_loader.sync(phys_sym, interval="1d", depth=bf_depth, total_timeout=300), f"Backfill {phys_sym}")
             except Exception as e:
-                logger.error(f"Backfill failed for {symbol}: {e}")
+                logger.error(f"Backfill failed for {phys_sym}: {e}")
 
         if do_gapfill and (is_stale or force_sync):
             try:
-                logger.info(f"Gap filling {symbol} (max_depth=1000)...")
-                run_with_retry(lambda: local_loader.repair(symbol, interval="1d", max_depth=1000, max_fills=20, max_time=180, total_timeout=180), f"Gap fill {symbol}")
+                logger.info(f"Gap filling {phys_sym} (max_depth=2000)...")
+                run_with_retry(lambda: local_loader.repair(phys_sym, interval="1d", max_depth=2000, max_fills=50, max_time=300, total_timeout=300), f"Gap fill {phys_sym}")
             except Exception as e:
-                logger.error(f"Gap fill failed for {symbol}: {e}")
+                logger.error(f"Gap fill failed for {phys_sym}: {e}")
 
-        logger.info(f"Loading history for {symbol}...")
+        logger.info(f"Loading history for {phys_sym}...")
         try:
-            df = local_loader.load(symbol, start_date, end_date, interval="1d")
+            df = local_loader.load(phys_sym, start_date, end_date, interval="1d")
             if df.empty:
-                skipped_empty.append(symbol)
+                skipped_empty.append(phys_sym)
                 return
 
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s").dt.date
-            df = df.set_index("timestamp")["close"]
-
-            returns = df.pct_change().dropna()
+            df_series = df.set_index("timestamp")["close"]
+            returns = df_series.pct_change().dropna()
 
             with lock:
-                # Atom Key: Asset_Logic_Direction
-                atom_id = f"{symbol}_{candidate.get('logic', 'trend')}_{candidate.get('direction', 'LONG')}"
-                price_data[atom_id] = returns
-                alpha_meta[atom_id] = {
-                    "symbol": symbol,
-                    "description": candidate.get("description", "N/A"),
-                    "sector": candidate.get("sector", "N/A"),
-                    "adx": candidate.get("adx", 0),
-                    "close": candidate.get("close", 0),
-                    "atr": candidate.get("atr", 0),
-                    "volatility_d": candidate.get("volatility_d", 0),
-                    "volume_change_pct": candidate.get("volume_change_pct", 0),
-                    "roc": candidate.get("roc", 0),
-                    "value_traded": candidate.get("value_traded", 0),
-                    "logic": candidate.get("logic", "trend"),
-                    "direction": candidate.get("direction", "LONG"),
-                    "market": candidate.get("market", "UNKNOWN"),
-                    "identity": candidate.get("identity", symbol),
-                    "is_benchmark": candidate.get("is_benchmark", False),
-                    "recommend_all": candidate.get("recommend_all"),
-                    "recommend_ma": candidate.get("recommend_ma"),
-                    "recommend_other": candidate.get("recommend_other"),
-                }
-        except Exception as e:
-            skipped_errors.append(symbol)
-            logger.error(f"Failed to load {symbol}: {e}")
+                # Map physical returns to all atoms
+                for candidate in candidates_for_phys:
+                    atom_id = candidate["symbol"]
+                    logic = candidate.get("logic") or "trend"
+                    direction = candidate.get("direction") or "LONG"
 
-    total_batches = math.ceil(len(universe) / batch_size) if batch_size > 0 else 1
+                    price_data[atom_id] = returns
+                    alpha_meta[atom_id] = {
+                        "symbol": phys_sym,
+                        "description": candidate.get("description", "N/A"),
+                        "sector": candidate.get("sector", "N/A"),
+                        "adx": candidate.get("adx", 0),
+                        "close": candidate.get("close", 0),
+                        "atr": candidate.get("atr", 0),
+                        "volatility_d": candidate.get("volatility_d", 0),
+                        "volume_change_pct": candidate.get("volume_change_pct", 0),
+                        "roc": candidate.get("roc", 0),
+                        "value_traded": candidate.get("value_traded", 0),
+                        "logic": logic,
+                        "direction": direction,
+                        "market": candidate.get("market", "UNKNOWN"),
+                        "identity": candidate.get("identity", phys_sym),
+                        "is_benchmark": candidate.get("is_benchmark", False),
+                        "recommend_all": candidate.get("recommend_all"),
+                        "recommend_ma": candidate.get("recommend_ma"),
+                        "recommend_other": candidate.get("recommend_other"),
+                    }
+
+        except Exception as e:
+            skipped_errors.append(phys_sym)
+            logger.error(f"Failed to load {phys_sym}: {e}")
+
+    phys_symbols = sorted(list(physical_map.keys()))
+    total_batches = math.ceil(len(phys_symbols) / batch_size) if batch_size > 0 else 1
 
     for batch_idx in range(total_batches):
-        batch = universe[batch_idx * batch_size : (batch_idx + 1) * batch_size]
-        logger.info("Processing batch %s/%s (%s symbols)", batch_idx + 1, total_batches, len(batch))
+        batch_syms = phys_symbols[batch_idx * batch_size : (batch_idx + 1) * batch_size]
+        logger.info("Processing batch %s/%s (%s physical symbols)", batch_idx + 1, total_batches, len(batch_syms))
         with ThreadPoolExecutor(max_workers=max(1, batch_size)) as executor:
-            futures = [executor.submit(fetch_and_store, c) for c in batch]
+            futures = [executor.submit(fetch_and_store, s, physical_map[s]) for s in batch_syms]
             per_symbol_timeout = 300
-            batch_timeout = len(batch) * per_symbol_timeout
+            batch_timeout = len(batch_syms) * per_symbol_timeout
             done, not_done = wait(futures, timeout=batch_timeout, return_when=ALL_COMPLETED)
 
             for fut in done:
@@ -197,6 +331,10 @@ def prepare_portfolio_universe():
                 logger.error(f"Batch timed out. {len(not_done)} tasks incomplete.")
 
     # 4. Aligned Matrix Creation
+    if not price_data:
+        logger.error("No price data loaded. Aborting matrix creation.")
+        return
+
     all_dates_raw = sorted(set().union(*(rets.index for rets in price_data.values())))
     # Ensure index is timezone-aware DatetimeIndex (UTC) to prevent downstream index errors
     all_dates = pd.to_datetime(all_dates_raw, utc=True)
@@ -266,9 +404,6 @@ def prepare_portfolio_universe():
     logger.info(f"Returns columns: {list(returns_df.columns)[:5]}")
     alpha_meta = {s: alpha_meta[s] for s in returns_df.columns if s in alpha_meta}
     logger.info(f"Alpha Meta size after filter: {len(alpha_meta)}")
-
-    returns_path = os.getenv("PORTFOLIO_RETURNS_PATH", "data/lakehouse/returns_matrix.parquet")
-    meta_path = os.getenv("PORTFOLIO_META_PATH", "data/lakehouse/portfolio_meta.json")
 
     logger.info(f"Returns matrix created: {returns_df.shape}")
     logger.info(f"Writing returns matrix to: {returns_path}")

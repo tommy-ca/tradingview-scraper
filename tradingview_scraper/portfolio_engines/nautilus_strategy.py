@@ -259,11 +259,13 @@ class NautilusRebalanceStrategy(Strategy):
             min_notional = limits.min_notional
 
         if step > 0:
-            qty = math.floor(raw_qty / step) * step
+            # Round towards zero to prevent over-allocation (especially for shorts)
+            qty = math.trunc(raw_qty / step) * step
         else:
             qty = raw_qty
 
-        if qty * price < min_notional:
+        # Check notional value using absolute quantity
+        if abs(qty) * price < min_notional:
             return 0.0
 
         return qty

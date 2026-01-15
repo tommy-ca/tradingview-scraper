@@ -21,12 +21,25 @@ def repair_gaps():
     args = parser.parse_args()
 
     candidates = []
-    candidates_files = ["data/lakehouse/portfolio_candidates.json", "data/lakehouse/portfolio_candidates_raw.json"]
+    # CR-831: Workspace Isolation
+    # Prioritize CANDIDATES_SELECTED, then CANDIDATES_RAW, then legacy paths
+    from tradingview_scraper.settings import get_settings
 
-    # Also check env var if provided (used in Pass 1)
-    env_file = os.getenv("CANDIDATES_FILE")
+    run_dir = get_settings().prepare_summaries_run_dir()
+
+    candidates_files = []
+
+    # Highest priority: Env var
+    env_file = os.getenv("CANDIDATES_FILE") or os.getenv("CANDIDATES_SELECTED") or os.getenv("CANDIDATES_RAW")
     if env_file:
-        candidates_files.insert(0, env_file)
+        candidates_files.append(env_file)
+
+    # Second priority: Run-specific workspace
+    candidates_files.append(str(run_dir / "data" / "portfolio_candidates.json"))
+    candidates_files.append(str(run_dir / "data" / "portfolio_candidates_raw.json"))
+
+    # Final priority: Shared lakehouse
+    candidates_files.extend(["data/lakehouse/portfolio_candidates.json", "data/lakehouse/portfolio_candidates_raw.json"])
 
     for cf in candidates_files:
         if os.path.exists(cf):

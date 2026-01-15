@@ -6,11 +6,11 @@ from typing import Any, Dict, List, cast
 import matplotlib
 
 matplotlib.use("Agg")  # Non-interactive backend
-import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.cluster.hierarchy as sch
-import seaborn as sns  # type: ignore
+import seaborn as sns
 from scipy.spatial.distance import squareform
 
 from tradingview_scraper.risk import VolatilityClusterer
@@ -190,7 +190,12 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     if os.path.exists(stats_path):
         stats_df = pd.read_json(stats_path)
 
-    returns = pd.read_pickle(returns_path)
+    # Load returns (Parquet or Pickle)
+    if returns_path.endswith(".parquet"):
+        returns = pd.read_parquet(returns_path)
+    else:
+        returns = pd.read_pickle(returns_path)
+
     if not isinstance(returns, pd.DataFrame):
         returns = pd.DataFrame(returns)
 
@@ -343,11 +348,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["selected", "raw"], default="selected")
     args = parser.parse_args()
+
     settings = get_settings()
-    settings.prepare_summaries_run_dir()
-    c_path, m_path = "data/lakehouse/portfolio_clusters.json", "data/lakehouse/portfolio_meta.json"
-    if args.mode == "raw":
-        c_path = "data/lakehouse/portfolio_clusters_raw.json"
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    default_clusters = str(run_dir / "data" / ("portfolio_clusters_raw.json" if args.mode == "raw" else "portfolio_clusters.json"))
+    if not os.path.exists(default_clusters):
+        default_clusters = "data/lakehouse/portfolio_clusters_raw.json" if args.mode == "raw" else "data/lakehouse/portfolio_clusters.json"
+
+    default_meta = str(run_dir / "data" / "portfolio_meta.json")
+    if not os.path.exists(default_meta):
+        default_meta = "data/lakehouse/portfolio_meta.json"
+
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = "data/lakehouse/portfolio_returns.pkl"
+
+    c_path = os.getenv("CLUSTERS_FILE" if args.mode == "selected" else "CLUSTERS_RAW", default_clusters)
+    m_path = os.getenv("PORTFOLIO_META", default_meta)
+    r_path = os.getenv("RETURNS_MATRIX", default_returns)
+    s_path = os.getenv("ANTIFRAGILITY_STATS", str(run_dir / "data" / "antifragility_stats.json"))
 
     out_p = settings.run_reports_dir / "research" / "cluster_analysis.md"
     out_p.parent.mkdir(parents=True, exist_ok=True)
@@ -357,8 +378,8 @@ if __name__ == "__main__":
     analyze_clusters(
         clusters_path=c_path,
         meta_path=m_path,
-        returns_path="data/lakehouse/portfolio_returns.pkl",
-        stats_path="data/lakehouse/antifragility_stats.json",
+        returns_path=r_path,
+        stats_path=s_path,
         output_path=str(out_p),
         image_path=str(plot_dir / "portfolio_clustermap.png"),
         vol_image_path=str(plot_dir / "volatility_clustermap.png"),

@@ -65,13 +65,22 @@ def flatten_weights(meta_weights_path: str, meta_manifest_path: str, output_path
 
         logger.info(f"Extracting weights for sleeve {s_id} (profile: {target_profile}) from {run_path}")
 
-        # Fallback: check artifacts/summaries/runs/<RUN_ID>/data/metadata/portfolio_optimized_v2.json
-        opt_path = Path(run_path) / "data" / "metadata" / "portfolio_optimized_v2.json"
-        if not opt_path.exists():
-            opt_path = Path(run_path) / "portfolio_optimized_v2.json"
+        # CR-831: Workspace Isolation Aware Extraction
+        # Try prioritized isolated paths
+        search_paths = [
+            Path(run_path) / "data" / "portfolio_optimized_v2.json",
+            Path(run_path) / "data" / "metadata" / "portfolio_optimized_v2.json",
+            Path(run_path) / "portfolio_optimized_v2.json",
+        ]
+
+        opt_path = None
+        for sp in search_paths:
+            if sp.exists():
+                opt_path = sp
+                break
 
         found_weights = False
-        if opt_path.exists():
+        if opt_path:
             with open(opt_path, "r") as f:
                 opt_data = json.load(f)
 

@@ -16,14 +16,31 @@ logger = logging.getLogger("cluster_drift")
 
 def monitor_drift():
     # 1. Load Data
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
-    clusters_path = "data/lakehouse/portfolio_clusters.json"
+    settings = get_settings()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = "data/lakehouse/portfolio_returns.pkl"
+
+    default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
+    if not os.path.exists(default_clusters):
+        default_clusters = "data/lakehouse/portfolio_clusters.json"
+
+    returns_path = os.getenv("RETURNS_MATRIX", default_returns)
+    clusters_path = os.getenv("CLUSTERS_FILE", default_clusters)
 
     if not os.path.exists(returns_path) or not os.path.exists(clusters_path):
-        logger.error("Required data missing.")
+        logger.error(f"Required data missing: {returns_path} or {clusters_path}")
         return
 
-    returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+    # Load returns (Parquet or Pickle)
+    if returns_path.endswith(".parquet"):
+        returns = pd.read_parquet(returns_path)
+    else:
+        returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+
     with open(clusters_path, "r") as f:
         clusters = cast(Dict[str, List[str]], json.load(f))
 
@@ -106,7 +123,9 @@ def monitor_drift():
     print(df.tail(5)[["Cluster_ID", "Drift_Score", "Corr_Delta", "Size", "Lead_Asset"]].to_string(index=False))
 
     # Save results
-    df.to_json("data/lakehouse/cluster_drift.json")
+    json_out = run_dir / "data" / "cluster_drift.json"
+    os.makedirs(json_out.parent, exist_ok=True)
+    df.to_json(str(json_out))
 
     # Generate Markdown Summary
     md = ["# 🔄 Cluster Drift & Stability Report"]

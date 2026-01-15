@@ -22,13 +22,28 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("portfolio_auditor")
 
 # Configuration
-LAKEHOUSE_PATH = "data/lakehouse"
-CANDIDATES_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_candidates.json")
-CANDIDATES_RAW_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_candidates_raw.json")
-RETURNS_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_returns.pkl")
-RETURNS_RAW_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_returns_raw.pkl")
+LAKEHOUSE_PATH = os.getenv("LAKEHOUSE_DIR", "data/lakehouse")
+
+
+def get_run_artifacts():
+    settings = get_settings()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    c_raw = os.getenv("CANDIDATES_RAW", str(run_dir / "data" / "portfolio_candidates_raw.json"))
+    c_sel = os.getenv("CANDIDATES_SELECTED", str(run_dir / "data" / "portfolio_candidates.json"))
+    r_mat = os.getenv("RETURNS_MATRIX", str(run_dir / "data" / "returns_matrix.parquet"))
+
+    # Fallback for raw returns if they exist separately
+    r_raw = os.getenv("RETURNS_RAW", r_mat)
+
+    return c_raw, c_sel, r_mat, r_raw
+
+
+CANDIDATES_RAW_FILE, CANDIDATES_FILE, RETURNS_FILE, RETURNS_RAW_FILE = get_run_artifacts()
 OPTIMIZED_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_optimized_v2.json")
-FRESHNESS_THRESHOLD_HOURS = 72
+
+FRESHNESS_THRESHOLD_HOURS = 24  # CR-829: Tightened for Crypto (Previously 72)
 # Daily bars for TradFi can be stale across weekends/holidays; use a day-based threshold.
 FRESHNESS_THRESHOLD_DAYS_TRADFI = int(os.getenv("FRESHNESS_THRESHOLD_DAYS_TRADFI", "5"))
 
@@ -65,20 +80,45 @@ class PortfolioAuditor:
             return None
         return f"{exchange}:{ticker}"
 
-    def _resolve_candidate_symbol(self, symbol: str, *, interval: str, returns_symbols: set) -> str:
-        # Selected-mode candidates should already be fully qualified (EXCHANGE:SYMBOL).
-        if ":" in symbol:
+    def _strip_atom_suffix(self, symbol: str) -> str:
+        """Removes strategy/direction suffix from Atom ID to get physical symbol."""
+        # Standard Atom format: EXCHANGE:TICKER_logic_DIRECTION
+        # If it contains no underscore after the first colon, it's likely already physical.
+        if "_" not in symbol:
             return symbol
+
+        # Split by underscore and check if last part is LONG/SHORT
+        parts = symbol.split("_")
+        if parts[-1] in ["LONG", "SHORT"]:
+            # Reconstruct the part before the first suffix underscore
+            # Usually: Symbol_Logic_Direction
+            # But Symbol might have underscores too if it's qualified incorrectly,
+            # though EXCHANGE:TICKER shouldn't have many.
+            # Most reliable: find the first underscore after the ':'
+            colon_idx = symbol.find(":")
+            if colon_idx != -1:
+                first_underscore = symbol.find("_", colon_idx)
+                if first_underscore != -1:
+                    return symbol[:first_underscore]
+        return symbol
+
+    def _resolve_candidate_symbol(self, symbol: str, *, interval: str, returns_symbols: set) -> str:
+        # If it looks like an Atom ID, strip it first to find physical file
+        phys_symbol = self._strip_atom_suffix(symbol)
+
+        # Selected-mode candidates should already be fully qualified (EXCHANGE:SYMBOL).
+        if ":" in phys_symbol:
+            return phys_symbol
 
         # Raw-mode candidates may be unqualified (e.g., "AAPL"). If the lakehouse already contains a
         # unique match for the daily parquet, resolve it so health checks don't false-fail.
         try:
             lakehouse_dir = os.path.join(LAKEHOUSE_PATH)
             # Match any exchange prefix (NASDAQ_AAPL_1d.parquet, NYSE_AAPL_1d.parquet, ...).
-            glob_pat = os.path.join(lakehouse_dir, f"*_{symbol}_{interval}.parquet")
+            glob_pat = os.path.join(lakehouse_dir, f"*_{phys_symbol}_{interval}.parquet")
             matches = sorted([p for p in glob.glob(glob_pat) if os.path.isfile(p)])
         except Exception:
-            return symbol
+            return phys_symbol
 
         resolved: List[str] = []
         for path in matches:
@@ -87,13 +127,16 @@ class PortfolioAuditor:
                 resolved.append(candidate)
 
         if not resolved:
-            return symbol
+            return phys_symbol
         if len(resolved) == 1:
             return resolved[0]
 
-        in_returns = [s for s in resolved if s in returns_symbols]
-        if len(in_returns) == 1:
-            return in_returns[0]
+        # Use returns_symbols (which are Atoms) to disambiguate if needed
+        # We need to find which Atom matches our physical symbol
+        for res in resolved:
+            for ret_s in returns_symbols:
+                if ret_s.startswith(res + "_"):
+                    return res
 
         # Prefer common US venues if ambiguous.
         preferred_prefixes = ("NASDAQ:", "NYSE:", "AMEX:")

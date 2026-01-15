@@ -32,7 +32,9 @@ class SelectionPolicyStage(BasePipelineStage):
         scores = context.inference_outputs["alpha_score"]
         features = context.feature_store
         clusters = context.clusters
-        candidate_map = {str(c["symbol"]): c for c in context.raw_pool}
+
+        # CR-823: Metadata Map (Standard: symbol=Atom ID)
+        candidate_map: Dict[str, Any] = {str(c["symbol"]): c for c in context.raw_pool}
 
         relaxation_stage = int(params.get("relaxation_stage", 1))
         top_n = int(params.get("top_n", 2))
@@ -40,18 +42,28 @@ class SelectionPolicyStage(BasePipelineStage):
         # 2. Apply Vetoes
         disqualified = self._apply_vetoes(features, candidate_map, settings, params)
 
+        # Ensure we only consider candidates from the provided raw_pool (Intent Preservation)
+        eligible_pool = set(candidate_map.keys())
+        logger.info(f"DEBUG: Policy Stage Eligible Pool Size: {len(eligible_pool)}")
+        if len(eligible_pool) > 0:
+            logger.info(f"DEBUG: Eligible Sample: {list(eligible_pool)[:5]}")
+
         # 3. Recruitment Loop
         recruitment_buffer: Set[str] = set()
 
+        def _get_score(s_id: str) -> float:
+            val = scores.get(s_id)
+            return float(val) if val is not None else -1.0
+
         # Cluster Recruitment
         for cid, symbols in clusters.items():
-            non_vetoed = [str(s) for s in symbols if str(s) not in disqualified]
+            # Prune symbols not in eligible pool or vetoed
+            non_vetoed = [str(s) for s in symbols if str(s) in eligible_pool and str(s) not in disqualified]
             if not non_vetoed:
                 # STAGE 3: Force Representative if Cluster Empty
                 if relaxation_stage >= 3 and symbols:
                     sym_list = [str(s) for s in symbols]
-                    # Direct lookup with float conversion for robust sorting
-                    all_ranked = sorted(sym_list, key=lambda x: float(scores.get(x, -1.0)), reverse=True)
+                    all_ranked = sorted(sym_list, key=_get_score, reverse=True)
                     for s in all_ranked:
                         # Defensive float conversion for entropy
                         ent = 1.0
@@ -80,42 +92,65 @@ class SelectionPolicyStage(BasePipelineStage):
             longs = []
             shorts = []
             for s in uniques:
-                mom = 0.0
-                if s in features.index:
-                    try:
-                        mom_val = features.loc[s, "momentum"]
-                        mom = float(mom_val) if mom_val is not None else 0.0
-                    except (TypeError, ValueError):
-                        mom = 0.0
+                item_meta = candidate_map.get(s, {})
+                # CR-823: Respect Discovery Intent for recruitment partitioning
+                item_dir = str(item_meta.get("direction") or "").upper()
+                if item_dir not in ["LONG", "SHORT"]:
+                    mom = float(features.loc[s, "momentum"]) if s in features.index else 0.0
+                    item_dir = "LONG" if mom >= 0 else "SHORT"
 
-                if mom >= 0:
+                if item_dir == "LONG":
                     longs.append(s)
                 else:
                     shorts.append(s)
 
             if longs:
-                ranked_longs = sorted(longs, key=lambda x: float(scores.get(x, -1.0)), reverse=True)
+                ranked_longs = sorted(longs, key=_get_score, reverse=True)
                 recruitment_buffer.update(ranked_longs[:top_n])
-            if shorts:
-                ranked_shorts = sorted(shorts, key=lambda x: float(scores.get(x, -1.0)), reverse=True)
+
+            # CR-822: Directional Integrity
+            # Only recruit SHORTS if specifically enabled in settings
+            if shorts and settings.features.feat_short_direction:
+                ranked_shorts = sorted(shorts, key=_get_score, reverse=True)
                 recruitment_buffer.update(ranked_shorts[:top_n])
 
         # STAGE 4: Balanced Fallback
-        if len(recruitment_buffer) < 15 and relaxation_stage >= 4:
-            needed = 15 - len(recruitment_buffer)
-            valid_pool = [
-                str(s)
-                for s in scores.index
-                if str(s) not in recruitment_buffer and str(s) not in disqualified and (float(features.loc[str(s), "entropy"]) if str(s) in features.index else 1.0) <= 0.999
-            ]
-            global_ranked = sorted(valid_pool, key=lambda s: float(scores.get(s, -1.0)), reverse=True)
+        # CR-825: Enforce strict floor of 15 assets to prevent optimizer degeneration
+        target_floor = 15
+        if len(recruitment_buffer) < target_floor and relaxation_stage >= 4:
+            needed = target_floor - len(recruitment_buffer)
+
+            # CR-822/CR-823: Directional-Aware Fallback
+            def _is_allowed(s_id: str) -> bool:
+                if not settings.features.feat_short_direction:
+                    # If SHORTS disabled, verify item isn't short
+                    # First check discovery intent
+                    meta = candidate_map.get(s_id, {})
+                    if str(meta.get("direction")).upper() == "SHORT":
+                        return False
+                    # Then check momentum if intent missing
+                    if not meta.get("direction"):
+                        mom = float(features.loc[s_id, "momentum"]) if s_id in features.index else 0.0
+                        if mom < 0:
+                            return False
+                return True
+
+            valid_pool = [str(s) for s in scores.index if str(s) in eligible_pool and str(s) not in recruitment_buffer and str(s) not in disqualified and _is_allowed(str(s))]
+            global_ranked = sorted(valid_pool, key=_get_score, reverse=True)
             recruitment_buffer.update(global_ranked[:needed])
+
+            # CR-826: Absolute Scarcity Fallback (Ignore Vetoes if still under floor)
+            if len(recruitment_buffer) < target_floor:
+                needed_now = target_floor - len(recruitment_buffer)
+                desperation_pool = [str(s) for s in scores.index if str(s) in eligible_pool and str(s) not in recruitment_buffer and _is_allowed(str(s))]
+                desperation_ranked = sorted(desperation_pool, key=_get_score, reverse=True)
+                recruitment_buffer.update(desperation_ranked[:needed_now])
 
         # 4. Finalize Winners & Apply Pool Sizing (Pillar 1)
         winners = []
 
         # Sort buffer by absolute conviction
-        sorted_buffer = sorted(list(recruitment_buffer), key=lambda s: float(scores.get(s, -1.0)), reverse=True)
+        sorted_buffer = sorted(list(recruitment_buffer), key=_get_score, reverse=True)
 
         # Institutional Cap: Max 25 assets to maintain high weight fidelity
         # Delegation: Directional balance and other risk constraints are handled in Pillar 3
@@ -125,8 +160,20 @@ class SelectionPolicyStage(BasePipelineStage):
         for s in final_selected:
             meta = candidate_map.get(s, {"symbol": s}).copy()
             meta["alpha_score"] = float(scores.get(s, 0.0))
-            mom = float(features.loc[s, "momentum"]) if s in features.index else 0.0
-            meta["direction"] = "LONG" if mom >= 0 else "SHORT"
+
+            # CR-831: Preserve Canonical Identity
+            # symbol=Atom ID, physical_symbol=Exchange:Ticker
+            # Both are already in meta from SelectTopUniverse
+
+            # CR-823: Respect Discovery Direction
+            discovery_direction = meta.get("direction")
+            if discovery_direction and str(discovery_direction).upper() in ["LONG", "SHORT"]:
+                meta["direction"] = str(discovery_direction).upper()
+            else:
+                mom = float(features.loc[s, "momentum"]) if s in features.index else 0.0
+                meta["direction"] = "LONG" if mom >= 0 else "SHORT"
+
+            logger.info(f"DEBUG: Winner {s} Direction: {meta['direction']} (Disc: {discovery_direction})")
             winners.append(meta)
 
         context.winners = winners

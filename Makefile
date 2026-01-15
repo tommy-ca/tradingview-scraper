@@ -103,6 +103,27 @@ export RUN_ID
 export TV_RUN_ID := $(RUN_ID)
 export TV_EXPORT_RUN_ID := $(RUN_ID)
 
+# workspace paths
+RUN_DATA_DIR ?= artifacts/summaries/runs/$(RUN_ID)/data
+LAKEHOUSE ?= data/lakehouse
+
+# artifacts
+CANDIDATES_RAW := $(RUN_DATA_DIR)/portfolio_candidates_raw.json
+CANDIDATES_SELECTED := $(RUN_DATA_DIR)/portfolio_candidates.json
+RETURNS_MATRIX := $(RUN_DATA_DIR)/returns_matrix.parquet
+PORTFOLIO_META := $(RUN_DATA_DIR)/portfolio_meta.json
+SELECTION_AUDIT := $(RUN_DATA_DIR)/selection_audit.json
+CLUSTERS_FILE := $(RUN_DATA_DIR)/portfolio_clusters.json
+
+# Environment promotion
+export CANDIDATES_RAW
+export CANDIDATES_SELECTED
+export RETURNS_MATRIX
+export PORTFOLIO_META
+export SELECTION_AUDIT
+export CLUSTERS_FILE
+export LAKEHOUSE_DIR := $(LAKEHOUSE)
+
 debug-env: ## Print resolved environment variables
 	@echo "PROFILE: $(PROFILE)"
 	@echo "TV_DATA__MIN_DAYS_FLOOR: $$TV_DATA__MIN_DAYS_FLOOR"
@@ -164,15 +185,15 @@ crypto-scan-audit: ## Validate crypto scanner configurations
 # --- DATA Namespace ---
 data-prep-raw: ## Aggregate scans and initialize raw pool
 	$(PY) scripts/select_top_universe.py --mode raw
-	CANDIDATES_FILE=data/lakehouse/portfolio_candidates_raw.json PORTFOLIO_RETURNS_PATH=data/lakehouse/portfolio_returns.pkl PORTFOLIO_META_PATH=data/lakehouse/portfolio_meta.json $(PY) scripts/prepare_portfolio_data.py
-	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_meta.json --returns data/lakehouse/portfolio_returns.pkl
+	CANDIDATES_FILE=$(CANDIDATES_RAW) PORTFOLIO_RETURNS_PATH=$(RETURNS_MATRIX) PORTFOLIO_META_PATH=$(PORTFOLIO_META) $(PY) scripts/prepare_portfolio_data.py
+	$(PY) scripts/enrich_candidates_metadata.py --candidates $(PORTFOLIO_META) --returns $(RETURNS_MATRIX)
 	-$(PY) scripts/validate_portfolio_artifacts.py --mode raw --only-health
-	$(PY) scripts/metadata_coverage_guardrail.py --target canonical:data/lakehouse/portfolio_candidates_raw.json:data/lakehouse/portfolio_returns.pkl
+	$(PY) scripts/metadata_coverage_guardrail.py --target canonical:$(CANDIDATES_RAW):$(RETURNS_MATRIX)
 
 
 data-fetch: ## Ingest historical market data
 	$(PY) scripts/prepare_portfolio_data.py
-	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_meta.json
+	$(PY) scripts/enrich_candidates_metadata.py --candidates $(PORTFOLIO_META)
 	@if [ "$(GAPFILL)" = "1" ] || [ "$(TV_GAPFILL)" = "1" ]; then \
 		echo "Running final aggressive repair pass..."; \
 		$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15; \
@@ -193,9 +214,9 @@ data-audit: ## Session-Aware health audit (use STRICT_HEALTH=1)
 
 # --- PORT Namespace ---
 port-select: ## Natural selection and pruning
-	$(PY) scripts/enrich_candidates_metadata.py --candidates data/lakehouse/portfolio_meta.json
+	$(PY) scripts/enrich_candidates_metadata.py --candidates $(PORTFOLIO_META)
 	$(PY) scripts/natural_selection.py
-	$(PY) scripts/metadata_coverage_guardrail.py --target selected:data/lakehouse/portfolio_candidates.json:data/lakehouse/portfolio_returns.pkl
+	$(PY) scripts/metadata_coverage_guardrail.py --target selected:$(CANDIDATES_SELECTED):$(RETURNS_MATRIX)
 
 port-optimize: ## Strategic asset allocation (Convex)
 	$(PY) scripts/optimize_clustered_v2.py
