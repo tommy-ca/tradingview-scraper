@@ -189,6 +189,7 @@ As of v3.7.2, the selection pipeline has been hardened with institutional liquid
 - **Pure Discovery Model**:
     - Discovery scanners are stripped of technical gates (ADX, Momentum) and alpha-ranking to maximize recruitment breadth.
     - **Baseline Purity**: L1 Base Scanners (Spot/Perp) enforce only liquidity floors and venue type, sorting by `name` or `Value.Traded` to avoid early-stage selection bias.
+    - **No Complex Logic**: Discovery scanners are prohibited from applying conditional filters or statistical pruning. All such logic is offloaded to the **Selection Policy Vetoes** to preserve funnel traceability.
     - **Venue Isolation**: Spot and Perpetual outputs are strictly separated. The pipeline ensures that atoms from different venues do not contaminate each other's return streams or metadata.
     - **Sentiment Floors**: Strictly `> 0.0` (LONG) or `< 0.0` (SHORT) in strategy-specific scanners to prioritize high-conviction signals.
 
@@ -196,5 +197,8 @@ As of v3.7.2, the selection pipeline has been hardened with institutional liquid
     - The system supports the persistence of multiple orthogonal "Strategy Atoms" for the same physical asset (indexed as `Asset_Logic_Direction`).
 - **Recruitment Depth**: 
     - Scanner limits increased to **100 candidates** per strategy to ensure a sufficiently deep pool for the HTR relaxation loop.
+- **Implementation Hygiene**:
+    - **Venue Purity**: Preference for USD-Stable quotes to eliminate regional fiat artifacts in technical ratings.
+    - **Velocity Bounds**: Explicit capping and audit flags for extreme momentum (ROC > 50%) to prevent recruitment of blow-off tops. (Reference Outlier: `FHEUSDT.P` with ROC > 100%).
 - **Champion Performance (HRP)**: Sharpe 1.56 (v3.7.0 Baseline), AnnRet 79%, MaxDD -27.6%.
 

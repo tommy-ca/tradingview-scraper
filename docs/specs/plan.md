@@ -184,10 +184,22 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Redundant Filter Cleanup**: Audited and removed redundant Python-side post-filters (Perps, Dated Futures, Quote Whitelists) in favor of native TradingView screener filters. [COMPLETED]
 - [x] **Agnostic Base Scanner Audit**: Verified `binance_spot_base.yaml` (>$20M) and `binance_perp_base.yaml` (>$50M) provide truly unranked liquidity pools with strict venue isolation and neutral `name` sorting. [COMPLETED]
 - [x] **Venue Isolation Standard**: Explicitly separated Spot and Perp outputs in discovery and Lakehouse persistence to prevent data contamination. [COMPLETED]
+- [x] **Lean Recruitment Standard**: Formalized requirement to offload all complex statistical filtering (ADX, ROC Capping) to downstream Selection Vetoes. [COMPLETED]
 - [x] **Exhaustive Recruitment Audit**: Verified recruitment of ~140 distinct atoms across orthogonal rating strategies with strictly non-neutral sentiment (> 0.0 / < 0.0). [COMPLETED]
+- [x] **Logic Preservation**: Verified consolidator persistence of `logic` metadata (`rating_all`, `rating_ma`, `rating_osc`) for independent return stream generation. [COMPLETED]
+- [x] **Strategy as an Asset**: Defined "Strategy Stream" architecture and created granular manifest profiles (`crypto_rating_all`, `crypto_rating_ma`, `crypto_rating_osc`) for independent execution. [COMPLETED]
+- [x] **Hedging Design Audit**: Validated that combined LONG/SHORT profiles enable native risk-parity hedging without requiring manual splitting. [COMPLETED]
+- [x] **Forensic Anomaly Audit**: Confirmed Venue Purity (0% leakage) and identified `FHEUSDT.P` as a reference ROC outlier (>100%). [COMPLETED]
+- [x] **Implementation Hardening**: Refactor scanners to prioritize USD-Stable venues (Done in L1 Audit) and identified ROC-capping requirement. [COMPLETED]
+
+### Phase 156: Meta-Portfolio Allocation & Risk Hardening (IN PROGRESS)
+- [x] **Veto Implementation**: Implemented `SelectionPolicyStage` vetoes for extreme ROC (>100% / <-80%) and Volatility (>100.0) to prune outliers. [COMPLETED]
+- [ ] **Strategy Execution**: Execute granular profiles (`rating_all`, `rating_ma`, `rating_osc`) to generate isolated synthetic equity curves.
+- [ ] **Meta-Allocation**: Construct the final Meta-Portfolio by allocating capital across these synthetic strategy streams.
+- [ ] **Final Certification**: Execute end-to-end tournament of the Multi-Strategy Meta-Portfolio.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.7.7) - Venue Isolated & Audited
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.8.1) - Tail-Risk Vetoes Active
 
 
 

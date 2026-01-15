@@ -169,6 +169,129 @@
         }
       }
     },
+    "crypto_rating_all": {
+      "description": "Composite Rating Strategy (Recommend.All) - Independent Return Stream",
+      "selection": { "top_n": 5, "threshold": 0.45, "selection_mode": "v4" },
+      "risk": { "cluster_lookbacks": [5, 60, 120, 200] },
+      "backtest": {
+        "engines": "custom,skfolio,riskfolio",
+        "profiles": "hrp,max_sharpe,market_neutral",
+        "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
+        "backtest_slippage": 0.001,
+        "backtest_commission": 0.0004,
+        "train_window": 60,
+        "test_window": 20,
+        "step_size": 20
+      },
+      "features": {
+        "selection_mode": "v4",
+        "feat_dynamic_selection": false,
+        "feat_short_direction": true,
+        "entropy_max_threshold": 0.999,
+        "feat_predictability_vetoes": true,
+        "feat_directional_returns": true,
+        "feat_dynamic_direction": true
+      },
+      "data": { "lookback_days": 500, "min_days_floor": 20 },
+      "discovery": {
+        "enabled_markets": ["crypto"],
+        "strategies": {
+          "rating_all": {
+            "scanners": [
+              "scanners/crypto/ratings/binance_perp_rating_all_long",
+              "scanners/crypto/ratings/binance_perp_rating_all_short",
+              "scanners/crypto/ratings/binance_spot_rating_all_long",
+              "scanners/crypto/ratings/binance_spot_rating_all_short"
+            ],
+            "interval": "1d",
+            "ingestion_depth": 500,
+            "strict_health": true
+          }
+        }
+      }
+    },
+    "crypto_rating_ma": {
+      "description": "Moving Average Rating Strategy (Recommend.MA) - Independent Return Stream",
+      "selection": { "top_n": 5, "threshold": 0.45, "selection_mode": "v4" },
+      "risk": { "cluster_lookbacks": [5, 60, 120, 200] },
+      "backtest": {
+        "engines": "custom,skfolio,riskfolio",
+        "profiles": "hrp,max_sharpe,market_neutral",
+        "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
+        "backtest_slippage": 0.001,
+        "backtest_commission": 0.0004,
+        "train_window": 60,
+        "test_window": 20,
+        "step_size": 20
+      },
+      "features": {
+        "selection_mode": "v4",
+        "feat_dynamic_selection": false,
+        "feat_short_direction": true,
+        "entropy_max_threshold": 0.999,
+        "feat_predictability_vetoes": true,
+        "feat_directional_returns": true,
+        "feat_dynamic_direction": true
+      },
+      "data": { "lookback_days": 500, "min_days_floor": 20 },
+      "discovery": {
+        "enabled_markets": ["crypto"],
+        "strategies": {
+          "rating_ma": {
+            "scanners": [
+              "scanners/crypto/ratings/binance_perp_rating_ma_long",
+              "scanners/crypto/ratings/binance_perp_rating_ma_short",
+              "scanners/crypto/ratings/binance_spot_rating_ma_long",
+              "scanners/crypto/ratings/binance_spot_rating_ma_short"
+            ],
+            "interval": "1d",
+            "ingestion_depth": 500,
+            "strict_health": true
+          }
+        }
+      }
+    },
+    "crypto_rating_osc": {
+      "description": "Oscillator Rating Strategy (Recommend.Other) - Independent Return Stream",
+      "selection": { "top_n": 5, "threshold": 0.45, "selection_mode": "v4" },
+      "risk": { "cluster_lookbacks": [5, 60, 120, 200] },
+      "backtest": {
+        "engines": "custom,skfolio,riskfolio",
+        "profiles": "hrp,max_sharpe,market_neutral",
+        "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
+        "backtest_slippage": 0.001,
+        "backtest_commission": 0.0004,
+        "train_window": 60,
+        "test_window": 20,
+        "step_size": 20
+      },
+      "features": {
+        "selection_mode": "v4",
+        "feat_dynamic_selection": false,
+        "feat_short_direction": true,
+        "entropy_max_threshold": 0.999,
+        "feat_predictability_vetoes": true,
+        "feat_directional_returns": true,
+        "feat_dynamic_direction": true
+      },
+      "data": { "lookback_days": 500, "min_days_floor": 20 },
+      "discovery": {
+        "enabled_markets": ["crypto"],
+        "strategies": {
+          "rating_osc": {
+            "scanners": [
+              "scanners/crypto/ratings/binance_perp_rating_osc_long",
+              "scanners/crypto/ratings/binance_perp_rating_osc_short",
+              "scanners/crypto/ratings/binance_spot_rating_osc_long",
+              "scanners/crypto/ratings/binance_spot_rating_osc_short"
+            ],
+            "interval": "1d",
+            "ingestion_depth": 500,
+            "strict_health": true
+          }
+        }
+      }
+    },
     "crypto_rating_alpha": {
       "description": "High-Conviction Rating-Based Alpha Strategy (Technical/MA Rating focused)",
       "selection": {

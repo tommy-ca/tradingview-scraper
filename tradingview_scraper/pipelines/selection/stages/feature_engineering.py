@@ -60,6 +60,9 @@ class FeatureEngineeringStage(BasePipelineStage):
         rec_all = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_all") or 0) for s in df.columns})
         rec_ma = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_ma") or 0) for s in df.columns})
         rec_other = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_other") or 0) for s in df.columns})
+        roc = pd.Series({s: float(candidate_map.get(s, {}).get("roc") or 0) for s in df.columns})
+        vol_d = pd.Series({s: float(candidate_map.get(s, {}).get("volatility_d") or 0) for s in df.columns})
+        vol_chg = pd.Series({s: float(candidate_map.get(s, {}).get("volume_change_pct") or 0) for s in df.columns})
 
         # Use v3 standardized liquidity scoring (normalized to $500M)
         liquidity = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in df.columns})
@@ -84,6 +87,9 @@ class FeatureEngineeringStage(BasePipelineStage):
                 "recommend_all": rec_all,
                 "recommend_ma": rec_ma,
                 "recommend_other": rec_other,
+                "roc": roc,
+                "volatility_d": vol_d,
+                "volume_change_pct": vol_chg,
                 "liquidity": liquidity,
                 "antifragility": af_all,
                 "survival": regime_all,

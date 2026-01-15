@@ -169,6 +169,16 @@ class SelectionPolicyStage(BasePipelineStage):
                 if vol_val > 2.5:  # Hard cap on asset-level volatility (250%)
                     disqualified.add(s)
 
+                # CR-801: Velocity & Stability Vetoes (Phase 156)
+                # Prune "Blow-Off Top" artifacts identified in forensic audit (e.g. FHEUSDT.P)
+                roc_val = float(features.loc[s, "roc"]) if "roc" in features.columns else 0.0
+                vol_d_val = float(features.loc[s, "volatility_d"]) if "volatility_d" in features.columns else 0.0
+
+                if roc_val > 100.0 or roc_val < -80.0:
+                    disqualified.add(s)
+                if vol_d_val > 100.0:
+                    disqualified.add(s)
+
             # 3. Regime Veto (Darwinian)
             surv = float(features.loc[s, "survival"])
             if surv < 0.1:
