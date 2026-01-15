@@ -154,7 +154,15 @@ def select_top_universe(mode: str = "raw"):
         elif isinstance(raw_data, list):
             items = cast(List[Dict[str, Any]], raw_data)
 
-        # Prefer embedded metadata; fall back to filename heuristics.
+        # 0. Context Mapping (Category extraction)
+        category = str(meta.get("data_category", "UNKNOWN")).upper()
+        if category == "UNKNOWN":
+            if "binance_perp" in f.lower():
+                category = "BINANCE_PERP"
+            elif "binance_spot" in f.lower():
+                category = "BINANCE_SPOT"
+
+        # 1. Prefer embedded metadata; fall back to filename heuristics.
         file_direction = "SHORT" if "_short" in f.lower() else "LONG"
         file_logic = "trend"
         if "_rating_all" in f.lower():
@@ -167,69 +175,16 @@ def select_top_universe(mode: str = "raw"):
             file_logic = "vol_breakout"
 
         meta_direction = meta.get("direction") or (meta.get("trend") or {}).get("direction")
-        if isinstance(meta_direction, str) and meta_direction.strip():
-            candidate = meta_direction.strip().upper()
-            if candidate in {"LONG", "SHORT"}:
-                file_direction = candidate
-
-        category = "UNKNOWN"
-        meta_exchange = meta.get("primary_exchange")
-        if not meta_exchange:
-            exchanges = meta.get("exchanges", [])
-            if isinstance(exchanges, list) and len(exchanges) > 0:
-                meta_exchange = exchanges[0]
-
-        meta_product = meta.get("product") or meta.get("data_category")
-        if isinstance(meta_exchange, str) and isinstance(meta_product, str) and meta_exchange and meta_product:
-            category = f"{meta_exchange.upper()}_{meta_product.upper()}"
-        elif isinstance(meta_product, str) and meta_product:
-            # If we only have product/category, use it as the main category
-            category = meta_product.upper()
-        else:
-            parts = os.path.basename(f).split("_")
-            try:
-                clean = [p for p in parts if p not in ["universe", "selector"] and not p[0].isdigit()]
-                exchange = "UNKNOWN"
-                mtype = "UNKNOWN"
-                for p in clean:
-                    if p.upper() in [
-                        "BINANCE",
-                        "BYBIT",
-                        "OKX",
-                        "BITGET",
-                        "NASDAQ",
-                        "NYSE",
-                        "AMEX",
-                        "CME",
-                        "FOREX",
-                        "US",
-                        "BOND",
-                        "OANDA",
-                        "THINKMARKETS",
-                    ]:
-                        exchange = p.upper()
-                    if p.upper() in ["SPOT", "PERP", "FUTURES", "STOCKS", "ETF", "BONDS", "CFD"]:
-                        mtype = p.upper()
-                category = f"{exchange}_{mtype}"
-            except Exception:
-                category = "UNKNOWN"
-
-        if category not in audit_discovery["categories"]:
-            audit_discovery["categories"][category] = {"long": 0, "short": 0, "total": 0}
-
-        count = len(items) if items else 0
-        audit_discovery["total_symbols_found"] += count
-        if file_direction == "LONG":
-            audit_discovery["categories"][category]["long"] += count
-        else:
-            audit_discovery["categories"][category]["short"] += count
-        audit_discovery["categories"][category]["total"] += count
+        # Priority 1: logic field from manifest/config injection
+        # Priority 2: filename heuristic
+        meta_logic = meta.get("logic") or file_logic
 
         for i in items:
             if isinstance(i, dict) and "symbol" in i:
-                i["_direction"] = file_direction
-                i["_logic"] = file_logic
+                i["_direction"] = meta_direction or file_direction
+                i["_logic"] = meta_logic
                 i["_category"] = category
+
                 i["_asset_class"] = get_asset_class(category, i["symbol"])
                 i["_identity"] = get_asset_identity(i["symbol"], i["_asset_class"])
                 all_items.append(i)

@@ -37,6 +37,10 @@ def compose_pipeline(pipeline_config: Dict[str, Any], profile_name: str) -> List
         # Inject pipeline-level overrides
         if "trend" not in config_dict:
             config_dict["trend"] = {}
+
+        # Map 1d -> daily, 1w -> weekly
+        tf_map = {"1d": "daily", "1w": "weekly"}
+        config_dict["trend"]["timeframe"] = tf_map.get(interval, interval)
         config_dict["trend"]["timeframe_loader"] = interval  # Store for ingestion
 
         # Validate with Pydantic
@@ -80,8 +84,15 @@ def main():
 
     discovery = profile.get("discovery", {})
     pipelines = discovery.get("pipelines", {})
+    strategies = discovery.get("strategies", {})
 
-    target_pipelines = [args.pipeline] if args.pipeline else list(pipelines.keys())
+    target_pipelines = [args.pipeline] if args.pipeline and args.pipeline in pipelines else list(pipelines.keys())
+    target_strategies = [args.pipeline] if args.pipeline and args.pipeline in strategies else list(strategies.keys())
+
+    # If --pipeline was provided and found in neither, error
+    if args.pipeline and not (args.pipeline in pipelines or args.pipeline in strategies):
+        logger.error(f"Pipeline/Strategy '{args.pipeline}' not found in profile '{args.profile}'")
+        return
 
     # Parse CLI Overrides
     cli_overrides = {}
@@ -93,18 +104,28 @@ def main():
             return
 
     all_composed = []
+
+    # 1. Process legacy Pipelines
     for p_name in target_pipelines:
         p_config = pipelines.get(p_name)
-        if not p_config:
-            logger.warning(f"Pipeline {p_name} not found")
-            continue
-
         composed_batch = compose_pipeline(p_config, args.profile)
-
-        # Apply CLI Overrides to each config in batch
         for config in composed_batch:
             if cli_overrides:
-                # Basic merge
+                config.update(cli_overrides)
+            all_composed.append(config)
+
+    # 2. Process new Strategies (Hierarchical grouping)
+    for s_name in target_strategies:
+        s_config = strategies.get(s_name)
+        composed_batch = compose_pipeline(s_config, args.profile)
+        for config in composed_batch:
+            # Inject strategy name as logic override
+            if "export_metadata" not in config:
+                config["export_metadata"] = {}
+            # Strategy name from manifest (e.g. rating_ma) becomes the atom logic
+            config["export_metadata"]["logic"] = s_name
+
+            if cli_overrides:
                 config.update(cli_overrides)
             all_composed.append(config)
 

@@ -129,7 +129,7 @@
       },
       "discovery": {
         "enabled_markets": ["crypto"],
-        "pipelines": {
+        "strategies": {
           "crypto_alpha": {
             "scanners": [
               "scanners/crypto/binance_spot_long_trend",
@@ -183,13 +183,35 @@
       },
       "discovery": {
         "enabled_markets": ["crypto"],
-        "pipelines": {
-          "rating_alpha": {
+        "strategies": {
+          "rating_all": {
             "scanners": [
-              "scanners/crypto/binance_perp_rating_long",
-              "scanners/crypto/binance_perp_rating_short",
-              "scanners/crypto/binance_spot_rating_long",
-              "scanners/crypto/binance_spot_rating_short"
+              "scanners/crypto/ratings/binance_perp_rating_all_long",
+              "scanners/crypto/ratings/binance_perp_rating_all_short",
+              "scanners/crypto/ratings/binance_spot_rating_all_long",
+              "scanners/crypto/ratings/binance_spot_rating_all_short"
+            ],
+            "interval": "1d",
+            "ingestion_depth": 500,
+            "strict_health": true
+          },
+          "rating_ma": {
+            "scanners": [
+              "scanners/crypto/ratings/binance_perp_rating_ma_long",
+              "scanners/crypto/ratings/binance_perp_rating_ma_short",
+              "scanners/crypto/ratings/binance_spot_rating_ma_long",
+              "scanners/crypto/ratings/binance_spot_rating_ma_short"
+            ],
+            "interval": "1d",
+            "ingestion_depth": 500,
+            "strict_health": true
+          },
+          "rating_osc": {
+            "scanners": [
+              "scanners/crypto/ratings/binance_perp_rating_osc_long",
+              "scanners/crypto/ratings/binance_perp_rating_osc_short",
+              "scanners/crypto/ratings/binance_spot_rating_osc_long",
+              "scanners/crypto/ratings/binance_spot_rating_osc_short"
             ],
             "interval": "1d",
             "ingestion_depth": 500,
@@ -215,7 +237,7 @@
       },
       "discovery": {
         "enabled_markets": ["crypto", "america"],
-        "pipelines": {
+        "strategies": {
           "fast_alpha": {
             "scanners": [
               "scanners/crypto/binance_spot_long_trend",
@@ -236,7 +258,7 @@
       },
       "discovery": {
         "enabled_markets": ["etf", "america"],
-        "pipelines": {
+        "strategies": {
           "etf_alpha": {
             "scanners": [
               "scanners/tradfi/index_etf_trend",

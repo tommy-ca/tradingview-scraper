@@ -49,9 +49,18 @@ class SelectionPolicyStage(BasePipelineStage):
             if not non_vetoed:
                 # STAGE 3: Force Representative if Cluster Empty
                 if relaxation_stage >= 3 and symbols:
-                    all_ranked = sorted([str(s) for s in symbols], key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
+                    sym_list = [str(s) for s in symbols]
+                    # Direct lookup with float conversion for robust sorting
+                    all_ranked = sorted(sym_list, key=lambda x: float(scores.get(x, -1.0)), reverse=True)
                     for s in all_ranked:
-                        ent = float(features.loc[s, "entropy"]) if s in features.index else 1.0
+                        # Defensive float conversion for entropy
+                        ent = 1.0
+                        if s in features.index:
+                            try:
+                                ent_val = features.loc[s, "entropy"]
+                                ent = float(ent_val) if ent_val is not None else 1.0
+                            except (TypeError, ValueError):
+                                ent = 1.0
                         if ent <= 0.999:
                             recruitment_buffer.add(s)
                             break
@@ -62,20 +71,33 @@ class SelectionPolicyStage(BasePipelineStage):
             id_to_best: Dict[str, str] = {}
             for s in non_vetoed:
                 ident = str(candidate_map.get(s, {}).get("identity", s))
-                if ident not in id_to_best or float(scores.get(s, -1.0)) > float(scores.get(id_to_best[ident], -1.0)):
+                if ident not in id_to_best or scores.get(s, -1.0) > scores.get(id_to_best[ident], -1.0):
                     id_to_best[ident] = s
             uniques = list(id_to_best.values())
 
             # Directional Recruitment (Pillar 1 Parity with v3.4)
             # Pick Top-N per direction per cluster
-            longs = [s for s in uniques if (float(features.loc[s, "momentum"]) if s in features.index else 0.0) >= 0]
-            shorts = [s for s in uniques if (float(features.loc[s, "momentum"]) if s in features.index else 0.0) < 0]
+            longs = []
+            shorts = []
+            for s in uniques:
+                mom = 0.0
+                if s in features.index:
+                    try:
+                        mom_val = features.loc[s, "momentum"]
+                        mom = float(mom_val) if mom_val is not None else 0.0
+                    except (TypeError, ValueError):
+                        mom = 0.0
+
+                if mom >= 0:
+                    longs.append(s)
+                else:
+                    shorts.append(s)
 
             if longs:
-                ranked_longs = sorted(longs, key=lambda s: float(scores.get(s, -1.0)), reverse=True)
+                ranked_longs = sorted(longs, key=lambda x: float(scores.get(x, -1.0)), reverse=True)
                 recruitment_buffer.update(ranked_longs[:top_n])
             if shorts:
-                ranked_shorts = sorted(shorts, key=lambda s: float(scores.get(s, -1.0)), reverse=True)
+                ranked_shorts = sorted(shorts, key=lambda x: float(scores.get(x, -1.0)), reverse=True)
                 recruitment_buffer.update(ranked_shorts[:top_n])
 
         # STAGE 4: Balanced Fallback
@@ -86,14 +108,14 @@ class SelectionPolicyStage(BasePipelineStage):
                 for s in scores.index
                 if str(s) not in recruitment_buffer and str(s) not in disqualified and (float(features.loc[str(s), "entropy"]) if str(s) in features.index else 1.0) <= 0.999
             ]
-            global_ranked = sorted(valid_pool, key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
+            global_ranked = sorted(valid_pool, key=lambda s: float(scores.get(s, -1.0)), reverse=True)
             recruitment_buffer.update(global_ranked[:needed])
 
         # 4. Finalize Winners & Apply Pool Sizing (Pillar 1)
         winners = []
 
         # Sort buffer by absolute conviction
-        sorted_buffer = sorted(list(recruitment_buffer), key=lambda s: float(scores.get(str(s), -1.0)), reverse=True)
+        sorted_buffer = sorted(list(recruitment_buffer), key=lambda s: float(scores.get(s, -1.0)), reverse=True)
 
         # Institutional Cap: Max 25 assets to maintain high weight fidelity
         # Delegation: Directional balance and other risk constraints are handled in Pillar 3
