@@ -1,0 +1,18 @@
+# Modular Alpha: Binance Perp Strong Sell (Technical Ratings)
+base_preset: ../../base/universes/binance_perp_top100.yaml
+volume:
+  value_traded_min: 50000000
+trend:
+  direction: "short"
+  logic: "AND"
+  adx: {enabled: true, min: 20}
+  recommendation: {enabled: true, min: -0.5}
+filters:
+  - {left: "Value.Traded", operation: "greater", right: 50000000}
+  - {left: "Recommend.MA", operation: "less", right: -0.5}
+limit: 25
+sort_by: Recommend.All
+sort_order: asc
+export_metadata:
+  symbol: binance_perp_rating_short
+  data_category: strategy_alpha

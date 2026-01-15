@@ -1,0 +1,18 @@
+# Modular Alpha: Binance Perp Strong Buy (Technical Ratings)
+base_preset: ../../base/universes/binance_perp_top100.yaml
+volume:
+  value_traded_min: 50000000
+trend:
+  direction: "long"
+  logic: "AND"
+  adx: {enabled: true, min: 20}
+  recommendation: {enabled: true, min: 0.5}
+filters:
+  - {left: "Value.Traded", operation: "greater", right: 50000000}
+  - {left: "Recommend.MA", operation: "greater", right: 0.5}
+limit: 25
+sort_by: Recommend.All
+sort_order: desc
+export_metadata:
+  symbol: binance_perp_rating_long
+  data_category: strategy_alpha
