@@ -1,15 +1,12 @@
 # Binance Spot - Oscillator Rating - SHORT
-base_preset: ../../../base/universes/binance_liquid_base.yaml
-volume: { value_traded_min: 20000000 }
+base_preset: ../../../base/universes/binance_spot_base.yaml
 trend:
   direction: "short"
   logic: "AND"
   adx: { enabled: false }
 filters:
-  - { left: "Value.Traded", operation: "greater", right: 20000000 }
-  - { left: "type", operation: "equal", right: "spot" }
   - { left: "name", operation: "match", right: "^((?!.P$).)*$" }
-  - { left: "Recommend.Other", operation: "less", right: -0.1 }
+  - { left: "Recommend.Other", operation: "less", right: 0 }
 sort_by: Recommend.Other
 sort_order: asc
 limit: 100

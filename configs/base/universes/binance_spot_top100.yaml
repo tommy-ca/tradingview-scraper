@@ -4,8 +4,6 @@ exchanges: ["BINANCE"]
 # High-quality institutional quotes only
 
 # Override volume floor for Spot ($500K)
-volume:
-  value_traded_min: 500000
 
 # Disable trend gates for pure universe selection
 trend:

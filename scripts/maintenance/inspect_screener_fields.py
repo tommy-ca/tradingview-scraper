@@ -1,5 +1,3 @@
-import json
-
 from tradingview_scraper.symbols.screener import Screener
 
 
@@ -30,14 +28,13 @@ def inspect_fields():
 
     print(f"Requesting columns: {columns}")
 
-    filters = [{"left": "exchange", "operation": "equal", "right": "BINANCE"}, {"left": "type", "operation": "equal", "right": "spot"}, {"left": "name", "operation": "nmatch", "right": ".P$"}]
-
+    filters = [{"left": "exchange", "operation": "equal", "right": "BINANCE"}, {"left": "Value.Traded", "operation": "greater", "right": 50000000}]
     try:
-        result = screener.screen(market="crypto", filters=filters, columns=columns, limit=1)
+        result = screener.screen(market="crypto", filters=filters, columns=["name", "type", "Value.Traded"], limit=20)
 
         if result["status"] == "success" and result["data"]:
-            item = result["data"][0]
-            print(json.dumps(item, indent=2))
+            for item in result["data"]:
+                print(f"{item['symbol']} | type: {item.get('type')} | volume: {item.get('Value.Traded'):,.0f}")
         else:
             print("Failed:", result)
 

@@ -344,6 +344,15 @@ def _merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:
     for key, value in override.items():
         if isinstance(value, Mapping) and isinstance(result.get(key), Mapping):
             result[key] = _merge(result[key], value)
+        elif isinstance(value, list) and isinstance(result.get(key), list):
+            # Concatenate lists
+            merged_list = result[key] + value
+            # Deduplicate simple lists (strings/ints) while preserving order
+            # (Filters are dicts, so we don't deduplicate them here to be safe)
+            if all(isinstance(x, (str, int, float)) for x in merged_list):
+                result[key] = list(dict.fromkeys(merged_list))
+            else:
+                result[key] = merged_list
         else:
             result[key] = value
     return result
@@ -488,6 +497,7 @@ class FuturesUniverseSelector:
         "Volatility.D",
         "volume_change",
         "ROC",
+        "type",
     ]
 
     def __init__(

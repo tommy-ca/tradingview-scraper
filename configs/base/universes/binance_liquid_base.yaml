@@ -9,8 +9,8 @@ markets: ["crypto"]
 exclude_stable_bases: false
 
 # Institutional Volume Floor (Broad $1M recruitment)
-volume:
-  value_traded_min: 1000000
+filters:
+  - { left: "Value.Traded", operation: "greater", right: 1000000 }
 
 # Zero technical trend gates
 trend:

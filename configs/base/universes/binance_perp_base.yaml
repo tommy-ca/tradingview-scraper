@@ -1,6 +1,5 @@
 # L1: Binance Perp Pure Liquidity Baseline
 base_preset: binance_liquid_base.yaml
-volume: { value_traded_min: 50000000 }
 filters:
   - { left: "Value.Traded", operation: "greater", right: 50000000 }
   - { left: "type", operation: "equal", right: "swap" }

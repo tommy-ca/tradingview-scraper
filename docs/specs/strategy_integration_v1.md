@@ -35,21 +35,27 @@ Scanners must emit candidates with enriched technical ratings from TradingView.
 ### 4.1 technical_rating_scanner
 - **Source**: TradingView `Recommend.All`, `Recommend.MA`, `Recommend.Other`.
 - **Ranking Logic**:
-    - **LONG**: `Recommend.* >= 0.1` (Captures "Buy" and "Strong Buy", excluding Neutrals).
-    - **SHORT**: `Recommend.* <= -0.1` (Captures "Sell" and "Strong Sell", excluding Neutrals).
+    - **LONG**: `Recommend.* > 0.0` (Strict Buy/Strong Buy only).
+    - **SHORT**: `Recommend.* < 0.0` (Strict Sell/Strong Sell only).
 - **Institutional Liquidity Floors**:
     - **Perpetuals**: `Value.Traded > 50,000,000 USD`.
     - **Spot**: `Value.Traded > 20,000,000 USD`.
 - **Base Universe Standard (L1)**:
-    - Discovery scanners must inherit from the audited base configurations:
+    - Discovery scanners must inherit from the audited pure baseline configurations to ensure strict venue isolation:
         - `binance_spot_base.yaml`: Enforces strictly **>$20M 24h Volume** and `type: spot`.
         - `binance_perp_base.yaml`: Enforces strictly **>$50M 24h Volume** and `type: swap`.
-    - These base universes provide a truly agnostic, ranking-free pool of liquid instruments. No alpha-bias (ratings) or technical gates are applied at this stage to ensure 100% data density for downstream inference.
+    - **Venue Isolation**: Spot and Perp outputs are strictly separated. Scanners must not mix assets from different market types to maintain implementation purity.
+    - **Purity Standard**: Base scanners utilize explicit TradingView server-side filters (`filters` list) and avoid redundant Pydantic-side `volume` blocks.
+    - **Zero Alpha Bias**: Base pools are unranked (sorted by `name`) and stripped of all technical gates to ensure 100% data density for downstream Inference.
 - **Discovery Sorting**: 
-    - Scanners must sort by `Recommend.All` during discovery to ensure the most extreme sentiment signals are recruited first.
-    - **LONG**: `sort_by: Recommend.All, order: desc`.
-    - **SHORT**: `sort_by: Recommend.All, order: asc`.
+    - Scanners must sort by the primary rating (e.g. `Recommend.All`, `Recommend.MA`) during discovery to ensure the most extreme sentiment signals are recruited first.
+    - **LONG**: `sort_by: RatingField, order: desc`.
+    - **SHORT**: `sort_by: RatingField, order: asc`.
 - **Output**: A candidates manifest containing ratings and intended direction.
+- **Target Recruitment Pool**:
+    - The discovery suite targets a total "Raw Pool" of ~100-150 unique candidates.
+    - Scanners are configured with a limit of **100 items per strategy** to ensure sufficient depth for the HTR relaxation loop.
+
 
 ## 5. Tier 2 Alpha Features (Enrichment)
 To enable advanced scoring and risk partitioning in the Selection Pipeline, the following fields are persisted but not used for discovery-stage filtering.
@@ -72,6 +78,7 @@ To enable advanced scoring and risk partitioning in the Selection Pipeline, the 
 Technical ratings must be preserved from the **Discovery** stage through the **Lakehouse** and into the **Inference** stage.
 - **Lakehouse Metadata**: `portfolio_meta.json` must store ratings as features.
 - **Deduplication**: Atoms with the same `(Asset, Logic)` must be pruned based on rating strength or liquidity.
+- **Venue Isolation**: Spot and Perpetual outputs are strictly separated at the discovery stage. Scanners are partitioned by market type (`type: spot` vs `type: swap`) to prevent cross-venue implementation errors.
 - **Workflow Isolation**: Rating-based strategies are managed via the `crypto_rating_alpha` profile to prevent dilution of standard trend-following sleeves.
 
 ### 6.2 Selection Pipeline (v4)

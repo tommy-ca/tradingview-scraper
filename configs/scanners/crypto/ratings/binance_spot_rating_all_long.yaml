@@ -1,15 +1,12 @@
 # Binance Spot - All Rating - LONG
-base_preset: ../../../base/universes/binance_liquid_base.yaml
-volume: { value_traded_min: 20000000 }
+base_preset: ../../../base/universes/binance_spot_base.yaml
 trend:
   direction: "long"
   logic: "AND"
   adx: { enabled: false }
   recommendation: { enabled: false }
 filters:
-  - { left: "Value.Traded", operation: "greater", right: 20000000 }
-  - { left: "type", operation: "equal", right: "spot" }
-  - { left: "Recommend.All", operation: "greater", right: 0.1 }
+  - { left: "Recommend.All", operation: "greater", right: 0 }
 sort_by: Recommend.All
 sort_order: desc
 limit: 100
