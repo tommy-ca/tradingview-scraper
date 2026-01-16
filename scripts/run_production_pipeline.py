@@ -425,8 +425,9 @@ class ProductionPipeline:
 
             meta_steps.append(("Meta Reporting", ["uv", "run", "scripts/generate_meta_report.py", f"--meta-dir={self.run_dir}/data", f"--output={self.run_dir}/reports/portfolio/report.md"], None))
 
-            # Gist Sync is common
-            meta_steps.append(("Gist Sync", [*make_base, "report-sync"], None))
+            # Gist Sync is optional
+            if os.getenv("GIST_SYNC") == "1":
+                meta_steps.append(("Gist Sync", [*make_base, "report-sync"], None))
 
             all_steps = meta_steps
 
@@ -470,8 +471,13 @@ class ProductionPipeline:
                 ),
                 ("Validation", [*make_base, "port-test", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json", f"RETURNS_MATRIX={self.run_dir}/data/returns_matrix.parquet"], None),
                 ("Reporting", [*make_base, "port-report", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json"], None),
-                ("Gist Sync", [*make_base, "report-sync"], None),
+                # Gist Sync is optional and doesn't block the pipeline
+                # Can be enabled by GIST_SYNC=1 env var if needed, or run manually.
+                # Removing from default production flow to reduce noise.
             ]
+
+            if os.getenv("GIST_SYNC") == "1":
+                all_steps.append(("Gist Sync", [*make_base, "report-sync"], None))
 
         steps_to_run = all_steps[start_step - 1 :]
 
