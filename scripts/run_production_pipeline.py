@@ -504,80 +504,13 @@ class ProductionPipeline:
                 if absolute_step == 1 and success:
                     self.snapshot_resolved_manifest()
 
-                # Integrated Recovery for Step 9 (Health Audit)
-                # CRITICAL FIX: Auto-recovery triggers on STALE/DEGRADED detection
-                # Issue: https://github.com/anomalyco/tradingview-scraper/issues/XXX
-                # Audit: docs/audit/crypto_production_funnel_audit_20260112.md
-                if name == "Health Audit" and success:
-                    # Check if validate_health() detected issues requiring recovery
-                    health_metrics = val_fn() if val_fn else {}
-                    trigger_recovery = health_metrics.get("metrics", {}).get("trigger_recovery", False)
-
-                    if trigger_recovery:
-                        recovery_reason = health_metrics["metrics"].get("recovery_reason", [])
-                        reason_str = " and ".join(recovery_reason)
-                        progress.console.print(f"[bold yellow]>>> Health Audit detected issues: {reason_str}[/]\n[bold yellow]>>> Triggering Self-Healing Recovery Loop...[/]")
-
-                        if self.ledger:
-                            self.ledger.record_intent(
-                                step="recovery",
-                                params={"trigger": "auto_recovery", "reason": reason_str},
-                                input_hashes={},
-                            )
-
-                        # Execute Recovery
-                        recovery_task = progress.add_task("[yellow]Self-Healing Recovery", total=None)
-                        if self.run_step(
-                            "Recovery",
-                            [*make_base, "data-repair"],
-                            step_num=absolute_step,
-                            progress=progress,
-                            task_id=recovery_task,
-                        ):
-                            progress.console.print("[bold green]>>> Recovery complete. Re-auditing health...[/]")
-                            # Re-run Health Audit (Hard Gate)
-                            audit_retry_task = progress.add_task("[cyan]Health Audit (Post-Recovery)", total=None)
-                            if not self.run_step(
-                                "Health Audit (Post-Recovery)",
-                                [*make_base, "data-audit", strict_health_arg],
-                                step_num=absolute_step,
-                                validate_fn=self.validate_health,
-                                progress=progress,
-                                task_id=audit_retry_task,
-                            ):
-                                progress.console.print("[bold yellow]WARNING: Health Audit failed even after recovery. Continuing anyway (patched).[/]")
-                            else:
-                                # Re-check if recovery actually fixed the issues
-                                post_recovery_health = self.validate_health()
-                                still_has_issues = post_recovery_health.get("metrics", {}).get("trigger_recovery", False)
-                                if still_has_issues:
-                                    progress.console.print("[bold yellow]WARNING: Health issues persist after recovery. Continuing anyway (patched).[/]")
-                                progress.console.print("[bold green]>>> Health audit passed after recovery.[/]")
-                        else:
-                            progress.console.print("[bold yellow]WARNING: Recovery failed. Continuing anyway (patched).[/]")
-
-                # Legacy recovery path for Health Audit failure
+                # Integrated Recovery is REMOVED to enforce Strict Pipeline Separation
+                # If Health Audit fails, the pipeline fails. Recovery must be done via 'flow-data'.
                 if name == "Health Audit" and not success:
-                    progress.console.print("[bold yellow]>>> Health Audit failed. Triggering Self-Healing Recovery Loop...[/]")
-                    if self.ledger:
-                        self.ledger.record_intent(step="recovery", params={"trigger": "health_audit_fail"}, input_hashes={})
+                    progress.console.print("[bold red]Health Audit failed. Aborting pipeline.[/]\n[yellow]Run 'make data-repair' or 'make flow-data' to fix the Lakehouse.[/]")
+                    sys.exit(1)
 
-                    # Execute Recovery
-                    recovery_task = progress.add_task("[yellow]Self-Healing Recovery", total=None)
-                    if self.run_step("Recovery", [*make_base, "data-repair"], step_num=absolute_step, progress=progress, task_id=recovery_task):
-                        progress.console.print("[bold green]>>> Recovery complete. Re-auditing health...[/]")
-                        # Re-run Health Audit (Hard Gate)
-                        audit_retry_task = progress.add_task("[cyan]Health Audit (Post-Recovery)", total=None)
-                        if not self.run_step(
-                            "Health Audit (Post-Recovery)", [*make_base, "data-audit"], step_num=absolute_step, validate_fn=self.validate_health, progress=progress, task_id=audit_retry_task
-                        ):
-                            progress.console.print("[bold yellow]WARNING: Health Audit failed even after recovery. Continuing anyway (patched).[/]")
-                        else:
-                            progress.console.print("[bold green]>>> Health audit passed after recovery.[/]")
-                    else:
-                        progress.console.print("[bold yellow]WARNING: Recovery failed. Continuing anyway (patched).[/]")
-
-                elif not success:
+                if not success:
                     progress.console.print(f"[bold red]Pipeline aborted at step '{name}' due to failure.[/]")
                     sys.exit(1)
 
