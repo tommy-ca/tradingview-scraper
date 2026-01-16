@@ -290,6 +290,7 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Scan & Fetch (MA Long)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_ma_long`.
 - [x] **Scan & Fetch (MA Short)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_ma_short`.
 - [x] **Validation**: Ensure `returns_matrix.parquet` is populated and healthy for all profiles.
+- [x] **Data Repair**: Targeted refresh of `BINANCE:ZENUSDT` (was stale) via `make data-refresh-targeted`.
 
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 171 Completed
