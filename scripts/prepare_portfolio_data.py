@@ -302,6 +302,10 @@ def prepare_portfolio_universe():
                         "roc": candidate.get("roc", 0),
                         "value_traded": candidate.get("value_traded", 0),
                         "is_benchmark": candidate.get("is_benchmark", False),
+                        # CR-Fix: Propagate Logic/Direction to Meta
+                        "direction": candidate.get("direction", "LONG"),
+                        "logic": candidate.get("logic", "trend"),
+                        "atom_id": candidate.get("atom_id"),
                     }
 
         except Exception as e:
