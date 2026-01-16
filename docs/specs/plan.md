@@ -284,16 +284,17 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Config Update**: Updated `settings.py` to use `data/logs` path.
 - [x] **Docs Synchronization**: Updated `nautilus_simulator_integration.md` and parity design docs with "Pre-Start Priming" details.
 
-### Phase 171: Cross-Factor Data Preparation (COMPLETED)
-- [x] **Scan & Fetch (All Long)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_all_long`.
-- [x] **Scan & Fetch (All Short)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_all_short`.
-- [x] **Scan & Fetch (MA Long)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_ma_long`.
-- [x] **Scan & Fetch (MA Short)**: Execute `scan-run` and `data-prep-raw` for `binance_spot_rating_ma_short`.
-- [x] **Validation**: Ensure `returns_matrix.parquet` is populated and healthy for all profiles.
-- [x] **Data Repair**: Targeted refresh of `BINANCE:ZENUSDT` (was stale) via `make data-refresh-targeted`.
+### Phase 172: Downstream Execution & Data Repair (COMPLETED)
+- [x] **Data Repair**: Identified and repaired stale assets (`ZENUSDT` + 8 others) via targeted refresh. Verified 100% health across all profiles.
+- [x] **Pipeline Execution**: Executed steps 6-16 (Selection -> Reporting) for all 4 profiles:
+    - `binance_spot_rating_all_long`
+    - `binance_spot_rating_all_short`
+    - `binance_spot_rating_ma_long`
+    - `binance_spot_rating_ma_short`
+- [x] **Validation**: Confirmed successful completion of optimization and backtesting steps.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 171 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 172 Completed
 
 
 
