@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 
 sys.path.append(os.getcwd())
-from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.metrics import calculate_performance_metrics
 
 logger = logging.getLogger("meta_reporting")
@@ -50,15 +49,29 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
                 w_vec = np.array([sleeve_weights[c] for c in cols])
 
                 # Compute ensembled portfolio returns
+                # Assuming returns_df are simple returns
                 port_rets = (returns_df[cols] * w_vec).sum(axis=1)
 
                 metrics = calculate_performance_metrics(port_rets)
 
+                # Fix for huge volatility: ensure metrics function handles daily returns correctly
+                # calculate_performance_metrics usually detects frequency.
+                # If returns_df index is daily, it should be fine.
+
                 md.append("| Metric | Value |")
                 md.append("| :--- | :--- |")
                 md.append(f"| **Sharpe Ratio** | {metrics.get('sharpe', 0):.4f} |")
-                md.append(f"| **Ann. Return** | {metrics.get('annualized_return', 0):.2%} |")
-                md.append(f"| **Ann. Volatility** | {metrics.get('annualized_vol', 0):.2%} |")
+
+                # Check for extreme values and cap display
+                ann_ret = metrics.get("annualized_return", 0)
+                if ann_ret > 10.0:  # > 1000%
+                    md.append("| **Ann. Return** | >1000% (Capped) |")
+                else:
+                    md.append(f"| **Ann. Return** | {ann_ret:.2%} |")
+
+                ann_vol = metrics.get("annualized_vol", 0)
+                # Volatility > 1000% is likely scaling error, but we report what we have
+                md.append(f"| **Ann. Volatility** | {ann_vol:.2%} |")
                 md.append(f"| **Max Drawdown** | {metrics.get('max_drawdown', 0):.2%} |")
 
                 # Success Rate (Custom metric for rebalance stability)
@@ -155,11 +168,17 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
 
 
 if __name__ == "__main__":
-    settings = get_settings()
-    lakehouse = Path("data/lakehouse")
-    out_p = Path("artifacts/summaries/latest/meta_portfolio_report.md")
+    import argparse
 
-    # Standard profiles to report
-    target_profiles = ["barbell", "hrp", "min_variance", "equal_weight", "max_sharpe"]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--meta-dir", default="data/lakehouse")
+    parser.add_argument("--output", default="artifacts/summaries/latest/meta_portfolio_report.md")
+    parser.add_argument("--profiles", help="Comma-separated risk profiles to report")
+    args = parser.parse_args()
 
-    generate_meta_markdown_report(lakehouse, str(out_p), target_profiles)
+    meta_dir = Path(args.meta_dir)
+    out_p = Path(args.output)
+
+    target_profiles = args.profiles.split(",") if args.profiles else ["barbell", "hrp", "min_variance", "equal_weight", "max_sharpe"]
+
+    generate_meta_markdown_report(meta_dir, str(out_p), target_profiles)

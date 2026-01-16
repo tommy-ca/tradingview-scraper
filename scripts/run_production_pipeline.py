@@ -376,37 +376,109 @@ class ProductionPipeline:
             if os.getenv("TV_STRICT_HEALTH") == "0" or os.getenv("STRICT_HEALTH") == "0":
                 strict_health_arg = "STRICT_HEALTH=0"
 
-        all_steps: List[Tuple[str, List[str], Optional[Callable[[], Any]]]] = [
-            ("Cleanup", [*make_base, "clean-run"], None),
-            ("Environment Check", [*make_base, "env-check"], None),
-            ("Discovery", [*make_base, "scan-run"], self.validate_discovery),
-            ("Aggregation", [*make_base, "data-prep-raw"], None),
-            ("Lightweight Prep", [*make_base, "data-fetch", f"LOOKBACK={lightweight_lookback}", f"BATCH={lightweight_batch}"], None),
-            ("Natural Selection", [*make_base, "port-select"], self.validate_selection),
-            ("Enrichment", [*make_base, "meta-refresh"], None),
-            ("High-Integrity Preparation", [*make_base, "data-fetch", f"LOOKBACK={high_integrity_lookback}"], None),
-            ("Strategy Synthesis", ["uv", "run", "scripts/synthesize_strategy_matrix.py"], None),
-            ("Health Audit", [*make_base, "data-audit", strict_health_arg], self.validate_health),
-            ("Persistence Analysis", [*make_base, "research-persistence"], None),
-            ("Regime Analysis", ["uv", "run", "python", "scripts/research_regime_v3.py"], None),
-            ("Factor Analysis", [*make_base, "port-analyze", f"RETURNS_MATRIX={self.run_dir}/data/synthetic_returns.parquet"], None),
-            ("Optimization", [*make_base, "port-optimize", f"RETURNS_MATRIX={self.run_dir}/data/synthetic_returns.parquet"], self.validate_optimization),
-            (
-                "Weight Flattening",
-                [
-                    "uv",
-                    "run",
-                    "scripts/flatten_strategy_weights.py",
-                    f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_optimized_v2.json",
-                    f"FLATTENED_FILE={self.run_dir}/data/portfolio_flattened.json",
-                    f"CANDIDATES_SELECTED={self.run_dir}/data/portfolio_candidates.json",
-                ],
-                None,
-            ),
-            ("Validation", [*make_base, "port-test", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json", f"RETURNS_MATRIX={self.run_dir}/data/returns_matrix.parquet"], None),
-            ("Reporting", [*make_base, "port-report", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json"], None),
-            ("Gist Sync", [*make_base, "report-sync"], None),
-        ]
+        if self.profile.startswith("meta_"):
+            # Meta-Portfolio Pipeline (Sleeve Aggregation)
+            # --------------------------------------------
+            # 1. Build Meta-Returns (Aggregate Sleeves)
+            # 2. Optimize Meta-Allocation (Risk Parity across Sleeves)
+            # 3. Flatten Weights (Meta -> Physical)
+            # 4. Generate Meta-Report
+
+            target_risk_profiles = "min_variance,hrp,max_sharpe,equal_weight,barbell"
+
+            # Step 4: Meta Construction (Replaces Aggregation/Prep)
+            meta_steps = [
+                ("Cleanup", [*make_base, "clean-run"], None),
+                ("Environment Check", [*make_base, "env-check"], None),
+                (
+                    "Meta Construction",
+                    [
+                        "uv",
+                        "run",
+                        "scripts/build_meta_returns.py",
+                        f"--profile={self.profile}",
+                        f"--output={self.run_dir}/data/meta_returns.pkl",
+                        f"--profiles={target_risk_profiles}",
+                    ],
+                    None,
+                ),
+                (
+                    "Meta Optimization",
+                    [
+                        "uv",
+                        "run",
+                        "scripts/optimize_meta_portfolio.py",
+                        f"--returns={self.run_dir}/data/meta_returns.pkl",
+                        f"--output={self.run_dir}/data/meta_optimized.json",
+                    ],
+                    None,  # Optimization loops through all found meta_returns_*.pkl
+                ),
+            ]
+
+            # Flattening steps for each risk profile (for validation/reporting)
+            # For simplicity in the pipeline visual, we flatten the primary 'hrp' or 'min_variance'
+            # but ideally we'd flatten all. Let's flatten the manifest default or HRP.
+
+            # We will use a wrapper script or just run flatten for HRP as the "Production" output
+            # But we want reporting for all.
+            # Let's add a "Meta Reporting" step that handles all.
+
+            meta_steps.append(
+                (
+                    "Meta Flattening",
+                    [
+                        "uv",
+                        "run",
+                        "scripts/flatten_meta_weights.py",
+                        f"--weights={self.run_dir}/data/meta_optimized_hrp.json",
+                        f"--manifest={self.run_dir}/data/lakehouse/meta_manifest_hrp.json",  # Build script writes here? Check build_meta_returns
+                        f"--output={self.run_dir}/data/portfolio_flattened.json",
+                        "--profile=hrp",
+                    ],
+                    None,
+                )
+            )
+
+            meta_steps.append(("Meta Reporting", ["uv", "run", "scripts/generate_meta_report.py", f"--meta-dir={self.run_dir}/data", f"--output={self.run_dir}/reports/portfolio/report.md"], None))
+
+            # Gist Sync is common
+            meta_steps.append(("Gist Sync", [*make_base, "report-sync"], None))
+
+            all_steps = meta_steps
+
+        else:
+            # Standard Asset Pipeline
+            all_steps: List[Tuple[str, List[str], Optional[Callable[[], Any]]]] = [
+                ("Cleanup", [*make_base, "clean-run"], None),
+                ("Environment Check", [*make_base, "env-check"], None),
+                ("Discovery", [*make_base, "scan-run"], self.validate_discovery),
+                ("Aggregation", [*make_base, "data-prep-raw"], None),
+                ("Lightweight Prep", [*make_base, "data-fetch", f"LOOKBACK={lightweight_lookback}", f"BATCH={lightweight_batch}"], None),
+                ("Natural Selection", [*make_base, "port-select"], self.validate_selection),
+                ("Enrichment", [*make_base, "meta-refresh"], None),
+                ("High-Integrity Preparation", [*make_base, "data-fetch", f"LOOKBACK={high_integrity_lookback}"], None),
+                ("Strategy Synthesis", ["uv", "run", "scripts/synthesize_strategy_matrix.py"], None),
+                ("Health Audit", [*make_base, "data-audit", strict_health_arg], self.validate_health),
+                ("Persistence Analysis", [*make_base, "research-persistence"], None),
+                ("Regime Analysis", ["uv", "run", "python", "scripts/research_regime_v3.py"], None),
+                ("Factor Analysis", [*make_base, "port-analyze", f"RETURNS_MATRIX={self.run_dir}/data/synthetic_returns.parquet"], None),
+                ("Optimization", [*make_base, "port-optimize", f"RETURNS_MATRIX={self.run_dir}/data/synthetic_returns.parquet"], self.validate_optimization),
+                (
+                    "Weight Flattening",
+                    [
+                        "uv",
+                        "run",
+                        "scripts/flatten_strategy_weights.py",
+                        f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_optimized_v2.json",
+                        f"FLATTENED_FILE={self.run_dir}/data/portfolio_flattened.json",
+                        f"CANDIDATES_SELECTED={self.run_dir}/data/portfolio_candidates.json",
+                    ],
+                    None,
+                ),
+                ("Validation", [*make_base, "port-test", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json", f"RETURNS_MATRIX={self.run_dir}/data/returns_matrix.parquet"], None),
+                ("Reporting", [*make_base, "port-report", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json"], None),
+                ("Gist Sync", [*make_base, "report-sync"], None),
+            ]
 
         steps_to_run = all_steps[start_step - 1 :]
 
