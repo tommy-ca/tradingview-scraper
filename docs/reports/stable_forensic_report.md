@@ -1,5 +1,5 @@
 # 🔍 Stable Forensic Audit Report (Phase 176)
-**Date:** 2026-01-16 13:48
+**Date:** 2026-01-16 20:06
 
 ## 1. Pipeline Funnel Summary
 | Run ID | Raw Pool | Selected | Selection Rate |
@@ -8,6 +8,7 @@
 | `short_all_std` | 10 | 8 | 80.0% |
 | `ma_long_std` | 13 | 10 | 76.9% |
 | `ma_short_std` | 10 | 8 | 80.0% |
+| `ma_long_fast` | 15 | 7 | 46.7% |
 
 ## 2. Performance Matrix (Custom Engine)
 | Run ID | Profile | Simulator | Sharpe | Total Ret | CAGR | Volatility | MaxDD |
