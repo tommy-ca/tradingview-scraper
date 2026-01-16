@@ -442,8 +442,15 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Verification**: Audited lakehouse integrity (`scripts/audit_data_spikes.py`) - No corrupted files found.
 - [x] **Cleanup**: Removed temporary repair artifacts.
 
+### Phase 197: Decoupled DataOps Architecture (IN PROGRESS)
+- [x] **Specification**: Defined `docs/specs/dataops_architecture_v1.md` splitting Data Cycle vs Alpha Cycle.
+- [ ] **Data Service**: Implement `scripts/services/ingest_data.py` (The Lakehouse Keeper).
+- [ ] **Refactor**: Update `prepare_portfolio_data.py` to support `source="lakehouse_only"` (Read-Only Mode).
+- [ ] **Orchestration**: Create `make flow-data` and update `make flow-production` to enforce the split.
+- [ ] **Validation**: Prove that a production run fails if data is missing (instead of auto-fetching), enforcing the contract.
+
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.0.2) - Data Integrity Restored
+**System Status**: 🟢 PRODUCTION READY (v4.0.2) - Phase 197 Initiated
 
 
 
