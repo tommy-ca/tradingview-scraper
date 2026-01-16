@@ -212,21 +212,17 @@ data-prep-raw: ## Aggregate scans and initialize raw pool (Read-Only from Lakeho
 	$(PY) scripts/metadata_coverage_guardrail.py --target canonical:$(CANDIDATES_RAW):$(RETURNS_MATRIX)
 
 
-data-fetch: ## Ingest historical market data
-	$(PY) scripts/prepare_portfolio_data.py
-	$(PY) scripts/enrich_candidates_metadata.py --candidates $(PORTFOLIO_META)
-	@if [ "$(GAPFILL)" = "1" ] || [ "$(TV_GAPFILL)" = "1" ]; then \
-		echo "Running final aggressive repair pass..."; \
-		$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15; \
-	fi
+data-repair: ## [DataOps] Repair gaps in Lakehouse data (Maintenance)
+	@echo ">>> Repairing Data Gaps..."
+	$(PY) scripts/services/repair_data.py --candidates data/lakehouse/portfolio_candidates.json --max-fills 15
 
-data-refresh-targeted: ## Force refresh for stale symbols listed in TARGETED_CANDIDATES
-	@echo ">>> Targeted refresh using $(TARGETED_CANDIDATES)"
-	CANDIDATES_FILE=$(TARGETED_CANDIDATES) PORTFOLIO_BACKFILL=1 PORTFOLIO_GAPFILL=1 PORTFOLIO_FORCE_SYNC=1 PORTFOLIO_LOOKBACK_DAYS=$(TARGETED_LOOKBACK) PORTFOLIO_BATCH_SIZE=$(TARGETED_BATCH) $(PY) scripts/prepare_portfolio_data.py
-	$(PY) scripts/repair_portfolio_gaps.py --type all --max-fills 15
+# Legacy targets kept for backward compatibility (Deprecated)
+data-fetch: 
+	@echo "WARNING: 'make data-fetch' is deprecated. Use 'make flow-data' or 'make data-ingest'."
+	$(MAKE) data-ingest
 
-data-repair: ## High-intensity gap repair for degraded assets
-	$(PY) scripts/recover_universe.py
+data-refresh-targeted:
+	@echo "WARNING: Deprecated. Use 'scripts/services/ingest_data.py' with specific candidate file."
 
 data-audit: ## Session-Aware health audit (use STRICT_HEALTH=1)
 	@STRICT_ARG=""; if [ "$(STRICT_HEALTH)" = "1" ] || [ "$(TV_STRICT_HEALTH)" = "1" ]; then STRICT_ARG="--strict"; fi; \
