@@ -41,6 +41,7 @@ graph TD
 ## 3. Technical Specifications
 
 ### 3.1 The Lakehouse Contract
+- **Registry**: `docs/design/lakehouse_schema_registry.md`
 - **Location**: `data/lakehouse/`
 - **Format**: `EXCHANGE_SYMBOL_1d.parquet` (Snappy compression).
 - **Schema**: `timestamp (int64), open, high, low, close, volume`.

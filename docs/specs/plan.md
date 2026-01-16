@@ -453,10 +453,15 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Design**: Defined `docs/specs/data_pipeline_metadata_v2.md`.
 - [x] **Makefile**: Create `meta-ingest` target (Structural + Execution Meta) and add to `flow-data`.
 - [x] **Orchestration**: Update `run_production_pipeline.py` to use `enrich_candidates_metadata.py` (Read-Only) instead of `meta-refresh`.
-- [ ] **Validation**: Verify `flow-production` no longer triggers TradingView/CCXT API calls.
+- [x] **Validation**: Verify `flow-production` no longer triggers TradingView/CCXT API calls.
+
+### Phase 199: Lakehouse Schema Formalization (COMPLETED)
+- [x] **Documentation**: Created `docs/design/lakehouse_schema_registry.md`.
+- [x] **Updates**: Linked Schema Registry in `docs/specs/dataops_architecture_v1.md`.
+- [x] **Definition**: Formalized schemas for OHLCV, Metadata, Execution, and Future Unstructured Data.
 
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.1.1) - Phase 198 Completed
+**System Status**: 🟢 PRODUCTION READY (v4.1.2) - Phase 199 Completed
 
 
 
