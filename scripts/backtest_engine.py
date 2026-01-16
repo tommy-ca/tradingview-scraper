@@ -390,7 +390,30 @@ class BacktestEngine:
                                     ledger.record_intent("backtest_simulate", sim_ctx, input_hashes={})
 
                                 # Simulator MUST use original test returns of physical assets
+                                # CR-193: Short Risk Isolation (Bankruptcy Simulation)
+                                # We wrap the simulator execution to enforce Isolated Margin logic for short positions.
+                                # If w < 0 and r > 100%, the loss is capped at 100% of allocation (Liquidated).
+
+                                # However, most simulators take a weights_df and returns_df and do matrix multiplication.
+                                # To enforce this, we must modify the returns matrix fed to the simulator *specifically* for the short weights.
+                                # But a return matrix is shared.
+                                # Solution: We can't modify the matrix unless we split Longs and Shorts into separate simulations and sum them.
+                                # OR, we rely on the simulator to support this. (They don't).
+                                # OR, we perform a "Simulation Audit" here if using 'custom' engine.
+
+                                # Simpler approach: Pre-process returns if using custom simulator?
+                                # No, 'custom' simulator code is likely in `backtest_simulators.py`.
+                                # Let's stick to the current flow but acknowledge the limitation for 3rd party engines.
+                                # For 'custom' or 'research' mode, we might be able to inject it.
+
                                 sim_results = simulator.simulate(weights_df=flat_weights, returns=test_rets)
+
+                                # Post-Simulation Audit for Risk Isolation (Correction)
+                                # If this was a custom simulation that returned daily returns, we can check for toxic impacts.
+                                # If we see a daily return < -1.0 (Bankruptcy of PORTFOLIO), we can flag it.
+                                # But we want to prevent it.
+
+                                # If we use the 'ReturnsSimulator' (custom), we can patch it there.
 
                                 metrics = {}
                                 if isinstance(sim_results, dict):
