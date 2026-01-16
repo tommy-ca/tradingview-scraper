@@ -423,22 +423,6 @@ class ProductionPipeline:
             # But we want reporting for all.
             # Let's add a "Meta Reporting" step that handles all.
 
-            meta_steps.append(
-                (
-                    "Meta Flattening",
-                    [
-                        "uv",
-                        "run",
-                        "scripts/flatten_meta_weights.py",
-                        f"--weights={self.run_dir}/data/meta_optimized_hrp.json",
-                        f"--manifest={self.run_dir}/data/lakehouse/meta_manifest_hrp.json",  # Build script writes here? Check build_meta_returns
-                        f"--output={self.run_dir}/data/portfolio_flattened.json",
-                        "--profile=hrp",
-                    ],
-                    None,
-                )
-            )
-
             meta_steps.append(("Meta Reporting", ["uv", "run", "scripts/generate_meta_report.py", f"--meta-dir={self.run_dir}/data", f"--output={self.run_dir}/reports/portfolio/report.md"], None))
 
             # Gist Sync is common
@@ -447,28 +431,13 @@ class ProductionPipeline:
             all_steps = meta_steps
 
         else:
-            # Standard Asset Pipeline
+            # Standard Asset Pipeline (Read-Only Alpha Cycle)
             all_steps: List[Tuple[str, List[str], Optional[Callable[[], Any]]]] = [
                 ("Cleanup", [*make_base, "clean-run"], None),
                 ("Environment Check", [*make_base, "env-check"], None),
-                ("Discovery", [*make_base, "scan-run"], self.validate_discovery),
-                (
-                    "Data Ingestion",
-                    [
-                        "make",
-                        "data-ingest",
-                        f"TV_RUN_ID={self.run_id}",
-                    ],
-                    None,
-                ),
+                # Discovery and Data Ingestion are removed from Alpha Cycle.
+                # They must run beforehand via 'make flow-data'.
                 ("Aggregation", [*make_base, "data-prep-raw"], None),
-                # Lightweight Prep is now redundant if Aggregation/Ingestion handles it?
-                # data-prep-raw calls prepare_portfolio_data.
-                # In lakehouse_only mode, prepare_portfolio_data loads data.
-                # So we don't need explicit 'data-fetch' steps anymore.
-                # But we might need 'enrich_candidates_metadata' which was part of data-fetch.
-                # 'data-prep-raw' includes enrich.
-                # Let's remove Lightweight/High-Integrity Prep steps as they were just fetching.
                 ("Natural Selection", [*make_base, "port-select"], self.validate_selection),
                 (
                     "Enrichment",
@@ -481,11 +450,6 @@ class ProductionPipeline:
                     ],
                     None,
                 ),
-                # High-Integrity Prep was fetching 500d. Ingestion Service should handle 500d if configured?
-                # The Ingestion Service defaults to 500d (or whatever lookback_days is passed).
-                # prepare_portfolio_data defaults to settings.
-                # We need to ensure Ingestion fetches enough history.
-                # data-ingest calls ingest_data.py. ingest_data.py defaults lookback to 500.
                 ("Strategy Synthesis", ["uv", "run", "scripts/synthesize_strategy_matrix.py"], None),
                 ("Health Audit", [*make_base, "data-audit", strict_health_arg], self.validate_health),
                 ("Persistence Analysis", [*make_base, "research-persistence"], None),
