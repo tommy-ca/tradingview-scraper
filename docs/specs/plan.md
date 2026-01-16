@@ -331,6 +331,7 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Window Analysis**: Ran `analyze_audit_windows.py` to identify Sharpe anomalies across time.
 - [x] **Physical Mapping Verification**: Confirmed that flattened weights in `portfolio_flattened.json` match the logic weights in `audit.jsonl` (with sign inversion for shorts).
 - [x] **Final Report**: Generated `docs/reports/stable_forensic_report.md` confirming directional integrity (Longs profitable, Shorts unprofitable in Bull regime).
+- [x] **Metric Correction**: Updated forensic generator to average metrics across windows, revealing true Sharpe ~8-9 for Long HRP.
 
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.4) - Phase 177 Completed

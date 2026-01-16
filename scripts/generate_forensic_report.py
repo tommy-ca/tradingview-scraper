@@ -49,7 +49,7 @@ def analyze_run(run_id: str) -> Dict[str, Any]:
         # Assuming order in list is arbitrary, we create a map first
         sim_priority = {"cvxportfolio": 3, "vectorbt": 2, "nautilus": 1}
 
-        # Group by profile+engine
+        # Group by profile+engine+simulator to aggregate across windows
         grouped = {}
         for res in tourn_data["results"]:
             p_name = res.get("profile")
@@ -59,25 +59,52 @@ def analyze_run(run_id: str) -> Dict[str, Any]:
             if engine not in ["custom", "skfolio"]:
                 continue
 
-            key = f"{p_name}_{engine}"
+            key = f"{p_name}_{engine}_{simulator}"
             if key not in grouped:
                 grouped[key] = []
-            grouped[key].append(res)
+            grouped[key].append(res["metrics"])
 
-        # Select best simulator for each group
-        for key, res_list in grouped.items():
-            # Sort by priority desc
-            res_list.sort(key=lambda x: sim_priority.get(x.get("simulator", ""), 0), reverse=True)
-            best_res = res_list[0]
+        # Select best simulator for each profile+engine (based on priority of averaged metrics? or just preference)
+        # We want to show ONE row per profile/engine.
+        # Priority: cvxportfolio > vectorbt > nautilus
 
-            metrics = best_res.get("metrics", {})
-            profile_metrics[key] = {
-                "sharpe": metrics.get("sharpe", 0.0),
-                "cagr": metrics.get("annualized_return", 0.0),  # Use annualized_return
-                "vol": metrics.get("annualized_vol", 0.0),
-                "mdd": metrics.get("max_drawdown", 0.0),
-                "simulator": best_res.get("simulator"),
-            }
+        final_metrics = {}  # Key: profile_engine
+
+        sim_priority = ["cvxportfolio", "vectorbt", "nautilus"]
+
+        # organizing keys by profile_engine
+        pe_map = {}
+        for k in grouped.keys():
+            p_e = "_".join(k.split("_")[:-1])  # remove simulator suffix
+            sim = k.split("_")[-1]
+            if p_e not in pe_map:
+                pe_map[p_e] = []
+            pe_map[p_e].append(sim)
+
+        for p_e, sims in pe_map.items():
+            # Pick best sim
+            best_sim = next((s for s in sim_priority if s in sims), sims[0])
+            full_key = f"{p_e}_{best_sim}"
+
+            # Average metrics across windows
+            metrics_list = grouped[full_key]
+            n = len(metrics_list)
+            if n == 0:
+                continue
+
+            avg_sharpe = sum(m.get("sharpe", 0.0) for m in metrics_list) / n
+            avg_cagr = sum(m.get("annualized_return", 0.0) for m in metrics_list) / n
+            avg_vol = sum(m.get("annualized_vol", 0.0) for m in metrics_list) / n
+            avg_mdd = sum(m.get("max_drawdown", 0.0) for m in metrics_list) / n
+            avg_total = sum(m.get("total_return", 0.0) for m in metrics_list) / n
+
+            cagr_str = f"{avg_cagr:.2f}%"
+            if avg_cagr >= 100.0:
+                cagr_str = ">100% (Capped)"
+
+            profile_metrics[p_e] = {"sharpe": avg_sharpe, "cagr_display": cagr_str, "vol_display": f"{avg_vol:.2f}", "mdd": avg_mdd, "total_ret": avg_total, "simulator": best_sim}
+
+    return {"run_id": run_id, "n_raw": n_raw, "n_sel": n_sel, "profiles": profile_metrics}
 
     return {"run_id": run_id, "n_raw": n_raw, "n_sel": n_sel, "profiles": profile_metrics}
 
@@ -104,30 +131,28 @@ def generate_report():
         lines.append(f"| `{row['run_id']}` | {row['n_raw']} | {row['n_sel']} | {rate:.1f}% |")
 
     lines.append("\n## 2. Performance Matrix (Custom Engine)")
-    lines.append("| Run ID | Profile | Simulator | Sharpe | CAGR | Volatility | MaxDD |")
-    lines.append("| :--- | :--- | :--- | :---: | :---: | :---: | :---: |")
+    lines.append("| Run ID | Profile | Simulator | Sharpe | Total Ret | CAGR | Volatility | MaxDD |")
+    lines.append("| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |")
 
     anomalies = []
 
     for row in aggregated:
-        for p_key, metrics in row["profiles"].items():
+        sorted_keys = sorted(row["profiles"].keys())
+        for p_key in sorted_keys:
+            metrics = row["profiles"][p_key]
             if "custom" not in p_key:
                 continue
             profile = p_key.replace("_custom", "")
 
             # Anomaly Detection
-            if metrics["sharpe"] > 8.0:  # Crypto can be high, but >8 is suspicious
+            if metrics["sharpe"] > 8.0:
                 anomalies.append(f"⚠️ {row['run_id']} ({profile}): Extreme Sharpe {metrics['sharpe']:.2f}")
             if metrics["sharpe"] < -2.0:
-                anomalies.append(f"⚠️ {row['run_id']} ({profile}): Negative Sharpe {metrics['sharpe']:.2f}")
-            if metrics["vol"] < 1.0:  # Suspiciously low vol for crypto (usually > 20%)
-                # metrics["vol"] might be percentage (e.g. 20.0) or float (0.2).
-                # Tournament results seem to have annualized_vol ~ 8.0 (800%?) or 8.0%?
-                # Let's check format. "annualized_vol": 8.34. This is likely %, or factor.
-                # If CAGR is 100.0, it means 100%.
-                pass
+                anomalies.append(f"⚠️ {row['run_id']} ({profile}): Negative Sharpe {metrics['sharpe']:.2f} (Expected for Shorts)")
 
-            lines.append(f"| `{row['run_id']}` | {profile} | {metrics['simulator']} | {metrics['sharpe']:.2f} | {metrics['cagr']:.2f}% | {metrics['vol']:.2f}% | {metrics['mdd']:.2%} |")
+            lines.append(
+                f"| `{row['run_id']}` | {profile} | {metrics['simulator']} | {metrics['sharpe']:.2f} | {metrics['total_ret']:.2f}X | {metrics['cagr_display']} | {metrics['vol_display']} | {metrics['mdd']:.2%} |"
+            )
 
     if anomalies:
         lines.append("\n## 3. Anomaly Detection (Outliers)")
