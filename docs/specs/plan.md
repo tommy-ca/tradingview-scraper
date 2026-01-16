@@ -293,6 +293,11 @@ This document codifies the institutional requirements and design specifications 
     - `binance_spot_rating_ma_short`
 - [x] **Validation**: Confirmed successful completion of optimization and backtesting steps.
 
+### Phase 173: Streamlined Data Pipeline (PLANNED)
+- [ ] **Architecture**: Design "Smart Ingestion" workflow that integrates Discovery -> Validation -> Targeted Repair -> Aggregation.
+- [ ] **Tooling**: Create a unified `make flow-data-smart` target or enhance `run_production_pipeline.py` to auto-heal stale data.
+- [ ] **Documentation**: Update `docs/specs/data_pipeline_v2.md` to define the streamlined process.
+
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 172 Completed
 
