@@ -18,10 +18,12 @@ Portfolio engines must treat these synthesized returns as "Primary Assets."
 $R_{composite} = R_{raw} \times Signal_{logic} \times DirectionFactor$
 Where $DirectionFactor$ is $1.0$ for LONG and $-1.0$ for SHORT.
 
-### 3.2 Optimization Flow
-1. **Pillar 1 (Selection)**: Identify high-hygiene candidates.
-2. **Pillar 2 (Synthesis)**: Generate return matrices for all enabled Strategy Atoms.
-3. **Pillar 3 (Allocation)**: Optimize across return streams using decision-naive solvers (`skfolio`, `riskfolio`, etc.).
+### 3.2 Optimization Flow (Just-In-Time Architecture)
+1. **Pillar 1 (Data)**: Ingest **Physical Returns** only (`returns_matrix.parquet`). No logic applied.
+2. **Pillar 2 (Synthesis)**: Just-In-Time expansion of Physical Assets into Logic Atoms (`scripts/synthesize_strategy_matrix.py`).
+    - Input: Physical Returns + Candidate Manifest (Logic/Direction).
+    - Output: `synthetic_returns.parquet` (e.g. `BTC_trend_SHORT` with inverted returns).
+3. **Pillar 3 (Allocation)**: Optimize across these **synthetic streams** using decision-naive solvers (`skfolio`, `riskfolio`).
 4. **Execution Layer**: Aggregate weights back to physical assets for implementation.
 
 ## 4. Recursive Weight Flattening

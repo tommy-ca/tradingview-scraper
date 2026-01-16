@@ -316,8 +316,17 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Artifact Verification**: Confirm `returns_matrix.parquet` contains strictly physical symbols (e.g. `BINANCE:BTCFDUSD`) before Selection.
 - [x] **Readiness**: Certify data health for downstream Selection & Optimization.
 
+### Phase 176: Downstream Production Execution (COMPLETED)
+- [x] **Execution**: Run steps 6-17 (Selection -> Reporting) for all 4 profiles using the JIT Synthesis flow.
+    - `long_all_fresh`
+    - `short_all_fresh`
+    - `ma_long_fresh`
+    - `ma_short_fresh`
+- [x] **Validation**: Verify that `synthetic_returns.parquet` is correctly generated and used by the optimizer.
+- [x] **Output**: Generate final Production Reports (`reports/port_report.md`).
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.3) - Phase 175 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.3) - Phase 176 Completed
 
 
 
