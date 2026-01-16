@@ -385,6 +385,7 @@ class ProductionPipeline:
             ("Natural Selection", [*make_base, "port-select"], self.validate_selection),
             ("Enrichment", [*make_base, "meta-refresh"], None),
             ("High-Integrity Preparation", [*make_base, "data-fetch", f"LOOKBACK={high_integrity_lookback}"], None),
+            ("Strategy Synthesis", ["uv", "run", "scripts/synthesize_strategy_matrix.py"], None),
             ("Health Audit", [*make_base, "data-audit", strict_health_arg], self.validate_health),
             ("Persistence Analysis", [*make_base, "research-persistence"], None),
             ("Regime Analysis", ["uv", "run", "python", "scripts/research_regime_v3.py"], None),

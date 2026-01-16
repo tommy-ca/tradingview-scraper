@@ -106,7 +106,11 @@ if __name__ == "__main__":
 
     # CR-831: Workspace Isolation
     # Prioritize run-specific artifacts
-    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    # Phase 173: Prioritize Synthetic Matrix if available (Strategy Synthesis)
+    default_returns = str(run_dir / "data" / "synthetic_returns.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+
     if not os.path.exists(default_returns):
         default_returns = "data/lakehouse/portfolio_returns.pkl"
 

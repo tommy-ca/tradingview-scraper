@@ -353,17 +353,22 @@ if __name__ == "__main__":
     run_dir = settings.prepare_summaries_run_dir()
 
     # CR-831: Workspace Isolation
-    default_clusters = str(run_dir / "data" / ("portfolio_clusters_raw.json" if args.mode == "raw" else "portfolio_clusters.json"))
+    # Prioritize run-specific artifacts
+    # Phase 173: Prioritize Synthetic Matrix if available
+    default_returns = str(run_dir / "data" / "synthetic_returns.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+
+    if not os.path.exists(default_returns):
+        default_returns = "data/lakehouse/portfolio_returns.pkl"
+
+    default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
     if not os.path.exists(default_clusters):
-        default_clusters = "data/lakehouse/portfolio_clusters_raw.json" if args.mode == "raw" else "data/lakehouse/portfolio_clusters.json"
+        default_clusters = "data/lakehouse/portfolio_clusters.json"
 
     default_meta = str(run_dir / "data" / "portfolio_meta.json")
     if not os.path.exists(default_meta):
         default_meta = "data/lakehouse/portfolio_meta.json"
-
-    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
-    if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
 
     c_path = os.getenv("CLUSTERS_FILE" if args.mode == "selected" else "CLUSTERS_RAW", default_clusters)
     m_path = os.getenv("PORTFOLIO_META", default_meta)

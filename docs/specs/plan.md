@@ -304,8 +304,14 @@ This document codifies the institutional requirements and design specifications 
 - [ ] **Tooling**: Create a unified `make flow-data-smart` target or enhance `run_production_pipeline.py` to auto-heal stale data.
 - [ ] **Documentation**: Update `docs/specs/data_pipeline_v2.md` to define the streamlined process.
 
+### Phase 174: Downstream Verification (COMPLETED)
+- [x] **Pipeline Integration**: Injected `Strategy Synthesis` (Step 8.5) into `run_production_pipeline.py` to restore logic-data coupling.
+- [x] **Engine Update**: Modified `optimize_clustered_v2.py` and `analyze_clusters.py` to auto-detect and prioritize `synthetic_returns.parquet`.
+- [x] **Execution**: Successfully ran downstream pipelines for `long_all_phys` and `ma_long_phys`.
+- [x] **Verification**: Confirmed successful Generation of Optimized Portfolios from Physical Data + Logical Synthesis.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.1) - Phase 173 Partially Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.2) - Phase 174 Completed
 
 
 
