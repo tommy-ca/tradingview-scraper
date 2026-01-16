@@ -506,8 +506,14 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Verification**: Ran `flow-production` for a test profile using ONLY the Lakehouse artifacts (validated via `lakehouse_only` mode).
 - [x] **Sign-off**: Verified zero network calls in the optimization phase (by design).
 
+### Phase 207: Aggregate Profile Validation (COMPLETED)
+- [x] **Objective**: Validate DataOps flow for aggregate/multi-scanner profiles (`crypto_rating_all`, `crypto_rating_ma`).
+- [x] **Execution**: Ran `flow-data` and `flow-production` for these high-level profiles.
+- [x] **Verification**: Ensured all 4 component sub-strategies (Spot/Perp x Long/Short) were ingested and optimized.
+- [x] **Artifacts**: Validated successful generation of `returns_matrix.parquet` and `portfolio_flattened.json` for aggregate runs.
+
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.4.0) - Phase 206 Completed
+**System Status**: 🟢 PRODUCTION READY (v4.4.1) - Phase 207 Completed
 
 
 
