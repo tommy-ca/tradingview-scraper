@@ -341,8 +341,14 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Remediation Plan**: Propose fixes if "Regression" is confirmed (e.g., loosen selection thresholds, fix solver constraints).
 - [x] **Conclusion**: Verified that "Convergence" is due to Universe Starvation ($N=5$) vs. Cluster Cap ($25\%$), forcing identical portfolios. System is healthy.
 
+### Phase 179: Liquidity Floor Adjustment & Re-Ingestion (COMPLETED)
+- [x] **Configuration Update**: Lowered `Value.Traded` floor from $20M to $5M in `binance_spot_base.yaml` to widen the funnel.
+- [x] **Scanner Verification**: Validated that `long` returns ~15 selected (from 9) and `short` returns ~10 selected.
+- [x] **Fresh Ingestion**: Re-run `scan-run` and `data-prep-raw` for all 4 profiles (`long_all_fresh`, `short_all_fresh`, `ma_long_fresh`, `ma_short_fresh`) to populate the pipeline with the wider universe.
+- [x] **Data Health Check**: Confirm 100% health for the new candidate set.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.4) - Phase 178 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.5) - Phase 179 Completed
 
 
 

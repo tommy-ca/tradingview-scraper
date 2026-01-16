@@ -1,7 +1,7 @@
 # L1: Binance Spot Pure Liquidity Baseline
 base_preset: binance_liquid_base.yaml
 filters:
-  - { left: "Value.Traded", operation: "greater", right: 20000000 }
+  - { left: "Value.Traded", operation: "greater", right: 5000000 }
   - { left: "type", operation: "equal", right: "spot" }
   - { left: "name", operation: "match", right: "USDT$|USDC$|FDUSD$|DAI$|USD$" }
   - { left: "name", operation: "nmatch", right: ".P$" }
