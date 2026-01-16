@@ -141,11 +141,11 @@ The crypto sleeve operates as an orthogonal capital allocation within the multi-
 
 ### Production Pillars (Forensic Standards)
 Agents must ensure every production run adheres to the following five pillars:
-1.  **Regime Alignment**: The `step_size` must be **20 days** for crypto production to match the structural optimum identified via forensic audit (Sharpe 1.88).
+1.  **Regime Alignment**: The `step_size` must be **10 days (Bi-Weekly)** for crypto production to capture fast-moving volatility clusters. (Updated Jan 2026).
 2.  **Tail-Risk Mitigation**: Forensic validation proves that 20-day alignment provides the best balance between momentum capture and drawdown protection (-15.1% MaxDD). **Annualized Return Clipping (-99.99%)** is enforced to prevent mathematical divergence in high-drawdown scenarios.
 3.  **Alpha Capture**: High-resolution factor isolation (threshold=0.45) and **Entropy Resolution (Order=5)** ensure winners are orthogonal and high-conviction. **Selection Scarcity Protocol (SSP)** ensures robust multi-stage fallbacks (Max-Sharpe -> Min-Var -> EW) when the winner pool is sparse.
 4.  **Directional Purity**: SHORT candidate returns must be inverted ($R_{synthetic} = -1 \times R_{raw}$) before optimization to ensure risk-parity engines (HRP/MinVar) correctly reward stable downward drift.
-5.  **Late-Binding Trend Enforcement**: Final asset direction is dynamically recalculated at rebalance-time using a 20-day momentum signal to ensure portfolio-regime alignment.
+5.  **Toxic Data Guard**: Assets with daily returns > 500% (5.0) are automatically dropped to prevent optimizer corruption. Synthetic shorts are capped at -100% loss.
 
 ### 9. Numerical Stability & Reporting
 1.  **Stable Sum Gate**: Mixed-direction or Short-only portfolios MUST use the Stable Sum Gate in rebalance simulations to prevent division-by-near-zero return artifacts ($W_{sum} < 1e-6$).

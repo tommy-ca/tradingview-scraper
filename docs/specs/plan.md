@@ -421,10 +421,16 @@ This document codifies the institutional requirements and design specifications 
 ### Phase 191: Architectural Consolidation (COMPLETED)
 - [x] **Review**: Analyzed necessity of Synthetic Symbols vs. Meta-Portfolios.
 - [x] **Decision**: Confirmed Synthetic Logic is MANDATORY to allow solvers to "see" short PnL as positive growth.
+- [x] **Audit**: Reviewed `cvxportfolio`, `riskfolio`, and `skfolio` implementations. All are configured for `LongOnly` constraints, validating the need for upstream return inversion.
 - [x] **Artifact**: Created `docs/design/adr_synthetic_logic_necessity.md`.
 
+### Phase 192: Final Polish & Handoff (COMPLETED)
+- [x] **Clean**: Remove temporary audit scripts (`scripts/audit_*.py`).
+- [x] **Docs**: Finalize `AGENTS.md` with the new rebalancing cadence and architectural decisions.
+- [x] **Status**: Mark system as `v4.0.0` (Production Ready).
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.10) - Phase 191 Completed
+**System Status**: 🟢 PRODUCTION READY (v4.0.0) - All Phases Complete
 
 
 
