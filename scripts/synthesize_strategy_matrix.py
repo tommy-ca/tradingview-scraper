@@ -84,6 +84,9 @@ def synthesize_strategy_matrix():
         if direction == "SHORT":
             # Synthetic Long: Invert returns
             syn_series = -1.0 * raw_series
+            # CR-187: Bankruptcy Guard for Synthetic Shorts
+            # Cap negative returns at -1.0 (Liquidation) to prevent mathematical explosions
+            syn_series = syn_series.clip(lower=-1.0)
         else:
             syn_series = raw_series
 

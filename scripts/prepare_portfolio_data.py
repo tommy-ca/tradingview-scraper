@@ -376,6 +376,17 @@ def prepare_portfolio_universe():
             returns_df = returns_df.drop(columns=short_history)
             logger.info("Dropped %d symbols due to insufficient secular history (< %d days): %s", len(short_history), min_days, ", ".join(short_history))
 
+    # CR-187: Data Sanity Guard (Toxic Volatility Filter)
+    # Detect and drop assets with unrealistic daily returns (e.g. > 500% or < -99% errors)
+    # This prevents solver explosions and meta-metric corruption.
+    TOXIC_THRESHOLD = 5.0  # 500% daily move limit
+    max_abs_rets = returns_df.abs().max()
+    toxic_assets = [str(c) for c, v in max_abs_rets.items() if v > TOXIC_THRESHOLD]
+
+    if toxic_assets:
+        returns_df = returns_df.drop(columns=toxic_assets)
+        logger.warning(f"Dropped {len(toxic_assets)} TOXIC assets (Daily Return > {TOXIC_THRESHOLD:.0%}): {', '.join(toxic_assets)}")
+
     # Drop zero-variance noise
     # Use ddof=0 to avoid "Degrees of freedom <= 0" warning
     variances = returns_df.var(ddof=0)

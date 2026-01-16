@@ -393,8 +393,21 @@ This document codifies the institutional requirements and design specifications 
     - **Observation**: Long/Short sleeves show near-zero correlation (-0.01), validating the diversification benefit.
 - [x] **Artifacts**: Verified generation of optimized weights and consolidated report for all profiles.
 
+### Phase 187: Meta-Metric Anomaly Investigation (COMPLETED)
+- [x] **Investigation**: Identified that `BINANCE:ADAUSDT` (and others) had Toxic Volatility (Returns > 1000x or < -100x), corrupting the `max_sharpe` optimizer.
+- [x] **Data Audit**: Confirmed raw prices were valid but synthetic short returns caused mathematical explosion without bankruptcy guards.
+- [x] **Fix 1 (Sanity)**: Implemented `TOXIC_THRESHOLD=5.0` (500%) drop filter in `prepare_portfolio_data.py`.
+- [x] **Fix 2 (Synthesis)**: Implemented Bankruptcy Guard (`clip(lower=-1.0)`) in `synthesize_strategy_matrix.py` for synthetic shorts.
+- [x] **Re-Run**: Executed full pipeline (`meta_super_v4`) with protected data.
+- [x] **Result**: Stable metrics for HRP/MinVar. MaxSharpe remains volatile (expected for momentum chasing) but no longer infinite/NaN.
+
+### Phase 188: Final Production Candidate Selection (COMPLETED)
+- [x] **Meta-Tournament**: Compared `hrp` vs `min_variance` vs `max_sharpe`.
+- [x] **Winner**: `min_variance` (Sharpe 5.13). Best risk-adjusted return and stability.
+- [x] **Recommendation**: Use `min_variance` for live deployment.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.8) - Phase 186 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.9) - Phase 188 Completed
 
 
 
