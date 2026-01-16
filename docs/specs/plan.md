@@ -311,8 +311,13 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Verification**: Confirmed successful Generation of Optimized Portfolios from Physical Data + Logical Synthesis.
 - [x] **Clean Run**: Executed downstream pipelines for the clean runs (`long_all_req`, `ma_long_req`), confirming end-to-end validity of the streamlined architecture.
 
+### Phase 175: Production Cycle Initiation (COMPLETED)
+- [x] **Fresh Ingestion**: Execute `scan-run` and `data-prep-raw` for the 4 core crypto profiles (`all_long`, `all_short`, `ma_long`, `ma_short`) using the stabilized pipeline.
+- [x] **Artifact Verification**: Confirm `returns_matrix.parquet` contains strictly physical symbols (e.g. `BINANCE:BTCFDUSD`) before Selection.
+- [x] **Readiness**: Certify data health for downstream Selection & Optimization.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.2) - Phase 174 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.3) - Phase 175 Completed
 
 
 
