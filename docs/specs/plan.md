@@ -361,8 +361,13 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Validation**: Verified `PAXGUSDT` is absent from the candidate pool.
 - [x] **Performance Check**: Confirmed metrics remain healthy (Sharpe > 7 for Longs) after removing the low-volatility gold anchor.
 
+### Phase 182: Backtest Parameter Standardization (IN PROGRESS)
+- [x] **Audit**: Reviewed `manifest.json` and `settings.py` defaults. Found `train_window=60` was too short for institutional stability.
+- [x] **Update**: Standardized `train_window` to **252** (1 Year) in `defaults`, `production_2026_q1`, and `settings.py`.
+- [ ] **Verification**: Ensure `development` profile retains its lightweight 30-day window (it does).
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.7) - Phase 181 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.7) - Phase 182 Initiated
 
 
 

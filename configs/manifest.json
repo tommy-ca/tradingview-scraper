@@ -22,7 +22,7 @@
       "backtest_simulator": "cvxportfolio",
       "backtest_slippage": 0.0005,
       "backtest_commission": 0.0001,
-      "train_window": 60,
+      "train_window": 252,
       "test_window": 20,
       "step_size": 20
     },
@@ -61,7 +61,10 @@
         "selection_mode": "v4"
       },
       "backtest": {
-        "backtest_simulators": "cvxportfolio,vectorbt,nautilus"
+        "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
+        "train_window": 252,
+        "test_window": 20,
+        "step_size": 20
       },
       "discovery": {
         "enabled_markets": ["america", "crypto"],

@@ -241,7 +241,7 @@ class TradingViewScraperSettings(BaseSettings):
     max_clusters: int = 25
 
     # Backtest
-    train_window: int = 60
+    train_window: int = 252
     test_window: int = 20
     step_size: int = 20
     backtest_simulator: str = "custom"
