@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("select_top_universe")
 
@@ -29,7 +31,7 @@ def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
             if not subdir.is_dir():
                 continue
             matches = []
-            for p in ["universe_selector_*.json", "strategy_alpha_*.json", "universe_foundation_*.json"]:
+            for p in ["universe_selector_*.json", "strategy_selector_*.json", "strategy_alpha_*.json", "universe_foundation_*.json"]:
                 matches.extend(list(subdir.glob(p)))
 
             if not matches:
@@ -116,9 +118,6 @@ def get_asset_class(category: str, symbol: str = "") -> str:
     if "FOREX" in c:
         return "FOREX"
     return "OTHER"
-
-
-from tradingview_scraper.settings import get_settings
 
 
 def select_top_universe(mode: str = "raw"):
@@ -254,11 +253,15 @@ def select_top_universe(mode: str = "raw"):
         logic = item["_logic"]
         direction = item["_direction"]
         # CR-831: Canonical Atom Identity
+        # atom_id = f"{phys_sym}_{logic}_{direction}"
+        # CR-Update: Use physical symbol as primary key to streamline data pipeline
+        # The Atom ID is preserved as 'atom_id' for downstream synthesis
         atom_id = f"{phys_sym}_{logic}_{direction}"
 
         output_universe.append(
             {
-                "symbol": atom_id,
+                "symbol": phys_sym,  # Changed from atom_id to phys_sym
+                "atom_id": atom_id,
                 "physical_symbol": phys_sym,
                 "description": item.get("description", item.get("name", "N/A")),
                 "sector": item.get("sector", "N/A"),

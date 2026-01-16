@@ -11,6 +11,7 @@ from typing import Any, cast
 
 import pandas as pd
 
+from tradingview_scraper.pipelines.data.orchestrator import DataPipelineOrchestrator
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.stream.metadata import DataProfile, get_symbol_profile
 from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
@@ -18,9 +19,6 @@ from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("portfolio_data_prep")
-
-
-from tradingview_scraper.pipelines.data.orchestrator import DataPipelineOrchestrator
 
 
 def prepare_portfolio_universe():
@@ -86,10 +84,15 @@ def prepare_portfolio_universe():
     start_date = end_date - timedelta(days=lookback_days)
 
     logger.info("Aligning return streams and generating atoms...")
+    unique_phys_symbols = set()
     for candidate in universe:
-        atom_id = candidate["symbol"]
-        phys_sym = candidate.get("physical_symbol") or atom_id
+        # With the update to select_top_universe, 'symbol' is now the physical symbol
+        # But we handle legacy cases where it might be an atom_id
+        sym = candidate["symbol"]
+        phys_sym = candidate.get("physical_symbol") or sym
+        unique_phys_symbols.add(phys_sym)
 
+    for phys_sym in unique_phys_symbols:
         try:
             df = loader.load(phys_sym, start_date, end_date, interval="1d")
             if df.empty:
@@ -99,29 +102,31 @@ def prepare_portfolio_universe():
             df_series = df.set_index("timestamp")["close"]
             returns = df_series.pct_change().dropna()
 
-            price_data[atom_id] = returns
-            alpha_meta[atom_id] = {
-                "symbol": phys_sym,
-                "description": candidate.get("description", "N/A"),
-                "sector": candidate.get("sector", "N/A"),
-                "adx": candidate.get("adx", 0),
-                "close": candidate.get("close", 0),
-                "atr": candidate.get("atr", 0),
-                "volatility_d": candidate.get("volatility_d", 0),
-                "volume_change_pct": candidate.get("volume_change", 0),
-                "roc": candidate.get("roc", 0),
-                "value_traded": candidate.get("value_traded", 0),
-                "logic": candidate.get("logic") or "trend",
-                "direction": candidate.get("direction") or "LONG",
-                "market": candidate.get("market", "UNKNOWN"),
-                "identity": candidate.get("identity", phys_sym),
-                "is_benchmark": candidate.get("is_benchmark", False),
-                "recommend_all": candidate.get("recommend_all"),
-                "recommend_ma": candidate.get("recommend_ma"),
-                "recommend_other": candidate.get("recommend_other"),
-            }
+            # Store keyed by physical symbol (One column per asset)
+            price_data[phys_sym] = returns
+
+            # Store metadata for the physical asset (taking first available candidate as proxy for description)
+            # Find a representative candidate
+            rep_cand = next((c for c in universe if c.get("physical_symbol") == phys_sym or c["symbol"] == phys_sym), None)
+
+            if rep_cand:
+                alpha_meta[phys_sym] = {
+                    "symbol": phys_sym,
+                    "description": rep_cand.get("description", "N/A"),
+                    "sector": rep_cand.get("sector", "N/A"),
+                    "market": rep_cand.get("market", "UNKNOWN"),
+                    "identity": rep_cand.get("identity", phys_sym),
+                    # Aggregated/Representative Metrics (metrics are usually asset-level anyway)
+                    "adx": rep_cand.get("adx", 0),
+                    "close": rep_cand.get("close", 0),
+                    "atr": rep_cand.get("atr", 0),
+                    "volatility_d": rep_cand.get("volatility_d", 0),
+                    "volume_change_pct": rep_cand.get("volume_change", 0),
+                    "roc": rep_cand.get("roc", 0),
+                    "value_traded": rep_cand.get("value_traded", 0),
+                }
         except Exception as e:
-            logger.error(f"Failed to transform {phys_sym} for atom {atom_id}: {e}")
+            logger.error(f"Failed to transform {phys_sym}: {e}")
 
     # 4. Aligned Matrix Creation
     if not price_data:
@@ -277,17 +282,18 @@ def prepare_portfolio_universe():
             returns = df_series.pct_change().dropna()
 
             with lock:
-                # Map physical returns to all atoms
-                for candidate in candidates_for_phys:
-                    atom_id = candidate["symbol"]
-                    logic = candidate.get("logic") or "trend"
-                    direction = candidate.get("direction") or "LONG"
+                # Store strictly physical returns
+                price_data[phys_sym] = returns
 
-                    price_data[atom_id] = returns
-                    alpha_meta[atom_id] = {
+                # Representative metadata
+                if candidates_for_phys:
+                    candidate = candidates_for_phys[0]
+                    alpha_meta[phys_sym] = {
                         "symbol": phys_sym,
                         "description": candidate.get("description", "N/A"),
                         "sector": candidate.get("sector", "N/A"),
+                        "market": candidate.get("market", "UNKNOWN"),
+                        "identity": candidate.get("identity", phys_sym),
                         "adx": candidate.get("adx", 0),
                         "close": candidate.get("close", 0),
                         "atr": candidate.get("atr", 0),
@@ -295,14 +301,7 @@ def prepare_portfolio_universe():
                         "volume_change_pct": candidate.get("volume_change_pct", 0),
                         "roc": candidate.get("roc", 0),
                         "value_traded": candidate.get("value_traded", 0),
-                        "logic": logic,
-                        "direction": direction,
-                        "market": candidate.get("market", "UNKNOWN"),
-                        "identity": candidate.get("identity", phys_sym),
                         "is_benchmark": candidate.get("is_benchmark", False),
-                        "recommend_all": candidate.get("recommend_all"),
-                        "recommend_ma": candidate.get("recommend_ma"),
-                        "recommend_other": candidate.get("recommend_other"),
                     }
 
         except Exception as e:
