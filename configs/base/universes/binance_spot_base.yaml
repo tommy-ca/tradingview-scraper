@@ -7,6 +7,8 @@ filters:
   - { left: "name", operation: "nmatch", right: ".P$" }
   # Exclude Gold Pegged Assets (Commodity Risk)
   - { left: "name", operation: "nmatch", right: "^PAXG|^XAUT" }
+  # Exclude Stablecoin Pairs (Pairs Trading Universe)
+  - { left: "name", operation: "nmatch", right: "^XUSD|^USD1|^AEUR|^EUR|^GBP|^JPY" }
 sort_by: name
 sort_order: asc
 base_universe_sort_by: name

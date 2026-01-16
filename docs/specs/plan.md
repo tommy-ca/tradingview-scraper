@@ -519,8 +519,18 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Audit**: Confirmed `returns_matrix.parquet` generation uses `lakehouse_only` mode without network.
 - [x] **Final Report**: Generated `docs/reports/stable_forensic_report.md` for the latest aggregate runs.
 
+### Phase 209: Stablecoin & Pair Trading Exclusion (COMPLETED)
+- [x] **Problem**: `XUSDUSDT` and `USD1USDT` (Stables) are being selected as SHORT candidates due to micro-drift, consuming risk budget.
+- [x] **Action**: Update `binance_spot_base.yaml` to exclude known stablecoin patterns (`XUSD`, `USD1`, `AEUR`, `EUR`).
+- [x] **Validation**: Re-ran scanner (`audit_stable_exclusion_209`). Verified `USD1` and `XUSD` are absent from the 18 selected candidates.
+- [x] **Future**: Create a dedicated "Pairs Trading" universe for these assets (documented in Phase 210).
+
+### Phase 210: Pairs Trading Universe (PLANNED)
+- [ ] **Concept**: Create `binance_pairs_base.yaml` specifically targeting stablecoin pairs and correlation plays.
+- [ ] **Strategy**: Use Mean Reversion logic on these low-volatility assets.
+
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.5.0) - Phase 208 Completed
+**System Status**: 🟢 PRODUCTION READY (v4.5.1) - Phase 209 Completed
 
 
 
