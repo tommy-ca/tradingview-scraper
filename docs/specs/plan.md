@@ -324,6 +324,7 @@ This document codifies the institutional requirements and design specifications 
     - `ma_short_fresh`
 - [x] **Validation**: Verify that `synthetic_returns.parquet` is correctly generated and used by the optimizer.
 - [x] **Output**: Generate final Production Reports (`reports/port_report.md`).
+- [x] **Forensic Audit**: Generated `docs/reports/stable_forensic_report.md` confirming high-fidelity Sharpe (~6.6) via `cvxportfolio`.
 
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.3) - Phase 176 Completed

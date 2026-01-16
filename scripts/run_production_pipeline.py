@@ -391,8 +391,9 @@ class ProductionPipeline:
             ("Regime Analysis", ["uv", "run", "python", "scripts/research_regime_v3.py"], None),
             ("Factor Analysis", [*make_base, "port-analyze"], None),
             ("Optimization", [*make_base, "port-optimize"], self.validate_optimization),
-            ("Validation", [*make_base, "port-test"], None),
-            ("Reporting", [*make_base, "port-report"], None),
+            ("Weight Flattening", ["uv", "run", "scripts/flatten_strategy_weights.py"], None),
+            ("Validation", [*make_base, "port-test", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json", f"RETURNS_MATRIX={self.run_dir}/data/returns_matrix.parquet"], None),
+            ("Reporting", [*make_base, "port-report", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json"], None),
             ("Gist Sync", [*make_base, "report-sync"], None),
         ]
 
