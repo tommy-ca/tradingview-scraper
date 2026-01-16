@@ -69,10 +69,10 @@ A unified CLI tool replacing ad-hoc `data-fetch` calls.
 ### 3.3 Data Selector (`scripts/prepare_portfolio_data.py` Refactor)
 - **Mode**: `source="lakehouse_only"` (Default for Production).
 - **Operation**:
-    1.  Read `candidates.json` (from upstream Discovery in Alpha Cycle).
+    1.  Read `candidates.json` (from upstream Discovery in Data Cycle or passed explicit file).
     2.  Check Lakehouse for these assets.
     3.  **Copy** Parquet files from Lakehouse to `artifacts/runs/<ID>/data/`.
-    4.  **Fail Fast**: If any required asset is missing/stale in Lakehouse, do NOT fetch. Fail the run or drop the asset (configurable).
+    4.  **Fail Fast**: If any required asset is missing/stale in Lakehouse, **ABORT** the pipeline. Do NOT attempt network calls.
 
 ### 3.4 Feature Store
 - **Service**: `scripts/services/ingest_features.py`
@@ -87,14 +87,19 @@ A unified CLI tool replacing ad-hoc `data-fetch` calls.
 ## 4. Operational Workflow
 
 ### Daily Routine (Cron/Airflow)
-1.  **Step 1: Discovery** (`make scan-run`)
-    - Generates candidates.
-2.  **Step 2: Ingestion** (`make flow-data-ingest`)
-    - `data-ingest`: OHLCV Market Data.
-    - `meta-ingest`: Symbol/Execution Metadata.
-    - `feature-ingest`: TradingView Technicals (New).
-3.  **Step 3: Alpha Production** (`make flow-production`)
-    - Runs Strategies using Lakehouse data and features.
+1.  **Step 1: Data Cycle** (`make flow-data`)
+    - **Discovery**: Generates `export/<date>/candidates.json`.
+    - **Ingestion**: Updates Lakehouse from candidates.
+    - **Meta/Features**: Enriches Lakehouse.
+    - **Output**: Validated Lakehouse snapshot.
+
+2.  **Step 2: Alpha Cycle** (`make flow-production`)
+    - **Trigger**: Runs *after* Data Cycle completion.
+    - **Input**: `export/<date>/candidates.json` (passed via `CANDIDATES_FILE` or resolved via RUN_ID).
+    - **Operation**:
+        - **Aggregation**: Builds `returns_matrix.parquet` from Lakehouse.
+        - **Selection/Optimization**: Pure computation.
+    - **Constraint**: **NO** network I/O permitted.
 
 ### Maintenance Routine
 1.  **Gap Repair**: `make data-repair` (Runs `repair_data.py`).
