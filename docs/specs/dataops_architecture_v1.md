@@ -65,11 +65,22 @@ A unified CLI tool replacing ad-hoc `data-fetch` calls.
     3.  **Copy** Parquet files from Lakehouse to `artifacts/runs/<ID>/data/`.
     4.  **Fail Fast**: If an asset is missing/stale in Lakehouse, do NOT fetch. Fail the run or drop the asset (configurable).
 
+### 3.4 Feature Store
+- **Service**: `scripts/services/ingest_features.py`
+- **Contract**: Produces `data/lakehouse/features/tv_technicals_1d.parquet`.
+- **Trigger**: Runs daily after Data/Meta ingestion.
+
 ## 4. Operational Workflow
 
 ### Daily Routine (Cron/Airflow)
-1.  `make flow-data-daily` -> Updates Lakehouse.
-2.  `make flow-production` -> Runs Strategies on updated Lakehouse.
+1.  **Step 1: Discovery** (`make scan-run`)
+    - Generates candidates.
+2.  **Step 2: Ingestion** (`make flow-data-ingest`)
+    - `data-ingest`: OHLCV Market Data.
+    - `meta-ingest`: Symbol/Execution Metadata.
+    - `feature-ingest`: TradingView Technicals (New).
+3.  **Step 3: Alpha Production** (`make flow-production`)
+    - Runs Strategies using Lakehouse data and features.
 
 ### Research Routine
 1.  Dev updates `universe.yaml`.

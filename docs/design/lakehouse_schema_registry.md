@@ -83,7 +83,28 @@ To be implemented using LanceDB for vector storage and fast retrieval of unstruc
     *   `embedding`: `vector(768)` (e.g. BERT/Transformer embedding)
     *   `sentiment_score`: `float32`
 
-## 4. Integrity Constraints
+## 4. Feature Store (Time-Series Features)
+Managed by the `Feature Ingestion Service`. Stored in `data/lakehouse/features/`.
+
+### 4.1 TradingView Technicals
+*   **Path**: `data/lakehouse/features/tv_technicals_1d.parquet` (Partitioned by Date)
+*   **Source**: TradingView Scanner API (`scripts/services/ingest_features.py`)
+*   **Frequency**: Daily Snapshot
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `timestamp` | `int64` | Ingestion Time (UTC) |
+| `symbol` | `string` | Unified Symbol |
+| `recommend_all` | `float32` | Composite Rating (-1.0 to 1.0) |
+| `recommend_ma` | `float32` | MA Rating |
+| `recommend_other` | `float32` | Oscillator Rating |
+| `rsi` | `float32` | RSI(14) |
+| `adx` | `float32` | ADX(14) |
+| `volatility_d` | `float32` | Daily Volatility |
+| `perf_w` | `float32` | Weekly Performance % |
+| `perf_1m` | `float32` | Monthly Performance % |
+
+## 5. Integrity Constraints
 1.  **Toxic Data Guard**: Market Data ingestion MUST reject daily returns > 500% (`TOXIC_THRESHOLD`).
-2.  **Referential Integrity**: All symbols in `execution.parquet` MUST exist in `symbols.parquet`.
+2.  **Referential Integrity**: All symbols in `execution.parquet` and `features/*` MUST exist in `symbols.parquet`.
 3.  **Idempotency**: Ingestion scripts MUST be re-runnable without duplicating data.
