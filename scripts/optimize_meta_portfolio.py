@@ -25,14 +25,33 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
 
     # Handle Profile Matrix
     if profile is None:
-        # Search for all meta_returns_*.pkl in the lakehouse
-        base_dir = Path("data/lakehouse")
+        # CR-831: Workspace Isolation - Infer base directory from returns_path
+        input_path = Path(returns_path)
+        if input_path.is_dir():
+            base_dir = input_path
+        else:
+            base_dir = input_path.parent
+
+        # Search for all meta_returns_*.pkl in the resolved directory
         files = list(base_dir.glob("meta_returns_*.pkl"))
+
+        # If none found in run dir, try lakehouse (Legacy fallback)
         if not files:
-            # Fallback to single returns path
-            files = [Path(returns_path)]
+            files = list(Path("data/lakehouse").glob("meta_returns_*.pkl"))
+
+        if not files and input_path.exists() and input_path.is_file():
+            # Fallback to single returns path if no pattern match
+            files = [input_path]
     else:
-        files = [Path("data/lakehouse") / f"meta_returns_{profile}.pkl"]
+        # Try run_dir first, then lakehouse
+        input_path = Path(returns_path)
+        base_dir = input_path.parent if input_path.is_file() else input_path
+
+        candidate = base_dir / f"meta_returns_{profile}.pkl"
+        if candidate.exists():
+            files = [candidate]
+        else:
+            files = [Path("data/lakehouse") / f"meta_returns_{profile}.pkl"]
 
     for p_path in files:
         if not p_path.exists():
