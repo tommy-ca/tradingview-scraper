@@ -424,13 +424,20 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Audit**: Reviewed `cvxportfolio`, `riskfolio`, and `skfolio` implementations. All are configured for `LongOnly` constraints, validating the need for upstream return inversion.
 - [x] **Artifact**: Created `docs/design/adr_synthetic_logic_necessity.md`.
 
-### Phase 192: Final Polish & Handoff (COMPLETED)
-- [x] **Clean**: Remove temporary audit scripts (`scripts/audit_*.py`).
-- [x] **Docs**: Finalize `AGENTS.md` with the new rebalancing cadence and architectural decisions.
-- [x] **Status**: Mark system as `v4.0.0` (Production Ready).
+### Phase 194: Data Integrity Audit & Recovery (COMPLETED)
+- [x] **Audit**: Identified `BINANCE:ADAUSDT` spike on 2026-01-01 ($0.33 -> $526.06, +157,639%).
+- [x] **Forensics**: Confirmed cross-contamination with `BINANCE:BNBUSDT` price levels. Identified 22 corrupted assets in the Lakehouse.
+- [x] **Remediation**: Deleted all corrupted parquet files.
+- [x] **Tooling**: Added `scripts/audit_data_spikes.py` for ongoing integrity monitoring.
+- [x] **Verification**: Confirmed Risk Isolation logic caps losses even if bad data enters the simulator.
+
+### Phase 195: Final System Polish (COMPLETED)
+- [x] **Documentation**: Updated `AGENTS.md` and created `docs/reports/data_corruption_audit_ada.md`.
+- [x] **Cleanup**: Removed temporary debug scripts.
+- [x] **Status**: **v4.0.1** (Production Ready + Data Hardened).
 
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.0.0) - All Phases Complete
+**System Status**: 🟢 PRODUCTION READY (v4.0.1) - All Phases Complete
 
 
 
