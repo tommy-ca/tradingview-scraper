@@ -467,8 +467,16 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Integration**: Added `feature-ingest` to `flow-data`.
 - [x] **Validation**: Verified `tv_technicals_1d.parquet` contains daily signals with correct schema.
 
+### Phase 201: Legacy Pipeline Migration & Centralization (IN PROGRESS)
+- [x] **Review**: Identified legacy scripts (`repair_portfolio_gaps.py`, `recover_universe.py`) and ad-hoc fetch logic.
+- [x] **Design**: Defined migration path in `dataops_architecture_v1.md`.
+- [ ] **Service**: Implement `scripts/services/repair_data.py` (Migrated Logic).
+- [ ] **Cleanup**: Deprecate `data-fetch` and legacy repair scripts in Makefile.
+- [ ] **Integration**: Add `data-repair` target to `flow-data` (optional/weekly) or as a standalone maintenance task.
+- [ ] **Validation**: Verify gap repair works on a test case using the new service.
+
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.3.0) - Feature Store Active
+**System Status**: 🟢 PRODUCTION READY (v4.3.0) - Phase 201 Initiated
 
 
 
