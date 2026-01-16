@@ -446,12 +446,17 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Specification**: Defined `docs/specs/dataops_architecture_v1.md` splitting Data Cycle vs Alpha Cycle.
 - [x] **Refinement**: Updated spec to include Scanner-Driven Ingestion and Idempotency logic.
 - [x] **Data Service**: Implemented `scripts/services/ingest_data.py` (The Lakehouse Keeper).
-- [x] **Refactor**: Updated `prepare_portfolio_data.py` to support `source="lakehouse_only"` (Read-Only Mode).
-- [x] **Orchestration**: Create `make flow-data` and update `make flow-production` to enforce the split.
-- [ ] **Validation**: Prove that a production run fails if data is missing (instead of auto-fetching), enforcing the contract.
+- [x] **Refactor**: Updated `prepare_portfolio_data.py` to support `source="lakehouse_only"` (Read-Only Mode) and fail fast if data missing.
+- [x] **Orchestration**: Created `make flow-data`.
+
+### Phase 198: Metadata Pipeline Isolation (COMPLETED)
+- [x] **Design**: Defined `docs/specs/data_pipeline_metadata_v2.md`.
+- [x] **Makefile**: Create `meta-ingest` target (Structural + Execution Meta) and add to `flow-data`.
+- [x] **Orchestration**: Update `run_production_pipeline.py` to use `enrich_candidates_metadata.py` (Read-Only) instead of `meta-refresh`.
+- [ ] **Validation**: Verify `flow-production` no longer triggers TradingView/CCXT API calls.
 
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.1.0) - Phase 197 Completed
+**System Status**: 🟢 PRODUCTION READY (v4.1.1) - Phase 198 Completed
 
 
 

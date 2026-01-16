@@ -483,7 +483,17 @@ class ProductionPipeline:
                 # 'data-prep-raw' includes enrich.
                 # Let's remove Lightweight/High-Integrity Prep steps as they were just fetching.
                 ("Natural Selection", [*make_base, "port-select"], self.validate_selection),
-                ("Enrichment", [*make_base, "meta-refresh"], None),
+                (
+                    "Enrichment",
+                    [
+                        "uv",
+                        "run",
+                        "scripts/enrich_candidates_metadata.py",
+                        f"--candidates={self.run_dir}/data/portfolio_candidates.json",
+                        f"--returns={self.run_dir}/data/returns_matrix.parquet",
+                    ],
+                    None,
+                ),
                 # High-Integrity Prep was fetching 500d. Ingestion Service should handle 500d if configured?
                 # The Ingestion Service defaults to 500d (or whatever lookback_days is passed).
                 # prepare_portfolio_data defaults to settings.
