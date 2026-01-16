@@ -529,8 +529,14 @@ This document codifies the institutional requirements and design specifications 
 - [ ] **Concept**: Create `binance_pairs_base.yaml` specifically targeting stablecoin pairs and correlation plays.
 - [ ] **Strategy**: Use Mean Reversion logic on these low-volatility assets.
 
+### Phase 211: Full Re-Verification (IN PROGRESS)
+- [ ] **Data Cycle**: Execute `flow-data` for `crypto_rating_all` to ingest fresh data for all components.
+- [ ] **Alpha Cycle**: Execute `flow-production` to generate updated portfolios.
+- [ ] **Audit**: Perform Deep Window Audit (Ledger + Weights) to verify risk profile behavior.
+- [ ] **Reporting**: Generate a new forensic report for the run.
+
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.5.1) - Phase 209 Completed
+**System Status**: 🟢 PRODUCTION READY (v4.5.1) - Phase 211 Initiated
 
 
 
