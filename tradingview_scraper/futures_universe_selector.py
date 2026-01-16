@@ -1432,44 +1432,83 @@ class FuturesUniverseSelector:
         """
         Processes raw screened data through the selector's post-filtering and aggregation pipeline.
         """
+        logger.info(f"AUDIT: Starting process_data with {len(raw_data)} candidates.")
+
         # Global Ensure: Track symbols that MUST be in the result if they exist in raw data
         ensure_set = {s.upper() for s in self.config.ensure_symbols}
         ensured_rows = [r for r in raw_data if r.get("symbol", "").upper() in ensure_set]
 
         # 1. Basic Filters (Symbol, type, stable exclusion)
-        rows = self._apply_basic_filters(raw_data)
+        rows_step1 = self._apply_basic_filters(raw_data)
+        logger.info(f"AUDIT: Step 1 (Basic Filters) dropped {len(raw_data) - len(rows_step1)} items.")
 
         # 2. Market Cap Guard (Rank and Floor)
-        rows = self._apply_market_cap_filter(rows)
+        rows_step2 = self._apply_market_cap_filter(rows_step1)
+        logger.info(f"AUDIT: Step 2 (Market Cap) dropped {len(rows_step1) - len(rows_step2)} items.")
 
         # 3. Volatility Filter
-        rows = [r for r in rows if self._evaluate_volatility(r)[0]]
+        rows_step3 = []
+        for r in rows_step2:
+            passed, val = self._evaluate_volatility(r)
+            if passed:
+                rows_step3.append(r)
+            else:
+                logger.info(f"AUDIT: Dropped {r.get('symbol')} due to Volatility (Value={val})")
+        logger.info(f"AUDIT: Step 3 (Volatility) dropped {len(rows_step2) - len(rows_step3)} items.")
 
         # 4. Liquidity Filter (Floor)
-        rows = [r for r in rows if self._evaluate_liquidity(r)]
+        rows_step4 = []
+        for r in rows_step3:
+            if self._evaluate_liquidity(r):
+                rows_step4.append(r)
+            else:
+                logger.info(f"AUDIT: Dropped {r.get('symbol')} due to Liquidity (Vol={r.get('volume')}, Val={r.get('Value.Traded')})")
+        logger.info(f"AUDIT: Step 4 (Liquidity) dropped {len(rows_step3) - len(rows_step4)} items.")
 
         # 5. Recent performance / data completeness guard
-        rows = self._apply_recent_perf_filter(rows)
+        rows_step5 = self._apply_recent_perf_filter(rows_step4)
+        logger.info(f"AUDIT: Step 5 (Recent Perf) dropped {len(rows_step4) - len(rows_step5)} items.")
 
         # Add back ensured rows if they were filtered out
-        seen_symbols = {r.get("symbol") for r in rows}
+        # (This logic implies ensured rows might have failed above checks but are forced back in?
+        #  If so, we should log that too).
+        seen_symbols = {r.get("symbol") for r in rows_step5}
+        forced_back = 0
         for er in ensured_rows:
             if er.get("symbol") not in seen_symbols:
-                rows.append(er)
+                rows_step5.append(er)
+                forced_back += 1
+        if forced_back > 0:
+            logger.info(f"AUDIT: Forced back {forced_back} ensured symbols.")
+
+        rows = rows_step5
 
         # 6. Aggregation (Deduplicate by base currency)
         if self.config.dedupe_by_symbol and not self.config.attach_perp_counterparts:
+            before_dedupe = len(rows)
             rows = self._aggregate_by_base(rows)
+            logger.info(f"AUDIT: Step 6 (Deduplication) reduced count from {before_dedupe} to {len(rows)} (merged {before_dedupe - len(rows)}).")
 
         # 7. Sorting & Limiting (Base Universe)
         base_sort_field = self.config.base_universe_sort_by or "Value.Traded"
         rows.sort(key=lambda x: x.get(base_sort_field) or 0, reverse=True)
 
         if self.config.base_universe_limit:
+            before_limit = len(rows)
             rows = rows[: self.config.base_universe_limit]
+            if len(rows) < before_limit:
+                logger.info(f"AUDIT: Step 7 (Base Limit) dropped {before_limit - len(rows)} items.")
 
         # 8. Strategy Filters (Trend, Screens)
         filtered = self._apply_strategy_filters(rows)
+        logger.info(f"AUDIT: Step 8 (Strategy Filters) dropped {len(rows) - len(filtered)} items.")
+
+        # Log specific strategy drops if count > 0
+        if len(rows) > len(filtered):
+            survivors = {r.get("symbol") for r in filtered}
+            for r in rows:
+                if r.get("symbol") not in survivors:
+                    logger.info(f"AUDIT: Dropped {r.get('symbol')} due to Strategy Filters (Passes: {r.get('passes')})")
 
         if self.config.momentum_composite_fields:
             filtered = self._apply_momentum_composite(filtered)
@@ -1479,6 +1518,8 @@ class FuturesUniverseSelector:
         else:
             final_sorted = self._sort_rows(filtered)
             trimmed = final_sorted[: self.config.limit]
+            if len(trimmed) < len(final_sorted):
+                logger.info(f"AUDIT: Step 9 (Final Limit) dropped {len(final_sorted) - len(trimmed)} items.")
 
         # Final Uniqueness Guard: Ensure no duplicate symbols in final output
         seen_final: Set[str] = set()

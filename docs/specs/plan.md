@@ -346,9 +346,15 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Scanner Verification**: Validated that `long` returns ~15 selected (from 9) and `short` returns ~10 selected.
 - [x] **Fresh Ingestion**: Re-run `scan-run` and `data-prep-raw` for all 4 profiles (`long_all_fresh`, `short_all_fresh`, `ma_long_fresh`, `ma_short_fresh`) to populate the pipeline with the wider universe.
 - [x] **Data Health Check**: Confirm 100% health for the new candidate set.
+- [x] **Audit Scanner Logic**: Verified that the "drop" from Raw -> Selected (e.g. 26 -> 15) is due to **Quote Deduplication** (merging USDT/FDUSD/USDC pairs), not aggressive filtering.
+
+### Phase 180: Production Optimization Re-Run (IN PROGRESS)
+- [ ] **Execution**: Re-run downstream steps 6-17 for the 4 fresh profiles (`long_all_fresh`, `short_all_fresh`, `ma_long_fresh`, `ma_short_fresh`) using the expanded universe.
+- [ ] **Validation**: Confirm that the "Identical Metrics" issue is resolved or mitigated by the larger N (15 vs 5).
+- [ ] **Final Report**: Generate an updated `stable_forensic_report.md`.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.5) - Phase 179 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.5) - Phase 180 Initiated
 
 
 
