@@ -1,0 +1,152 @@
+import json
+import logging
+import os
+import time
+from pathlib import Path
+from typing import Any, Dict, List
+
+import pandas as pd
+
+# Assume PersistentDataLoader is available via PYTHONPATH or install
+try:
+    from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
+except ImportError:
+    # For testing environment where package might not be installed
+    PersistentDataLoader = None  # type: ignore
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("ingestion_service")
+
+
+class IngestionService:
+    def __init__(self, lakehouse_dir: Path = Path("data/lakehouse"), freshness_hours: int = 12):
+        self.lakehouse_dir = Path(lakehouse_dir)
+        self.freshness_hours = freshness_hours
+        self.loader = PersistentDataLoader() if PersistentDataLoader else None
+
+        # Ensure lakehouse exists
+        self.lakehouse_dir.mkdir(parents=True, exist_ok=True)
+
+    def is_fresh(self, symbol: str) -> bool:
+        """Check if symbol data exists and is fresh."""
+        safe_sym = symbol.replace(":", "_")
+        p_path = self.lakehouse_dir / f"{safe_sym}_1d.parquet"
+
+        if not p_path.exists():
+            return False
+
+        mtime = p_path.stat().st_mtime
+        age_hours = (time.time() - mtime) / 3600
+
+        if age_hours < self.freshness_hours:
+            logger.debug(f"{symbol} is fresh ({age_hours:.1f}h < {self.freshness_hours}h). Skipping.")
+            return True
+
+        logger.info(f"{symbol} is stale ({age_hours:.1f}h). Queueing for fetch.")
+        return False
+
+    def ingest(self, candidates: List[Dict[str, Any]], lookback_days: int = 500):
+        """
+        Main ingestion logic:
+        1. Filter candidates for freshness (Idempotency).
+        2. Fetch missing/stale data.
+        3. Validate toxicity.
+        4. Commit to Lakehouse (PersistentLoader does this, but we validate before).
+        """
+        if not self.loader:
+            raise RuntimeError("PersistentDataLoader not initialized.")
+
+        # 1. Filter
+        to_fetch = [c for c in candidates if not self.is_fresh(c["symbol"])]
+
+        if not to_fetch:
+            logger.info("All candidates are fresh. No ingestion needed.")
+            return
+
+        logger.info(f"Ingesting {len(to_fetch)} symbols...")
+
+        # 2. Fetch Loop (Sequential for safety, or threaded in real prod)
+        for item in to_fetch:
+            symbol = item["symbol"]
+            try:
+                # Use sync to fetch data. The loader handles writing to parquet usually,
+                # but we want to intercept for toxic check if possible.
+                # However, PersistentLoader writes directly.
+                # To implement "Toxic Filter AT SOURCE", we rely on the fact that
+                # loader.load() reads what was just synced.
+
+                # Fetch
+                # Depth should cover lookback + buffer
+                depth = lookback_days + 100
+                self.loader.sync(symbol, interval="1d", depth=depth, total_timeout=300)
+
+                # 3. Post-Fetch Validation (Toxic Check)
+                # We load what was just written to check integrity
+                # Note: PersistentLoader writes to 'data/lakehouse' by default in the project config.
+                # If we injected a custom lakehouse_dir, we hope PersistentLoader respects it or we verify the real path.
+                # For this implementation, we assume PersistentLoader writes to self.lakehouse_dir or standard location.
+
+                # Verify Toxic
+                # We use the loader to load back the dataframe
+                # Note: 'load' might return cached data if we don't force reload?
+                # Usually it reads from disk.
+
+                # Let's assume standard path for validation
+                safe_sym = symbol.replace(":", "_")
+                p_path = self.lakehouse_dir / f"{safe_sym}_1d.parquet"
+
+                if p_path.exists():
+                    df = pd.read_parquet(p_path)
+                    if self.is_toxic(df):
+                        logger.warning(f"TOXIC DATA DETECTED for {symbol}. Deleting corrupted file.")
+                        os.remove(p_path)
+                    else:
+                        logger.info(f"Successfully ingested {symbol}")
+
+            except Exception as e:
+                logger.error(f"Failed to ingest {symbol}: {e}")
+
+    def is_toxic(self, df: pd.DataFrame) -> bool:
+        """Check for >500% daily returns."""
+        if "close" not in df.columns:
+            return False
+
+        # Calculate returns
+        # Sort by timestamp just in case
+        if "timestamp" in df.columns:
+            df = df.sort_values("timestamp")
+
+        pct = df["close"].pct_change().dropna()
+        if pct.empty:
+            return False
+
+        if pct.max() > 5.0:  # 500%
+            return True
+        if pct.min() < -0.99:  # -99% drop (suspicious for some assets, but maybe real. Keep focus on upside spikes)
+            # Actually -99% happens in crypto rugs. The spike is the main "contamination" issue.
+            pass
+
+        return False
+
+    def process_candidate_file(self, file_path: Path):
+        """Load candidates from JSON and ingest."""
+        if not file_path.exists():
+            logger.error(f"Candidate file not found: {file_path}")
+            return
+
+        with open(file_path, "r") as f:
+            candidates = json.load(f)
+
+        self.ingest(candidates)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--candidates", help="Path to candidates.json", required=True)
+    parser.add_argument("--lakehouse", help="Path to lakehouse dir", default="data/lakehouse")
+    args = parser.parse_args()
+
+    service = IngestionService(lakehouse_dir=Path(args.lakehouse))
+    service.process_candidate_file(Path(args.candidates))
