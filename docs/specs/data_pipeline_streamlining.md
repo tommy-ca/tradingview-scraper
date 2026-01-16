@@ -36,19 +36,22 @@ graph TD
 
 ## 4. Implementation Plan
 
-### 4.1 Tooling Enhancements
+### 4.1 Tooling Enhancements (COMPLETED)
 - **`prepare_portfolio_data.py`**:
-    - Add `--smart-repair` flag.
-    - Integrate `PortfolioAuditor` logic to detect staleness *before* attempting fetch.
-    - Internally construct the "Targeted List" from the audit result.
-    - Execute a 2-pass fetch:
+    - [x] Standardized on **Physical Symbols** for data storage (`returns_matrix.parquet`).
+    - [x] Removed logic/direction awareness from the Data Layer.
+    - [ ] Add `--smart-repair` flag.
+    - [ ] Integrate `PortfolioAuditor` logic to detect staleness *before* attempting fetch.
+    - [ ] Internally construct the "Targeted List" from the audit result.
+    - [ ] Execute a 2-pass fetch:
         1.  **Pass 1**: Standard fetch for missing assets.
         2.  **Pass 2**: Force-sync fetch for stale assets (if any).
 
-### 4.2 Orchestration
+### 4.2 Orchestration (COMPLETED)
 - **`run_production_pipeline.py`**:
-    - Update `Aggregation` step to use the `--smart-repair` flag.
-    - This effectively merges "High-Integrity Preparation" and "Health Audit" recovery into the data prep phase.
+    - [x] Injected `Strategy Synthesis` (Step 9) to re-couple Logic Atoms just-in-time for Optimization.
+    - [ ] Update `Aggregation` step to use the `--smart-repair` flag.
+    - [ ] This effectively merges "High-Integrity Preparation" and "Health Audit" recovery into the data prep phase.
 
 ### 4.3 Validation
 - The `Health Audit` step remains as a **Hard Gate**, but it should pass on the first try due to the upstream smart repair.

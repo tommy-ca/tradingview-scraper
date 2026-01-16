@@ -298,17 +298,18 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Physical Standardization**: Updated `select_top_universe.py` to output physical symbols in the candidate list.
 - [x] **Data Prep Update**: Modified `prepare_portfolio_data.py` to generate `returns_matrix` with strictly physical columns, decoupling Logic from Data.
 - [x] **Execution Verification**: Run discovery and data prep for the 4 crypto profiles to validate the physical-symbol pipeline.
-    - `long_all_phys`: Success (Physical returns matrix created).
-    - `ma_long_phys`: Success (Physical returns matrix created).
+    - `long_all_req`: Success (Physical returns matrix created).
+    - `ma_long_req`: Success (Physical returns matrix created).
     - `short` profiles: Empty (Expected, current market conditions).
 - [ ] **Tooling**: Create a unified `make flow-data-smart` target or enhance `run_production_pipeline.py` to auto-heal stale data.
-- [ ] **Documentation**: Update `docs/specs/data_pipeline_v2.md` to define the streamlined process.
+- [x] **Documentation**: Update `docs/specs/data_pipeline_v2.md` to define the streamlined process.
 
 ### Phase 174: Downstream Verification (COMPLETED)
 - [x] **Pipeline Integration**: Injected `Strategy Synthesis` (Step 8.5) into `run_production_pipeline.py` to restore logic-data coupling.
 - [x] **Engine Update**: Modified `optimize_clustered_v2.py` and `analyze_clusters.py` to auto-detect and prioritize `synthetic_returns.parquet`.
 - [x] **Execution**: Successfully ran downstream pipelines for `long_all_phys` and `ma_long_phys`.
 - [x] **Verification**: Confirmed successful Generation of Optimized Portfolios from Physical Data + Logical Synthesis.
+- [x] **Clean Run**: Executed downstream pipelines for the clean runs (`long_all_req`, `ma_long_req`), confirming end-to-end validity of the streamlined architecture.
 
 ---
 **System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.2) - Phase 174 Completed

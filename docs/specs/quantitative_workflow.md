@@ -5,7 +5,7 @@
 ## 1. Overview
 This document defines the standardized pipeline for transforming raw market data into an optimized, multi-asset portfolio. The workflow is unified under a 15-step production sequence.
 
-## 2. The 15-Step Production Sequence
+## 2. The 17-Step Production Sequence
 
 The entire production lifecycle is managed via the **Python Orchestrator** (`scripts/run_production_pipeline.py`) and follows this rigorous sequence:
 
@@ -14,20 +14,21 @@ The entire production lifecycle is managed via the **Python Orchestrator** (`scr
 3.  **Discovery**: Execute composable discovery scanners (`make scan-run`).
 4.  **Aggregation**: Consolidate scans into a Raw Pool (`make data-prep-raw`).
 5.  **Lightweight Prep**: Fetch 60-day history for analysis (`make data-fetch LOOKBACK=60`).
+    - **Note**: Now produces `returns_matrix.parquet` with **Physical Symbols** (e.g. `BINANCE:BTCUSDT`).
 6.  **Natural Selection**: Hierarchical clustering & XS Ranking (`make port-select`).
 7.  **Enrichment**: Propagate metadata and descriptions (`make meta-refresh`).
 8.  **High-Integrity Prep**: Fetch 500-day secular history for winners (`make data-fetch LOOKBACK=500`).
-9.  **Health Audit**: Validate 100% gap-free alignment (`make data-audit`).
-10. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
-11. **Optimization**: Cluster-Aware allocation with Turnover Control (`make port-optimize`).
-12. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`).
-    - Primary output: `tournament_results.json` in `artifacts/summaries/runs/<RUN_ID>/`.
-    - Optional 4D sweep (Selection x Simulator x Engine x Profile) writes `tournament_4d_results.json` and `full_4d_comparison_table.md`.
-      This sweep is not produced by default by `flow-dev` / `flow-production`.
-    - Rebalance audit uses `scripts/run_4d_tournament.py` and writes `rebalance_audit_results.json` (render via `scripts/generate_human_table.py --rebalance`).
-13. **Reporting**: QuantStats Tear-sheets & Alpha Audit (`make port-report`).
-14. **Gist Sync**: Synchronize essential artifacts to private Gist (`make report-sync`).
-15. **Audit Verification**: Final cryptographic signature check of the decision ledger.
+9.  **Strategy Synthesis** (New): Expand Physical Assets into Logic Atoms (Logic + Direction) (`uv run scripts/synthesize_strategy_matrix.py`).
+    - Outputs `synthetic_returns.parquet`.
+10. **Health Audit**: Validate 100% gap-free alignment (`make data-audit`).
+11. **Persistence Analysis**: Analyze trend/mean-reversion persistence (`make research-persistence`).
+12. **Regime Analysis**: Detect market regimes (Normal/Turbulent/Crisis) (`scripts/research_regime_v3.py`).
+13. **Factor Analysis**: Build hierarchical risk buckets (`make port-analyze`).
+14. **Optimization**: Cluster-Aware allocation with Turnover Control (`make port-optimize`).
+    - Prioritizes `synthetic_returns.parquet` for Logic-Aware optimization.
+15. **Validation**: Walk-Forward Tournament benchmarking (`make port-test`).
+16. **Reporting**: QuantStats Tear-sheets & Alpha Audit (`make port-report`).
+17. **Gist Sync**: Synchronize essential artifacts to private Gist (`make report-sync`).
 
 ## 3. Automation Commands
 ```bash
