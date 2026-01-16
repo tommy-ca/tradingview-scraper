@@ -485,8 +485,23 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Audit**: Verified usage of `Recommend.All` in scanners and ingestion services.
 - [x] **Planning**: Confirmed roadmap for Local Engineering (Feature Store v2).
 
+### Phase 204: Crypto Profile Validation (COMPLETED)
+- [x] **Test Creation**: Create `tests/integration/test_crypto_flow.py` for `crypto_rating_all` and `crypto_rating_ma` profiles.
+- [x] **Execution**: Ran `make flow-data` (simulated via tests and manual steps) for all 4 profiles.
+- [x] **Verification**: Validated candidates generation and data ingestion for:
+    - `binance_spot_rating_all_long` (Integration Test)
+    - `binance_spot_rating_ma_long` (Integration Test)
+    - `binance_spot_rating_all_short` (Manual Validation `val_short_all_204`)
+    - `binance_spot_rating_ma_short` (Manual Validation `val_short_ma_204`)
+- [x] **Artifact Check**: Confirmed Lakehouse contains fresh data and features for the discovered assets.
+
+### Phase 205: Cleanup & Scheduler (COMPLETED)
+- [x] **Cleanup**: Removed temporary validation runs/exports.
+- [x] **Cleanup**: Removed legacy scripts (`repair_portfolio_gaps.py`, `recover_universe.py`) now that `repair_data.py` is validated.
+- [x] **Documentation**: Documented the cron schedule in `docs/operations/runbook.md`.
+
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.3.2) - Phase 203 Completed
+**System Status**: 🟢 PRODUCTION READY (v4.4.0) - Phase 205 Completed
 
 
 
