@@ -529,14 +529,21 @@ This document codifies the institutional requirements and design specifications 
 - [ ] **Concept**: Create `binance_pairs_base.yaml` specifically targeting stablecoin pairs and correlation plays.
 - [ ] **Strategy**: Use Mean Reversion logic on these low-volatility assets.
 
-### Phase 211: Full Re-Verification (IN PROGRESS)
-- [ ] **Data Cycle**: Execute `flow-data` for `crypto_rating_all` to ingest fresh data for all components.
-- [ ] **Alpha Cycle**: Execute `flow-production` to generate updated portfolios.
-- [ ] **Audit**: Perform Deep Window Audit (Ledger + Weights) to verify risk profile behavior.
-- [ ] **Reporting**: Generate a new forensic report for the run.
+### Phase 211: Full Re-Verification (COMPLETED)
+- [x] **Data Cycle**: Executed `flow-data` for `crypto_rating_all` to ingest fresh data for all components.
+- [x] **Alpha Cycle**: Executed `flow-production` to generate updated portfolios.
+- [x] **Audit**: Performed Deep Window Audit (Ledger + Weights) verifying stablecoin exclusion and valid weight distribution.
+- [x] **Reporting**: Generated `stable_forensic_report.md` confirming healthy performance (Sharpe ~0.64 - 1.15).
+
+### Phase 212: Technical Indicator Feature Expansion (IN PROGRESS)
+- [ ] **Audit**: Review current TradingView features (RSI, ADX, Perf) vs available indicators.
+- [ ] **Design**: Define `docs/design/feature_store_expansion.md` adding Trend (SMA/EMA), Volatility (ATR/Bollinger), and Momentum (Stoch/CCI) signals.
+- [ ] **Implementation**: Update `scripts/services/ingest_features.py` to fetch expanded feature set.
+- [ ] **Schema**: Update `lakehouse_schema_registry.md` with new columns.
+- [ ] **Validation**: Ingest and verify new features for a test symbol.
 
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.5.1) - Phase 211 Initiated
+**System Status**: 🟢 PRODUCTION READY (v4.5.2) - Phase 212 Initiated
 
 
 
