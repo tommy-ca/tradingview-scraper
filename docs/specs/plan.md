@@ -333,8 +333,16 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Final Report**: Generated `docs/reports/stable_forensic_report.md` confirming directional integrity (Longs profitable, Shorts unprofitable in Bull regime).
 - [x] **Metric Correction**: Updated forensic generator to average metrics across windows, revealing true Sharpe ~8-9 for Long HRP.
 
+### Phase 178: Single-Profile Deep Dive (COMPLETED)
+- [x] **Target Selection**: Deep audit of `binance_spot_rating_all_long` (Run ID: `long_all_fresh`).
+- [x] **Step-by-Step Ledger Audit**: Trace `audit.jsonl` from Discovery -> Selection -> Optimization -> Simulation for every window.
+- [x] **Convergence Investigation**: Investigate why `hrp`, `min_variance`, and `max_sharpe` produce identical metrics in many windows (Suspect: Low N selected assets).
+- [x] **Risk Matrix Review**: Analyze the internal tournament matrix for this specific profile to pinpoint where differentiation fails.
+- [x] **Remediation Plan**: Propose fixes if "Regression" is confirmed (e.g., loosen selection thresholds, fix solver constraints).
+- [x] **Conclusion**: Verified that "Convergence" is due to Universe Starvation ($N=5$) vs. Cluster Cap ($25\%$), forcing identical portfolios. System is healthy.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.4) - Phase 177 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.4) - Phase 178 Completed
 
 
 
