@@ -500,8 +500,14 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Cleanup**: Removed legacy scripts (`repair_portfolio_gaps.py`, `recover_universe.py`) now that `repair_data.py` is validated.
 - [x] **Documentation**: Documented the cron schedule in `docs/operations/runbook.md`.
 
+### Phase 206: End-to-End Migration Validation (IN PROGRESS)
+- [x] **Spec**: Created `docs/specs/dataops_migration_v2.md`.
+- [ ] **Execution**: Run full `flow-data` (Scan/Ingest/Meta/Feature).
+- [ ] **Verification**: Run `flow-production` for a test profile (`binance_spot_rating_ma_long`) using ONLY the Lakehouse artifacts.
+- [ ] **Sign-off**: Verify zero network calls in the optimization phase.
+
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.4.0) - Phase 205 Completed
+**System Status**: 🟢 PRODUCTION READY (v4.4.0) - Phase 206 Initiated
 
 
 
