@@ -1,7 +1,7 @@
 import json
 import os
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
@@ -283,12 +283,13 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
         md.append("| Symbol | Market | Direction | ADX | ATR% | Trend |")
         md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
 
-        sorted_candidates = sorted(candidates, key=lambda x: (get_market_category(x.get("market", "")), -x.get("adx", 0)))
+        sorted_candidates = sorted(candidates, key=lambda x: (get_market_category(x.get("market", "")), -(x.get("adx") or 0)))
 
         for c in sorted_candidates:
-            adx = float(c.get("adx", 0))
-            close = float(c.get("close", 0))
-            atr = float(c.get("atr", 0))
+            adx = float(c.get("adx") or 0)
+            close = float(c.get("close") or 0)
+            atr = float(c.get("atr") or 0)
+
             atr_pct = f"{(atr / close) * 100:.2f}%" if close > 0 else "N/A"
 
             trend_icon = "🔥" if adx > 25 else "📈" if adx > 15 else "➡️"

@@ -348,13 +348,14 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Data Health Check**: Confirm 100% health for the new candidate set.
 - [x] **Audit Scanner Logic**: Verified that the "drop" from Raw -> Selected (e.g. 26 -> 15) is due to **Quote Deduplication** (merging USDT/FDUSD/USDC pairs), not aggressive filtering.
 
-### Phase 180: Production Optimization Re-Run (IN PROGRESS)
-- [ ] **Execution**: Re-run downstream steps 6-17 for the 4 fresh profiles (`long_all_fresh`, `short_all_fresh`, `ma_long_fresh`, `ma_short_fresh`) using the expanded universe.
-- [ ] **Validation**: Confirm that the "Identical Metrics" issue is resolved or mitigated by the larger N (15 vs 5).
-- [ ] **Final Report**: Generate an updated `stable_forensic_report.md`.
+### Phase 180: Production Optimization Re-Run (COMPLETED)
+- [x] **Execution**: Re-run downstream steps 6-17 for the 4 fresh profiles (`long_all_fresh`, `short_all_fresh`, `ma_long_fresh`, `ma_short_fresh`) using the expanded universe.
+- [x] **Validation**: Confirmed that the "Identical Metrics" issue is **resolved**. With $N \approx 10$, profiles now diverge meaningfully (e.g. HRP 4.91 vs MaxSharpe 8.21).
+- [x] **Final Report**: Generate an updated `stable_forensic_report.md` showing healthy risk differentiation.
+- [x] **Fixes**: Patched `generate_portfolio_report.py` to handle NoneType values in reporting loop.
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.5) - Phase 180 Initiated
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.6) - Phase 180 Completed
 
 
 
