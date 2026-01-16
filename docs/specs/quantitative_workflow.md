@@ -30,7 +30,18 @@ The entire production lifecycle is managed via the **Python Orchestrator** (`scr
 16. **Reporting**: QuantStats Tear-sheets & Alpha Audit (`make port-report`).
 17. **Gist Sync**: Synchronize essential artifacts to private Gist (`make report-sync`).
 
-## 3. Automation Commands
+## 3. Standard Production Configuration (v3.9.7)
+Institutional stability requires robust lookback windows to prevent overfitting.
+
+| Parameter | Value | Purpose |
+| :--- | :--- | :--- |
+| **Lookback Days** | `500` | Full secular cycle capture (Bull + Bear). |
+| **Train Window** | `252` | 1-Year covariance estimation for stable risk parity. |
+| **Test Window** | `20` | Monthly rebalance cadence. |
+| **Step Size** | `20` | Monthly walk-forward step. |
+| **Min Liquidity** | `$5M` | Binance Spot Floor (Wider funnel). |
+
+## 4. Automation Commands
 ```bash
 # Full institutional production lifecycle
 make flow-production

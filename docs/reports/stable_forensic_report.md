@@ -1,40 +1,46 @@
 # 🔍 Stable Forensic Audit Report (Phase 176)
-**Date:** 2026-01-16 13:31
+**Date:** 2026-01-16 13:48
 
 ## 1. Pipeline Funnel Summary
 | Run ID | Raw Pool | Selected | Selection Rate |
 | :--- | :---: | :---: | :---: |
-| `long_all_fresh` | 17 | 14 | 82.4% |
-| `short_all_fresh` | 10 | 8 | 80.0% |
-| `ma_long_fresh` | 13 | 10 | 76.9% |
-| `ma_short_fresh` | 10 | 8 | 80.0% |
+| `long_all_std` | 16 | 13 | 81.2% |
+| `short_all_std` | 10 | 8 | 80.0% |
+| `ma_long_std` | 13 | 10 | 76.9% |
+| `ma_short_std` | 10 | 8 | 80.0% |
 
 ## 2. Performance Matrix (Custom Engine)
 | Run ID | Profile | Simulator | Sharpe | Total Ret | CAGR | Volatility | MaxDD |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| `long_all_fresh` | equal_weight | cvxportfolio | 11.18 | 14.62X | >100% (Capped) | 8.34 | -31.32% |
-| `long_all_fresh` | hrp | cvxportfolio | 7.62 | 13.14X | >100% (Capped) | 7.43 | -34.48% |
-| `long_all_fresh` | max_sharpe | cvxportfolio | 8.90 | 15.68X | >100% (Capped) | 10.17 | -38.14% |
-| `long_all_fresh` | min_variance | cvxportfolio | 7.58 | 13.11X | >100% (Capped) | 7.43 | -34.51% |
-| `short_all_fresh` | equal_weight | cvxportfolio | -7.71 | -1.22X | -1.00% | 19.68 | -121.55% |
-| `short_all_fresh` | hrp | cvxportfolio | -1.76 | -1.08X | -0.99% | 20.58 | -110.67% |
-| `short_all_fresh` | max_sharpe | cvxportfolio | -0.77 | -0.98X | -0.98% | 36.76 | -104.48% |
-| `short_all_fresh` | min_variance | cvxportfolio | -0.29 | -1.12X | -1.00% | 36.89 | -114.04% |
-| `ma_long_fresh` | equal_weight | cvxportfolio | 12.19 | 16.71X | >100% (Capped) | 8.77 | -33.69% |
-| `ma_long_fresh` | hrp | cvxportfolio | 9.03 | 15.66X | >100% (Capped) | 7.90 | -32.72% |
-| `ma_long_fresh` | max_sharpe | cvxportfolio | 9.08 | 16.92X | >100% (Capped) | 10.76 | -39.11% |
-| `ma_long_fresh` | min_variance | cvxportfolio | 8.38 | 16.00X | >100% (Capped) | 9.49 | -37.51% |
-| `ma_short_fresh` | equal_weight | cvxportfolio | -5.01 | -1.41X | 1.38% | 34.94 | -140.78% |
-| `ma_short_fresh` | hrp | cvxportfolio | -1.12 | -1.14X | -1.00% | 41.12 | -116.54% |
-| `ma_short_fresh` | max_sharpe | cvxportfolio | -0.93 | -1.09X | -0.99% | 33.63 | -112.92% |
-| `ma_short_fresh` | min_variance | cvxportfolio | -0.32 | -1.10X | -1.00% | 49.33 | -112.14% |
+| `long_all_std` | equal_weight | cvxportfolio | 11.20 | 15.68X | >100% (Capped) | 8.69 | -31.93% |
+| `long_all_std` | hrp | cvxportfolio | 10.07 | 12.96X | >100% (Capped) | 8.46 | -32.12% |
+| `long_all_std` | max_sharpe | cvxportfolio | 9.59 | 13.43X | >100% (Capped) | 10.85 | -37.75% |
+| `long_all_std` | min_variance | cvxportfolio | 8.82 | 13.23X | >100% (Capped) | 12.15 | -42.42% |
+| `short_all_std` | equal_weight | cvxportfolio | -4.97 | -1.37X | 7.42% | 34.86 | -136.54% |
+| `short_all_std` | hrp | cvxportfolio | -4.17 | -1.34X | -1.00% | 31.43 | -133.33% |
+| `short_all_std` | max_sharpe | cvxportfolio | -1.53 | -1.44X | 7.42% | 175.22 | -142.19% |
+| `short_all_std` | min_variance | cvxportfolio | -2.11 | -1.40X | 2.00% | 29.50 | -137.96% |
+| `ma_long_std` | equal_weight | cvxportfolio | 12.06 | 16.60X | >100% (Capped) | 8.90 | -33.68% |
+| `ma_long_std` | hrp | cvxportfolio | 10.66 | 13.92X | >100% (Capped) | 8.70 | -31.91% |
+| `ma_long_std` | max_sharpe | cvxportfolio | 9.93 | 12.44X | >100% (Capped) | 10.74 | -36.31% |
+| `ma_long_std` | min_variance | cvxportfolio | 8.89 | 12.02X | >100% (Capped) | 11.63 | -40.33% |
+| `ma_short_std` | equal_weight | cvxportfolio | -4.97 | -1.37X | 7.42% | 34.87 | -136.54% |
+| `ma_short_std` | hrp | cvxportfolio | -4.18 | -1.34X | -1.00% | 31.30 | -133.33% |
+| `ma_short_std` | max_sharpe | cvxportfolio | -1.53 | -1.44X | 7.42% | 174.11 | -142.19% |
+| `ma_short_std` | min_variance | cvxportfolio | -2.11 | -1.40X | 2.00% | 29.50 | -137.96% |
 
 ## 3. Anomaly Detection (Outliers)
-- ⚠️ long_all_fresh (equal_weight): Extreme Sharpe 11.18
-- ⚠️ long_all_fresh (max_sharpe): Extreme Sharpe 8.90
-- ⚠️ short_all_fresh (equal_weight): Negative Sharpe -7.71 (Expected for Shorts)
-- ⚠️ ma_long_fresh (equal_weight): Extreme Sharpe 12.19
-- ⚠️ ma_long_fresh (hrp): Extreme Sharpe 9.03
-- ⚠️ ma_long_fresh (max_sharpe): Extreme Sharpe 9.08
-- ⚠️ ma_long_fresh (min_variance): Extreme Sharpe 8.38
-- ⚠️ ma_short_fresh (equal_weight): Negative Sharpe -5.01 (Expected for Shorts)
+- ⚠️ long_all_std (equal_weight): Extreme Sharpe 11.20
+- ⚠️ long_all_std (hrp): Extreme Sharpe 10.07
+- ⚠️ long_all_std (max_sharpe): Extreme Sharpe 9.59
+- ⚠️ long_all_std (min_variance): Extreme Sharpe 8.82
+- ⚠️ short_all_std (equal_weight): Negative Sharpe -4.97 (Expected for Shorts)
+- ⚠️ short_all_std (hrp): Negative Sharpe -4.17 (Expected for Shorts)
+- ⚠️ short_all_std (min_variance): Negative Sharpe -2.11 (Expected for Shorts)
+- ⚠️ ma_long_std (equal_weight): Extreme Sharpe 12.06
+- ⚠️ ma_long_std (hrp): Extreme Sharpe 10.66
+- ⚠️ ma_long_std (max_sharpe): Extreme Sharpe 9.93
+- ⚠️ ma_long_std (min_variance): Extreme Sharpe 8.89
+- ⚠️ ma_short_std (equal_weight): Negative Sharpe -4.97 (Expected for Shorts)
+- ⚠️ ma_short_std (hrp): Negative Sharpe -4.18 (Expected for Shorts)
+- ⚠️ ma_short_std (min_variance): Negative Sharpe -2.11 (Expected for Shorts)

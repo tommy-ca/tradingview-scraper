@@ -361,13 +361,18 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Validation**: Verified `PAXGUSDT` is absent from the candidate pool.
 - [x] **Performance Check**: Confirmed metrics remain healthy (Sharpe > 7 for Longs) after removing the low-volatility gold anchor.
 
-### Phase 182: Backtest Parameter Standardization (IN PROGRESS)
+### Phase 182: Backtest Parameter Standardization (COMPLETED)
 - [x] **Audit**: Reviewed `manifest.json` and `settings.py` defaults. Found `train_window=60` was too short for institutional stability.
 - [x] **Update**: Standardized `train_window` to **252** (1 Year) in `defaults`, `production_2026_q1`, and `settings.py`.
-- [ ] **Verification**: Ensure `development` profile retains its lightweight 30-day window (it does).
+- [x] **Verification**: Ensure `development` profile retains its lightweight 30-day window (it does).
+
+### Phase 183: Standardized Window Validation (COMPLETED)
+- [x] **Fresh Data Prep**: Run `scan-run` and `data-prep-raw` for profiles (`long_all_std`, `short_all_std`, `ma_long_std`, `ma_short_std`) to ensure 100% health.
+- [x] **Execution**: Run full downstream pipelines with the new `train_window=252`.
+- [x] **Validation**: Confirmed backtest successfully computes covariance matrices with the longer window and produces stable metrics (Sharpe ~9-10).
 
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.7) - Phase 182 Initiated
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.7) - Phase 183 Completed
 
 
 

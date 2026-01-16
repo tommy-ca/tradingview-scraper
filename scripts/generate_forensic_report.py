@@ -9,7 +9,7 @@ import pandas as pd
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("forensic_audit")
 
-RUNS = ["long_all_fresh", "short_all_fresh", "ma_long_fresh", "ma_short_fresh"]
+RUNS = ["long_all_std", "short_all_std", "ma_long_std", "ma_short_std"]
 
 
 def load_json(path: Path) -> Dict[str, Any]:
