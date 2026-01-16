@@ -412,8 +412,19 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Verification**: Re-ran `short_all_clean`. Confirmed ADA dropped.
 - [x] **Performance**: Short Profile volatility stabilized (from 4217% to ~184%). HRP successfully extracted alpha (+40%) from crashing assets (`PROMUSDT`) despite the bull market.
 
+### Phase 190: High-Frequency Rebalancing (IN PROGRESS)
+- [x] **Design**: Defined the "2:1 Golden Ratio" standard (`docs/design/adaptive_rebalancing_strategy.md`).
+- [x] **Config Update**: Update `manifest.json` for all crypto profiles to `train_window: 20`, `test_window: 10`, `step_size: 10`.
+- [ ] **Documentation**: Update `AGENTS.md` to reflect the new Regime Alignment pillar.
+- [ ] **Execution**: Re-run downstream optimization for `ma_long_fresh` (pilot) to validate the new cadence.
+
+### Phase 191: Architectural Consolidation (COMPLETED)
+- [x] **Review**: Analyzed necessity of Synthetic Symbols vs. Meta-Portfolios.
+- [x] **Decision**: Confirmed Synthetic Logic is MANDATORY to allow solvers to "see" short PnL as positive growth.
+- [x] **Artifact**: Created `docs/design/adr_synthetic_logic_necessity.md`.
+
 ---
-**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.10) - Phase 189 Completed
+**System Status**: 🟢 PRODUCTION CERTIFIED (v3.9.10) - Phase 191 Completed
 
 
 

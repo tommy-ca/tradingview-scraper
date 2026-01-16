@@ -63,8 +63,8 @@
       "backtest": {
         "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
         "train_window": 252,
-        "test_window": 20,
-        "step_size": 20
+        "test_window": 5,
+        "step_size": 5
       },
       "discovery": {
         "enabled_markets": ["america", "crypto"],
@@ -163,9 +163,9 @@
         "benchmark_symbols": ["BINANCE:ETHUSD.P", "AMEX:SPY"],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
-        "train_window": 60,
-        "test_window": 20,
-        "step_size": 20,
+        "train_window": 20,
+        "test_window": 10,
+        "step_size": 10,
         "backtest_simulators": "custom,cvxportfolio,vectorbt,nautilus"
       },
       "features": {
@@ -229,9 +229,9 @@
         "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
-        "train_window": 60,
-        "test_window": 20,
-        "step_size": 20
+        "train_window": 20,
+        "test_window": 10,
+        "step_size": 10
       },
       "features": {
         "selection_mode": "v4",
@@ -270,9 +270,9 @@
         "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
-        "train_window": 60,
-        "test_window": 20,
-        "step_size": 20
+        "train_window": 20,
+        "test_window": 10,
+        "step_size": 10
       },
       "features": {
         "selection_mode": "v4",
@@ -311,9 +311,9 @@
         "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
-        "train_window": 60,
-        "test_window": 20,
-        "step_size": 20
+        "train_window": 20,
+        "test_window": 10,
+        "step_size": 10
       },
       "features": {
         "selection_mode": "v4",
@@ -350,9 +350,9 @@
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight",
         "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
-        "train_window": 252,
-        "test_window": 20,
-        "step_size": 20
+        "train_window": 20,
+        "test_window": 10,
+        "step_size": 10
       },
       "features": { "selection_mode": "v4", "feat_short_direction": false },
       "discovery": {
@@ -373,9 +373,9 @@
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight",
         "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
-        "train_window": 252,
-        "test_window": 20,
-        "step_size": 20
+        "train_window": 20,
+        "test_window": 10,
+        "step_size": 10
       },
       "features": { "selection_mode": "v4", "feat_short_direction": true },
       "discovery": {
@@ -396,9 +396,9 @@
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight",
         "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
-        "train_window": 252,
-        "test_window": 20,
-        "step_size": 20
+        "train_window": 20,
+        "test_window": 10,
+        "step_size": 10
       },
       "features": { "selection_mode": "v4", "feat_short_direction": false },
       "discovery": {
@@ -419,9 +419,9 @@
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight",
         "backtest_simulators": "cvxportfolio,vectorbt,nautilus",
-        "train_window": 252,
-        "test_window": 20,
-        "step_size": 20
+        "train_window": 20,
+        "test_window": 10,
+        "step_size": 10
       },
       "features": { "selection_mode": "v4", "feat_short_direction": true },
       "discovery": {
