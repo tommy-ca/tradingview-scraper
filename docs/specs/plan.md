@@ -535,15 +535,46 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Audit**: Performed Deep Window Audit (Ledger + Weights) verifying stablecoin exclusion and valid weight distribution.
 - [x] **Reporting**: Generated `stable_forensic_report.md` confirming healthy performance (Sharpe ~0.64 - 1.15).
 
-### Phase 212: Technical Indicator Feature Expansion (IN PROGRESS)
-- [ ] **Audit**: Review current TradingView features (RSI, ADX, Perf) vs available indicators.
-- [ ] **Design**: Define `docs/design/feature_store_expansion.md` adding Trend (SMA/EMA), Volatility (ATR/Bollinger), and Momentum (Stoch/CCI) signals.
-- [ ] **Implementation**: Update `scripts/services/ingest_features.py` to fetch expanded feature set.
-- [ ] **Schema**: Update `lakehouse_schema_registry.md` with new columns.
-- [ ] **Validation**: Ingest and verify new features for a test symbol.
+### Phase 213: Selection Ranker & Signal Dominance (COMPLETED)
+- [x] **Architecture**: Designed `BaseRanker` interface and `RankerFactory`.
+- [x] **Implementation**: Created `MPSRanker` (Default) and `SignalRanker` (Raw Feature).
+- [x] **Configuration**: Added `ranking.direction` (Ascending/Descending) and `dominant_signal` support to Manifest.
+- [x] **Verification**: Validated `binance_spot_rating_ma_short` using Ascending Sort (Lowest Score = Bearish), fixing the "Best of the Worst" bug.
+
+### Phase 214: Data Consolidation & Export Isolation (COMPLETED)
+- [x] **Fix**: Disabled automatic JSON export in `PersistentDataLoader` to prevent directory pollution.
+- [x] **Service**: Implemented `scripts/services/consolidate_candidates.py` to aggregate parallel scanner outputs.
+- [x] **Integration**: Updated `Makefile` to run consolidation during `data-ingest`.
+- [x] **Validation**: Confirmed `meta-ingest` succeeds with consolidated data.
+
+### Phase 215: Synthetic Rating Reconstruction (COMPLETED)
+- [x] **Research**: Reverse-engineered TradingView's `Recommend.MA` (15 components) and `Recommend.Other` (11 components) logic.
+- [x] **Implementation**: Created `tradingview_scraper.utils.technicals.TechnicalRatings` class using `pandas-ta-classic`.
+- [x] **Validation**: Verified 100% accuracy for MA and High Accuracy for Oscillators against live snapshots.
+
+### Phase 216: Multi-Timeframe Feature Ingestion (COMPLETED)
+- [x] **Expansion**: Updated `ingest_features.py` to support 11 timeframes (1m to 1M).
+- [x] **Performance Metrics**: Added Global (`Perf.3Y`, `Perf.5Y`) and Interval-Specific (`change_5m`, `volume_1h`) metrics.
+- [x] **Verification**: Confirmed schema expansion to 200+ columns in Lakehouse.
+
+### Phase 217: Meta-Portfolio Resilience (COMPLETED)
+- [x] **Requirement**: Meta-Aggregator must handle missing sleeve profiles gracefully.
+- [x] **Implementation**: Added "Best Effort Proxy" logic (Fallback: HRP -> MinVar -> MaxSharpe).
+- [x] **Verification**: Successfully generated `meta_super_benchmark` despite `long_ma` failing HRP optimization.
+
+### Phase 218: Optimization Hardening (SCHEDULED)
+- [ ] **Investigation**: Diagnose persistent HRP/Barbell failures in `prod_ma_long_v3`.
+- [ ] **Fix**: Relax solver constraints or implement robust covariance estimation for sparse/correlated universes.
+- [ ] **Fix**: Resolve `RuntimeWarning` in `metrics.py` for extreme negative returns.
+- [ ] **Validation**: Achieve 100% profile generation for all atomic sleeves.
+
+### Phase 219: Dynamic Historical Backtesting (SCHEDULED)
+- [ ] **Service**: Implement `HistoricalFeatureBackfill` to generate `features_matrix.parquet` using Synthetic Engine.
+- [ ] **Engine Update**: Modify `BacktestEngine` to re-rank candidates at each rebalance step using historical synthetic ratings.
+- [ ] **Goal**: Resolve "Discovery-Backtest Regime Mismatch".
 
 ---
-**System Status**: 🟢 PRODUCTION READY (v4.5.2) - Phase 212 Initiated
+**System Status**: 🟢 PRODUCTION READY (v4.6.0) - Phase 219 Scheduled
 
 
 

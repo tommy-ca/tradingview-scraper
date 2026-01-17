@@ -43,6 +43,11 @@ Includes standard certification for Rating-Based Strategy Benchmarks:
 - **Rationale**: To resolve the "Discovery-Backtest Regime Mismatch" and enable true historical backtesting of Rating-based strategies without waiting for months of data accumulation.
 - **Implementation**: Utilize `pandas-ta` to replicate the Moving Average (15 components) and Oscillator (11 components) ensemble logic defined in the Feature Composition spec.
 
+### 3.7 Meta-Portfolio Resilience (v3.6.6)
+- **Requirement**: The Meta-Portfolio Aggregator MUST implement a "Best Effort Proxy" strategy for sleeve inclusion.
+- **Logic**: If a specific risk profile (e.g., `hrp`) is missing for an atomic sleeve, the engine MUST fallback to the nearest mathematical equivalent (e.g., `min_variance`) rather than dropping the sleeve entirely.
+- **Alerting**: Fallback events MUST be logged as warnings but MUST NOT halt the pipeline.
+
 ### 2.12 Short Selling & Margin Standards
 | Requirement ID | Priority | Status | Description |
 |----------------|----------|--------|-------------|

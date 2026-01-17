@@ -56,6 +56,23 @@ To enable true backtesting, the platform mandates the transition to **Daily Feat
 
 ---
 
+## 23. Meta-Portfolio Fractal Architecture (v3.6.6)
+
+### 23.1 The Fractal Matrix
+The Meta-Portfolio operates as a "Fractal Matrix" where:
+1.  **Atomic Sleeves**: Individual runs (e.g., `long_ma`, `short_all`) generate a full spectrum of risk profiles (HRP, MinVar, MaxSharpe).
+2.  **Meta-Aggregation**: The Meta-Level constructs a "Meta-Return Series" for each target profile (e.g., `meta_hrp`) by joining the corresponding return series from each sleeve.
+3.  **Proxy Fallback**: To ensure robust diversification, if Sleeve A fails to generate Profile X (e.g., HRP optimization failed), the aggregator injects Profile Y (MinVar) as a proxy. This prevents a single solver failure from invalidating the entire meta-strategy.
+
+### 23.2 Allocation Logic
+The Meta-Optimizer treats Sleeves as Assets:
+- **Input**: Matrix of Sleeve Returns (e.g., 4 columns: `long_ma`, `short_ma`, `long_all`, `short_all`).
+- **Optimization**: Applies the *same* engines (HRP, etc.) to allocate capital among sleeves.
+- **Output**: `Sleeve_Weights`.
+- **Flattening**: Final Asset Weight = `Sleeve_Weight * Atomic_Asset_Weight`.
+
+---
+
 ## 24. Synthetic Signal Engine (v3.6.5)
 
 ### 24.1 Motivation

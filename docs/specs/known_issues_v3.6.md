@@ -17,7 +17,25 @@
 - **Impact**: Fallback to `MinVariance` or `EqualWeight` is triggered.
 - **Fix Scheduled**: Q2 2026 (Robust Covariance Estimation).
 
-## 3. Missing HHI Metrics
+## 4. Optimization failures in Base Sleeves (v3.6.6)
+- **Severity**: Medium
+- **Component**: `optimize_clustered_v2.py` / `cvxportfolio`
+- **Description**: Specific risk profiles failed to generate outputs in v3 production runs, necessitating Meta-Layer fallbacks.
+    - `prod_ma_long_v3`: Missing `hrp`, `barbell`, `risk_parity`, `market`, `benchmark`.
+    - `prod_short_all_v3`: Missing `hrp`.
+- **Probable Cause**: Solver infeasibility (likely strict constraints on concentrated pools) or configuration mismatch in the `backtest` block of the manifest.
+- **Workaround**: Meta-Portfolio successfully used `min_variance` as a proxy.
+- **Fix Scheduled**: Deep dive into `cvxpy` solver logs for `prod_ma_long_v3` to relax constraints.
+
+## 5. Reporting Metrics (CAGR)
+- **Severity**: Low (Fixed in v3)
+
+## 6. Runtime Warnings in Metrics (v3.6.6)
+- **Severity**: Low
+- **Component**: `utils/metrics.py`
+- **Description**: `RuntimeWarning: invalid value encountered in scalar power` during geometric mean calculation when Total Return < -100% (due to leverage or shorting).
+- **Impact**: Returns `NaN` or incorrect CAGR for failed strategies.
+- **Fix Scheduled**: Q2 2026 (Robust Math Guardrails).
 - **Severity**: Low
 - **Component**: `scripts/backtest_engine.py`
 - **Description**: "Vol-HHI Corr" metric is NaN in reports because simulators do not natively return `top_assets`.
