@@ -46,6 +46,9 @@ dependencies = [
     "statsmodels>=0.14.0",
     "exchange-calendars>=4.11.3",
     "ccxt>=4.1.0",
+    "tabulate>=0.9.0",
+    "cvxpy>=1.7.5",
+    "cvxportfolio>=1.5.1",
 ]
 
 [project.urls]
