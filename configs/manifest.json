@@ -471,13 +471,13 @@
       },
       "data": {
         "lookback_days": 500,
-        "min_days_floor": 90
+        "min_days_floor": 252
       },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight,barbell,market,benchmark,risk_parity",
         "backtest_simulators": "cvxportfolio,vectorbt",
-        "train_window": 20,
+        "train_window": 252,
         "test_window": 10,
         "step_size": 10
       },
@@ -509,13 +509,13 @@
       },
       "data": {
         "lookback_days": 500,
-        "min_days_floor": 90
+        "min_days_floor": 252
       },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight,barbell,market,benchmark,risk_parity",
         "backtest_simulators": "cvxportfolio,vectorbt",
-        "train_window": 20,
+        "train_window": 252,
         "test_window": 10,
         "step_size": 10
       },
@@ -546,12 +546,12 @@
         "selection_mode": "v4",
         "ranking": { "direction": "descending" }
       },
-      "data": { "lookback_days": 500, "min_days_floor": 90 },
+      "data": { "lookback_days": 500, "min_days_floor": 252 },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight,barbell,market,benchmark,risk_parity",
         "backtest_simulators": "cvxportfolio,vectorbt",
-        "train_window": 20,
+        "train_window": 252,
         "test_window": 10,
         "step_size": 10
       },
@@ -588,13 +588,13 @@
       },
       "data": {
         "lookback_days": 500,
-        "min_days_floor": 90
+        "min_days_floor": 252
       },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight,barbell,market,benchmark,risk_parity",
         "backtest_simulators": "cvxportfolio,vectorbt",
-        "train_window": 20,
+        "train_window": 252,
         "test_window": 10,
         "step_size": 10
       },

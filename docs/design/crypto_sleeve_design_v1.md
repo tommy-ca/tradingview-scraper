@@ -8,11 +8,13 @@ The crypto sleeve operates as an independent capital allocation unit within the 
 ### 1.2 Design Principles
 1. **Directional Normalization**: All returns are transformed to "Synthetic Longs" prior to analysis.
 2. **Short-Cycle Momentum**: 10-day rebalancing window as the structural standard (Updated Jan 2026).
-3. **Noise Floor Selection**: Late-binding trend filters to reject "dead-cat bounces."
-4. **DataOps Hygiene**: Strict export isolation and automatic candidate consolidation (DataOps 2.0).
-5. **HRP Dominance**: Hierarchical Risk Parity as the primary stability profile.
-6. **Temporal Alignment**: Distance matrices averaged across 60d, 120d, and 200d windows.
-7. **Deep Auditability**: Full matrix transparency via window-by-window forensic reports.
+3. **Institutional Training Depth**: 252-day training windows ($T_{train}$) to capture full annual seasonality and regime cycles.
+4. **Noise Floor Selection**: Late-binding trend filters to reject "dead-cat bounces."
+5. **DataOps Hygiene**: Strict export isolation and automatic candidate consolidation (DataOps 2.0).
+6. **HRP Dominance**: Hierarchical Risk Parity as the primary stability profile.
+7. **Temporal Alignment**: Distance matrices averaged across 60d, 120d, and 200d windows.
+8. **Deep Auditability**: Full matrix transparency via window-by-window forensic reports.
+9. **Hard Asset Floor**: Mandatory 252-day history floor for all implementation candidates to ensure statistical robustness.
 
 ---
 
