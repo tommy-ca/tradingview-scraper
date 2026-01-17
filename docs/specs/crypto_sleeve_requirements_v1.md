@@ -1,4 +1,4 @@
-# Crypto Sleeve Requirements Specification v3.6.1
+# Crypto Sleeve Requirements Specification v3.6.2
 
 ## 1. Overview
 
@@ -7,24 +7,41 @@ Define the institutional requirements for the crypto production sleeve within th
 
 ### 1.2 Scope
 This specification covers the crypto asset discovery, selection, optimization, and backtesting infrastructure for BINANCE-only production deployment using the `uv` native workflow.
+Includes standard certification for Rating-Based Strategy Benchmarks:
+- `binance_spot_rating_all_long/short`
+- `binance_spot_rating_ma_long/short`
 
 ### 1.3 Status
-**Production Certified** (2026-01-14) - Deep Audit Standard v3.6.4.
+**Production Certified** (2026-01-16) - Deep Audit Standard v3.6.4.
+**Note**: Rating-based profiles are currently backtested on "Latest-Snapshot" data. Full validation pending historical feature accumulation (v3.6.5).
 
-### 1.4 Statistical Performance Baselines (Grand Tournament 2026-01-14)
-The following benchmarks serve as the institutional standard for Q1 2026 production (v3.6.4):
-| Selection | Engine | Profile | Sharpe (μ) | AnnRet (CAGR) | MaxDD (comp) | Vol (μ) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **v3.4** | **skfolio** | **max_sharpe** | **1.988** | **148.3%** | **-16.0%** | **0.83** |
-| **v4 (MLOps)** | **skfolio** | **hrp** | **1.335** | **79.0%** | **-27.6%** | **0.50** |
-| **baseline** | **skfolio** | **hrp** | **0.571** | **28.6%** | **-14.7%** | **0.25** |
+### 3.3 DataOps & Infrastructure
+- **Ingestion Hygiene**: 
+    - **Export Isolation**: Ingestion processes MUST NOT generate raw OHLC/Indicator files in the export directory.
+    - **Consolidation**: Disparate scanner outputs MUST be automatically aggregated into `portfolio_candidates.json` before metadata enrichment.
+- **Traceability**:
+    - **Instrument Mapping**: Deduplication processes MUST preserve discarded instrument metadata (e.g., PERP symbols) as `alternatives` within the canonical (SPOT) candidate record to support downstream execution routing.
+- **Run Identity**: Every execution MUST be traceable via a unique `RUN_ID`.
+- **Artifact Retention**: Raw candidates, selected portfolios, and returns matrices MUST be persisted to the `artifacts/` tree.
 
+### 3.4 Selection Ranking & Signal Dominance (v3.6.4)
+- **Pluggable Ranking**: The Selection Policy MUST support a configurable ranking interface via the manifest:
+    - **Method**: `mps` (default) or `signal` (raw feature).
+    - **Direction**: `descending` (default, High Score=Bullish) or `ascending` (Low Score=Bearish).
+- **Signal Dominance**: Profiles MUST be able to assert a "Primary Signal" via `dominant_signal` configuration:
+    - **Boost**: The primary signal weight is significantly increased (e.g., 3.0x).
+    - **Dampen**: Competing signals (e.g., generic Momentum) are automatically dampened to prevent alpha dilution.
+    - **Use Case**: Enables specialized strategies like `Rating MA Short` (Ascending Sort + MA Dominance) to function alongside generic `Rating All` strategies.
 
+### 3.5 Historical Feature Persistence (v3.6.5)
+- **Requirement**: The system MUST implement a mechanism to capture and persist discovery-layer signals (e.g., `Recommend.All`, `Recommend.MA`) on a daily basis.
+- **Rationale**: To resolve the "Discovery-Backtest Regime Mismatch" where backtests rely on present-day scanner results for historical rebalancing.
+- **Policy**: Low-performing profiles (e.g., `Rating MA`) MUST NOT be discarded. They are preserved in `active` state to facilitate data collection for future validation once sufficient history is accumulated.
 
-
----
-
-## 2. Functional Requirements
+### 3.6 Synthetic Rating Reconstruction (v3.6.5)
+- **Requirement**: The system MUST be able to generate historical `Recommend.MA` and `Recommend.Other` signals from raw OHLCV data that correlate > 0.9 with TradingView's live values.
+- **Rationale**: To resolve the "Discovery-Backtest Regime Mismatch" and enable true historical backtesting of Rating-based strategies without waiting for months of data accumulation.
+- **Implementation**: Utilize `pandas-ta` to replicate the Moving Average (15 components) and Oscillator (11 components) ensemble logic defined in the Feature Composition spec.
 
 ### 2.12 Short Selling & Margin Standards
 | Requirement ID | Priority | Status | Description |

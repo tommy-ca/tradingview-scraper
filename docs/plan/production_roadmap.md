@@ -82,7 +82,22 @@ This roadmap outlines the strategic development goals for the TradingView Scrape
 - **Status**: **COMPLETED**.
 - **Outcome**: Standardized intra-cluster risk parity. Reduced structural risk across the entire tree by 34%.
 
-## Phase 10: Feedback-Driven Calibration (PLANNED - Q2 2026)
+## Phase 11: Production Certification & Scale-Up (COMPLETED - Jan 2026)
+
+### 1. Binance Ratings Certification
+- **Status**: **COMPLETED** (2026-01-16).
+- **Outcome**: Validated "Rating All" (Long/Short) profiles.
+- **Key Metrics**: 
+    - **Short Profile**: 1.65 Sharpe, -6.17% MaxDD.
+    - **Long Profile**: 1.49 Sharpe, -8.68% MaxDD.
+- **Infrastructure**: Certified "DataOps v2" (Superset) and "Backtest Engine v2" (Turnover Fix).
+
+### 2. Execution Intelligence
+- **Status**: **IN PROGRESS**.
+- **Traceability**: Implemented `implementation_alternatives` metadata to map Spot Analysis -> Perp Execution.
+- **Next Step**: Integrate with `Nautilus` OMS for live paper trading.
+
+## Phase 12: Feedback-Driven Calibration (PLANNED - Q2 2026)
 
 Now that the Bayesian framework is in place, the focus shifts to closing the loop between realized performance and parameter selection.
 

@@ -115,10 +115,39 @@ To further refine the "Noise Floor," we analyze the internal memory of return se
 2.  **Ljung-Box Q-Test**: A statistical test for the "White Noise" null hypothesis.
     - **Standard**: Assets must achieve a p-value < 0.05 to reject the white-noise hypothesis and be considered "Self-Predictable."
 
-## 12. Lead-Lag Cluster Verification
-Clusters must be audited for internal cohesion and leading relationships.
+## 13. Selection Ranking & Signal Dominance (v3.6.4)
 
-### 12.1 Cluster Homogeneity
-- **Cross-Correlation**: Assets within a cluster should maintain a base correlation > 0.70 (except in extreme regimes where the Diversity Floor forces redundancy relaxation).
-- **Factor Leaders**: We identify the "Cluster Leader" by finding the asset with the highest lead-lag correlation: $Max(Corr(Asset_{i}, Asset_{j, t-1}))$.
-- **Policy**: If a clear leader exists (e.g., BTC leading BCH), the portfolio engine may prioritize the leader's signal for entry/exit timing while maintaining the follower for breadth.
+### 13.1 Pluggable Ranking Interface
+The selection engine now supports a configurable ranking interface, allowing profiles to define *how* assets are sorted and *which* signals drive the alpha score.
+
+#### Ranking Schema
+```json
+"selection": {
+  "ranking": {
+    "method": "alpha_score",  // Sorting metric (default: alpha_score)
+    "direction": "descending" // Sort order: descending (Bullish) or ascending (Bearish)
+  }
+}
+```
+
+### 13.2 Signal Dominance (MPS Overrides)
+To prevent generic factors (like Momentum) from overshadowing specific strategy signals (like Rating MA), profiles can assert **Signal Dominance** via the `features` block.
+
+#### Configuration
+```json
+"features": {
+  "dominant_signal": "recommend_ma",  // The primary alpha driver
+  "dominant_signal_weight": 3.0       // Boost weight (Default: 3.0)
+}
+```
+**Behavior**:
+1.  **Boost**: The dominant signal's weight is set to 3.0 (vs default ~1.0).
+2.  **Dampen**: If the dominant signal is *not* `momentum`, the generic `momentum` weight is automatically dampened to 0.5 (from 1.75) to prevent signal drift.
+
+### 13.3 Profile Examples
+- **Rating MA Short**:
+    - `ranking.direction`: "ascending" (Select Lowest Score = Strongest Bear)
+    - `features.dominant_signal`: "recommend_ma" (Prioritize MA Rating over generic Momentum)
+- **Rating All Long**:
+    - `ranking.direction`: "descending" (Select Highest Score = Strongest Bull)
+    - `features.dominant_signal`: "recommend_all" (Prioritize Composite Rating)

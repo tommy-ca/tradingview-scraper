@@ -131,3 +131,20 @@ To ensure a **solid benchmark baseline** for backtesting risk profiles, enforce 
 Suggested automation targets:
 - `make baseline-audit`: validate `market` + `benchmark` availability and report coverage
 - `make baseline-guardrail`: compare `raw_pool_ew` summaries across selection modes for the same universe source
+
+## 7. Schema Reference
+
+### Selection Settings
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `top_n` | int | Maximum number of assets to select. |
+| `threshold` | float | Minimum alpha score required for selection. |
+| `selection_mode` | str | Engine version (`v3.2`, `v3.4`, `v4`). |
+| `ranking.method` | str | Metric to sort by (default: `alpha_score`). |
+| `ranking.direction` | str | Sort order: `descending` (High Score) or `ascending` (Low Score). |
+
+### Feature Flags (Partial List)
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `dominant_signal` | str | Signal to prioritize in Log-MPS (e.g., `recommend_ma`). |
+| `dominant_signal_weight` | float | Weight multiplier for dominant signal (Default: 3.0). |
