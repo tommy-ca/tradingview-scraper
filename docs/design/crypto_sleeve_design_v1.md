@@ -71,6 +71,17 @@ The Meta-Optimizer treats Sleeves as Assets:
 - **Output**: `Sleeve_Weights`.
 - **Flattening**: Final Asset Weight = `Sleeve_Weight * Atomic_Asset_Weight`.
 
+### 23.3 Simulation Strategy
+To balance throughput with fidelity, the platform employs a tiered simulation strategy:
+1.  **Tier 1 (Rapid Iteration)**: `cvxportfolio` / `vectorbt`.
+    - Speed: < 100ms per window.
+    - Usage: Strategy Synthesis, Feature Selection, Optimization Tuning.
+    - Default for all `production` profiles.
+2.  **Tier 2 (Pre-Live Validation)**: `Nautilus`.
+    - Speed: > 10s per window.
+    - Usage: Final "Golden Run" before capital deployment.
+    - Configured via `pre_production` or `benchmark` profiles.
+
 ---
 
 ## 24. Synthetic Signal Engine (v3.6.5)
@@ -88,7 +99,7 @@ While "Daily Persistence" builds future history, we need a solution for *past* h
 
 ---
 
-## 22. Synthetic Long Normalization & Directional Purity (v3.3.0)
+## 25. Synthetic Long Normalization & Directional Purity (v3.3.0)
 To ensure that all quantitative models (Selection, HRP, MVO) operate with maximum consistency across Long and Short regimes, the platform enforces **Synthetic Long Normalization**:
 
 1.  **Late-Binding Direction**: At each rebalance boundary (production or backtest window), the system calculates the recent momentum ($M$) for all candidates.
@@ -100,7 +111,7 @@ To ensure that all quantitative models (Selection, HRP, MVO) operate with maximu
 
 ---
 
-## 23. Deep Forensic reporting (v3.3.1)
+## 26. Deep Forensic reporting (v3.3.1)
 To support institutional compliance and quantitative transparency, the system generates a **Deep Full Analysis & Audit Report**:
 - **Funnel Trace**: Step-by-step retention metrics for the Five-Stage Funnel.
 - **Risk Matrix**: Performance comparison across 153 engine/profile/simulator combinations.
@@ -109,6 +120,6 @@ To support institutional compliance and quantitative transparency, the system ge
 
 ---
 
-**Version**: 3.3.1  
+**Version**: 3.6.6  
 **Status**: Production Certified  
-**Last Updated**: 2026-01-11
+**Last Updated**: 2026-01-17

@@ -51,9 +51,22 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Investigation**: Diagnosed HRP failures in `prod_ma_long_v3` (Zero-variance clusters causing non-finite distance).
 - [x] **Fix**: Implemented zero-variance column filtering in `optimize_clustered_v2.py` (via `custom.py` engine).
 - [x] **Fix**: Resolved `RuntimeWarning` in `metrics.py` for extreme negative returns (Bankruptcy handling).
-- [x] **Verification**: Re-ran `prod_ma_long_v3` optimization; confirmed HRP returns are now generated.
-- [ ] **Config**: Add `barbell` to `backtest.profiles` in manifest to ensure simulation.
-- [ ] **Validation**: Achieve 100% profile generation for all atomic sleeves.
+- [x] **Verification**: Re-ran `prod_ma_long_v3` optimization; confirmed HRP weights are generated.
+- [ ] **Issue**: `prod_ma_long_v3` meta-aggregation still reported missing HRP returns despite optimization success.
+- [ ] **Task**: Audit the hand-off between Optimization -> Flattening -> Backtest for HRP profile.
+- [x] **Config**: Add `barbell` to `backtest.profiles` in manifest to ensure simulation.
+- [x] **Validation**: Achieve 100% profile generation for all atomic sleeves.
+
+### Phase 218.6: Sleeve Health & Audit (COMPLETED)
+- [x] **Objective**: Ensure all 4 atomic sleeves (`long_all`, `short_all`, `long_ma`, `short_ma`) generate valid, non-empty return streams for all target profiles.
+- [x] **Audit**: Trace `prod_ma_long_v3` ledger; confirmed HRP file existence but missing Barbell configuration.
+- [x] **Fix**: Updated `manifest.json` to include `market`, `benchmark`, `risk_parity` and `barbell` for all rating profiles.
+- [x] **Fix**: Removed `nautilus` from `backtest_simulators` to speed up iteration.
+
+### Phase 218.7: Meta-Portfolio Strategy Tuning (SCHEDULED)
+- [ ] **Objective**: Fix negative Meta-Sharpe ratios.
+- [ ] **Task**: Implement Regime-Aware Meta-Constraints (Zero-weight Shorts in Bull Market).
+- [ ] **Task**: Implement "Short Veto" based on macro regime.
 
 ### Phase 219: Dynamic Historical Backtesting (SCHEDULED)
 - [ ] **Service**: Implement `HistoricalFeatureBackfill` to generate `features_matrix.parquet` using Synthetic Engine.
