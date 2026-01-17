@@ -43,30 +43,11 @@ Includes standard certification for Rating-Based Strategy Benchmarks:
 - **Rationale**: To resolve the "Discovery-Backtest Regime Mismatch" and enable true historical backtesting of Rating-based strategies without waiting for months of data accumulation.
 - **Implementation**: Utilize `pandas-ta` to replicate the Moving Average (15 components) and Oscillator (11 components) ensemble logic defined in the Feature Composition spec.
 
-### 3.7 Meta-Portfolio Resilience (v3.6.6)
+### 3.7 Meta-Portfolio Resilience & Fractal Recursion (v3.6.7)
 - **Requirement**: The Meta-Portfolio Aggregator MUST implement a "Best Effort Proxy" strategy for sleeve inclusion.
-- **Logic**: If a specific risk profile (e.g., `hrp`) is missing for an atomic sleeve, the engine MUST fallback to the nearest mathematical equivalent (e.g., `min_variance`) rather than dropping the sleeve entirely.
-- **Alerting**: Fallback events MUST be logged as warnings but MUST NOT halt the pipeline.
-
-### 3.8 Simulation Fidelity & Performance
-- **Default Simulator**: The platform defaults to fast vector-based simulators (`cvxportfolio`, `vectorbt`) for standard production runs to ensure throughput.
-- **High-Fidelity Simulation**: `Nautilus` (event-driven) is reserved for "Pre-Production" or "Golden Benchmark" profiles due to its high computational cost.
-- **Parity Check**: All vector-based results MUST be periodically audited against Nautilus on a subset of windows to ensure slippage/execution logic alignment (Target: Sharpe Drift < 5%).
-
-### 3.9 Atomic Correctness & Completeness (v3.6.6)
-- **Full Spectrum Requirement**: All production-grade sleeves MUST generate a full return set (8 standard profiles: `hrp`, `min_variance`, `max_sharpe`, `equal_weight`, `barbell`, `market`, `benchmark`, `risk_parity`) to be eligible for Meta-Portfolio inclusion.
-- **Proxy Status**: Use of Proxies (MinVar for HRP) is permitted for pipeline resilience during development but marks the sleeve as **DEGRADED** in the final certification report.
-- **Validation Gate**: A sleeve is only considered **CERTIFIED** once all 8 profiles are generated natively without numerical errors.
-
-### 3.10 Stability & Wealth Continuity
-- **Wealth Persistence**: Simulations MUST persist absolute wealth (in $ or wealth units) across rebalance boundaries to maintain wealth-process continuity.
-- **Outlier Guard**: Daily returns MUST be clipped at reasonable thresholds (e.g., -99.9% to +500%) during reporting to prevent numerical artifacts from corrupting summary CAGR calculations.
-- **Bankruptcy Logic**: Portfolios dropping below a defined wealth floor (e.g., 1%) MUST be liquidated to cash to reflect total strategy failure.
-- **Simulator Parity**: The Sharpe Ratio drift between vector-based and friction-based simulators MUST be monitored and documented (Target: Drift < 0.20).
-
-### 3.11 Portfolio Normalization
-- **Gross Exposure Cap**: Simulators MUST enforce a strict 1.0 Gross Exposure (sum of absolute weights) at the rebalance point to prevent unintended margin-driven volatility spikes.
-- **Cash Buffering**: Residual equity after meeting target weights MUST be held in cash to ensure the sum of all weights (including cash) is exactly 1.0.
+- **Fractal Nesting**: The system MUST support **Recursive Nesting** of sleeve profiles. A meta-portfolio sleeve can point to another meta-profile, allowing for hierarchical risk allocation (e.g., Asset -> Group -> Sub-Group -> Meta).
+- **Naming Isolation**: All meta-artifacts MUST be prefixed with the profile name (`meta_returns_{profile}.pkl`) to prevent cross-profile namespace pollution.
+- **Physical Flattening**: The final meta-weight output MUST recursively collapse all Logic Atoms into Physical Assets, summing weights for assets appearing in multiple strategic branches.
 
 ### 2.12 Short Selling & Margin Standards
 | Requirement ID | Priority | Status | Description |

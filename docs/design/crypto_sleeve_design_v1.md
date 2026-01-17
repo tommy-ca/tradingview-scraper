@@ -58,22 +58,24 @@ To enable true backtesting, the platform mandates the transition to **Daily Feat
 
 ---
 
-## 23. Meta-Portfolio Fractal Architecture (v3.6.6)
+## 23. Meta-Portfolio Fractal Architecture (v3.6.7)
 
-### 23.1 The Fractal Matrix
-The Meta-Portfolio operates as a "Fractal Matrix" where:
-1.  **Atomic Sleeves**: Individual runs (e.g., `long_ma`, `short_all`) generate a full spectrum of risk profiles (HRP, MinVar, MaxSharpe).
-2.  **Meta-Aggregation**: The Meta-Level constructs a "Meta-Return Series" for each target profile (e.g., `meta_hrp`) by joining the corresponding return series from each sleeve.
-3.  **Proxy Fallback**: To ensure robust diversification, if Sleeve A fails to generate Profile X (e.g., HRP optimization failed), the aggregator injects Profile Y (MinVar) as a proxy. This prevents a single solver failure from invalidating the entire meta-strategy.
+### 23.1 The Fractal Tree
+The Meta-Portfolio operates as a **Fractal Tree** structure:
+1.  **Atomic Strategy**: Base logic (e.g., `long_all`).
+2.  **Meta-Node**: A group of strategies or other meta-nodes (e.g., `meta_crypto`).
+3.  **Root-Node**: The final top-level portfolio (e.g., `meta_global_macro`).
 
-### 23.2 Allocation Logic
-The Meta-Optimizer treats Sleeves as Assets:
-- **Input**: Matrix of Sleeve Returns (e.g., 4 columns: `long_ma`, `short_ma`, `long_all`, `short_all`).
-- **Optimization**: Applies the *same* engines (HRP, etc.) to allocate capital among sleeves.
-- **Output**: `Sleeve_Weights`.
-- **Flattening**: Final Asset Weight = `Sleeve_Weight * Atomic_Asset_Weight`.
+### 23.2 Recursive Aggregation
+The pipeline implements recursive descent:
+- **Build**: `scripts/build_meta_returns.py` recursively resolves sub-meta branches, collapsing them into single "Strategy Returns" for the parent node.
+- **Optimize**: Standard engines (HRP, MVO) allocate risk at each level of the tree.
+- **Flatten**: `scripts/flatten_meta_weights.py` recursively multiplies weights down the tree, resolving all strategic atoms into physical symbol exposures.
 
-### 23.3 Simulation Strategy
+### 23.3 Proxy Fallback
+To ensure robust diversification, if Sleeve A fails to generate Profile X (e.g., HRP optimization failed), the aggregator injects Profile Y (MinVar) as a proxy. This prevents a single solver failure from invalidating the entire meta-strategy.
+
+### 23.4 Simulation Strategy
 To balance throughput with fidelity, the platform employs a tiered simulation strategy:
 1.  **Tier 1 (Rapid Iteration)**: `cvxportfolio` / `vectorbt`.
     - Speed: < 100ms per window.
@@ -84,13 +86,16 @@ To balance throughput with fidelity, the platform employs a tiered simulation st
     - Usage: Final "Golden Run" before capital deployment.
     - Configured via `pre_production` or `benchmark` profiles.
 
-### 23.4 Numerical Stability & Wealth Persistence (v3.6.6)
-To resolve "Anomalous Returns" and artificial volatility artifacts (e.g. 114% Vol reporting spikes) in multi-window backtests, the following mechanisms are enforced:
+### 23.5 Numerical Stability & Wealth Persistence
+To resolve "Anomalous Returns" and artificial volatility reporting spikes in multi-window backtests, the following mechanisms are enforced:
 1.  **Absolute Holding Persistence**: The backtest engine persists absolute wealth (dollars) across rebalance windows. This ensures the wealth process is continuous, eliminating reset artifacts.
 2.  **Hard Bankruptcy Gate**: Portfolios hitting a 1% wealth floor are automatically liquidated to cash. This prevents "zombie" gains on dust from inflating percentage returns.
 3.  **Stitched Summary Metrics**: Summary statistics (Sharpe, CAGR, Vol) are calculated from the **full-history stitched return series**. This eliminates the bias introduced by averaging annualized short-window metrics.
 4.  **Forensic Clipping**: Extreme daily returns (> 1000%) are clipped to prevent numerical divergence in reporting.
 5.  **Leverage Normalization**: Simulators enforce a strict 1.0 Gross Exposure cap at rebalance boundaries to prevent unintended margin-driven spikes.
+
+### 23.6 Workspace Isolation
+All intermediate meta-artifacts are prefixed by the profile name: `meta_returns_{meta_profile}_{risk_profile}.pkl`. This ensures that different meta-portfolios (e.g., "Defensive" vs "Aggressive") can coexist in the same Lakehouse without state collision.
 
 ---
 
@@ -130,6 +135,6 @@ To support institutional compliance and quantitative transparency, the system ge
 
 ---
 
-**Version**: 3.6.6  
+**Version**: 3.6.7  
 **Status**: Production Certified  
-**Last Updated**: 2026-01-17
+**Last Updated**: 2026-01-18

@@ -10,22 +10,32 @@ import numpy as np
 import pandas as pd
 
 sys.path.append(os.getcwd())
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.metrics import calculate_performance_metrics
 
 logger = logging.getLogger("meta_reporting")
 
 
-def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: List[str]):
+def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: List[str], meta_profile: str = "meta_production"):
     md = []
     md.append("# 🌐 Multi-Sleeve Meta-Portfolio Report")
+    md.append(f"**Root Profile:** `{meta_profile}`")
     md.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     md.append("\n---")
 
     for prof in profiles:
         prof = prof.strip()
-        opt_path = meta_dir / f"meta_optimized_{prof}.json"
-        rets_path = meta_dir / f"meta_returns_{prof}.pkl"
-        flat_path = meta_dir / f"portfolio_optimized_meta_{prof}.json"
+        opt_path = meta_dir / f"meta_optimized_{meta_profile}_{prof}.json"
+        rets_path = meta_dir / f"meta_returns_{meta_profile}_{prof}.pkl"
+        flat_path = meta_dir / f"portfolio_optimized_meta_{meta_profile}_{prof}.json"
+
+        # Fallbacks for legacy files
+        if not opt_path.exists():
+            opt_path = meta_dir / f"meta_optimized_{prof}.json"
+        if not rets_path.exists():
+            rets_path = meta_dir / f"meta_returns_{prof}.pkl"
+        if not flat_path.exists():
+            flat_path = meta_dir / f"portfolio_optimized_meta_{prof}.json"
 
         if not opt_path.exists():
             continue
@@ -174,11 +184,15 @@ if __name__ == "__main__":
     parser.add_argument("--meta-dir", default="data/lakehouse")
     parser.add_argument("--output", default="artifacts/summaries/latest/meta_portfolio_report.md")
     parser.add_argument("--profiles", help="Comma-separated risk profiles to report")
+    parser.add_argument("--meta-profile", help="Meta profile name (e.g. meta_super_benchmark)")
     args = parser.parse_args()
 
     meta_dir = Path(args.meta_dir)
     out_p = Path(args.output)
 
+    settings = get_settings()
+    m_prof = args.meta_profile or os.getenv("PROFILE") or "meta_production"
+
     target_profiles = args.profiles.split(",") if args.profiles else ["barbell", "hrp", "min_variance", "equal_weight", "max_sharpe"]
 
-    generate_meta_markdown_report(meta_dir, str(out_p), target_profiles)
+    generate_meta_markdown_report(meta_dir, str(out_p), target_profiles, m_prof)

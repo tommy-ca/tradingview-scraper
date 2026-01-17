@@ -18,47 +18,59 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("optimize_meta_portfolio")
 
 
-def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = None):
+def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = None, meta_profile: Optional[str] = None):
     settings = get_settings()
     run_dir = settings.prepare_summaries_run_dir()
     ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
+
+    # Resolve Meta Profile from settings if not passed
+    m_prof = meta_profile or os.getenv("PROFILE") or "meta_production"
 
     # Handle Profile Matrix
     if profile is None:
         # CR-831: Workspace Isolation - Infer base directory from returns_path
         input_path = Path(returns_path)
-        if input_path.is_dir():
-            base_dir = input_path
-        else:
-            base_dir = input_path.parent
+        base_dir = input_path.parent if input_path.is_file() else input_path
 
-        # Search for all meta_returns_*.pkl in the resolved directory
-        files = list(base_dir.glob("meta_returns_*.pkl"))
+        # Search for all meta_returns_{meta_profile}_*.pkl in the resolved directory
+        files = list(base_dir.glob(f"meta_returns_{m_prof}_*.pkl"))
 
         # If none found in run dir, try lakehouse (Legacy fallback)
         if not files:
-            files = list(Path("data/lakehouse").glob("meta_returns_*.pkl"))
+            files = list(Path("data/lakehouse").glob(f"meta_returns_{m_prof}_*.pkl"))
+
+        # Global fallback to old pattern if no profile-specific ones found
+        if not files:
+            files = list(base_dir.glob("meta_returns_*.pkl"))
+            if not files:
+                files = list(Path("data/lakehouse").glob("meta_returns_*.pkl"))
 
         if not files and input_path.exists() and input_path.is_file():
-            # Fallback to single returns path if no pattern match
             files = [input_path]
     else:
         # Try run_dir first, then lakehouse
         input_path = Path(returns_path)
         base_dir = input_path.parent if input_path.is_file() else input_path
 
-        candidate = base_dir / f"meta_returns_{profile}.pkl"
-        if candidate.exists():
-            files = [candidate]
-        else:
-            files = [Path("data/lakehouse") / f"meta_returns_{profile}.pkl"]
+        candidates = [
+            base_dir / f"meta_returns_{m_prof}_{profile}.pkl",
+            Path("data/lakehouse") / f"meta_returns_{m_prof}_{profile}.pkl",
+            base_dir / f"meta_returns_{profile}.pkl",
+            Path("data/lakehouse") / f"meta_returns_{profile}.pkl",
+        ]
+        files = [c for c in candidates if c.exists()]
 
     for p_path in files:
         if not p_path.exists():
             continue
 
-        # Extract profile from filename: meta_returns_<prof>.pkl
-        prof_name = p_path.stem.replace("meta_returns_", "")
+        # Extract profile from filename: meta_returns_{m_prof}_<prof>.pkl or meta_returns_<prof>.pkl
+        stem = p_path.stem
+        if f"meta_returns_{m_prof}_" in stem:
+            prof_name = stem.replace(f"meta_returns_{m_prof}_", "")
+        else:
+            prof_name = stem.replace("meta_returns_", "")
+
         if prof_name == "meta_returns":
             prof_name = "hrp"  # Default legacy
 
@@ -69,7 +81,7 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
         except Exception:
             pass
 
-        logger.info(f"🔨 Fractal Meta-Optimization: {target_profile}")
+        logger.info(f"🔨 Fractal Meta-Optimization ({m_prof}): {target_profile}")
 
         meta_rets = pd.read_pickle(p_path)
         if not isinstance(meta_rets, pd.DataFrame):
@@ -85,7 +97,7 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
                 step=f"meta_optimize_{target_profile}",
                 params={"engine": "custom", "profile": str(target_profile), "n_sleeves": len(meta_rets.columns)},
                 input_hashes={"meta_returns": get_df_hash(meta_rets)},
-                context={"meta_profile": "meta_production"},
+                context={"meta_profile": m_prof},
             )
 
         engine = build_engine("custom")
@@ -110,11 +122,12 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
                 continue
 
             # Save specific matrix result
-            p_output_path = Path(output_path).parent / f"meta_optimized_{target_profile}.json"
+            p_output_path = Path(output_path).parent / f"meta_optimized_{m_prof}_{target_profile}.json"
 
             artifact = {
                 "metadata": {
                     "source": str(p_path),
+                    "meta_profile": m_prof,
                     "engine": "custom",
                     "profile": target_profile,
                     "n_sleeves": len(meta_rets.columns),
@@ -128,7 +141,7 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
             with open(p_output_path, "w") as f:
                 json.dump(artifact, f, indent=2)
 
-            logger.info(f"✅ Meta-optimized weights ({target_profile}) saved to {p_output_path}")
+            logger.info(f"✅ Meta-optimized weights ({m_prof}/{target_profile}) saved to {p_output_path}")
 
         except Exception as e:
             logger.error(f"Meta-optimization failed for {target_profile}: {e}")
@@ -138,7 +151,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--returns", default="data/lakehouse/meta_returns.pkl")
     parser.add_argument("--output", default="data/lakehouse/meta_optimized.json")
-    parser.add_argument("--profile", help="Specific risk profile to optimize")
+    parser.add_argument("--profile", help="Specific risk profile to optimize (e.g. hrp)")
+    parser.add_argument("--meta-profile", help="Meta profile name (e.g. meta_super_benchmark)")
     args = parser.parse_args()
 
-    optimize_meta(args.returns, args.output, args.profile)
+    optimize_meta(args.returns, args.output, args.profile, args.meta_profile)

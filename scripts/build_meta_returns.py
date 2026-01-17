@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -49,9 +49,8 @@ def find_latest_run_for_profile(profile: str) -> Optional[Path]:
     return None
 
 
-def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[List[str]] = None):
+def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[List[str]] = None, manifest_path: Path = Path("configs/manifest.json")):
     settings = get_settings()
-    manifest_path = Path("configs/manifest.json")
     if not manifest_path.exists():
         logger.error(f"Manifest missing: {manifest_path}")
         return
@@ -82,100 +81,110 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
 
         for sleeve in sleeves:
             s_id = sleeve["id"]
-            s_profile = sleeve["profile"]
-            # CR-835: Respect explicit Run ID from manifest if provided
-            s_run_id = sleeve.get("run_id")
+            run_path = None
 
-            if s_run_id:
-                run_path = Path("artifacts/summaries/runs") / s_run_id
-                if not run_path.exists():
-                    # Fallback to checking if it's just a run_id string and the path needs construction
-                    # or if the user provided a full path? usually just the dir name.
-                    logger.warning(f"Explicit Run ID {s_run_id} not found in artifacts. Searching dynamically...")
+            # CR-837: Fractal Recursive Support
+            # If sleeve is a meta-profile itself, resolve it first
+            if "meta_profile" in sleeve:
+                sub_meta = sleeve["meta_profile"]
+                logger.info(f"  [{s_id}] Resolving nested meta-profile: {sub_meta}")
+                # Recursively build returns for the sub-meta
+                sub_output = Path("data/lakehouse") / f"meta_returns_{sub_meta}_{prof}.pkl"
+                build_meta_returns(sub_meta, str(sub_output), [prof], manifest_path)
+
+                if sub_output.exists():
+                    s_rets_raw = pd.read_pickle(sub_output)
+                    if isinstance(s_rets_raw, pd.DataFrame):
+                        s_rets = cast(pd.Series, s_rets_raw.mean(axis=1)).to_frame(s_id)
+                    elif isinstance(s_rets_raw, pd.Series):
+                        s_rets = s_rets_raw.to_frame(s_id)
+                    else:
+                        logger.warning(f"  [{s_id}] Unknown return format from sub-meta {sub_meta}")
+                        continue
+                    target_file = sub_output  # For logging
+                else:
+                    logger.warning(f"  [{s_id}] Failed to resolve nested meta {sub_meta}")
+                    continue
+            else:
+                s_profile = sleeve["profile"]
+                # CR-835: Respect explicit Run ID from manifest if provided
+                s_run_id = sleeve.get("run_id")
+
+                if s_run_id:
+                    run_path = Path("artifacts/summaries/runs") / s_run_id
+                    if not run_path.exists():
+                        logger.warning(f"Explicit Run ID {s_run_id} not found in artifacts. Searching dynamically...")
+                        run_path = find_latest_run_for_profile(s_profile)
+                else:
                     run_path = find_latest_run_for_profile(s_profile)
-            else:
-                run_path = find_latest_run_for_profile(s_profile)
 
-            if not run_path:
-                logger.warning(f"Could not find a specific run for profile {s_profile}. Skipping.")
-                continue
+                if not run_path:
+                    logger.warning(f"Could not find a specific run for profile {s_profile}. Skipping.")
+                    continue
 
-            # Robust file discovery: Search for any backend that produced the target profile returns
-            returns_dir = run_path / "data" / "returns"
-            target_file = None
+                # Robust file discovery
+                returns_dir = run_path / "data" / "returns"
+                target_file = None
 
-            if returns_dir.exists():
-                # Prefer skfolio if multiple exist, but accept any
-                matching_files = list(returns_dir.glob(f"*_{prof}.pkl"))
-                if not matching_files:
-                    # CR-836: Fallback for missing risk profiles
-                    # If HRP is missing, try MinVariance (closest proxy)
-                    if prof == "hrp":
-                        matching_files = list(returns_dir.glob("*_min_variance.pkl"))
-                        if matching_files:
-                            logger.warning(f"  [{s_id}] HRP returns missing. Falling back to MinVariance proxy.")
-
-                    # If still missing, try any available profile to keep sleeve alive
+                if returns_dir.exists():
+                    matching_files = list(returns_dir.glob(f"*_{prof}.pkl"))
                     if not matching_files:
-                        # Priority: min_variance > max_sharpe > equal_weight
-                        for fallback_prof in ["min_variance", "max_sharpe", "equal_weight"]:
-                            fallback_files = list(returns_dir.glob(f"*_{fallback_prof}.pkl"))
-                            if fallback_files:
-                                matching_files = fallback_files
-                                logger.warning(f"  [{s_id}] {prof} returns missing. Falling back to {fallback_prof} proxy.")
-                                break
+                        if prof == "hrp":
+                            matching_files = list(returns_dir.glob("*_min_variance.pkl"))
 
-                if matching_files:
-                    # Sort to ensure deterministic selection (prefer shorter names or specific backends)
-                    matching_files.sort(key=lambda x: ("skfolio" not in x.name, x.name))
-                    target_file = matching_files[0]
+                        if not matching_files:
+                            for fallback_prof in ["min_variance", "max_sharpe", "equal_weight"]:
+                                fallback_files = list(returns_dir.glob(f"*_{fallback_prof}.pkl"))
+                                if fallback_files:
+                                    matching_files = fallback_files
+                                    break
+
+                    if matching_files:
+                        matching_files.sort(key=lambda x: ("skfolio" not in x.name, x.name))
+                        target_file = matching_files[0]
+                    else:
+                        fallbacks = list(returns_dir.glob("*_barbell.pkl"))
+                        if fallbacks:
+                            target_file = fallbacks[0]
+
+                if target_file and target_file.exists():
+                    s_rets_raw = pd.read_pickle(target_file)
+                    if isinstance(s_rets_raw, pd.Series):
+                        s_rets = s_rets_raw.to_frame(s_id)
+                    elif isinstance(s_rets_raw, pd.DataFrame):
+                        s_rets = s_rets_raw.iloc[:, 0].to_frame(s_id)
+                    else:
+                        logger.warning(f"  [{s_id}] Unknown return format in {target_file}")
+                        continue
                 else:
-                    # Fallback to any barbell if specific profile missing (legacy support)
-                    fallbacks = list(returns_dir.glob("*_barbell.pkl"))
-                    if fallbacks:
-                        target_file = fallbacks[0]
+                    logger.warning(f"  [{s_id}] No return series found for {prof} in {run_path}")
+                    continue
 
-            if target_file and target_file.exists():
-                logger.info(f"  [{s_id}] Found returns: {target_file.name}")
-                s_rets = pd.read_pickle(target_file)
-                if isinstance(s_rets, pd.Series):
-                    s_rets = s_rets.to_frame(s_id)
-                else:
-                    # In case of multi-column, pick first.
-                    # CVXPortfolio result DF usually has 'returns' as first col.
-                    s_rets = s_rets.iloc[:, 0].to_frame(s_id)
+            # Robust Index Alignment (UTC Naive)
+            s_rets.index = pd.to_datetime(s_rets.index)
+            if s_rets.index.tz is not None:
+                s_rets.index = s_rets.index.tz_convert(None)
 
-                # Robust Index Alignment (UTC Naive)
-                s_rets.index = pd.to_datetime(s_rets.index)
-                if s_rets.index.tz is not None:
-                    s_rets.index = s_rets.index.tz_convert(None)
-
-                if meta_df.empty:
-                    meta_df = s_rets
-                else:
-                    # Inner join handles the calendar intersection (TradFi vs Crypto)
-                    # as mandated in AGENTS.md Section 8.
-                    original_len = len(meta_df)
-                    meta_df = meta_df.join(s_rets, how="inner")
-                    new_len = len(meta_df)
-
-                    if new_len < (original_len * 0.5):
-                        logger.warning(f"  [{s_id}] Heavy alpha dilution: join reduced history by {original_len - new_len} days.")
-
-                sleeve_metadata.append({"id": s_id, "profile": s_profile, "run_id": run_path.name, "run_path": str(run_path)})
+            if meta_df.empty:
+                meta_df = s_rets
             else:
-                logger.warning(f"  [{s_id}] No return series found for {prof} in {run_path}")
+                meta_df = meta_df.join(s_rets, how="inner")
+
+            s_meta = {"id": s_id}
+            if "meta_profile" in sleeve:
+                s_meta["meta_profile"] = sleeve["meta_profile"]
+            elif run_path:
+                s_meta.update({"profile": sleeve["profile"], "run_id": run_path.name, "run_path": str(run_path)})
+            sleeve_metadata.append(s_meta)
 
         if not meta_df.empty:
-            # Save profile-specific meta returns
-            p_output_path = Path(output_path).parent / f"meta_returns_{prof}.pkl"
+            p_output_path = Path(output_path).parent / f"meta_returns_{meta_profile}_{prof}.pkl"
             os.makedirs(p_output_path.parent, exist_ok=True)
             meta_df.to_pickle(p_output_path)
-            logger.info(f"✅ Meta-Returns ({prof}) saved to {p_output_path}")
+            logger.info(f"✅ Meta-Returns ({meta_profile}/{prof}) saved to {p_output_path}")
 
-            # Also output a manifest for this specific profile matrix
             manifest_out = {"meta_profile": meta_profile, "risk_profile": prof, "sleeves": sleeve_metadata}
-            m_path = Path("data/lakehouse") / f"meta_manifest_{prof}.json"
+            m_path = Path("data/lakehouse") / f"meta_manifest_{meta_profile}_{prof}.json"
             with open(m_path, "w") as f:
                 json.dump(manifest_out, f, indent=2)
 

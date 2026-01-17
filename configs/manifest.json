@@ -170,36 +170,23 @@
         "max_weight": 0.95
       }
     },
-    "meta_super_benchmark": {
-      "description": "Cross-Factor Super-Meta (MA + ALL)",
+    "meta_crypto_only": {
+      "description": "Fractal Branch: Crypto-Only Matrix",
       "sleeves": [
-        {
-          "id": "long_ma",
-          "profile": "binance_spot_rating_ma_long",
-          "run_id": "prod_ma_long_v3"
-        },
-        {
-          "id": "short_ma",
-          "profile": "binance_spot_rating_ma_short",
-          "run_id": "prod_ma_short_v3"
-        },
-        {
-          "id": "long_all",
-          "profile": "binance_spot_rating_all_long",
-          "run_id": "prod_long_all_v3"
-        },
-        {
-          "id": "short_all",
-          "profile": "binance_spot_rating_all_short",
-          "run_id": "prod_short_all_v3"
-        }
+        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "prod_long_all_v3" },
+        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "prod_short_all_v3" },
+        { "id": "ma_long", "profile": "binance_spot_rating_ma_long", "run_id": "prod_ma_long_v3" },
+        { "id": "ma_short", "profile": "binance_spot_rating_ma_short", "run_id": "prod_ma_short_v3" }
       ],
-      "meta_allocation": {
-        "engine": "custom",
-        "profile": "hrp",
-        "min_weight": 0.05,
-        "max_weight": 0.5
-      }
+      "meta_allocation": { "engine": "custom", "profile": "hrp", "min_weight": 0.05, "max_weight": 0.5 }
+    },
+    "meta_fractal_test": {
+      "description": "Root: Global Macro Fractal (Crypto Branch + TradFi)",
+      "sleeves": [
+        { "id": "crypto_branch", "meta_profile": "meta_crypto_only" },
+        { "id": "tradfi_sleeve", "profile": "institutional_etf", "run_id": "institutional_v1_long_all" }
+      ],
+      "meta_allocation": { "engine": "custom", "profile": "equal_weight" }
     },
     "crypto_production": {
       "selection": {
