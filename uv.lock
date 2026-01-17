@@ -1638,6 +1638,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pandas-ta-classic"
+version = "0.3.60.dev1"
+source = { git = "https://github.com/xgboosted/pandas-ta-classic.git#589f15b13d7bc2ddab94c1559a7763b32533c8a3" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "python-dateutil" },
+    { name = "pytz" },
+    { name = "six" },
+]
+
+[[package]]
 name = "parso"
 version = "0.8.5"
 source = { registry = "https://pypi.org/simple" }
@@ -2792,6 +2804,11 @@ engines-gpl = [
     { name = "cvxportfolio" },
 ]
 
+[package.dev-dependencies]
+analytics = [
+    { name = "pandas-ta-classic" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.9.0" },
@@ -2835,6 +2852,9 @@ requires-dist = [
     { name = "websockets", specifier = ">=13.1" },
 ]
 provides-extras = ["dev", "engines", "analytics", "engines-gpl"]
+
+[package.metadata.requires-dev]
+analytics = [{ name = "pandas-ta-classic", git = "https://github.com/xgboosted/pandas-ta-classic.git" }]
 
 [[package]]
 name = "traitlets"

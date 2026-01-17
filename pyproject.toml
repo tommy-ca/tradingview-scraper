@@ -117,3 +117,11 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/**/*.py" = ["E402"]
+
+[tool.uv.sources]
+pandas-ta-classic = { git = "https://github.com/xgboosted/pandas-ta-classic.git" }
+
+[dependency-groups]
+analytics = [
+    "pandas-ta-classic",
+]
