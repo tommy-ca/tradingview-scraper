@@ -174,7 +174,7 @@ def validate_window_parity(returns: pd.DataFrame, weights: pd.DataFrame, initial
     t_minus_1 = t0 - pd.Timedelta(days=1)
 
     # Create dummy row (0.0 return)
-    dummy_row = pd.DataFrame(0.0, index=[t_minus_1], columns=returns.columns)
+    dummy_row = pd.DataFrame(0.0, index=pd.Index([t_minus_1]), columns=returns.columns)
     returns_naut = pd.concat([dummy_row, returns])
 
     naut_sim = NautilusSimulator()

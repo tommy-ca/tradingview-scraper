@@ -31,7 +31,7 @@ class PersistentDataLoader:
         self.catalog = MetadataCatalog(base_path=lakehouse_path)
         self.ex_catalog = ExchangeCatalog(base_path=lakehouse_path)
         self.overview = Overview()
-        self.streamer = Streamer(export_result=True, websocket_jwt_token=websocket_jwt_token)
+        self.streamer = Streamer(export_result=False, websocket_jwt_token=websocket_jwt_token)
 
     def _ensure_metadata(self, symbol: str):
         """Checks if metadata exists, otherwise attempts to fetch it."""

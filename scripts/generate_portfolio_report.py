@@ -18,7 +18,9 @@ def draw_bar(weight: float, max_width: int = 15) -> str:
 
 def get_market_category(market: str) -> str:
     """Maps granular market labels to broad asset classes."""
-    m = market.upper()
+    if market is None:
+        return "🌐 OTHER"
+    m = str(market).upper()
     if "BOND" in m:
         return "🏛️ BONDS"
     if any(x in m for x in ["BINANCE", "BITGET", "BYBIT", "OKX", "CRYPTO"]):

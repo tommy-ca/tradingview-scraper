@@ -57,7 +57,15 @@ class IngestionService:
             raise RuntimeError("PersistentDataLoader not initialized.")
 
         # 1. Filter
-        to_fetch = [c for c in candidates if not self.is_fresh(c["symbol"])]
+        # Validate that 'c' is a dictionary and has 'symbol'
+        validated_candidates = []
+        for c in candidates:
+            if isinstance(c, dict) and "symbol" in c:
+                validated_candidates.append(c)
+            else:
+                logger.warning(f"Skipping invalid candidate format: {c}")
+
+        to_fetch = [c for c in validated_candidates if not self.is_fresh(c["symbol"])]
 
         if not to_fetch:
             logger.info("All candidates are fresh. No ingestion needed.")
@@ -135,7 +143,21 @@ class IngestionService:
             return
 
         with open(file_path, "r") as f:
-            candidates = json.load(f)
+            data = json.load(f)
+
+        # Handle {meta, data} envelope or raw list
+        candidates = []
+        if isinstance(data, dict):
+            if "data" in data and isinstance(data["data"], list):
+                candidates = data["data"]
+            else:
+                logger.error(f"Invalid JSON envelope in {file_path}. Expected 'data' list.")
+                return
+        elif isinstance(data, list):
+            candidates = data
+        else:
+            logger.error(f"Unknown JSON format in {file_path}")
+            return
 
         self.ingest(candidates)
 
