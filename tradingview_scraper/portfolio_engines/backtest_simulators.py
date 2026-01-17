@@ -268,11 +268,15 @@ class CVXPortfolioSimulator(BaseSimulator):
         if initial_holdings is not None:
             h_init = initial_holdings.reindex(universe, fill_value=0.0).astype(np.float64)
             v_init = float(h_init.sum())
-            if v_init <= 1e-6:
-                # Portfolio is essentially bankrupt
+
+            # CR-FIX: Hard Bankruptcy Gate
+            # If wealth is below dust threshold (e.g. $0.01 on a $1.0 start),
+            # the portfolio is liquidated and stays in cash.
+            if v_init < 1e-2:
+                logger.warning(f"Portfolio Bankruptcy Detected (Wealth={v_init:.6f}). Liquidating to cash.")
                 h_init = pd.Series(0.0, index=universe, dtype=np.float64)
-                h_init[cash_key] = 1e-6
-                v_init = 1e-6
+                h_init[cash_key] = max(1e-6, v_init)  # Preserve tiny remainder in cash
+                v_init = float(h_init.sum())
         else:
             h_init = pd.Series(0.0, index=universe, dtype=np.float64)
             h_init[cash_key] = 1.0

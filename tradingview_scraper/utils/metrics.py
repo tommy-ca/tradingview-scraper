@@ -127,18 +127,6 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
             # Compounded total return over the period
             total_return = float(qs.stats.comp(rets))
 
-            # CR-FIX: Sharpe Ratio Penalty for Bankruptcy
-            # If the strategy wipes out, the Sharpe should reflect this failure.
-            raw_sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
-            if total_return <= -0.99:
-                # Force very negative sharpe if portfolio is dead
-                sharpe = min(-10.0, raw_sharpe)
-            else:
-                sharpe = raw_sharpe
-
-            mdd = float(qs.stats.max_drawdown(rets))
-            vol = float(qs.stats.volatility(rets, periods=ann_factor))
-
             # Annualization
             # Use geometric mean for robust CAGR
             if total_return > -1.0:
@@ -151,7 +139,18 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
             annualized_return = float(np.clip(annualized_return, -0.9999, 100.0))
 
             # realized_vol clip to prevent infinite Sharpe in reports
+            vol = float(qs.stats.volatility(rets, periods=ann_factor))
             realized_vol = float(np.clip(vol, 0.0, 10.0))
+
+            # CR-FIX: Sharpe Ratio Penalty for Bankruptcy
+            # If the strategy wipes out, the Sharpe should reflect this failure.
+            # We use the raw sharpe but capped if return is disastrous.
+            sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
+            if total_return <= -0.95:
+                # Force negative sharpe if portfolio is nearly dead
+                sharpe = min(-5.0, sharpe)
+
+            max_drawdown = float(qs.stats.max_drawdown(rets))
 
             return {
                 "total_return": total_return,
@@ -161,8 +160,8 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
                 "annualized_vol": realized_vol,
                 "vol": realized_vol,
                 "sharpe": sharpe,
-                "max_drawdown": mdd,
-                "mdd": mdd,
+                "max_drawdown": max_drawdown,
+                "mdd": max_drawdown,
                 "var_95": float(qs.stats.value_at_risk(rets_j, sigma=1, confidence=0.95)),
                 "cvar_95": float(qs.stats.expected_shortfall(rets_j, sigma=1, confidence=0.95)),
                 "sortino": float(qs.stats.sortino(rets, rf=0, periods=ann_factor)),
@@ -175,7 +174,9 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
         ann_factor = periods if periods is not None else _get_annualization_factor(rets)
         total_return = (1 + rets).prod() - 1
 
-        # CR-FIX: Handle bankruptcy gracefully in fallback
+        vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
+        vol_ann = float(np.clip(vol_daily * math.sqrt(ann_factor), 0.0, 10.0))
+
         if total_return <= -1.0:
             geom_mean = -1.0
             annualized_return = -1.0
@@ -183,10 +184,6 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
         else:
             geom_mean = float((1 + total_return) ** (1 / n_obs)) - 1
             annualized_return = float(np.clip((1 + geom_mean) ** ann_factor - 1, -0.9999, 100.0))
-
-            vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
-            vol_ann = vol_daily * math.sqrt(ann_factor)
-            vol_ann = float(np.clip(vol_ann, 0.0, 10.0))
             sharpe = (rets.mean() * ann_factor) / (vol_ann + 1e-9)
 
         max_drawdown = calculate_max_drawdown(rets)
@@ -194,9 +191,9 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
             "total_return": float(total_return),
             "annualized_return": float(annualized_return),
             "return": float(annualized_return),
-            "realized_vol": float(vol_ann) if total_return > -1.0 else 10.0,
-            "annualized_vol": float(vol_ann) if total_return > -1.0 else 10.0,
-            "vol": float(vol_ann) if total_return > -1.0 else 10.0,
+            "realized_vol": vol_ann,
+            "annualized_vol": vol_ann,
+            "vol": vol_ann,
             "sharpe": float(sharpe),
             "max_drawdown": float(max_drawdown),
             "mdd": float(max_drawdown),

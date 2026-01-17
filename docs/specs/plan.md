@@ -53,6 +53,7 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Fix**: Resolved `RuntimeWarning` in `metrics.py` for extreme negative returns (Bankruptcy handling).
 - [x] **Fix**: Corrected summary metric aggregation in `generate_reports.py` to use stitched returns instead of averaging annualized window metrics.
 - [x] **Fix**: Hardened `backtest_engine.py` and `backtest_simulators.py` to persist absolute wealth/holdings across windows, preventing wealth reset artifacts and exploding returns.
+- [x] **Fix**: Implemented "Hard Bankruptcy Gate" in simulators to liquidate portfolios hitting a 1% wealth floor, preventing "zombie" gains on dust.
 - [x] **Verification**: Validated `v6` sweep; confirmed realistic metrics (e.g. -31% CAGR for CVX vs previous 1853% anomaly) and simulator parity.
 - [x] **Config**: Hardened manifest to include all benchmarks and risk profiles.
 
