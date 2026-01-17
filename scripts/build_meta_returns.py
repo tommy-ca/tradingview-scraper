@@ -107,6 +107,24 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
             if returns_dir.exists():
                 # Prefer skfolio if multiple exist, but accept any
                 matching_files = list(returns_dir.glob(f"*_{prof}.pkl"))
+                if not matching_files:
+                    # CR-836: Fallback for missing risk profiles
+                    # If HRP is missing, try MinVariance (closest proxy)
+                    if prof == "hrp":
+                        matching_files = list(returns_dir.glob("*_min_variance.pkl"))
+                        if matching_files:
+                            logger.warning(f"  [{s_id}] HRP returns missing. Falling back to MinVariance proxy.")
+
+                    # If still missing, try any available profile to keep sleeve alive
+                    if not matching_files:
+                        # Priority: min_variance > max_sharpe > equal_weight
+                        for fallback_prof in ["min_variance", "max_sharpe", "equal_weight"]:
+                            fallback_files = list(returns_dir.glob(f"*_{fallback_prof}.pkl"))
+                            if fallback_files:
+                                matching_files = fallback_files
+                                logger.warning(f"  [{s_id}] {prof} returns missing. Falling back to {fallback_prof} proxy.")
+                                break
+
                 if matching_files:
                     # Sort to ensure deterministic selection (prefer shorter names or specific backends)
                     matching_files.sort(key=lambda x: ("skfolio" not in x.name, x.name))
