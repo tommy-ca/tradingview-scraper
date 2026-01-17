@@ -313,7 +313,7 @@ flow-dev: ## Rapid iteration development execution
 
 flow-meta-production: ## Run multi-sleeve meta-portfolio flow (Fractal Matrix)
 	@echo ">>> STAGE: META-PORTFOLIO (Fractal Matrix)"
-	$(PY) scripts/build_meta_returns.py --profile meta_production
+	$(PY) scripts/build_meta_returns.py --profile $(PROFILE)
 	$(PY) scripts/optimize_meta_portfolio.py
 	@for prof in barbell hrp min_variance equal_weight; do \
 		$(PY) scripts/flatten_meta_weights.py --profile $$prof; \

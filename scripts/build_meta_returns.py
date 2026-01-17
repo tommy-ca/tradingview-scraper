@@ -83,8 +83,19 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
         for sleeve in sleeves:
             s_id = sleeve["id"]
             s_profile = sleeve["profile"]
+            # CR-835: Respect explicit Run ID from manifest if provided
+            s_run_id = sleeve.get("run_id")
 
-            run_path = find_latest_run_for_profile(s_profile)
+            if s_run_id:
+                run_path = Path("artifacts/summaries/runs") / s_run_id
+                if not run_path.exists():
+                    # Fallback to checking if it's just a run_id string and the path needs construction
+                    # or if the user provided a full path? usually just the dir name.
+                    logger.warning(f"Explicit Run ID {s_run_id} not found in artifacts. Searching dynamically...")
+                    run_path = find_latest_run_for_profile(s_profile)
+            else:
+                run_path = find_latest_run_for_profile(s_profile)
+
             if not run_path:
                 logger.warning(f"Could not find a specific run for profile {s_profile}. Skipping.")
                 continue
