@@ -82,6 +82,13 @@ To balance throughput with fidelity, the platform employs a tiered simulation st
     - Usage: Final "Golden Run" before capital deployment.
     - Configured via `pre_production` or `benchmark` profiles.
 
+### 23.4 Numerical Stability & Wealth Persistence (v3.6.6)
+To resolve "Anomalous Returns" artifacts in multi-window backtests, the following mechanisms are enforced:
+1.  **Absolute Holding Persistence**: The backtest engine persists absolute wealth (dollars) across rebalance windows. This ensures the wealth process is continuous, eliminating reset artifacts.
+2.  **Hard Bankruptcy Gate**: Portfolios hitting a 1% wealth floor are automatically liquidated to cash. This prevents "zombie" gains on dust from inflating percentage returns.
+3.  **Stitched Summary Metrics**: Summary statistics (Sharpe, CAGR, Vol) are calculated from the **full-history stitched return series**. This eliminates the bias introduced by averaging annualized short-window metrics.
+4.  **Forensic Clipping**: Extreme daily returns (> 1000%) are clipped to prevent numerical divergence in reporting.
+
 ---
 
 ## 24. Synthetic Signal Engine (v3.6.5)

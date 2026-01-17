@@ -58,6 +58,11 @@ Includes standard certification for Rating-Based Strategy Benchmarks:
 - **Proxy Status**: Use of Proxies (MinVar for HRP) is permitted for pipeline resilience during development but marks the sleeve as **DEGRADED** in the final certification report.
 - **Validation Gate**: A sleeve is only considered **CERTIFIED** once all 8 profiles are generated natively without numerical errors.
 
+### 3.10 Stability & Wealth Continuity
+- **Wealth Persistence**: Simulations MUST persist absolute wealth (in $ or wealth units) across rebalance boundaries to maintain wealth-process continuity.
+- **Outlier Guard**: Daily returns MUST be clipped at reasonable thresholds (e.g., -99.9% to +500%) during reporting to prevent numerical artifacts from corrupting summary CAGR calculations.
+- **Bankruptcy Logic**: Portfolios dropping below a defined wealth floor (e.g., 1%) MUST be liquidated to cash to reflect total strategy failure.
+
 ### 2.12 Short Selling & Margin Standards
 | Requirement ID | Priority | Status | Description |
 |----------------|----------|--------|-------------|
