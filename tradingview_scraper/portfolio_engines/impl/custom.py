@@ -287,26 +287,48 @@ class CustomClusteredEngine(BaseRiskEngine):
         if n == 1:
             return pd.Series([1.0], index=X.columns)
 
+        # CR-FIX: HRP Robustness - Drop Zero Variance Columns
+        # Identify valid columns (non-zero variance)
+        valid_cols = [c for c in X.columns if X[c].std() > 1e-9]
+        dropped_cols = [c for c in X.columns if c not in valid_cols]
+
+        if dropped_cols:
+            logger.warning(f"Dropping {len(dropped_cols)} zero-variance clusters from optimization: {dropped_cols}")
+            X_clean = X[valid_cols]
+        else:
+            X_clean = X
+
+        n_clean = X_clean.shape[1]
+        if n_clean <= 0:
+            return pd.Series(0.0, index=X.columns)
+
+        if n_clean == 1:
+            w_clean = pd.Series([1.0], index=X_clean.columns)
+            return w_clean.reindex(X.columns, fill_value=0.0)
+
         # CR-590: Strict 25% Cluster Cap Enforcement
         cap_val = min(0.25, float(request.cluster_cap))
-        cap = _effective_cap(cap_val, n)
-        cov = _cov_shrunk(X, kappa_thresh=request.kappa_shrinkage_threshold, default_shrinkage=request.default_shrinkage_intensity)
+        cap = _effective_cap(cap_val, n_clean)
+
+        # Calculate covariance on clean data
+        cov = _cov_shrunk(X_clean, kappa_thresh=request.kappa_shrinkage_threshold, default_shrinkage=request.default_shrinkage_intensity)
 
         if request.profile == "hrp":
-            link = sch.linkage(squareform(np.sqrt(0.5 * (1 - X.corr().values.clip(-1, 1))), checks=False), method="ward")
+            link = sch.linkage(squareform(np.sqrt(0.5 * (1 - X_clean.corr().values.clip(-1, 1))), checks=False), method="ward")
             # Ensure sort_ix is a list of ints
             sort_ix = cast(List[int], sch.leaves_list(link).tolist())
             w_np = _get_recursive_bisection_weights(cov, sort_ix)
-            return _enforce_cap_series(pd.Series(w_np, index=X.columns), cap)
+            w_series = _enforce_cap_series(pd.Series(w_np, index=X_clean.columns), cap)
+            return w_series.reindex(X.columns, fill_value=0.0)
 
         l2 = {"EXPANSION": 0.05, "INFLATIONARY_TREND": 0.10, "STAGNATION": 0.10, "CRISIS": 0.20}.get(request.market_environment, 0.05)
         p_w = None
         if request.prev_weights is not None and not request.prev_weights.empty:
-            p_w = np.zeros(n)
+            p_w = np.zeros(n_clean)
             for sym_key, weight in request.prev_weights.items():
                 c_id = universe.symbol_to_cluster.get(str(sym_key))
-                if c_id and f"Cluster_{c_id}" in X.columns:
-                    p_w[X.columns.get_loc(f"Cluster_{c_id}")] += float(weight)
+                if c_id and f"Cluster_{c_id}" in X_clean.columns:
+                    p_w[X_clean.columns.get_loc(f"Cluster_{c_id}")] += float(weight)
             if p_w.sum() > 0:
                 p_w /= p_w.sum()
 
@@ -317,15 +339,26 @@ class CustomClusteredEngine(BaseRiskEngine):
         if is_neutral and request.benchmark_returns is not None:
             from tradingview_scraper.utils.synthesis import calculate_beta
 
-            betas = np.array([calculate_beta(X[col], request.benchmark_returns) for col in X.columns])
+            betas = np.array([calculate_beta(X_clean[col], request.benchmark_returns) for col in X_clean.columns])
 
-        mu = np.asarray(X.mean(), dtype=float).flatten() * 252
+        mu = np.asarray(X_clean.mean(), dtype=float).flatten() * 252
+
+        # Helper to align penalties with cleaned columns
+        def _get_clean_penalties(u, clean_cols):
+            # _cluster_penalties returns array aligned with u.cluster_benchmarks.columns
+            # We map back to indices
+            all_pens = _cluster_penalties(u)
+            # Map column name to index in original X
+            original_cols = u.cluster_benchmarks.columns
+            indices = [original_cols.get_loc(c) for c in clean_cols]
+            return all_pens[indices]
+
         w = _solve_cvxpy(
-            n=n,
+            n=n_clean,
             cap=cap,
             cov=cov,
             mu=mu,
-            penalties=_cluster_penalties(universe),
+            penalties=_get_clean_penalties(universe, X_clean.columns),
             profile=request.profile,
             risk_free_rate=float(request.risk_free_rate),
             prev_weights=p_w,
@@ -334,7 +367,10 @@ class CustomClusteredEngine(BaseRiskEngine):
             market_neutral=is_neutral,
             beta_tolerance=None,
         )
-        return _safe_series(w, X.columns)
+
+        # Re-index result to match original columns
+        w_series = _safe_series(w, X_clean.columns)
+        return w_series.reindex(X.columns, fill_value=0.0)
 
     def _barbell(self, *, universe, meta=None, stats=None, request):
         if stats is None or stats.empty:

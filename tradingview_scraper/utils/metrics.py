@@ -164,8 +164,15 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
         logger.debug(f"QuantStats failed: {e}")
         ann_factor = periods if periods is not None else _get_annualization_factor(rets)
         total_return = (1 + rets).prod() - 1
-        geom_mean = float((1 + total_return) ** (1 / n_obs)) - 1
-        annualized_return = float(np.clip((1 + geom_mean) ** ann_factor - 1, -0.9999, 100.0))
+
+        # CR-FIX: Handle bankruptcy (total_return <= -1.0) gracefully
+        if total_return <= -1.0:
+            geom_mean = -1.0
+            annualized_return = -1.0  # Or -0.9999
+        else:
+            geom_mean = float((1 + total_return) ** (1 / n_obs)) - 1
+            annualized_return = float(np.clip((1 + geom_mean) ** ann_factor - 1, -0.9999, 100.0))
+
         vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
         realized_vol = vol_daily * math.sqrt(ann_factor)
         sharpe = (rets.mean() * ann_factor) / (realized_vol + 1e-9)

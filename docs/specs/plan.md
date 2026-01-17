@@ -63,7 +63,12 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Fix**: Updated `manifest.json` to include `market`, `benchmark`, `risk_parity` and `barbell` for all rating profiles.
 - [x] **Fix**: Removed `nautilus` from `backtest_simulators` to speed up iteration.
 
-### Phase 218.7: Meta-Portfolio Strategy Tuning (SCHEDULED)
+### Phase 218.7: Atomic Correctness Rerun (IN PROGRESS)
+- [ ] **Task**: Rerun Step 11-14 for all 4 profiles to achieve 100% native returns.
+- [ ] **Profiles**: `prod_long_all_v3`, `prod_short_all_v3`, `prod_ma_long_v3`, `prod_ma_short_v3`.
+- [ ] **Verification**: Ensure no Proxy Fallbacks in `build_meta_returns.py` logs.
+
+### Phase 218.8: Meta-Portfolio Strategy Tuning (SCHEDULED)
 - [ ] **Objective**: Fix negative Meta-Sharpe ratios.
 - [ ] **Task**: Implement Regime-Aware Meta-Constraints (Zero-weight Shorts in Bull Market).
 - [ ] **Task**: Implement "Short Veto" based on macro regime.

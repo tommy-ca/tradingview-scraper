@@ -48,6 +48,16 @@ Includes standard certification for Rating-Based Strategy Benchmarks:
 - **Logic**: If a specific risk profile (e.g., `hrp`) is missing for an atomic sleeve, the engine MUST fallback to the nearest mathematical equivalent (e.g., `min_variance`) rather than dropping the sleeve entirely.
 - **Alerting**: Fallback events MUST be logged as warnings but MUST NOT halt the pipeline.
 
+### 3.8 Simulation Fidelity & Performance
+- **Default Simulator**: The platform defaults to fast vector-based simulators (`cvxportfolio`, `vectorbt`) for standard production runs to ensure throughput.
+- **High-Fidelity Simulation**: `Nautilus` (event-driven) is reserved for "Pre-Production" or "Golden Benchmark" profiles due to its high computational cost.
+- **Parity Check**: All vector-based results MUST be periodically audited against Nautilus on a subset of windows to ensure slippage/execution logic alignment (Target: Sharpe Drift < 5%).
+
+### 3.9 Atomic Correctness & Completeness (v3.6.6)
+- **Full Spectrum Requirement**: All production-grade sleeves MUST generate a full return set (8 standard profiles: `hrp`, `min_variance`, `max_sharpe`, `equal_weight`, `barbell`, `market`, `benchmark`, `risk_parity`) to be eligible for Meta-Portfolio inclusion.
+- **Proxy Status**: Use of Proxies (MinVar for HRP) is permitted for pipeline resilience during development but marks the sleeve as **DEGRADED** in the final certification report.
+- **Validation Gate**: A sleeve is only considered **CERTIFIED** once all 8 profiles are generated natively without numerical errors.
+
 ### 2.12 Short Selling & Margin Standards
 | Requirement ID | Priority | Status | Description |
 |----------------|----------|--------|-------------|
