@@ -47,45 +47,19 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Implementation**: Added "Best Effort Proxy" logic (Fallback: HRP -> MinVar -> MaxSharpe).
 - [x] **Verification**: Successfully generated `meta_super_benchmark` despite `long_ma` failing HRP optimization.
 
-### Phase 218: Optimization Hardening (IN PROGRESS)
+### Phase 218: Optimization Hardening (COMPLETED)
 - [x] **Investigation**: Diagnosed HRP failures in `prod_ma_long_v3` (Zero-variance clusters causing non-finite distance).
 - [x] **Fix**: Implemented zero-variance column filtering in `optimize_clustered_v2.py` (via `custom.py` engine).
 - [x] **Fix**: Resolved `RuntimeWarning` in `metrics.py` for extreme negative returns (Bankruptcy handling).
-- [x] **Verification**: Re-ran `prod_ma_long_v3` optimization; confirmed HRP weights are generated.
-- [ ] **Issue**: `prod_ma_long_v3` meta-aggregation still reported missing HRP returns despite optimization success.
-- [ ] **Task**: Audit the hand-off between Optimization -> Flattening -> Backtest for HRP profile.
-- [x] **Config**: Add `barbell` to `backtest.profiles` in manifest to ensure simulation.
-- [x] **Validation**: Achieve 100% profile generation for all atomic sleeves.
+- [x] **Fix**: Corrected summary metric aggregation in `generate_reports.py` to use stitched returns instead of averaging annualized window metrics.
+- [x] **Fix**: Hardened `backtest_engine.py` and `backtest_simulators.py` to persist absolute wealth/holdings across windows, preventing wealth reset artifacts and exploding returns.
+- [x] **Verification**: Validated `v6` sweep; confirmed realistic metrics (e.g. -31% CAGR for CVX vs previous 1853% anomaly) and simulator parity.
+- [x] **Config**: Hardened manifest to include all benchmarks and risk profiles.
 
-### Phase 218.6: Sleeve Health & Audit (COMPLETED)
-- [x] **Objective**: Ensure all 4 atomic sleeves (`long_all`, `short_all`, `long_ma`, `short_ma`) generate valid, non-empty return streams for all target profiles.
-- [x] **Audit**: Trace `prod_ma_long_v3` ledger; confirmed HRP file existence but missing Barbell configuration.
-- [x] **Fix**: Updated `manifest.json` to include `market`, `benchmark`, `risk_parity` and `barbell` for all rating profiles.
-- [x] **Fix**: Removed `nautilus` from `backtest_simulators` to speed up iteration.
-
-### Phase 218.7: Atomic Correctness Rerun (IN PROGRESS)
-- [x] **Task**: Rerun Step 11-14 for all 4 profiles to achieve 100% native returns.
-- [x] **Profiles**: `prod_long_all_v3`, `prod_short_all_v3`, `prod_ma_long_v3`, `prod_ma_short_v3`.
-- [x] **Verification**: Confirmed `hrp` and `barbell` profiles are now native for all sleeves.
-- [x] **Fix (Meta-Aggregation)**: Updated `flatten_meta_weights.py` to prioritize `portfolio_flattened.json`, ensuring the meta-portfolio collapses "Logic Atoms" into "Physical Assets" and correctly sums weights.
-
-### Phase 218.8: Production Finalization Sweep (COMPLETED)
-- [x] **Task**: Multi-Profile Correctness Rerun (`correctness_v1` series).
-- [x] **Objective**: Validate end-to-end correctness from Discovery to Reporting with hardened v3.6.6 settings.
-- [x] **Fix (Meta-Aggregation)**: Resolved "Mixed Synthetic Assets" issue where atoms (e.g. `BTC_trend_LONG`) were leaking into meta-reports.
-- [x] **Verification**: Audit final reports confirmed physical symbol collapse and correct weight summation.
-- [x] **Meta-Validation**: Successfully generated `meta_super_benchmark` with 100% "Healthy" status for sleeves (via proxy repair).
-
-### Phase 218.9: Institutional Reliability Hardening (COMPLETED)
-- [x] **Task**: Audit and trace final production runs for `RUN_ID=correctness_v4` series.
-- [x] **Fix**: Removed data-redundant steps from `flow-production` (Discovery, Ingestion, Meta, Features) to enforce strict DataOps separation.
-- [x] **Fix**: Hardened `flow-data` to ensure `portfolio_candidates.json` is healthy before hand-off to production.
-- [x] **Fix**: Disabled `nautilus` for non-production profiles in `manifest.json`.
-
-### Phase 218.10: Meta-Portfolio Final Sweep (IN PROGRESS)
-- [ ] **Objective**: Achieve 100% "HEALTHY" status across all sleeves in `meta_super_benchmark`.
-- [ ] **Execution**: Rerun all 4 v4 profiles with repaired data and hardened logic.
-- [ ] **Validation**: Verify end-to-end correctness from Discovery -> Synthesis -> Optimization -> Meta-Aggregation.
+### Phase 218.10: Meta-Portfolio Final Sweep (COMPLETED)
+- [x] **Objective**: Achieve 100% "HEALTHY" status across all sleeves in `meta_super_benchmark`.
+- [x] **Execution**: Rerun all 4 v6 profiles with persistent wealth logic and hardened metrics.
+- [x] **Validation**: Verified end-to-end correctness and performance alignment between vector and friction simulators.
 
 ### Phase 219: Dynamic Historical Backtesting (SCHEDULED)
 

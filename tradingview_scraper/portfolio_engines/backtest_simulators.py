@@ -253,33 +253,42 @@ class CVXPortfolioSimulator(BaseSimulator):
 
         if isinstance(w_target_raw, pd.DataFrame):
             w_target_raw = w_target_raw.iloc[:, 0]
-        w_target = cast(pd.Series, w_target_raw).reindex(universe, fill_value=0.0)
 
-        # Cash calculation: max(0.0, 1.0 - absolute sum of risk assets)
-        # Note: In a Long/Short portfolio, leverage or margin might apply,
-        # but here we assume a dollar-neutral or cash-constrained allocation.
-        non_cash_abs_sum = float(w_target.drop(index=[cash_key]).abs().sum())
-        w_target[cash_key] = max(0.0, 1.0 - non_cash_abs_sum)
-        w_target = w_target.fillna(0.0)
+        # Target weights (normalized to 1.0)
+        w_target_norm = cast(pd.Series, w_target_raw).reindex(universe, fill_value=0.0)
+        w_sum = w_target_norm.abs().sum()
+        if w_sum > 1.0:
+            w_target_norm = w_target_norm / w_sum
+            w_sum = 1.0
+        w_target_norm[cash_key] = max(0.0, 1.0 - w_sum)
 
         rebalance_mode = settings.features.feat_rebalance_mode
 
-        h_init = pd.Series(0.0, index=universe, dtype=np.float64)
+        # Determine initial wealth and holdings
         if initial_holdings is not None:
             h_init = initial_holdings.reindex(universe, fill_value=0.0).astype(np.float64)
-            h_sum = float(h_init.abs().sum())
-            if h_sum > 0:
-                h_init = h_init / h_sum
-            else:
-                h_init[cash_key] = 1.0
+            v_init = float(h_init.sum())
+            if v_init <= 1e-6:
+                # Portfolio is essentially bankrupt
+                h_init = pd.Series(0.0, index=universe, dtype=np.float64)
+                h_init[cash_key] = 1e-6
+                v_init = 1e-6
         else:
+            h_init = pd.Series(0.0, index=universe, dtype=np.float64)
             h_init[cash_key] = 1.0
+            v_init = 1.0
+
+        # w_target in dollars = normalized_target_weights * current_wealth
+        h_target = w_target_norm * v_init
 
         if rebalance_mode == "daily":
-            policy = self.cvp.FixedWeights(w_target)
+            # For daily rebalance, CVXPortfolio takes care of scaling weights to wealth internally
+            # if we use FixedWeights.
+            policy = self.cvp.FixedWeights(w_target_norm)
         else:
+            # Rebalance once at start of period
             trades = pd.DataFrame(0.0, index=returns.index, columns=pd.Index(universe))
-            trades.iloc[0] = w_target - h_init
+            trades.iloc[0] = h_target - h_init
             policy = self.cvp.FixedTrades(trades)
 
         cost_list: List[Any] = [self.cvp.TransactionCost(a=settings.backtest_slippage + settings.backtest_commission)]
@@ -287,25 +296,43 @@ class CVXPortfolioSimulator(BaseSimulator):
             cost_list.append(self.cvp.HoldingCost(short_fees=settings.features.short_borrow_cost))
 
         try:
-            returns_cvx = returns.astype(np.float64).clip(-0.5, 2.0).fillna(0.0)
-
-            # Explicitly add cash if not present to avoid CVXPortfolio auto-injection warnings and alignment issues
+            # Clip extreme returns to prevent numerical instability
+            returns_cvx = returns.astype(np.float64).clip(-0.9, 10.0).fillna(0.0)
             if cash_key not in returns_cvx.columns:
                 returns_cvx[cash_key] = 0.0
 
             simulator = self.cvp.MarketSimulator(returns=returns_cvx, costs=cost_list, cash_key=cash_key, min_history=pd.Timedelta(days=0))
 
-            # Ensure holdings and universe are perfectly aligned for the simulator
-            h_init_cvx = h_init.reindex(returns_cvx.columns, fill_value=0.0)
+            # Execute backtest
+            result = simulator.backtest(policy, start_time=start_t, end_time=end_t, h=h_init)
 
-            result = simulator.backtest(policy, start_time=start_t, end_time=end_t, h=h_init_cvx)
+            # Extract returns from wealth process
+            # result.returns are the realized fractional returns of the portfolio
+            if hasattr(result, "returns") and not result.returns.empty:
+                realized_returns = result.returns.copy()
+            else:
+                realized_returns = result.v.pct_change().dropna()
 
-            realized_returns = result.v.pct_change().dropna()
             realized_returns.index = returns.index[: len(realized_returns)]
 
+            # Forensic Clipping of realized returns
+            realized_returns = realized_returns.clip(-0.9999, 10.0)
+
             res = calculate_performance_metrics(realized_returns)
-            res.update({"daily_returns": realized_returns, "final_weights": result.w.iloc[-1], "turnover": float(result.turnover.sum())})
+
+            # We must return absolute holdings to maintain state across windows
+            res.update(
+                {
+                    "daily_returns": realized_returns,
+                    "final_holdings": result.h.iloc[-1],  # Persist absolute $
+                    "final_weights": result.w.iloc[-1],
+                    "turnover": float(result.turnover.sum()),
+                }
+            )
             return res
+        except Exception as e:
+            logger.error(f"cvxportfolio failed: {e}")
+            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
         except Exception as e:
             logger.error(f"cvxportfolio failed: {e}")
             return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)

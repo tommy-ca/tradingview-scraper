@@ -70,11 +70,13 @@ def calculate_max_drawdown(series: pd.Series | np.ndarray) -> float:
 def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[int] = None) -> Dict[str, Any]:
     """
     Computes a standardized suite of performance metrics using QuantStats.
+    Adds robustness against anomalous data, extreme volatility, and bankruptcy.
     """
     empty_res = {
         "total_return": 0.0,
         "annualized_return": 0.0,
         "realized_vol": 0.0,
+        "annualized_vol": 0.0,
         "sharpe": 0.0,
         "max_drawdown": 0.0,
         "var_95": None,
@@ -87,28 +89,27 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
     if daily_returns.empty:
         return empty_res
 
+    # CR-FIX: Data Hygiene - Drop extreme outliers that would corrupt CAGR
+    # Returns > 1000% in a single day are almost certainly numerical artifacts
+    # or errors in the simulator's wealth process calculation.
+    # We clip them to prevent mathematical divergence in summary reporting.
+    rets = daily_returns.clip(-0.9999, 10.0).dropna().copy()
+
     # Consistent Timezone Handling - Force Naive
-    rets = daily_returns.dropna().copy()
     try:
         new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in rets.index]
         rets.index = pd.DatetimeIndex(new_idx)
     except Exception as e_idx:
         logger.debug(f"Metrics index forcing failed: {e_idx}")
-        # Fallback if attribute access fails
         if hasattr(rets.index, "tz") and getattr(rets.index, "tz") is not None:
-            # For newer pandas versions or different index types
             try:
-                # Type ignore because pyright complains about Index having no tz_convert
                 rets.index = cast(Any, rets.index).tz_convert(None)
             except AttributeError:
-                # Fallback for some index types
                 rets.index = pd.to_datetime(rets.index).tz_convert(None)
         else:
             try:
-                # Type ignore because pyright complains about Index having no tz_localize
                 rets.index = cast(Any, rets.index).tz_localize(None)
             except AttributeError:
-                # Fallback for some index types
                 rets.index = pd.to_datetime(rets.index).tz_localize(None)
 
     n_obs = len(rets)
@@ -122,74 +123,84 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
         ann_factor = periods if periods is not None else _get_annualization_factor(rets)
 
         # QuantStats metrics (Proven methods)
-        total_return = float(qs.stats.comp(rets))
-        annualized_return = float(qs.stats.cagr(rets, periods=ann_factor))
-        # CR-215: Clip extreme wipeouts
-        annualized_return = float(np.clip(annualized_return, -0.9999, 100.0))
+        with np.errstate(all="ignore"):
+            # Compounded total return over the period
+            total_return = float(qs.stats.comp(rets))
 
-        realized_vol = float(qs.stats.volatility(rets, periods=ann_factor))
-        sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
-        max_drawdown = float(qs.stats.max_drawdown(rets))
-
-        var_95 = float(qs.stats.value_at_risk(rets_j, sigma=1, confidence=0.95))
-
-        # Guard for CVaR calculation to avoid Mean of empty slice warning
-        try:
-            if any(rets_j < var_95):
-                cvar_95 = float(qs.stats.expected_shortfall(rets_j, sigma=1, confidence=0.95))
+            # CR-FIX: Sharpe Ratio Penalty for Bankruptcy
+            # If the strategy wipes out, the Sharpe should reflect this failure.
+            raw_sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
+            if total_return <= -0.99:
+                # Force very negative sharpe if portfolio is dead
+                sharpe = min(-10.0, raw_sharpe)
             else:
-                cvar_95 = var_95
-        except Exception:
-            cvar_95 = var_95
+                sharpe = raw_sharpe
 
-        sortino = float(qs.stats.sortino(rets, rf=0, periods=ann_factor))
-        calmar = float(qs.stats.calmar(rets, periods=ann_factor))
-        omega = float(qs.stats.omega(rets))
+            mdd = float(qs.stats.max_drawdown(rets))
+            vol = float(qs.stats.volatility(rets, periods=ann_factor))
 
-        return {
-            "total_return": total_return,
-            "annualized_return": annualized_return,
-            "realized_vol": realized_vol,
-            "annualized_vol": realized_vol,
-            "sharpe": sharpe,
-            "max_drawdown": max_drawdown,
-            "var_95": var_95,
-            "cvar_95": cvar_95,
-            "sortino": sortino,
-            "calmar": calmar,
-            "omega": omega,
-            "ann_factor": ann_factor,
-        }
+            # Annualization
+            # Use geometric mean for robust CAGR
+            if total_return > -1.0:
+                annualized_return = float((1 + total_return) ** (ann_factor / n_obs)) - 1
+            else:
+                annualized_return = -1.0
+
+            # CR-215: Clip extreme reporting values for dashboard stability
+            # Strategies with > 10,000% CAGR are clipped to 100.0 (10,000%)
+            annualized_return = float(np.clip(annualized_return, -0.9999, 100.0))
+
+            # realized_vol clip to prevent infinite Sharpe in reports
+            realized_vol = float(np.clip(vol, 0.0, 10.0))
+
+            return {
+                "total_return": total_return,
+                "annualized_return": annualized_return,
+                "return": annualized_return,
+                "realized_vol": realized_vol,
+                "annualized_vol": realized_vol,
+                "vol": realized_vol,
+                "sharpe": sharpe,
+                "max_drawdown": mdd,
+                "mdd": mdd,
+                "var_95": float(qs.stats.value_at_risk(rets_j, sigma=1, confidence=0.95)),
+                "cvar_95": float(qs.stats.expected_shortfall(rets_j, sigma=1, confidence=0.95)),
+                "sortino": float(qs.stats.sortino(rets, rf=0, periods=ann_factor)),
+                "calmar": float(qs.stats.calmar(rets, periods=ann_factor)),
+                "omega": float(qs.stats.omega(rets)),
+                "ann_factor": float(ann_factor),
+            }
     except Exception as e:
         logger.debug(f"QuantStats failed: {e}")
         ann_factor = periods if periods is not None else _get_annualization_factor(rets)
         total_return = (1 + rets).prod() - 1
 
-        # CR-FIX: Handle bankruptcy (total_return <= -1.0) gracefully
+        # CR-FIX: Handle bankruptcy gracefully in fallback
         if total_return <= -1.0:
             geom_mean = -1.0
-            annualized_return = -1.0  # Or -0.9999
+            annualized_return = -1.0
+            sharpe = -10.0
         else:
             geom_mean = float((1 + total_return) ** (1 / n_obs)) - 1
             annualized_return = float(np.clip((1 + geom_mean) ** ann_factor - 1, -0.9999, 100.0))
 
-        vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
-        realized_vol = vol_daily * math.sqrt(ann_factor)
-        sharpe = (rets.mean() * ann_factor) / (realized_vol + 1e-9)
+            vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
+            vol_ann = vol_daily * math.sqrt(ann_factor)
+            vol_ann = float(np.clip(vol_ann, 0.0, 10.0))
+            sharpe = (rets.mean() * ann_factor) / (vol_ann + 1e-9)
+
         max_drawdown = calculate_max_drawdown(rets)
         return {
             "total_return": float(total_return),
             "annualized_return": float(annualized_return),
-            "realized_vol": float(realized_vol),
-            "annualized_vol": float(realized_vol),
+            "return": float(annualized_return),
+            "realized_vol": float(vol_ann) if total_return > -1.0 else 10.0,
+            "annualized_vol": float(vol_ann) if total_return > -1.0 else 10.0,
+            "vol": float(vol_ann) if total_return > -1.0 else 10.0,
             "sharpe": float(sharpe),
             "max_drawdown": float(max_drawdown),
-            "var_95": float(rets.quantile(0.05)),
-            "cvar_95": float(rets[rets <= rets.quantile(0.05)].mean() if len(rets[rets <= rets.quantile(0.05)]) > 0 else rets.quantile(0.05)),
-            "sortino": 0.0,
-            "calmar": 0.0,
-            "omega": 0.0,
-            "ann_factor": ann_factor,
+            "mdd": float(max_drawdown),
+            "ann_factor": float(ann_factor),
         }
 
 

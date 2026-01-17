@@ -418,15 +418,22 @@ class BacktestEngine:
                                 # For 'custom' or 'research' mode, we might be able to inject it.
 
                                 state_key = f"{target_engine}_{sim_name}_{profile}"
-                                last_weights = current_holdings.get(state_key)
+                                last_state = current_holdings.get(state_key)
 
-                                sim_results = simulator.simulate(weights_df=flat_weights, returns=test_rets, initial_holdings=last_weights)
+                                sim_results = simulator.simulate(weights_df=flat_weights, returns=test_rets, initial_holdings=last_state)
 
                                 # Update state for next window
-                                if hasattr(sim_results, "final_weights"):
-                                    current_holdings[state_key] = sim_results.final_weights
-                                elif isinstance(sim_results, dict) and "final_weights" in sim_results:
-                                    current_holdings[state_key] = sim_results["final_weights"]
+                                # CR-FIX: Prefer final_holdings (absolute $) over final_weights (normalized)
+                                # to preserve the wealth process across rebalance windows.
+                                if isinstance(sim_results, dict):
+                                    if "final_holdings" in sim_results:
+                                        current_holdings[state_key] = sim_results["final_holdings"]
+                                    elif "final_weights" in sim_results:
+                                        current_holdings[state_key] = sim_results["final_weights"]
+                                elif hasattr(sim_results, "final_holdings"):
+                                    current_holdings[state_key] = getattr(sim_results, "final_holdings")
+                                elif hasattr(sim_results, "final_weights"):
+                                    current_holdings[state_key] = getattr(sim_results, "final_weights")
 
                                 # Post-Simulation Audit for Risk Isolation (Correction)
                                 # If this was a custom simulation that returned daily returns, we can check for toxic impacts.

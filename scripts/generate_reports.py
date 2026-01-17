@@ -146,7 +146,8 @@ class ReportGenerator:
                         summary = {}
 
                         # CR-Fix: Calculate summary from Stitched Returns (Global) instead of averaging windows
-                        pkl_name = f"{sim}_{eng}_{prof}.pkl"
+                        # Standard name format from backtest_engine.py is {engine}_{simulator}_{profile}.pkl
+                        pkl_name = f"{eng}_{sim}_{prof}.pkl"
                         pkl_path = self.returns_dir / pkl_name
 
                         full_series = None
@@ -173,10 +174,17 @@ class ReportGenerator:
                             summary["mdd"] = m["max_drawdown"]
 
                             # Average non-return metrics from windows (e.g. turnover)
-                            turnovers = [w.get("metrics", {}).get("turnover") for w in windows]
+                            # 'w' is already flattened in the loop above
+                            turnovers = [w.get("turnover") for w in windows]
                             turnovers = [t for t in turnovers if t is not None]
                             if turnovers:
                                 summary["avg_turnover"] = sum(turnovers) / len(turnovers)
+
+                            # Average win rate
+                            win_rates = [w.get("win_rate") for w in windows]
+                            win_rates = [wr for wr in win_rates if wr is not None]
+                            if win_rates:
+                                summary["win_rate"] = sum(win_rates) / len(win_rates)
                         else:
                             # Fallback to Window Averaging (Legacy)
                             metric_keys = set()
@@ -190,6 +198,8 @@ class ReportGenerator:
                                     summary[f"avg_window_{k}"] = avg_val
                                     summary[k] = avg_val
                                     # Provide aliases for summary keys as well
+                                    if k == "turnover":
+                                        summary["avg_turnover"] = avg_val
                                     if k == "annualized_vol":
                                         summary["vol"] = avg_val
                                     if k == "annualized_return":
