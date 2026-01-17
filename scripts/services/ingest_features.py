@@ -26,33 +26,95 @@ class FeatureIngestionService:
     def fetch_technicals_single(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Fetch technicals for a single symbol."""
         try:
-            # We fetch ALL fields to get the technicals defined in Overview.TECHNICAL_FIELDS
-            # Overview class automatically requests them if fields=None or we can specify
-            fields = Overview.TECHNICAL_FIELDS + Overview.VOLATILITY_FIELDS + Overview.PERFORMANCE_FIELDS
-            res = self.overview.get_symbol_overview(symbol, fields=fields)
+            # Multi-Timeframe Configuration
+            timeframes = {
+                "1m": "1",
+                "3m": "3",
+                "5m": "5",
+                "15m": "15",
+                "30m": "30",
+                "1h": "60",
+                "2h": "120",
+                "4h": "240",
+                "1d": "",
+                "1W": "1W",
+                "1M": "1M",
+            }
+            # Key technicals to expand across timeframes
+            mtf_fields = [
+                "Recommend.All",
+                "Recommend.MA",
+                "Recommend.Other",
+                "RSI",
+                "ADX",
+                "AO",
+                "CCI20",
+                "Stoch.K",
+                "Stoch.D",
+                "MACD.macd",
+                "MACD.signal",
+                # Price Performance & Volume
+                "change",  # Percent change
+                "change_abs",  # Absolute change
+                "close",  # Close price
+                "volume",  # Volume
+                "gap",  # Gap percent
+                "high",  # High price
+                "low",  # Low price
+                "open",  # Open price
+            ]
+
+            request_fields = []
+
+            # 1. Add Base Fields (Volatility, Performance - keep default 1d)
+            request_fields.extend(Overview.VOLATILITY_FIELDS)
+            request_fields.extend(Overview.PERFORMANCE_FIELDS)
+
+            # 2. Add MTF Fields
+            for field in mtf_fields:
+                for _, suffix in timeframes.items():
+                    if suffix:
+                        request_fields.append(f"{field}|{suffix}")
+                    else:
+                        request_fields.append(field)
+
+            # Deduplicate
+            request_fields = sorted(list(set(request_fields)))
+
+            res = self.overview.get_symbol_overview(symbol, fields=request_fields)
 
             if res["status"] == "success" and res.get("data"):
                 data = res["data"]
 
-                # Map to schema keys (lowercase)
-                return {
+                # Base Record
+                record = {
                     "symbol": symbol,
-                    "recommend_all": data.get("Recommend.All"),
-                    "recommend_ma": data.get("Recommend.MA"),
-                    "recommend_other": data.get("Recommend.Other"),
-                    "rsi": data.get("RSI"),
-                    "adx": data.get("ADX"),
-                    "ao": data.get("AO"),
-                    "cci20": data.get("CCI20"),
-                    "stoch_k": data.get("Stoch.K"),
-                    "stoch_d": data.get("Stoch.D"),
-                    "macd_macd": data.get("MACD.macd"),
-                    "macd_signal": data.get("MACD.signal"),
                     "volatility_d": data.get("Volatility.D"),
                     "perf_w": data.get("Perf.W"),
                     "perf_1m": data.get("Perf.1M"),
-                    # Add timestamp here or in batch
+                    "perf_3m": data.get("Perf.3M"),
+                    "perf_6m": data.get("Perf.6M"),
+                    "perf_y": data.get("Perf.Y"),
+                    "perf_3y": data.get("Perf.3Y"),
+                    "perf_5y": data.get("Perf.5Y"),
+                    "perf_all": data.get("Perf.All"),
+                    "perf_ytd": data.get("Perf.YTD"),
                 }
+
+                # Map MTF Fields to flattened schema
+                # Schema: {feature}_{interval} (e.g. rsi_1h, recommend_all_1m)
+                for field in mtf_fields:
+                    clean_name = field.lower().replace(".", "_")
+                    for tf_name, suffix in timeframes.items():
+                        lookup_key = f"{field}|{suffix}" if suffix else field
+                        val = data.get(lookup_key)
+
+                        # Store with interval suffix
+                        # e.g. recommend_all_1d, recommend_all_1h
+                        col_name = f"{clean_name}_{tf_name}"
+                        record[col_name] = val
+
+                return record
         except Exception as e:
             logger.warning(f"Failed to fetch technicals for {symbol}: {e}")
         return None

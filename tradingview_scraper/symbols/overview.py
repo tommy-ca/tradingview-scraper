@@ -107,6 +107,9 @@ class Overview:
         "Perf.3M",
         "Perf.6M",
         "Perf.Y",
+        "Perf.3Y",
+        "Perf.5Y",
+        "Perf.All",
         "Perf.YTD",
     ]
 
