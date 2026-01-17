@@ -51,6 +51,23 @@ class SelectionPolicyStage(BasePipelineStage):
         # 3. Recruitment Loop
         recruitment_buffer: Set[str] = set()
 
+        # CR-835: Pluggable Ranking (v3.6.4)
+        # Delegate sorting logic to the configured Ranker
+        from tradingview_scraper.pipelines.selection.rankers.factory import RankerFactory
+
+        ranker_method = settings.ranking.method
+        ranker_config = {}
+        # Special case: If method is "signal" but not configured, check dominant signal?
+        # But 'ranking' in settings is just (method, direction).
+        # We can map 'dominant_signal' to a SignalRanker if method is 'mps' but dominant_signal is set?
+        # NO, stick to the plan: MPS is default. Signal Dominance is handled inside MPS scoring.
+        # But user requested "default to original mps alpha score ranking, for ratings ma, use ratings ma as primary drive".
+        # This is already handled by the MPS weight override in inference.py.
+        # So we just need to use the Ranker interface to wrap the sort.
+
+        ranker = RankerFactory.get_ranker(ranker_method, ranker_config)
+        is_ascending = settings.ranking.direction == "ascending"
+
         def _get_score(s_id: str) -> float:
             val = scores.get(s_id)
             return float(val) if val is not None else -1.0
@@ -63,7 +80,8 @@ class SelectionPolicyStage(BasePipelineStage):
                 # STAGE 3: Force Representative if Cluster Empty
                 if relaxation_stage >= 3 and symbols:
                     sym_list = [str(s) for s in symbols]
-                    all_ranked = sorted(sym_list, key=_get_score, reverse=True)
+                    # Use Ranker
+                    all_ranked = ranker.rank(sym_list, context, ascending=is_ascending)
                     for s in all_ranked:
                         # Defensive float conversion for entropy
                         ent = 1.0
@@ -83,7 +101,28 @@ class SelectionPolicyStage(BasePipelineStage):
             id_to_best: Dict[str, str] = {}
             for s in non_vetoed:
                 ident = str(candidate_map.get(s, {}).get("identity", s))
-                if ident not in id_to_best or scores.get(s, -1.0) > scores.get(id_to_best[ident], -1.0):
+
+                # Robust score retrieval
+                c_val = scores.get(s)
+                current_score = float(c_val) if c_val is not None else -1.0
+
+                update = False
+                if ident not in id_to_best:
+                    update = True
+                else:
+                    b_val = scores.get(id_to_best[ident])
+                    best_score = float(b_val) if b_val is not None else -1.0
+
+                    if is_ascending:
+                        # Better = Lower
+                        if current_score < best_score:
+                            update = True
+                    else:
+                        # Better = Higher (Default)
+                        if current_score > best_score:
+                            update = True
+
+                if update:
                     id_to_best[ident] = s
             uniques = list(id_to_best.values())
 
@@ -105,13 +144,18 @@ class SelectionPolicyStage(BasePipelineStage):
                     shorts.append(s)
 
             if longs:
-                ranked_longs = sorted(longs, key=_get_score, reverse=True)
+                # Use Ranker
+                # Note: Longs are usually Descending (High Score).
+                # If global direction is Ascending (for Short profile), we might have a conflict if we mix directions.
+                # However, the profile is usually Long-Only or Short-Only.
+                # If mixed, we assume the Ranker logic applies to the primary objective.
+                ranked_longs = ranker.rank(longs, context, ascending=is_ascending)
                 recruitment_buffer.update(ranked_longs[:top_n])
 
             # CR-822: Directional Integrity
             # Only recruit SHORTS if specifically enabled in settings
             if shorts and settings.features.feat_short_direction:
-                ranked_shorts = sorted(shorts, key=_get_score, reverse=True)
+                ranked_shorts = ranker.rank(shorts, context, ascending=is_ascending)
                 recruitment_buffer.update(ranked_shorts[:top_n])
 
         # STAGE 4: Balanced Fallback
@@ -136,21 +180,21 @@ class SelectionPolicyStage(BasePipelineStage):
                 return True
 
             valid_pool = [str(s) for s in scores.index if str(s) in eligible_pool and str(s) not in recruitment_buffer and str(s) not in disqualified and _is_allowed(str(s))]
-            global_ranked = sorted(valid_pool, key=_get_score, reverse=True)
+            global_ranked = ranker.rank(valid_pool, context, ascending=is_ascending)
             recruitment_buffer.update(global_ranked[:needed])
 
             # CR-826: Absolute Scarcity Fallback (Ignore Vetoes if still under floor)
             if len(recruitment_buffer) < target_floor:
                 needed_now = target_floor - len(recruitment_buffer)
                 desperation_pool = [str(s) for s in scores.index if str(s) in eligible_pool and str(s) not in recruitment_buffer and _is_allowed(str(s))]
-                desperation_ranked = sorted(desperation_pool, key=_get_score, reverse=True)
+                desperation_ranked = ranker.rank(desperation_pool, context, ascending=is_ascending)
                 recruitment_buffer.update(desperation_ranked[:needed_now])
 
         # 4. Finalize Winners & Apply Pool Sizing (Pillar 1)
         winners = []
 
         # Sort buffer by absolute conviction
-        sorted_buffer = sorted(list(recruitment_buffer), key=_get_score, reverse=True)
+        sorted_buffer = ranker.rank(list(recruitment_buffer), context, ascending=is_ascending)
 
         # Institutional Cap: Max 25 assets to maintain high weight fidelity
         # Delegation: Directional balance and other risk constraints are handled in Pillar 3
@@ -159,7 +203,10 @@ class SelectionPolicyStage(BasePipelineStage):
 
         for s in final_selected:
             meta = candidate_map.get(s, {"symbol": s}).copy()
-            meta["alpha_score"] = float(scores.get(s, 0.0))
+
+            # Robust score retrieval
+            score_val = scores.get(s)
+            meta["alpha_score"] = float(score_val) if score_val is not None else 0.0
 
             # CR-831: Preserve Canonical Identity
             # symbol=Atom ID, physical_symbol=Exchange:Ticker

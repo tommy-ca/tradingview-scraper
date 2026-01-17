@@ -30,6 +30,29 @@ class SelectionPipeline:
 
         # Use production weights from global settings (v3 parity)
         weights = self.settings.features.weights_global.copy()
+
+        # Apply Profile-Specific Weight Overrides (Custom MPS Plan 2026-01-16)
+        if self.settings.features.mps_weights_override:
+            overrides = self.settings.features.mps_weights_override
+            logger.info(f"Applying MPS Weight Overrides: {overrides}")
+            weights.update(overrides)
+
+        # Apply Signal Dominance Override (v4.1)
+        # Allows profiles to declare a "primary" signal that overrides the default ensemble
+        dom_signal = self.settings.features.dominant_signal
+        dom_weight = self.settings.features.dominant_signal_weight
+
+        if dom_signal and dom_signal in weights:
+            logger.info(f"Applying Signal Dominance: {dom_signal} = {dom_weight}")
+            # Boost the dominant signal
+            weights[dom_signal] = dom_weight
+
+            # Dampen Momentum if it's not the dominant signal
+            # This prevents momentum drift from overshadowing the target signal
+            if dom_signal != "momentum" and "momentum" in weights:
+                logger.info("Dampening Momentum weight due to signal dominance.")
+                weights["momentum"] = 0.5  # Reduced from ~1.75
+
         # Ensure adx is present (v3 implicit default)
         if "adx" not in weights:
             weights["adx"] = 1.0

@@ -19,6 +19,13 @@ from pydantic_settings import (
 logger = logging.getLogger(__name__)
 
 
+class SelectionRanking(BaseModel):
+    """Configuration for selection sorting logic."""
+
+    method: str = "alpha_score"
+    direction: str = "descending"  # "ascending" or "descending"
+
+
 class FeatureFlags(BaseModel):
     """Gradual rollout toggles for 2026 Quantitative features."""
 
@@ -45,6 +52,14 @@ class FeatureFlags(BaseModel):
     feat_market_neutral: bool = False
     feature_lookback: int = 120
     selection_mode: str = "v4"
+
+    # Custom MPS Weight Overrides (Map[str, float])
+    # Allows profiles to boost specific signals (e.g. recommend_ma) over generic momentum
+    mps_weights_override: Dict[str, float] = {}
+
+    # Signal Dominance (New)
+    dominant_signal: Optional[str] = None
+    dominant_signal_weight: float = 3.0
 
     # Predictability Thresholds
     entropy_max_threshold: float = 0.9
@@ -235,6 +250,7 @@ class TradingViewScraperSettings(BaseSettings):
     threshold: float = 0.4
     min_momentum_score: float = 0.0
     cluster_lookbacks: List[int] = [60, 120, 200]
+    ranking: SelectionRanking = Field(default_factory=SelectionRanking)
 
     # Optimization
     cluster_cap: float = 0.25
