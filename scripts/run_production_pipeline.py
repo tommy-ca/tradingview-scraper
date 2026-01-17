@@ -7,7 +7,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from rich.console import Console
 from rich.progress import (
@@ -433,7 +433,7 @@ class ProductionPipeline:
 
         else:
             # Standard Asset Pipeline (Read-Only Alpha Cycle)
-            all_steps: List[Tuple[str, List[str], Optional[Callable[[], Any]]]] = [
+            all_steps: List[Tuple[str, List[str], Any]] = [
                 ("Cleanup", [*make_base, "clean-run"], None),
                 ("Environment Check", [*make_base, "env-check"], None),
                 # Discovery and Data Ingestion are removed from Alpha Cycle.
