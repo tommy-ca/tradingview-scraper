@@ -188,9 +188,20 @@ class BacktestEngine:
             }
             ledger.record_genesis(config.run_id, config.profile, manifest_hash, config=audit_config)
 
-        results = []
         # Prepare return series accumulator
         return_series: Dict[str, List[pd.Series]] = {}
+
+        # Metadata Injection for Reporting
+        results_meta = {
+            "train_window": train_window,
+            "test_window": test_window,
+            "step_size": step_size,
+            "run_id": config.run_id,
+        }
+
+        results = []
+        # Initialize holding state for Turnover continuity
+        current_holdings = {}  # key: f"{engine}_{profile}_{sim_name}" -> weights
 
         for i in range(train_window, total_len - test_window, step_size):
             # Pillar 1: High-Precision Window Slicing (CR-185)
@@ -406,7 +417,16 @@ class BacktestEngine:
                                 # Let's stick to the current flow but acknowledge the limitation for 3rd party engines.
                                 # For 'custom' or 'research' mode, we might be able to inject it.
 
-                                sim_results = simulator.simulate(weights_df=flat_weights, returns=test_rets)
+                                state_key = f"{target_engine}_{sim_name}_{profile}"
+                                last_weights = current_holdings.get(state_key)
+
+                                sim_results = simulator.simulate(weights_df=flat_weights, returns=test_rets, initial_holdings=last_weights)
+
+                                # Update state for next window
+                                if hasattr(sim_results, "final_weights"):
+                                    current_holdings[state_key] = sim_results.final_weights
+                                elif isinstance(sim_results, dict) and "final_weights" in sim_results:
+                                    current_holdings[state_key] = sim_results["final_weights"]
 
                                 # Post-Simulation Audit for Risk Isolation (Correction)
                                 # If this was a custom simulation that returned daily returns, we can check for toxic impacts.
@@ -422,9 +442,26 @@ class BacktestEngine:
                                     metrics = getattr(sim_results, "metrics", {})
 
                                 sanitized_metrics = {}
+
+                                # HHI Extraction before sanitization
+                                if "top_assets" in metrics:
+                                    try:
+                                        # Calculate HHI from top assets if weights are present
+                                        top_assets = metrics["top_assets"]
+                                        if isinstance(top_assets, list):
+                                            hhi = sum([a.get("Weight", 0) ** 2 for a in top_assets])
+                                            sanitized_metrics["concentration_hhi"] = float(hhi)
+                                            # Also preserve top_assets for the report generator to use directly
+                                            sanitized_metrics["top_assets"] = top_assets
+                                    except Exception as e:
+                                        logger.warning(f"Failed to calculate HHI: {e}")
+
                                 for k, v in metrics.items():
                                     if isinstance(v, (int, float, np.number, str, bool, type(None))):
                                         sanitized_metrics[k] = float(v) if isinstance(v, (np.number, float, int)) else v
+                                    # Allow list of dicts (like top_assets) to pass through if safe
+                                    elif k == "top_assets" and isinstance(v, list):
+                                        sanitized_metrics[k] = v
 
                                 # Persistent Return Storage (CR-810)
                                 # Decoupled from ledger to ensure meta-allocation availability
@@ -476,7 +513,7 @@ class BacktestEngine:
             except Exception as e:
                 logger.error(f"Failed to save returns for {key}: {e}")
 
-        return {"results": results}
+        return {"results": results, "meta": results_meta}
 
 
 if __name__ == "__main__":

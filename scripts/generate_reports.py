@@ -144,26 +144,60 @@ class ReportGenerator:
                             continue
 
                         summary = {}
-                        # Common metrics to average
-                        metric_keys = set()
-                        for m in all_metrics:
-                            metric_keys.update(m.keys())
 
-                        for k in metric_keys:
-                            vals = [m[k] for m in all_metrics if k in m and isinstance(m[k], (int, float))]
-                            if vals:
-                                avg_val = sum(vals) / len(vals)
-                                summary[f"avg_window_{k}"] = avg_val
-                                summary[k] = avg_val
-                                # Provide aliases for summary keys as well
-                                if k == "annualized_vol":
-                                    summary["vol"] = avg_val
-                                if k == "annualized_return":
-                                    summary["return"] = avg_val
-                                if k == "max_drawdown":
-                                    summary["mdd"] = avg_val
-                                if k == "sharpe":
-                                    summary["avg_window_sharpe"] = avg_val
+                        # CR-Fix: Calculate summary from Stitched Returns (Global) instead of averaging windows
+                        pkl_name = f"{sim}_{eng}_{prof}.pkl"
+                        pkl_path = self.returns_dir / pkl_name
+
+                        full_series = None
+                        if pkl_path.exists():
+                            try:
+                                full_series = pd.read_pickle(pkl_path)
+                            except Exception as e:
+                                logger.warning(f"Failed to load stitched returns for {pkl_name}: {e}")
+
+                        if full_series is not None and not full_series.empty:
+                            # Calculate global metrics
+                            from tradingview_scraper.utils.metrics import calculate_performance_metrics
+
+                            # Assume 365 for crypto if undetectable, or use logic
+                            # We can reuse the utility
+                            m = calculate_performance_metrics(full_series)
+                            summary["annualized_return"] = m["annualized_return"]
+                            summary["return"] = m["annualized_return"]
+                            summary["annualized_vol"] = m["annualized_vol"]
+                            summary["vol"] = m["annualized_vol"]
+                            summary["sharpe"] = m["sharpe"]
+                            summary["avg_window_sharpe"] = m["sharpe"]  # Use global sharpe
+                            summary["max_drawdown"] = m["max_drawdown"]
+                            summary["mdd"] = m["max_drawdown"]
+
+                            # Average non-return metrics from windows (e.g. turnover)
+                            turnovers = [w.get("metrics", {}).get("turnover") for w in windows]
+                            turnovers = [t for t in turnovers if t is not None]
+                            if turnovers:
+                                summary["avg_turnover"] = sum(turnovers) / len(turnovers)
+                        else:
+                            # Fallback to Window Averaging (Legacy)
+                            metric_keys = set()
+                            for m in all_metrics:
+                                metric_keys.update(m.keys())
+
+                            for k in metric_keys:
+                                vals = [m[k] for m in all_metrics if k in m and isinstance(m[k], (int, float))]
+                                if vals:
+                                    avg_val = sum(vals) / len(vals)
+                                    summary[f"avg_window_{k}"] = avg_val
+                                    summary[k] = avg_val
+                                    # Provide aliases for summary keys as well
+                                    if k == "annualized_vol":
+                                        summary["vol"] = avg_val
+                                    if k == "annualized_return":
+                                        summary["return"] = avg_val
+                                    if k == "max_drawdown":
+                                        summary["mdd"] = avg_val
+                                    if k == "sharpe":
+                                        summary["avg_window_sharpe"] = avg_val
 
                         node["summary"] = summary
             self.all_results = agg
