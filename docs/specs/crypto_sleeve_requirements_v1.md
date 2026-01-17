@@ -62,6 +62,11 @@ Includes standard certification for Rating-Based Strategy Benchmarks:
 - **Wealth Persistence**: Simulations MUST persist absolute wealth (in $ or wealth units) across rebalance boundaries to maintain wealth-process continuity.
 - **Outlier Guard**: Daily returns MUST be clipped at reasonable thresholds (e.g., -99.9% to +500%) during reporting to prevent numerical artifacts from corrupting summary CAGR calculations.
 - **Bankruptcy Logic**: Portfolios dropping below a defined wealth floor (e.g., 1%) MUST be liquidated to cash to reflect total strategy failure.
+- **Simulator Parity**: The Sharpe Ratio drift between vector-based and friction-based simulators MUST be monitored and documented (Target: Drift < 0.20).
+
+### 3.11 Portfolio Normalization
+- **Gross Exposure Cap**: Simulators MUST enforce a strict 1.0 Gross Exposure (sum of absolute weights) at the rebalance point to prevent unintended margin-driven volatility spikes.
+- **Cash Buffering**: Residual equity after meeting target weights MUST be held in cash to ensure the sum of all weights (including cash) is exactly 1.0.
 
 ### 2.12 Short Selling & Margin Standards
 | Requirement ID | Priority | Status | Description |

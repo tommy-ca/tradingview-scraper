@@ -305,12 +305,14 @@ class CVXPortfolioSimulator(BaseSimulator):
             if cash_key not in returns_cvx.columns:
                 returns_cvx[cash_key] = 0.0
 
+            # CR-FIX: Ensure h_init sum is strictly used as V_init for the simulator
+            # MarketSimulator with returns uses absolute $ wealth.
             simulator = self.cvp.MarketSimulator(returns=returns_cvx, costs=cost_list, cash_key=cash_key, min_history=pd.Timedelta(days=0))
 
             # Execute backtest
             result = simulator.backtest(policy, start_time=start_t, end_time=end_t, h=h_init)
 
-            # Extract returns from wealth process
+            # Forensic Clipping of realized returns
             # result.returns are the realized fractional returns of the portfolio
             if hasattr(result, "returns") and not result.returns.empty:
                 realized_returns = result.returns.copy()
@@ -318,24 +320,25 @@ class CVXPortfolioSimulator(BaseSimulator):
                 realized_returns = result.v.pct_change().dropna()
 
             realized_returns.index = returns.index[: len(realized_returns)]
-
-            # Forensic Clipping of realized returns
             realized_returns = realized_returns.clip(-0.9999, 10.0)
 
             res = calculate_performance_metrics(realized_returns)
 
             # We must return absolute holdings to maintain state across windows
+            # result.h is absolute dollar holdings per asset
+            final_h = result.h.iloc[-1]
+
             res.update(
                 {
                     "daily_returns": realized_returns,
-                    "final_holdings": result.h.iloc[-1],  # Persist absolute $
+                    "final_holdings": final_h,  # Persist absolute $
                     "final_weights": result.w.iloc[-1],
                     "turnover": float(result.turnover.sum()),
                 }
             )
             return res
         except Exception as e:
-            logger.error(f"cvxportfolio failed: {e}")
+            logger.error(f"cvxportfolio backtest failed: {e}")
             return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
         except Exception as e:
             logger.error(f"cvxportfolio failed: {e}")
