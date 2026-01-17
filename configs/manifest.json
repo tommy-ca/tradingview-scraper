@@ -14,7 +14,11 @@
     },
     "risk": {
       "cluster_cap": 0.25,
-      "cluster_lookbacks": [60, 120, 200]
+      "cluster_lookbacks": [
+        60,
+        120,
+        200
+      ]
     },
     "backtest": {
       "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
@@ -27,7 +31,10 @@
       "step_size": 20
     },
     "discovery": {
-      "enabled_markets": ["america", "crypto"]
+      "enabled_markets": [
+        "america",
+        "crypto"
+      ]
     },
     "features": {
       "selection_mode": "v4",
@@ -67,7 +74,10 @@
         "step_size": 5
       },
       "discovery": {
-        "enabled_markets": ["america", "crypto"],
+        "enabled_markets": [
+          "america",
+          "crypto"
+        ],
         "strategies": {
           "trend_following": {
             "scanners": [
@@ -94,23 +104,43 @@
     "meta_production": {
       "description": "Multi-Sleeve Institutional Meta-Portfolio",
       "sleeves": [
-        { "id": "crypto_all", "profile": "crypto_rating_all" },
-        { "id": "crypto_ma", "profile": "crypto_rating_ma" },
-        { "id": "crypto_osc", "profile": "crypto_rating_osc" },
-        { "id": "tradfi", "profile": "production_2026_q1" }
+        {
+          "id": "crypto_all",
+          "profile": "crypto_rating_all"
+        },
+        {
+          "id": "crypto_ma",
+          "profile": "crypto_rating_ma"
+        },
+        {
+          "id": "crypto_osc",
+          "profile": "crypto_rating_osc"
+        },
+        {
+          "id": "tradfi",
+          "profile": "production_2026_q1"
+        }
       ],
       "meta_allocation": {
         "engine": "custom",
         "profile": "hrp",
         "min_weight": 0.05,
-        "max_weight": 0.50
+        "max_weight": 0.5
       }
     },
     "meta_benchmark": {
       "description": "Meta-Portfolio Benchmark (Long + Short Rating All)",
       "sleeves": [
-        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "long_all_baseline" },
-        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "short_all_baseline" }
+        {
+          "id": "long_all",
+          "profile": "binance_spot_rating_all_long",
+          "run_id": "long_all_baseline"
+        },
+        {
+          "id": "short_all",
+          "profile": "binance_spot_rating_all_short",
+          "run_id": "short_all_baseline"
+        }
       ],
       "meta_allocation": {
         "engine": "custom",
@@ -122,8 +152,16 @@
     "meta_ma_benchmark": {
       "description": "Meta-Portfolio MA Benchmark (Long + Short Rating MA)",
       "sleeves": [
-        { "id": "long_ma", "profile": "binance_spot_rating_ma_long", "run_id": "long_ma_baseline" },
-        { "id": "short_ma", "profile": "binance_spot_rating_ma_short", "run_id": "short_ma_baseline" }
+        {
+          "id": "long_ma",
+          "profile": "binance_spot_rating_ma_long",
+          "run_id": "long_ma_baseline"
+        },
+        {
+          "id": "short_ma",
+          "profile": "binance_spot_rating_ma_short",
+          "run_id": "short_ma_baseline"
+        }
       ],
       "meta_allocation": {
         "engine": "custom",
@@ -135,32 +173,56 @@
     "meta_super_benchmark": {
       "description": "Cross-Factor Super-Meta (MA + ALL)",
       "sleeves": [
-        { "id": "long_ma", "profile": "binance_spot_rating_ma_long", "run_id": "long_ma_baseline" },
-        { "id": "short_ma", "profile": "binance_spot_rating_ma_short", "run_id": "short_ma_baseline" },
-        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "long_all_baseline" },
-        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "short_all_baseline" }
+        {
+          "id": "long_ma",
+          "profile": "binance_spot_rating_ma_long",
+          "run_id": "prod_ma_long_v3"
+        },
+        {
+          "id": "short_ma",
+          "profile": "binance_spot_rating_ma_short",
+          "run_id": "prod_ma_short_v3"
+        },
+        {
+          "id": "long_all",
+          "profile": "binance_spot_rating_all_long",
+          "run_id": "prod_long_all_v3"
+        },
+        {
+          "id": "short_all",
+          "profile": "binance_spot_rating_all_short",
+          "run_id": "prod_short_all_v3"
+        }
       ],
       "meta_allocation": {
         "engine": "custom",
         "profile": "hrp",
         "min_weight": 0.05,
-        "max_weight": 0.50
+        "max_weight": 0.5
       }
     },
     "crypto_production": {
       "selection": {
-        "top_n": 10,
+        "top_n": 15,
         "threshold": 0.45,
         "min_momentum_score": -0.05,
         "selection_mode": "v4"
       },
       "risk": {
-        "cluster_lookbacks": [5, 60, 120, 200]
+        "cluster_lookbacks": [
+          5,
+          60,
+          120,
+          200
+        ]
       },
       "backtest": {
         "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio,adaptive",
         "profiles": "min_variance,hrp,max_sharpe,barbell,equal_weight,risk_parity,market,benchmark,market_neutral",
-        "benchmark_symbols": ["BINANCE:ETHUSD.P", "AMEX:SPY"],
+        "benchmark_symbols": [
+          "BINANCE:ETHUSD.P",
+          "AMEX:SPY"
+        ],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
         "train_window": 20,
@@ -189,10 +251,12 @@
       },
       "data": {
         "lookback_days": 500,
-        "min_days_floor": 60
+        "min_days_floor": 90
       },
       "discovery": {
-        "enabled_markets": ["crypto"],
+        "enabled_markets": [
+          "crypto"
+        ],
         "strategies": {
           "trend_following": {
             "scanners": [
@@ -221,12 +285,25 @@
     },
     "crypto_rating_all": {
       "description": "Composite Rating Strategy (Recommend.All) - Independent Return Stream",
-      "selection": { "top_n": 5, "threshold": 0.45, "selection_mode": "v4" },
-      "risk": { "cluster_lookbacks": [5, 60, 120, 200] },
+      "selection": {
+        "top_n": 5,
+        "threshold": 0.45,
+        "selection_mode": "v4"
+      },
+      "risk": {
+        "cluster_lookbacks": [
+          5,
+          60,
+          120,
+          200
+        ]
+      },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,max_sharpe,market_neutral",
-        "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
+        "benchmark_symbols": [
+          "BINANCE:BTCUSDT.P"
+        ],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
         "train_window": 20,
@@ -242,9 +319,14 @@
         "feat_directional_returns": true,
         "feat_dynamic_direction": true
       },
-      "data": { "lookback_days": 500, "min_days_floor": 60 },
+      "data": {
+        "lookback_days": 500,
+        "min_days_floor": 60
+      },
       "discovery": {
-        "enabled_markets": ["crypto"],
+        "enabled_markets": [
+          "crypto"
+        ],
         "strategies": {
           "rating_all": {
             "scanners": [
@@ -262,12 +344,25 @@
     },
     "crypto_rating_ma": {
       "description": "Moving Average Rating Strategy (Recommend.MA) - Independent Return Stream",
-      "selection": { "top_n": 5, "threshold": 0.45, "selection_mode": "v4" },
-      "risk": { "cluster_lookbacks": [5, 60, 120, 200] },
+      "selection": {
+        "top_n": 5,
+        "threshold": 0.45,
+        "selection_mode": "v4"
+      },
+      "risk": {
+        "cluster_lookbacks": [
+          5,
+          60,
+          120,
+          200
+        ]
+      },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,max_sharpe,market_neutral",
-        "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
+        "benchmark_symbols": [
+          "BINANCE:BTCUSDT.P"
+        ],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
         "train_window": 20,
@@ -281,11 +376,18 @@
         "entropy_max_threshold": 0.999,
         "feat_predictability_vetoes": true,
         "feat_directional_returns": true,
-        "feat_dynamic_direction": true
+        "feat_dynamic_direction": true,
+        "dominant_signal": "recommend_ma",
+        "dominant_signal_weight": 3.0
       },
-      "data": { "lookback_days": 500, "min_days_floor": 60 },
+      "data": {
+        "lookback_days": 500,
+        "min_days_floor": 60
+      },
       "discovery": {
-        "enabled_markets": ["crypto"],
+        "enabled_markets": [
+          "crypto"
+        ],
         "strategies": {
           "rating_ma": {
             "scanners": [
@@ -303,12 +405,25 @@
     },
     "crypto_rating_osc": {
       "description": "Oscillator Rating Strategy (Recommend.Other) - Independent Return Stream",
-      "selection": { "top_n": 5, "threshold": 0.45, "selection_mode": "v4" },
-      "risk": { "cluster_lookbacks": [5, 60, 120, 200] },
+      "selection": {
+        "top_n": 5,
+        "threshold": 0.45,
+        "selection_mode": "v4"
+      },
+      "risk": {
+        "cluster_lookbacks": [
+          5,
+          60,
+          120,
+          200
+        ]
+      },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,max_sharpe,market_neutral",
-        "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
+        "benchmark_symbols": [
+          "BINANCE:BTCUSDT.P"
+        ],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
         "train_window": 20,
@@ -324,9 +439,14 @@
         "feat_directional_returns": true,
         "feat_dynamic_direction": true
       },
-      "data": { "lookback_days": 500, "min_days_floor": 60 },
+      "data": {
+        "lookback_days": 500,
+        "min_days_floor": 60
+      },
       "discovery": {
-        "enabled_markets": ["crypto"],
+        "enabled_markets": [
+          "crypto"
+        ],
         "strategies": {
           "rating_osc": {
             "scanners": [
@@ -344,8 +464,15 @@
     },
     "binance_spot_rating_all_long": {
       "description": "Binance Spot LONG only - Rating All (Exhaustive Matrix)",
-      "selection": { "top_n": 10, "threshold": 0.45, "selection_mode": "v4" },
-      "data": { "lookback_days": 500, "min_days_floor": 320 },
+      "selection": {
+        "top_n": 15,
+        "threshold": 0.45,
+        "selection_mode": "v4"
+      },
+      "data": {
+        "lookback_days": 500,
+        "min_days_floor": 90
+      },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight",
@@ -354,12 +481,20 @@
         "test_window": 10,
         "step_size": 10
       },
-      "features": { "selection_mode": "v4", "feat_short_direction": false },
+      "features": {
+        "selection_mode": "v4",
+        "feat_short_direction": false,
+        "entropy_max_threshold": 0.999
+      },
       "discovery": {
-        "enabled_markets": ["crypto"],
+        "enabled_markets": [
+          "crypto"
+        ],
         "strategies": {
           "rating_all_long": {
-            "scanners": ["scanners/crypto/ratings/binance_spot_rating_all_long"],
+            "scanners": [
+              "scanners/crypto/ratings/binance_spot_rating_all_long"
+            ],
             "interval": "1d"
           }
         }
@@ -367,8 +502,15 @@
     },
     "binance_spot_rating_all_short": {
       "description": "Binance Spot SHORT only - Rating All (Exhaustive Matrix)",
-      "selection": { "top_n": 10, "threshold": 0.45, "selection_mode": "v4" },
-      "data": { "lookback_days": 500, "min_days_floor": 320 },
+      "selection": {
+        "top_n": 15,
+        "threshold": 0.45,
+        "selection_mode": "v4"
+      },
+      "data": {
+        "lookback_days": 500,
+        "min_days_floor": 90
+      },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight",
@@ -377,12 +519,20 @@
         "test_window": 10,
         "step_size": 10
       },
-      "features": { "selection_mode": "v4", "feat_short_direction": true },
+      "features": {
+        "selection_mode": "v4",
+        "feat_short_direction": true,
+        "entropy_max_threshold": 0.999
+      },
       "discovery": {
-        "enabled_markets": ["crypto"],
+        "enabled_markets": [
+          "crypto"
+        ],
         "strategies": {
           "rating_all_short": {
-            "scanners": ["scanners/crypto/ratings/binance_spot_rating_all_short"],
+            "scanners": [
+              "scanners/crypto/ratings/binance_spot_rating_all_short"
+            ],
             "interval": "1d"
           }
         }
@@ -390,8 +540,13 @@
     },
     "binance_spot_rating_ma_long": {
       "description": "Binance Spot LONG only - Rating MA (Exhaustive Matrix)",
-      "selection": { "top_n": 10, "threshold": 0.45, "selection_mode": "v4" },
-      "data": { "lookback_days": 500, "min_days_floor": 320 },
+      "selection": {
+        "top_n": 15,
+        "threshold": 0.45,
+        "selection_mode": "v4",
+        "ranking": { "direction": "descending" }
+      },
+      "data": { "lookback_days": 500, "min_days_floor": 90 },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight",
@@ -400,12 +555,22 @@
         "test_window": 10,
         "step_size": 10
       },
-      "features": { "selection_mode": "v4", "feat_short_direction": false },
+      "features": {
+        "selection_mode": "v4",
+        "feat_short_direction": false,
+        "entropy_max_threshold": 0.999,
+        "dominant_signal": "recommend_ma",
+        "dominant_signal_weight": 3.0
+      },
       "discovery": {
-        "enabled_markets": ["crypto"],
+        "enabled_markets": [
+          "crypto"
+        ],
         "strategies": {
           "rating_ma_long": {
-            "scanners": ["scanners/crypto/ratings/binance_spot_rating_ma_long"],
+            "scanners": [
+              "scanners/crypto/ratings/binance_spot_rating_ma_long"
+            ],
             "interval": "1d"
           }
         }
@@ -413,8 +578,18 @@
     },
     "binance_spot_rating_ma_short": {
       "description": "Binance Spot SHORT only - Rating MA (Exhaustive Matrix)",
-      "selection": { "top_n": 10, "threshold": 0.45, "selection_mode": "v4" },
-      "data": { "lookback_days": 500, "min_days_floor": 320 },
+      "selection": {
+        "top_n": 15,
+        "threshold": 0.45,
+        "selection_mode": "v4",
+        "ranking": {
+          "direction": "ascending"
+        }
+      },
+      "data": {
+        "lookback_days": 500,
+        "min_days_floor": 90
+      },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight",
@@ -423,12 +598,22 @@
         "test_window": 10,
         "step_size": 10
       },
-      "features": { "selection_mode": "v4", "feat_short_direction": true },
+      "features": {
+        "selection_mode": "v4",
+        "feat_short_direction": true,
+        "entropy_max_threshold": 0.999,
+        "dominant_signal": "recommend_ma",
+        "dominant_signal_weight": 3.0
+      },
       "discovery": {
-        "enabled_markets": ["crypto"],
+        "enabled_markets": [
+          "crypto"
+        ],
         "strategies": {
           "rating_ma_short": {
-            "scanners": ["scanners/crypto/ratings/binance_spot_rating_ma_short"],
+            "scanners": [
+              "scanners/crypto/ratings/binance_spot_rating_ma_short"
+            ],
             "interval": "1d"
           }
         }
@@ -442,12 +627,19 @@
         "selection_mode": "v4"
       },
       "risk": {
-        "cluster_lookbacks": [5, 60, 120, 200]
+        "cluster_lookbacks": [
+          5,
+          60,
+          120,
+          200
+        ]
       },
       "backtest": {
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,max_sharpe,market_neutral",
-        "benchmark_symbols": ["BINANCE:BTCUSDT.P"],
+        "benchmark_symbols": [
+          "BINANCE:BTCUSDT.P"
+        ],
         "backtest_slippage": 0.001,
         "backtest_commission": 0.0004,
         "train_window": 60,
@@ -468,7 +660,9 @@
         "min_days_floor": 60
       },
       "discovery": {
-        "enabled_markets": ["crypto"],
+        "enabled_markets": [
+          "crypto"
+        ],
         "strategies": {
           "rating_all": {
             "scanners": [
@@ -522,7 +716,10 @@
         "step_size": 10
       },
       "discovery": {
-        "enabled_markets": ["crypto", "america"],
+        "enabled_markets": [
+          "crypto",
+          "america"
+        ],
         "strategies": {
           "fast_alpha": {
             "scanners": [
@@ -543,7 +740,10 @@
         "min_days_floor": 252
       },
       "discovery": {
-        "enabled_markets": ["etf", "america"],
+        "enabled_markets": [
+          "etf",
+          "america"
+        ],
         "strategies": {
           "etf_alpha": {
             "scanners": [
