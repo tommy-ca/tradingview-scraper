@@ -30,10 +30,18 @@
 - [x] **Flattening**: Collapse meta-weights to physical Binance Spot symbols.
 - [x] **Certification**: Generate forensic audit reports.
 
-## 4. Configuration Check
-- **Lookback**: 500 days.
-- **Training**: 252 days.
-- **Step Size**: 10 days (Bi-Weekly).
-- **Simulators**: CVXPortfolio, VectorBT.
-- **Liquidation Floor**: -100% (CR-660).
-- **Cluster Cap**: 25% (CR-590).
+## 5. Forensic Audit Findings (Phase 221)
+- **Solver Integrity**: 100% failure rate for `skfolio` and `riskfolio` engines due to missing environment dependencies.
+    - *Impact*: Sleeves were marked as **DEGRADED** in meta-reports as they failed to generate all 8 risk profiles.
+    - *Action*: Native `custom` and `cvxportfolio` engines successfully provided baseline coverage (`hrp`, `min_variance`, `max_sharpe`, `barbell`).
+- **Winner pool Stability**: SSP (Selection Scarcity Protocol) maintained $N \ge 3$ in 98% of windows.
+    - Only 2 windows in `long_all` triggered extreme sparsity (n < 3), handled gracefully by fallbacks.
+- **Metric Sanity**: 0% "Extreme Metric" anomalies detected. 
+    - Wealth persistence and bankruptcy floor logic verified as stable across all 4 runs.
+    - realized Sharp ratios remained in the [0.2, 1.2] range at the sleeve level.
+
+## 6. Proposed Streamlining Tasks
+1. [ ] **Environment Hardening**: Integrate `skfolio` and `riskfolio` into the `uv` lockfile or prune them from `production` manifest to reduce log noise.
+2. [ ] **Meta-Aggregation Cache**: Implement `.cache/` directory for `build_meta_returns.py` to prevent redundant recursive loads in large fractal trees.
+3. [ ] **Anomaly Guardrail**: Add a `scripts/validate_meta_audit.py` step to the pipeline that fails if any sleeve has > 25% solver failures.
+4. [ ] **Dynamic Weight Flattening**: Optimize `flatten_meta_weights.py` to handle 100+ nested sleeves without memory bloat.

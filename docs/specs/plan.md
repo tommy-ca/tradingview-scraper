@@ -107,6 +107,18 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Downstream**: Generate unified quant reports and physical weight flattens.
 - [x] **Data Ops**: Execute full data ingestion and repair before pipeline start.
 
+### Phase 221: Meta-Portfolio Forensic Audit & Streamlining (COMPLETED)
+- [x] **Audit**: Review per-rebalance window audit ledgers for all 4 rating-based sleeves.
+- [x] **Anomaly Detection**: Spot outliers in realized returns and solver behaviors (e.g. `skfolio` missing).
+- [x] **Design**: Propose streamlining for the meta-aggregation layer (Aggregation Speed, Error Handling).
+- [x] **Tasks**: Define next steps for institutional hardening.
+
+### Phase 222: Meta-Portfolio Orchestration Hardening (PLANNED)
+- [ ] **Infrastructure**: Fix missing dependencies (`skfolio`, `riskfolio`) in production environment.
+- [ ] **Service**: Implement caching in `build_meta_returns.py` for recursive fractal nodes.
+- [ ] **Guardrail**: Implement `scripts/validate_meta_audit.py` to enforce solver health thresholds.
+- [ ] **Optimization**: Parallelize atomic sleeve execution in meta-runs if resources permit.
+
 ---
 **System Status**: 🟢 PRODUCTION READY (v4.6.0) - Phase 219 Scheduled
 
