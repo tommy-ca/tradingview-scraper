@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import pandas as pd
 import numpy as np
@@ -14,7 +14,7 @@ sys.path.append(os.getcwd())
 from tradingview_scraper.utils.technicals import TechnicalRatings
 from tradingview_scraper.utils.audit import get_df_hash
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("backfill_features")
 
 
@@ -31,6 +31,7 @@ def backfill_features(candidates_path: str, returns_matrix_path: str, output_pat
     with open(candidates_path, "r") as f:
         candidates = json.load(f)
 
+    # Extract unique physical symbols
     symbols = list(set([c.get("physical_symbol") or c.get("symbol") for c in candidates]))
     logger.info(f"Loaded {len(symbols)} unique physical symbols for backfill.")
 
@@ -54,7 +55,7 @@ def backfill_features(candidates_path: str, returns_matrix_path: str, output_pat
         ohlcv_path = lakehouse / f"{safe_sym}_1d.parquet"
 
         if not ohlcv_path.exists():
-            logger.warning(f"OHLCV data missing for {symbol} at {ohlcv_path}")
+            logger.warning(f"  [{symbol}] OHLCV data missing at {ohlcv_path}")
             continue
 
         try:
@@ -86,7 +87,7 @@ def backfill_features(candidates_path: str, returns_matrix_path: str, output_pat
                     continue
 
                 # Reconstruct
-                # Pass explicit DataFrame slice
+                # Pass explicit DataFrame slice to ensure it's not a Series
                 history_df = pd.DataFrame(history)
                 ma_val = TechnicalRatings.calculate_recommend_ma(history_df)
                 osc_val = TechnicalRatings.calculate_recommend_other(history_df)
@@ -101,7 +102,7 @@ def backfill_features(candidates_path: str, returns_matrix_path: str, output_pat
             all_features[(symbol, "recommend_all")] = all_series
 
         except Exception as e:
-            logger.error(f"Failed to process {symbol}: {e}")
+            logger.error(f"  [{symbol}] Failed: {e}")
 
     if not all_features:
         logger.error("No features generated.")
