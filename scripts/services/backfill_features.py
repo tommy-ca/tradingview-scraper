@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("backfill_features")
 
 
-def backfill_features(candidates_path: str, returns_matrix_path: str, output_path: str):
+def backfill_features(candidates_path: str, returns_matrix_path: str, output_path: str, step_size: int = 10):
     """
     Generates a historical features_matrix.parquet by reconstructing technical ratings
     from raw OHLCV data for all assets in the universe.
@@ -40,15 +40,13 @@ def backfill_features(candidates_path: str, returns_matrix_path: str, output_pat
         return
 
     returns_df = pd.read_parquet(returns_matrix_path)
-    dates = returns_df.index
-    logger.info(f"Targeting {len(dates)} dates from {dates[0]} to {dates[-1]}")
+    # Optimization: Only calculate for rebalance windows to save time
+    all_dates = returns_df.index
+    dates = all_dates[::step_size]
+    logger.info(f"Targeting {len(dates)} rebalance dates (step={step_size}) from {dates[0]} to {dates[-1]}")
 
     # 3. Process Symbols
-    # We build a dictionary of DataFrames: { (Symbol, Feature): Series }
     all_features = {}
-
-    # Pre-load all available Parquet data to avoid redundant IO
-    # Assuming lakehouse naming convention
     lakehouse = Path("data/lakehouse")
 
     for symbol in tqdm(symbols, desc="Backfilling Symbols"):
@@ -63,15 +61,12 @@ def backfill_features(candidates_path: str, returns_matrix_path: str, output_pat
             df = pd.read_parquet(ohlcv_path)
             df.columns = [c.lower() for c in df.columns]
 
-            # Reconstruction Logic
-            # We need a rolling calculation or a loop?
-            # calculate_recommend_ma currently only does the LAST row.
-            # To be efficient, we should implement vectorized versions in TechnicalRatings.
-            # For now, we use a window-based approach for the backtest rebalance points.
+            # Robust Index Alignment (UTC Naive)
+            df.index = pd.to_datetime(df.index)
+            if hasattr(df.index, "tz") and df.index.tz is not None:
+                df.index = df.index.tz_convert(None)
 
-            # Optimization: Only calculate for dates present in the returns matrix
-            # and only if there's enough history.
-
+            # Result Series
             ma_series = pd.Series(index=dates, dtype=float)
             osc_series = pd.Series(index=dates, dtype=float)
             all_series = pd.Series(index=dates, dtype=float)
@@ -80,16 +75,22 @@ def backfill_features(candidates_path: str, returns_matrix_path: str, output_pat
             min_history = 250
 
             for date in dates:
+                # Align search date (ensure naive comparison)
+                target_date = pd.to_datetime(date)
+                if hasattr(target_date, "tz") and target_date.tz is not None:
+                    target_date = target_date.tz_convert(None)
+
                 # Slice history up to this date
-                history = df[df.index <= date]
+                history = df[df.index <= target_date]
                 if len(history) < min_history:
                     continue
 
                 # Reconstruct
-                # Note: This is slow. Vectorized implementation is needed for Phase 220.
-                ma_val = TechnicalRatings.calculate_recommend_ma(history)
-                osc_val = TechnicalRatings.calculate_recommend_other(history)
-                all_val = TechnicalRatings.calculate_recommend_all(history, ma_val, osc_val)
+                # Pass explicit DataFrame slice
+                history_df = pd.DataFrame(history)
+                ma_val = TechnicalRatings.calculate_recommend_ma(history_df)
+                osc_val = TechnicalRatings.calculate_recommend_other(history_df)
+                all_val = TechnicalRatings.calculate_recommend_all(history_df, ma_val, osc_val)
 
                 ma_series.loc[date] = ma_val
                 osc_series.loc[date] = osc_val
@@ -112,8 +113,8 @@ def backfill_features(candidates_path: str, returns_matrix_path: str, output_pat
     final_df.columns.names = ["symbol", "feature"]
 
     # 5. Save
-    output_dir = Path(output_path).parent
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path_p = Path(output_path)
+    output_path_p.parent.mkdir(parents=True, exist_ok=True)
     final_df.to_parquet(output_path)
 
     logger.info(f"✅ Features matrix saved to {output_path}")
@@ -125,6 +126,7 @@ if __name__ == "__main__":
     parser.add_argument("--candidates", required=True, help="Path to portfolio_candidates.json")
     parser.add_argument("--returns", required=True, help="Path to returns_matrix.parquet")
     parser.add_argument("--output", required=True, help="Output path for features_matrix.parquet")
+    parser.add_argument("--step", type=int, default=10, help="Step size for backfill (rebalance frequency)")
     args = parser.parse_args()
 
-    backfill_features(args.candidates, args.returns, args.output)
+    backfill_features(args.candidates, args.returns, args.output, args.step)

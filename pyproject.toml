@@ -50,6 +50,7 @@ dependencies = [
     "cvxpy>=1.7.5",
     "cvxportfolio>=1.5.1",
     "filelock>=3.20.1",
+    "tqdm>=4.67.1",
 ]
 
 [project.urls]

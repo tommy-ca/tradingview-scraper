@@ -2778,6 +2778,7 @@ dependencies = [
     { name = "statsmodels" },
     { name = "tabulate" },
     { name = "tenacity" },
+    { name = "tqdm" },
     { name = "websocket-client" },
     { name = "websockets" },
 ]
@@ -2854,6 +2855,7 @@ requires-dist = [
     { name = "statsmodels", specifier = ">=0.14.0" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "tenacity", specifier = ">=8.3.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
     { name = "ty", marker = "extra == 'dev'" },
     { name = "vectorbt", marker = "extra == 'analytics'", specifier = ">=0.26.2" },
     { name = "websocket-client", specifier = ">=1.8.0" },
