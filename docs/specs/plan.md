@@ -84,20 +84,24 @@ This document codifies the institutional requirements and design specifications 
 
 ### Phase 218.14: Fractal Meta-Portfolio Implementation (COMPLETED)
 - [x] **Architecture**: Designed Fractal Tree structure supporting nested meta-profiles.
-- [x] **Service**: Updated `build_meta_returns.py` with recursive branch resolution.
+- [x] **Service**: Updated `build_meta_returns.py` with recursive branch resolution and weighted sub-meta return calculation.
 - [x] **Service**: Updated `flatten_meta_weights.py` with recursive physical asset collapse.
 - [x] **Isolation**: Implemented profile-prefixed meta-artifact naming.
 - [x] **Auditability**: Implemented `meta_cluster_tree_*.json` persistence for hierarchical allocation review.
+- [x] **Orchestration**: Created `run_meta_pipeline.py` for streamlined "One-Go" fractal execution.
 - [x] **Validation**: Executed recursive fractal test (`meta_crypto_only`) and verified weight propagation and physical symbol collapse.
+- [x] **Audit**: Final Forensic Audit report signed off (`fractal_meta_audit_20260118.md`).
+
+### Phase 218.15: Specs Driven Development (SDD) Integration (COMPLETED)
+- [x] **Methodology**: Codified SDD flow in `docs/specs/sdd_flow.md`.
+- [x] **Workflow**: Transitioned meta-portfolio and fractal updates to use the formal Spec -> Build -> Audit lifecycle.
+- [x] **Standardization**: Updated requirements and design docs to mandate fractal auditability and naming isolation.
 
 ### Phase 219: Dynamic Historical Backtesting (SCHEDULED)
 - [ ] **Service**: Implement `HistoricalFeatureBackfill` to generate `features_matrix.parquet` using Synthetic Engine.
 - [ ] **Engine Update**: Modify `BacktestEngine` to re-rank candidates at each rebalance step using historical synthetic ratings.
 - [ ] **Goal**: Resolve "Discovery-Backtest Regime Mismatch".
 - [ ] **Workflow**: Integrate into SDD Flow (Spec -> Build -> Audit).
-
-
-### Phase 219: Dynamic Historical Backtesting (SCHEDULED)
 
 ---
 **System Status**: 🟢 PRODUCTION READY (v4.6.0) - Phase 219 Scheduled

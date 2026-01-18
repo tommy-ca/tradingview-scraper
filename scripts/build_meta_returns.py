@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
+import numpy as np
 import pandas as pd
 
 sys.path.append(os.getcwd())
@@ -88,23 +89,39 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
             if "meta_profile" in sleeve:
                 sub_meta = sleeve["meta_profile"]
                 logger.info(f"  [{s_id}] Resolving nested meta-profile: {sub_meta}")
-                # Recursively build returns for the sub-meta
-                sub_output = Path("data/lakehouse") / f"meta_returns_{sub_meta}_{prof}.pkl"
-                build_meta_returns(sub_meta, str(sub_output), [prof], manifest_path)
 
-                if sub_output.exists():
-                    s_rets_raw = pd.read_pickle(sub_output)
-                    if isinstance(s_rets_raw, pd.DataFrame):
-                        s_rets = cast(pd.Series, s_rets_raw.mean(axis=1)).to_frame(s_id)
-                    elif isinstance(s_rets_raw, pd.Series):
-                        s_rets = s_rets_raw.to_frame(s_id)
-                    else:
-                        logger.warning(f"  [{s_id}] Unknown return format from sub-meta {sub_meta}")
-                        continue
-                    target_file = sub_output  # For logging
-                else:
-                    logger.warning(f"  [{s_id}] Failed to resolve nested meta {sub_meta}")
+                # 1. Build Sub-Meta Returns
+                sub_returns_file = Path("data/lakehouse") / f"meta_returns_{sub_meta}_{prof}.pkl"
+                build_meta_returns(sub_meta, str(sub_returns_file), [prof], manifest_path)
+
+                if not sub_returns_file.exists():
+                    logger.warning(f"  [{s_id}] Failed to build sub-meta returns for {sub_meta}")
                     continue
+
+                # 2. Optimize Sub-Meta (to get weights)
+                from scripts.optimize_meta_portfolio import optimize_meta
+
+                sub_opt_file = Path("data/lakehouse") / f"meta_optimized_{sub_meta}_{prof}.json"
+                optimize_meta(str(sub_returns_file), str(sub_opt_file), profile=prof, meta_profile=sub_meta)
+
+                if not sub_opt_file.exists():
+                    logger.warning(f"  [{s_id}] Failed to optimize sub-meta {sub_meta}. Falling back to equal weight.")
+                    s_rets_raw = pd.read_pickle(sub_returns_file)
+                    s_rets = cast(pd.Series, s_rets_raw.mean(axis=1)).to_frame(s_id)
+                else:
+                    # 3. Calculate Weighted Sub-Meta Return
+                    with open(sub_opt_file, "r") as f:
+                        sub_opt_data = json.load(f)
+
+                    sub_weights = {w["Symbol"]: w["Weight"] for w in sub_opt_data["weights"]}
+                    s_rets_raw = pd.read_pickle(sub_returns_file)
+
+                    # Align and Multiply
+                    cols = [c for c in s_rets_raw.columns if c in sub_weights]
+                    w_vec = np.array([sub_weights[c] for c in cols])
+                    s_rets = (s_rets_raw[cols] * w_vec).sum(axis=1).to_frame(s_id)
+
+                target_file = sub_returns_file  # For logging
             else:
                 s_profile = sleeve["profile"]
                 # CR-835: Respect explicit Run ID from manifest if provided
@@ -173,8 +190,11 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
             s_meta = {"id": s_id}
             if "meta_profile" in sleeve:
                 s_meta["meta_profile"] = sleeve["meta_profile"]
-            elif run_path:
+            elif run_path is not None:
                 s_meta.update({"profile": sleeve["profile"], "run_id": run_path.name, "run_path": str(run_path)})
+            else:
+                # Target file must have existed if we got here
+                s_meta.update({"profile": sleeve.get("profile", "N/A"), "run_id": "N/A", "run_path": "N/A"})
             sleeve_metadata.append(s_meta)
 
         if not meta_df.empty:

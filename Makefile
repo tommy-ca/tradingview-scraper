@@ -311,14 +311,10 @@ flow-prelive: ## Production pre-live workflow (including slow Nautilus simulator
 flow-dev: ## Rapid iteration development execution
 	$(MAKE) flow-production PROFILE=development
 
-flow-meta-production: ## Run multi-sleeve meta-portfolio flow (Fractal Matrix)
-	@echo ">>> STAGE: META-PORTFOLIO (Fractal Matrix)"
-	$(PY) scripts/build_meta_returns.py --profile $(PROFILE)
-	$(PY) scripts/optimize_meta_portfolio.py --meta-profile $(PROFILE)
-	@for prof in barbell hrp min_variance equal_weight; do \
-		$(PY) scripts/flatten_meta_weights.py --profile $(PROFILE) --risk-profile $$prof; \
-	done
-	$(PY) scripts/generate_meta_report.py --meta-profile $(PROFILE) --profiles "barbell,hrp,min_variance,equal_weight"
+flow-meta-production: ## Run multi-sleeve meta-portfolio flow (Streamlined Fractal Tree)
+	@echo ">>> STAGE: META-PORTFOLIO PIPELINE (Fractal Matrix)"
+	$(PY) scripts/run_meta_pipeline.py --profile $(PROFILE)
+
 
 # --- CLEAN Namespace ---
 clean-run: ## Wipe current run artifacts

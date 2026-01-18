@@ -43,17 +43,16 @@ Includes standard certification for Rating-Based Strategy Benchmarks:
 - **Rationale**: To resolve the "Discovery-Backtest Regime Mismatch" and enable true historical backtesting of Rating-based strategies without waiting for months of data accumulation.
 - **Implementation**: Utilize `pandas-ta` to replicate the Moving Average (15 components) and Oscillator (11 components) ensemble logic defined in the Feature Composition spec.
 
-### 3.7 Meta-Portfolio Resilience & Fractal Recursion (v3.6.7)
-- **Requirement**: The Meta-Portfolio Aggregator MUST implement a "Best Effort Proxy" strategy for sleeve inclusion.
-- **Fractal Tree Support**: The system MUST support **Recursive Nesting** of sleeve profiles. A meta-portfolio sleeve can point to another meta-profile, allowing for hierarchical risk allocation (e.g., Asset -> Group -> Sub-Group -> Meta).
-- **Physical Asset Collapse**: The final meta-weight output MUST recursively collapse all Logic Atoms into Physical Assets, summing weights for assets appearing in multiple strategic branches.
-- **Fractal Auditability**: The optimizer MUST persist the **Hierarchical Cluster Tree** (`meta_cluster_tree_*.json`) before flattening. This artifact captures the uncollapsed weights of each strategy/sleeve branch, enabling forensic audit of the fractal decision process.
-- **Naming Isolation**: All meta-artifacts MUST be prefixed with the profile name (`meta_returns_{profile}_{risk}.pkl`) to prevent cross-profile namespace pollution.
+### 3.7 Meta-Portfolio Architecture
+The system MUST support the [Fractal Hierarchical Meta-Portfolio Specification](fractal_meta_portfolio_v1.md), including recursive nesting, weighted branch aggregation, and physical asset collapse.
 
-### 3.8 Simulation Fidelity & Performance
-- **Default Simulator**: The platform defaults to fast vector-based simulators (`cvxportfolio`, `vectorbt`) for standard production runs to ensure throughput.
-- **High-Fidelity Simulation**: `Nautilus` (event-driven) is reserved for "Pre-Production" or "Golden Benchmark" profiles due to its high computational cost.
-- **Parity Check**: All vector-based results MUST be periodically audited against Nautilus on a subset of windows to ensure slippage/execution logic alignment (Target: Sharpe Drift < 5%).
+### 3.8 Specs Driven Development (SDD) Flow (v3.6.7)
+- **Mandatory Lifecycle**: Every quantitative feature MUST follow the formal [SDD Flow](sdd_flow.md):
+    1. **Spec**: Update Requirements/Design docs first.
+    2. **Build**: Implementation with atomic commits.
+    3. **Verify**: Rerun full production pipelines.
+    4. **Audit**: Trace realized results using ledger logs and cluster trees.
+- **Certification Gate**: Deployment to paper/live trading is prohibited without a signed-off forensic audit report in `docs/reports/`.
 
 ### 3.9 Atomic Correctness & Completeness (v3.6.6)
 - **Full Spectrum Requirement**: All production-grade sleeves MUST generate a full return set (8 standard profiles: `hrp`, `min_variance`, `max_sharpe`, `equal_weight`, `barbell`, `market`, `benchmark`, `risk_parity`) to be eligible for Meta-Portfolio inclusion.

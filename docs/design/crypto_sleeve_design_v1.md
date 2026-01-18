@@ -59,43 +59,12 @@ To enable true backtesting, the platform mandates the transition to **Daily Feat
 ---
 
 ## 23. Meta-Portfolio Fractal Architecture (v3.6.7)
+The platform implements a hierarchical risk allocation framework known as the **Fractal Tree**. For detailed technical specifications, see [Fractal Hierarchical Meta-Portfolio Specification](../specs/fractal_meta_portfolio_v1.md).
 
-### 23.1 The Fractal Tree
-The Meta-Portfolio operates as a **Fractal Tree** structure:
-1.  **Atomic Strategy**: Base logic (e.g., `long_all`).
-2.  **Meta-Node**: A group of strategies or other meta-nodes (e.g., `meta_crypto`).
-3.  **Root-Node**: The final top-level portfolio (e.g., `meta_global_macro`).
-
-### 23.2 Recursive Aggregation
-The pipeline implements recursive descent:
-- **Build**: `scripts/build_meta_returns.py` recursively resolves sub-meta branches, collapsing them into single "Strategy Returns" for the parent node.
-- **Optimize**: Standard engines (HRP, MVO) allocate risk at each level of the tree.
-- **Flatten**: `scripts/flatten_meta_weights.py` recursively multiplies weights down the tree, resolving all strategic atoms into physical symbol exposures.
-
-### 23.3 Proxy Fallback
-To ensure robust diversification, if Sleeve A fails to generate Profile X (e.g., HRP optimization failed), the aggregator injects Profile Y (MinVar) as a proxy. This prevents a single solver failure from invalidating the entire meta-strategy.
-
-### 23.4 Simulation Strategy
-To balance throughput with fidelity, the platform employs a tiered simulation strategy:
-1.  **Tier 1 (Rapid Iteration)**: `cvxportfolio` / `vectorbt`.
-    - Speed: < 100ms per window.
-    - Usage: Strategy Synthesis, Feature Selection, Optimization Tuning.
-    - Default for all `production` profiles.
-2.  **Tier 2 (Pre-Live Validation)**: `Nautilus`.
-    - Speed: > 10s per window.
-    - Usage: Final "Golden Run" before capital deployment.
-    - Configured via `pre_production` or `benchmark` profiles.
-
-### 23.5 Numerical Stability & Wealth Persistence
-To resolve "Anomalous Returns" and artificial volatility reporting spikes in multi-window backtests, the following mechanisms are enforced:
-1.  **Absolute Holding Persistence**: The backtest engine persists absolute wealth (dollars) across rebalance windows. This ensures the wealth process is continuous, eliminating reset artifacts.
-2.  **Hard Bankruptcy Gate**: Portfolios hitting a 1% wealth floor are automatically liquidated to cash. This prevents "zombie" gains on dust from inflating percentage returns.
-3.  **Stitched Summary Metrics**: Summary statistics (Sharpe, CAGR, Vol) are calculated from the **full-history stitched return series**. This eliminates the bias introduced by averaging annualized short-window metrics.
-4.  **Forensic Clipping**: Extreme daily returns (> 1000%) are clipped to prevent numerical divergence in reporting.
-5.  **Leverage Normalization**: Simulators enforce a strict 1.0 Gross Exposure cap at rebalance boundaries to prevent unintended margin-driven spikes.
-
-### 23.6 Workspace Isolation
-All intermediate meta-artifacts are prefixed by the profile name: `meta_returns_{meta_profile}_{risk_profile}.pkl`. This ensures that different meta-portfolios (e.g., "Defensive" vs "Aggressive") can coexist in the same Lakehouse without state collision.
+### 23.1 Design Principles
+1. **Recursive Nesting**: Meta-portfolios can contain other meta-portfolios as sleeves.
+2. **Physical Flattening**: All strategic logic is eventually collapsed into net symbol exposures.
+3. **Audit Integrity**: Unflattened cluster trees are preserved for forensic review.
 
 ---
 

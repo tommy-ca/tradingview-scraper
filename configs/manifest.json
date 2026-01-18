@@ -173,10 +173,10 @@
     "meta_crypto_only": {
       "description": "Fractal Branch: Crypto-Only Matrix",
       "sleeves": [
-        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "prod_long_all_v3" },
-        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "prod_short_all_v3" },
-        { "id": "ma_long", "profile": "binance_spot_rating_ma_long", "run_id": "prod_ma_long_v3" },
-        { "id": "ma_short", "profile": "binance_spot_rating_ma_short", "run_id": "prod_ma_short_v3" }
+        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "final_long_all_v9" },
+        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "final_short_all_v9" },
+        { "id": "ma_long", "profile": "binance_spot_rating_ma_long", "run_id": "final_long_ma_v9" },
+        { "id": "ma_short", "profile": "binance_spot_rating_ma_short", "run_id": "final_short_ma_v9" }
       ],
       "meta_allocation": { "engine": "custom", "profile": "hrp", "min_weight": 0.05, "max_weight": 0.5 }
     },
