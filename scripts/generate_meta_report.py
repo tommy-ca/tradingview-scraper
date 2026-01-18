@@ -16,6 +16,41 @@ from tradingview_scraper.utils.metrics import calculate_performance_metrics
 logger = logging.getLogger("meta_reporting")
 
 
+def get_forensic_anomalies(manifest: dict) -> List[dict]:
+    """Audit each sleeve for window-level anomalies."""
+    anomalies = []
+    for sleeve in manifest.get("sleeves", []):
+        s_id = sleeve["id"]
+        run_path = Path(sleeve["run_path"])
+        audit_path = run_path / "audit.jsonl"
+        if not audit_path.exists():
+            continue
+
+        with open(audit_path, "r") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                    if entry.get("type") == "action" and entry.get("step") == "backtest_simulate":
+                        outcome = entry.get("outcome", {})
+                        metrics = outcome.get("metrics", {})
+                        sharpe = metrics.get("sharpe", 0)
+                        ann_ret = metrics.get("ann_ret", 0)
+
+                        if sharpe > 10 or ann_ret > 10 or ann_ret < -0.9:
+                            anomalies.append(
+                                {
+                                    "sleeve": s_id,
+                                    "window": entry.get("context", {}).get("window_index"),
+                                    "profile": entry.get("context", {}).get("profile"),
+                                    "sharpe": sharpe,
+                                    "ann_ret": ann_ret,
+                                }
+                            )
+                except Exception:
+                    continue
+    return anomalies
+
+
 def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: List[str], meta_profile: str = "meta_production"):
     md = []
     md.append("# 🌐 Multi-Sleeve Meta-Portfolio Report")
@@ -162,6 +197,18 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
                             status = "❌ MISSING DATA"
 
                     md.append(f"| {s_id} | {run_path.name} | {status} |")
+
+                # CR-845: Forensic Anomalies (Phase 222)
+                anomalies = get_forensic_anomalies(manifest)
+                if anomalies:
+                    md.append("\n### 🚨 Forensic Anomalies")
+                    md.append("| Sleeve | Window | Profile | Sharpe | Ann. Ret |")
+                    md.append("| :--- | :--- | :--- | :--- | :--- |")
+                    for a in anomalies[:10]:  # Top 10
+                        md.append(f"| {a['sleeve']} | {a['window']} | {a['profile']} | {a['sharpe']:.2f} | {a['ann_ret']:.2%} |")
+                    if len(anomalies) > 10:
+                        md.append("| ... | ... | ... | ... | ... |")
+                        md.append(f"\n*Total anomalies detected: {len(anomalies)}*")
             except Exception as e:
                 logger.error(f"Failed to include sleeve health: {e}")
 

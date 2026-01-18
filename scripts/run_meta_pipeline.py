@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import List, Optional
 
 sys.path.append(os.getcwd())
-from tradingview_scraper.settings import get_settings
 from scripts.build_meta_returns import build_meta_returns
-from scripts.optimize_meta_portfolio import optimize_meta
 from scripts.flatten_meta_weights import flatten_weights
 from scripts.generate_meta_report import generate_meta_markdown_report
+from scripts.optimize_meta_portfolio import optimize_meta
+from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("run_meta_pipeline")

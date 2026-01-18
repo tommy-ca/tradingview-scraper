@@ -148,6 +148,9 @@ The system MUST support the [Fractal Hierarchical Meta-Portfolio Specification](
 | CR-640 | MUST | ✅ | **Directional Balance Delegation**: Directional concentration limits (e.g., LONG/SHORT exposure caps) are delegated to the **Pillar 3 (Allocation)** layer. The selection pipeline provides the purified alpha pool, while the portfolio engine enforces strategy-specific risk policy. |
 | CR-650 | MUST | ✅ | **Hard-Bounded Cluster Resolution**: The clustering stage MUST enforce a hard ceiling (default: 25) on factor resolution to ensure statistically significant branch variance for risk budgeting. |
 | CR-660 | MUST | ✅ | **Simulator Liquidation Standard**: Portfolio backtest simulators MUST enforce a -100% liquidation floor. Any strategy reaching this threshold is considered failed, and subsequent rebalance returns are zeroed out to prevent "Negative Capital" artifacts. |
+| CR-670 | MUST | ✅ | **Solver Health Gate**: Meta-aggregation scripts MUST automatically veto any atomic sleeve exhibiting a solver success rate below 75% to ensure the integrity of the meta-portfolio. |
+| CR-671 | MUST | ✅ | **Recursive Aggregation Caching**: The meta-aggregation pipeline MUST utilize a content-hashed caching layer to eliminate redundant IO and compute in complex fractal strategy trees. |
+| CR-672 | MUST | ✅ | **Forensic Outlier Reporting**: All meta-portfolio reports MUST include an automated forensic table identifying window-level anomalies (Sharpe > 10, Return > 1000%) to provide early warning of solver divergence. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable \"Deep Forensic Report\" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 

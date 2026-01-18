@@ -1,19 +1,30 @@
 import argparse
+import hashlib
 import json
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
 
 sys.path.append(os.getcwd())
+from scripts.validate_sleeve_health import validate_sleeve_health
 from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("build_meta_returns")
+
+
+def get_meta_cache_key(meta_profile: str, prof: str, sleeves: List[Dict]) -> str:
+    """Generate a unique key based on sleeve profiles and run_ids."""
+    components = [meta_profile, prof]
+    for s in sleeves:
+        components.append(f"{s['id']}:{s.get('run_id', 'dynamic')}")
+
+    return hashlib.sha256("|".join(components).encode()).hexdigest()[:16]
 
 
 def find_latest_run_for_profile(profile: str) -> Optional[Path]:
@@ -75,6 +86,30 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
 
     for prof in target_profiles:
         prof = prof.strip()
+
+        # CR-842: Aggregation Caching (Phase 222)
+        cache_key = get_meta_cache_key(meta_profile, prof, sleeves)
+        cache_dir = Path("data/lakehouse/.cache")
+        cache_file = cache_dir / f"{meta_profile}_{prof}_{cache_key}.pkl"
+        manifest_cache = cache_dir / f"{meta_profile}_{prof}_{cache_key}_manifest.json"
+
+        if cache_file.exists() and manifest_cache.exists():
+            logger.info(f"  [CACHE HIT] {meta_profile}/{prof} (Key: {cache_key})")
+            # Update output manifest from cache
+            with open(manifest_cache, "r") as f:
+                cached_manifest = json.load(f)
+
+            m_path = Path("data/lakehouse") / f"meta_manifest_{meta_profile}_{prof}.json"
+            with open(m_path, "w") as f:
+                json.dump(cached_manifest, f, indent=2)
+
+            # Legacy pkl update
+            p_output_path = Path(output_path).parent / f"meta_returns_{meta_profile}_{prof}.pkl"
+            import shutil
+
+            shutil.copy(cache_file, p_output_path)
+            continue
+
         meta_df = pd.DataFrame()
         sleeve_metadata = []
 
@@ -137,6 +172,11 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
 
                 if not run_path:
                     logger.warning(f"Could not find a specific run for profile {s_profile}. Skipping.")
+                    continue
+
+                # CR-840: Health Guardrail (Phase 222)
+                if not validate_sleeve_health(run_path.name, threshold=0.75):
+                    logger.warning(f"  [{s_id}] VETOED: Solver health below 75%. Skipping.")
                     continue
 
                 # Robust file discovery
@@ -207,6 +247,13 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
             m_path = Path("data/lakehouse") / f"meta_manifest_{meta_profile}_{prof}.json"
             with open(m_path, "w") as f:
                 json.dump(manifest_out, f, indent=2)
+
+            # CR-842: Persist to Cache
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            meta_df.to_pickle(cache_file)
+            with open(manifest_cache, "w") as f:
+                json.dump(manifest_out, f, indent=2)
+            logger.info(f"  [CACHE SAVE] {meta_profile}/{prof} (Key: {cache_key})")
 
     # Maintain legacy output_path for compatibility with old scripts if needed
     # but we now favor the profile-matrix outputs.

@@ -113,11 +113,13 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Design**: Propose streamlining for the meta-aggregation layer (Aggregation Speed, Error Handling).
 - [x] **Tasks**: Define next steps for institutional hardening.
 
-### Phase 222: Meta-Portfolio Orchestration Hardening (PLANNED)
-- [ ] **Infrastructure**: Fix missing dependencies (`skfolio`, `riskfolio`) in production environment.
-- [ ] **Service**: Implement caching in `build_meta_returns.py` for recursive fractal nodes.
-- [ ] **Guardrail**: Implement `scripts/validate_meta_audit.py` to enforce solver health thresholds.
-- [ ] **Optimization**: Parallelize atomic sleeve execution in meta-runs if resources permit.
+### Phase 222: Meta-Portfolio Orchestration Hardening (COMPLETED)
+- [x] **Infrastructure**: Fix missing dependencies (`skfolio`, `riskfolio`) in production environment.
+- [x] **Service**: Implement caching in `build_meta_returns.py` for recursive fractal nodes.
+- [x] **Guardrail**: Implement `scripts/validate_sleeve_health.py` to enforce solver health thresholds.
+- [x] **Optimization**: Parallelize atomic sleeve execution in meta-runs if resources permit.
+- [x] **Reporting**: Integrated forensic anomaly detection into the meta-portfolio reporter.
+
 
 ---
 **System Status**: 🟢 PRODUCTION READY (v4.6.0) - Phase 219 Scheduled
