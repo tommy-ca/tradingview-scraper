@@ -82,12 +82,20 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Objective**: Achieved final certification for Q1 2026 deployment.
 - [x] **Verification**: Confirmed 100% mechanical and strategic alignment under 252d training regime.
 
-### Phase 218.14: Fractal Meta-Portfolio Implementation (IN PROGRESS)
+### Phase 218.14: Fractal Meta-Portfolio Implementation (COMPLETED)
 - [x] **Architecture**: Designed Fractal Tree structure supporting nested meta-profiles.
 - [x] **Service**: Updated `build_meta_returns.py` with recursive branch resolution.
 - [x] **Service**: Updated `flatten_meta_weights.py` with recursive physical asset collapse.
 - [x] **Isolation**: Implemented profile-prefixed meta-artifact naming.
-- [ ] **Validation**: Execute recursive fractal test (Root -> Branch -> Atoms) and verify weight propagation.
+- [x] **Auditability**: Implemented `meta_cluster_tree_*.json` persistence for hierarchical allocation review.
+- [x] **Validation**: Executed recursive fractal test (`meta_crypto_only`) and verified weight propagation and physical symbol collapse.
+
+### Phase 219: Dynamic Historical Backtesting (SCHEDULED)
+- [ ] **Service**: Implement `HistoricalFeatureBackfill` to generate `features_matrix.parquet` using Synthetic Engine.
+- [ ] **Engine Update**: Modify `BacktestEngine` to re-rank candidates at each rebalance step using historical synthetic ratings.
+- [ ] **Goal**: Resolve "Discovery-Backtest Regime Mismatch".
+- [ ] **Workflow**: Integrate into SDD Flow (Spec -> Build -> Audit).
+
 
 ### Phase 219: Dynamic Historical Backtesting (SCHEDULED)
 
