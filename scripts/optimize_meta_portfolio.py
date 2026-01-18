@@ -124,6 +124,10 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
             # Save specific matrix result
             p_output_path = Path(output_path).parent / f"meta_optimized_{m_prof}_{target_profile}.json"
 
+            # CR-838: Preserve Hierarchical Cluster Metadata for Audit
+            # This captures the 'Fractal Tree' before it is flattened into physical assets
+            cluster_tree_path = Path(output_path).parent / f"meta_cluster_tree_{m_prof}_{target_profile}.json"
+
             artifact = {
                 "metadata": {
                     "source": str(p_path),
@@ -141,7 +145,12 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
             with open(p_output_path, "w") as f:
                 json.dump(artifact, f, indent=2)
 
+            # Also save the hierarchical tree (unflattened logic weights)
+            with open(cluster_tree_path, "w") as f:
+                json.dump(artifact, f, indent=2)
+
             logger.info(f"✅ Meta-optimized weights ({m_prof}/{target_profile}) saved to {p_output_path}")
+            logger.info(f"🌳 Meta-cluster tree preserved at {cluster_tree_path}")
 
         except Exception as e:
             logger.error(f"Meta-optimization failed for {target_profile}: {e}")
