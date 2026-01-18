@@ -134,12 +134,12 @@
         {
           "id": "long_all",
           "profile": "binance_spot_rating_all_long",
-          "run_id": "long_all_baseline"
+          "run_id": "20260118-161253"
         },
         {
           "id": "short_all",
           "profile": "binance_spot_rating_all_short",
-          "run_id": "short_all_baseline"
+          "run_id": "20260118-161504"
         }
       ],
       "meta_allocation": {
@@ -155,12 +155,12 @@
         {
           "id": "long_ma",
           "profile": "binance_spot_rating_ma_long",
-          "run_id": "long_ma_baseline"
+          "run_id": "20260118-161655"
         },
         {
           "id": "short_ma",
           "profile": "binance_spot_rating_ma_short",
-          "run_id": "short_ma_baseline"
+          "run_id": "20260118-161849"
         }
       ],
       "meta_allocation": {

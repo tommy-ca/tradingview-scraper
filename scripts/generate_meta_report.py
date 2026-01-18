@@ -130,7 +130,10 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
                 md.append(f"| {i + 1} | `{w['Symbol']}` | {w.get('Description', 'N/A')} | **{w['Weight']:.2%}** | {w.get('Market', 'N/A')} |")
 
         # 4. SLEEVE DATA HEALTH (CR-828)
-        manifest_path = meta_dir / f"meta_manifest_{prof}.json"
+        manifest_path = meta_dir / f"meta_manifest_{meta_profile}_{prof}.json"
+        if not manifest_path.exists():
+            manifest_path = meta_dir / f"meta_manifest_{prof}.json"
+
         if manifest_path.exists():
             try:
                 with open(manifest_path, "r") as f:

@@ -13,6 +13,7 @@ Includes standard certification for Rating-Based Strategy Benchmarks:
 
 ### 1.3 Status
 **Production Certified** (2026-01-16) - Deep Audit Standard v3.6.4.
+**Rerun Scheduled** (2026-01-18) - Meta-Portfolio stress test for All/MA Rating profiles.
 **Note**: Rating-based profiles are currently backtested on "Latest-Snapshot" data. Full validation pending historical feature accumulation (v3.6.5).
 
 ### 3.3 DataOps & Infrastructure

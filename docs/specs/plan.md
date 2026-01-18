@@ -99,6 +99,14 @@ This document codifies the institutional requirements and design specifications 
 - [ ] **Goal**: Resolve "Discovery-Backtest Regime Mismatch".
 - [ ] **Workflow**: Integrate into SDD Flow (Spec -> Build -> Audit).
 
+### Phase 220: Binance Spot Ratings Meta-Portfolio Rerun (COMPLETED)
+- [x] **Objective**: Rerun full production pipelines for Binance Spot Ratings (All & MA) including meta-aggregation.
+- [x] **Standard**: 10-day step size (Bi-Weekly) for crypto production.
+- [x] **Sleeves**: `binance_spot_rating_all_long/short` and `binance_spot_rating_ma_long/short`.
+- [x] **Meta-Portfolios**: `meta_benchmark` (All) and `meta_ma_benchmark` (MA).
+- [x] **Downstream**: Generate unified quant reports and physical weight flattens.
+- [x] **Data Ops**: Execute full data ingestion and repair before pipeline start.
+
 ---
 **System Status**: 🟢 PRODUCTION READY (v4.6.0) - Phase 219 Scheduled
 
