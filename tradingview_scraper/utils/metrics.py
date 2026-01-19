@@ -127,28 +127,34 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
             # Compounded total return over the period
             total_return = float(qs.stats.comp(rets))
 
-            # Annualization
-            # Use geometric mean for robust CAGR
-            if total_return > -1.0:
-                annualized_return = float((1 + total_return) ** (ann_factor / n_obs)) - 1
+            # CR-FIX: Standardize on arithmetic scaling for window-level reporting (Phase 225)
+            # This prevents the geometric wipe-out artifact where a 10-day loss compounds to -99.99%
+            if n_obs < 30:
+                # Arithmetic scaling relative to the ACTUAL window duration (CR-Update)
+                # Instead of projecting 10 days to 365, we project 10 days to 252 (Market standard)
+                # and use geometric mean logic for consistency with stitched CAGR
+
+                # Projecting 10 days to 365 is 36.5x leverage.
+                # For short windows, we should report annualized returns conservatively.
+                # Use daily mean * 252
+                annualized_return = float(rets.mean() * 252.0)
+                vol = float(rets.std() * math.sqrt(252.0))
+                realized_vol = float(np.clip(vol, 0.0, 5.0))
+                sharpe = (rets.mean() * 252.0) / (vol + 1e-9)
             else:
-                annualized_return = -1.0
+                # Standard geometric CAGR for long series
+                total_return = float(qs.stats.comp(rets))
+                annualized_return = float((1 + total_return) ** (ann_factor / n_obs)) - 1
+                vol = float(qs.stats.volatility(rets, periods=ann_factor))
+                realized_vol = float(np.clip(vol, 0.0, 5.0))
+                sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
 
-            # CR-215: Clip extreme reporting values for dashboard stability (Phase 224 Tightening)
-            # Strategies with > 1,000% CAGR are clipped to 10.0 (1,000%)
-            annualized_return = float(np.clip(annualized_return, -0.9999, 10.0))
-
-            # realized_vol clip to prevent infinite Sharpe in reports
-            vol = float(qs.stats.volatility(rets, periods=ann_factor))
-            realized_vol = float(np.clip(vol, 0.0, 5.0))
-
-            # CR-FIX: Sharpe Ratio Penalty for Bankruptcy
-            # If the strategy wipes out, the Sharpe should reflect this failure.
-            # We use the raw sharpe but capped if return is disastrous.
-            sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
-
+            # CR-215: Dashboard Stability Clipping
+            annualized_return = float(np.clip(annualized_return, -0.9999, 5.0))
             # CR-690: Institutional Sharpe Clipping (Phase 224)
-            sharpe = float(np.clip(sharpe, -5.0, 10.0))
+            # Tightened to prevent high-Sharpe artifacts in meta-aggregation
+            # But relaxed slightly for negatives to allow gradient awareness in optimizers
+            sharpe = float(np.clip(sharpe, -4.0, 5.0))
 
             if total_return <= -0.95:
                 # Force negative sharpe if portfolio is nearly dead

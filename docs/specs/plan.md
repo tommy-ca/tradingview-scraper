@@ -135,11 +135,16 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Guardrail**: Added per-window numerical clipping and Sharpe tightening to `tradingview_scraper/utils/metrics.py`.
 - [x] **Audit**: Validated anomaly reduction from **337** to **77** window-level events.
 
-### Phase 225: Ray Orchestration Hardening (IN PROGRESS)
-- [x] **Infrastructure**: Fixed Ray environment inheritance and subprocess PYTHONPATH.
-- [x] **Stability**: Implemented "Hard Fallback to EW" for windows remaining unstable at Ridge 0.95.
-- [ ] **Validation**: Execute full meta-rerun using Ray with all mitigations enabled.
-- [ ] **Goal**: Reduce anomaly count to < 10 window-level events.
+### Phase 225: Numerical Hardening (IN PROGRESS)
+- [ ] **Metrics**: Implement Arithmetic Annualization for reporting windows < 30 days in `metrics.py`.
+- [ ] **Solvers**: Enforce 25% weight caps in `BacktestEngine` to prevent factor concentration.
+- [ ] **Logic**: Switch internal performance tracking to Log-Returns for short-horizon symmetry.
+- [ ] **Goal**: Suppress false "Fear-Induced" anomalies (-99% projection artifacts).
+
+### Phase 226: Ray Resource Hardening (PLANNED)
+- [ ] **Infrastructure**: Implement 3GB memory caps per Ray sleeve task to prevent system OOM.
+- [ ] **Parallelization**: Execute 4-sleeve meta-rerun with full healthy solvers and 100% stable metrics.
+- [ ] **Certification**: Achieve final Forensic Audit sign-off for Q1 Production.
 
 ---
 

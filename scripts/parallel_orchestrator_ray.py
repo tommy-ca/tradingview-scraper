@@ -10,7 +10,7 @@ import ray
 logger = logging.getLogger("ray_orchestrator")
 
 
-@ray.remote(num_cpus=2)
+@ray.remote(num_cpus=2, memory=3 * 1024 * 1024 * 1024)
 def run_sleeve_production(profile: str, run_id: str) -> Dict:
     """
     Executes a single sleeve's production pipeline as a Ray task.

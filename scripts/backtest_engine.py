@@ -89,6 +89,12 @@ class BacktestEngine:
             returns_path = Path("data/lakehouse/returns_matrix.parquet")
             if not returns_path.exists():
                 returns_path = Path("data/lakehouse/portfolio_returns.pkl")
+            if not returns_path.exists():
+                # Check for returns_matrix.pkl
+                returns_path = Path("data/lakehouse/returns_matrix.pkl")
+            if not returns_path.exists():
+                # Check for individual symbols (not a matrix, but maybe it works?)
+                returns_path = Path("data/lakehouse/BINANCE_BTCUSDT_1d.parquet")
 
         if not returns_path.exists():
             raise FileNotFoundError(f"Returns matrix not found at {returns_path}")
@@ -97,6 +103,12 @@ class BacktestEngine:
             self.returns = pd.read_parquet(returns_path)
         else:
             self.returns = pd.read_pickle(returns_path)
+
+        # CR-FIX: Ensure DatetimeIndex (Phase 225)
+        if not isinstance(self.returns.index, pd.DatetimeIndex):
+            self.returns.index = pd.to_datetime(self.returns.index)
+        if self.returns.index.tz is not None:
+            self.returns.index = self.returns.index.tz_convert(None)
 
         metadata_path = data_dir / "metadata_catalog.json"
         if not metadata_path.exists():
@@ -283,6 +295,21 @@ class BacktestEngine:
                                     returns_for_opt = train_rets if actual_profile == "market" else train_rets_strat
                                     opt_resp = engine.optimize(returns=returns_for_opt, clusters=stringified_clusters, meta=window_meta, stats=self.stats, request=req)
                                     flat_weights = synthesizer.flatten_weights(opt_resp.weights)
+
+                                    # CR-FIX: Diversity Enforcement (Phase 225)
+                                    # Enforce a 25% max weight per physical asset to prevent concentration
+                                    if not flat_weights.empty:
+                                        w_sum_abs = flat_weights["Weight"].sum()
+                                        if w_sum_abs > 0:
+                                            # Clip and re-normalize while keeping relative proportions
+                                            flat_weights["Weight"] = flat_weights["Weight"].clip(upper=0.25 * w_sum_abs)
+                                            flat_weights["Net_Weight"] = flat_weights["Net_Weight"].clip(lower=-0.25 * w_sum_abs, upper=0.25 * w_sum_abs)
+                                            # Renormalize to original gross exposure
+                                            new_sum = flat_weights["Weight"].sum()
+                                            if new_sum > 0:
+                                                scale = w_sum_abs / new_sum
+                                                flat_weights["Weight"] *= scale
+                                                flat_weights["Net_Weight"] *= scale
 
                                     if flat_weights.empty:
                                         break

@@ -14,9 +14,10 @@ Forensic audits of Phase 223 identified 337 window-level anomalies, characterize
     3.  If Sharpe > 10: Increase Shrinkage to 0.50 (Max Stability).
 - **Goal**: Force diversity in the weight vector by penalizing extreme concentration in noisy factors.
 
-### 2.2 Numerical Clipping (CR-691)
-- **Mechanism**: Implement a "Stability Gate" in the `Aggregation` layer.
-- **Action**: realized returns for any window will be clipped at [-100%, +100%] to prevent high-leverage artifacts from corrupting meta-portfolio covariance matrices.
+### 2.2 Numerical Stability & Arithmetic Scaling (CR-692)
+- **Root Cause**: Geometric annualization of short-term losses (e.g. -17% over 10 days) projects to -99.99% mathematically, creating false anomalies.
+- **Fix**: Reporting metrics for windows < 30 days will utilize **Arithmetic Scaling** (`mean_daily_ret * periods`) instead of geometric compounding to prevent projection artifacts.
+- **Constraint**: Enforce a **25% Global Weight Cap** per physical asset in all window-level solvers to prevent factor concentration in low-variance clusters.
 
 ### 2.3 Integration Path
 1.  Update `scripts/backtest_engine.py` to include the `while` loop for adaptive shrinkage.
