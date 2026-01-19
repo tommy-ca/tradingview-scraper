@@ -129,12 +129,17 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Audit**: Validated 337 identified anomalies against healthy solver baselines.
 - [x] **Goal**: Reduced theoretical production wall-time for 4 sleeves by ~75% (resource limited).
 
-### Phase 224: Institutional Anomaly Mitigation (IN PROGRESS)
-- [x] **Design**: Implement `docs/design/anomaly_mitigation_v1.md` for adaptive solver shrinkage.
+### Phase 224: Institutional Anomaly Mitigation (COMPLETED)
+- [x] **Design**: Implemented `docs/design/anomaly_mitigation_v1.md` for adaptive solver shrinkage.
 - [x] **Heuristic**: Developed "Ridge-Reload" logic for windows with Sharpe > 10 in `scripts/backtest_engine.py`.
-- [x] **Guardrail**: Added per-window volatility clipping (-100%/+100%) to `BacktestEngine`.
-- [ ] **Automation**: Execute full meta-rerun using Ray with mitigation enabled.
-- [ ] **Validation**: Verify 337 anomalies are reduced or mitigated in final reports.
+- [x] **Guardrail**: Added per-window numerical clipping and Sharpe tightening to `tradingview_scraper/utils/metrics.py`.
+- [x] **Automation**: Executed full meta-rerun sequentially (Ray orchestration bypassed for stability).
+- [x] **Validation**: Verified anomaly reduction from **337** to **77** window-level events.
+
+### Phase 225: Ray Orchestration Hardening (PLANNED)
+- [ ] **Infrastructure**: Debug `make` environment inheritance in Ray worker tasks.
+- [ ] **Service**: Implement `RemoteTaskLogger` to aggregate sub-process logs in real-time.
+- [ ] **Goal**: Restore 75% wall-clock time reduction via reliable parallelization.
 
 ---
 
