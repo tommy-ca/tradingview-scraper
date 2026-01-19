@@ -121,11 +121,12 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Reporting**: Integrated forensic anomaly detection into the meta-portfolio reporter.
 - [x] **Audit**: Validated 100% solver health baseline and identified 155 window-level outliers.
 
-### Phase 223: Multi-Sleeve Parallelization (IN PROGRESS)
-- [ ] **Design**: Define `docs/design/parallel_orchestration_v1.md` for ProcessPool-based execution.
-- [ ] **Service**: Implement `scripts/parallel_orchestrator.py` for concurrent `make flow-production` calls.
-- [ ] **Workflow**: Add `--execute-sleeves` flag to `run_meta_pipeline.py`.
-- [ ] **Goal**: Reduce total production runtime for meta-portfolios by > 50%.
+### Phase 223: Multi-Sleeve Parallelization with Ray (IN PROGRESS)
+- [x] **Design**: Define `docs/design/parallel_orchestration_v1.md` for Ray-based execution (v2.0).
+- [ ] **Service**: Implement `scripts/parallel_orchestrator_ray.py` for concurrent sleeve production.
+- [ ] **Workflow**: Integrate Ray logic into `run_meta_pipeline.py` with automatic resource scaling.
+- [ ] **Audit**: Verify 155 identified anomalies against parallel-simulated results.
+- [ ] **Goal**: Reduce total production runtime for meta-portfolios by > 60%.
 
 ---
 
