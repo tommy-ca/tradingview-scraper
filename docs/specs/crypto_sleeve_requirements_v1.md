@@ -152,6 +152,8 @@ The system MUST support the [Fractal Hierarchical Meta-Portfolio Specification](
 | CR-671 | MUST | ✅ | **Recursive Aggregation Caching**: The meta-aggregation pipeline MUST utilize a content-hashed caching layer to eliminate redundant IO and compute in complex fractal strategy trees. |
 | CR-672 | MUST | ✅ | **Forensic Outlier Reporting**: All meta-portfolio reports MUST include an automated forensic table identifying window-level anomalies (Sharpe > 10, Return > 1000%) to provide early warning of solver divergence. |
 | CR-680 | MUST | ✅ | **Ray-Based Parallelization**: The meta-aggregation orchestrator MUST utilize Ray for concurrent sleeve execution to minimize wall-clock production time while maintaining resource isolation. |
+| CR-690 | MUST | ✅ | **Adaptive Ridge Reloading**: The backtest engine MUST automatically detect high-Sharpe windows (>10.0) and iteratively reload Ridge shrinkage intensity (up to 0.50) to enforce weight diversity. |
+| CR-691 | MUST | ✅ | **Numerical Clipping**: realize daily returns MUST be clipped at [-100%, +100%] in the meta-aggregation layer to prevent mathematical divergence in covariance estimation. |
 | CR-200 | MUST | ✅ | **Deep Forensic Reporting**: Every tournament must generate a human-readable \"Deep Forensic Report\" tracing the Five-Stage Funnel and providing window-by-window portfolio snapshots. |
 
 

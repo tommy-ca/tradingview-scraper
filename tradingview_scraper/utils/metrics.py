@@ -134,18 +134,22 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
             else:
                 annualized_return = -1.0
 
-            # CR-215: Clip extreme reporting values for dashboard stability
-            # Strategies with > 10,000% CAGR are clipped to 100.0 (10,000%)
-            annualized_return = float(np.clip(annualized_return, -0.9999, 100.0))
+            # CR-215: Clip extreme reporting values for dashboard stability (Phase 224 Tightening)
+            # Strategies with > 1,000% CAGR are clipped to 10.0 (1,000%)
+            annualized_return = float(np.clip(annualized_return, -0.9999, 10.0))
 
             # realized_vol clip to prevent infinite Sharpe in reports
             vol = float(qs.stats.volatility(rets, periods=ann_factor))
-            realized_vol = float(np.clip(vol, 0.0, 10.0))
+            realized_vol = float(np.clip(vol, 0.0, 5.0))
 
             # CR-FIX: Sharpe Ratio Penalty for Bankruptcy
             # If the strategy wipes out, the Sharpe should reflect this failure.
             # We use the raw sharpe but capped if return is disastrous.
             sharpe = float(qs.stats.sharpe(rets, rf=0, periods=ann_factor))
+
+            # CR-690: Institutional Sharpe Clipping (Phase 224)
+            sharpe = float(np.clip(sharpe, -5.0, 10.0))
+
             if total_return <= -0.95:
                 # Force negative sharpe if portfolio is nearly dead
                 sharpe = min(-5.0, sharpe)

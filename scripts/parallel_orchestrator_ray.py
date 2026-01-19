@@ -1,5 +1,7 @@
 import logging
+import os
 import subprocess
+import sys
 import time
 from typing import Dict, List
 
@@ -16,14 +18,28 @@ def run_sleeve_production(profile: str, run_id: str) -> Dict:
     start_time = time.time()
     logger.info(f"🚀 [Ray] Starting production for {profile} (Run: {run_id})")
 
-    cmd = ["uv", "run", "python", "-m", "scripts.run_production_pipeline", "--profile", profile, "--run-id", run_id]
+    # CR-FIX: Ensure we run in the correct working directory and use same python
+    cwd = os.getcwd()
+    cmd = [sys.executable, "-m", "scripts.run_production_pipeline", "--profile", profile, "--run-id", run_id]
+
+    # Explicitly inherit and propagate important environment variables
+    env = os.environ.copy()
+    env["PYTHONPATH"] = cwd + ":" + env.get("PYTHONPATH", "")
+    env["TV_PROFILE"] = profile
+    env["TV_RUN_ID"] = run_id
+
+    # Force use of local python for Ray tasks
+    env["PATH"] = os.path.dirname(sys.executable) + ":" + env.get("PATH", "")
 
     try:
         # Capture output to prevent interleaving
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=cwd, env=env)
         duration = time.time() - start_time
         return {"profile": profile, "run_id": run_id, "status": "success", "duration": duration, "stdout_tail": result.stdout[-500:]}
     except subprocess.CalledProcessError as e:
+        logger.error(f"❌ [Ray] Task failed for {profile}: {e}")
+        logger.error(f"STDOUT: {e.stdout}")
+        logger.error(f"STDERR: {e.stderr}")
         return {"profile": profile, "run_id": run_id, "status": "error", "error": str(e), "stderr": e.stderr}
 
 
