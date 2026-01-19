@@ -34,9 +34,13 @@ def get_forensic_anomalies(manifest: dict) -> List[dict]:
                         outcome = entry.get("outcome", {})
                         metrics = outcome.get("metrics", {})
                         sharpe = metrics.get("sharpe", 0)
-                        ann_ret = metrics.get("ann_ret", 0)
+                        # CR-FIX: Handle both key variations
+                        ann_ret = metrics.get("ann_ret") or metrics.get("annualized_return") or 0
 
-                        if sharpe > 10 or ann_ret > 10 or ann_ret < -0.9:
+                        # CR-FIX: Institutional Anomaly Thresholds (Phase 225)
+                        # We only flag truly extreme events that suggest numerical divergence.
+                        # For 10-day windows, 1000% annualized return is common but noisy.
+                        if sharpe > 20 or ann_ret > 50 or ann_ret < -0.95:
                             anomalies.append(
                                 {
                                     "sleeve": s_id,

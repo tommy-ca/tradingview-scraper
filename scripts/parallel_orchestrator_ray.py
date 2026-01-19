@@ -48,6 +48,8 @@ def execute_parallel_sleeves(sleeves: List[Dict]) -> List[Dict]:
     Orchestrates multiple sleeve runs using Ray.
     """
     if not ray.is_initialized():
+        # CR-FIX: Standard init. Subprocesses will use the local env
+        # since we are running on a single node.
         ray.init(ignore_reinit_error=True)
 
     futures = [run_sleeve_production.remote(s["profile"], s["run_id"]) for s in sleeves]

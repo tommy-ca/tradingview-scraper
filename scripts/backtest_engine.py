@@ -67,7 +67,20 @@ class BacktestEngine:
         data_dir = run_dir / "data" if run_dir else Path("data/lakehouse")
         logger.info(f"Loading data from {data_dir}")
 
+        # Load Candidates
+        cands_path = data_dir / "portfolio_candidates_raw.json"
+        if not cands_path.exists():
+            cands_path = data_dir / "portfolio_candidates.json"
+
+        self.raw_candidates = []
+        if cands_path.exists():
+            import json
+
+            with open(cands_path, "r") as f:
+                self.raw_candidates = json.load(f)
+
         returns_path = data_dir / "returns_matrix.parquet"
+
         if not returns_path.exists():
             returns_path = data_dir / "portfolio_returns.pkl"
 
@@ -108,15 +121,15 @@ class BacktestEngine:
                 except Exception:
                     self.stats = pd.DataFrame()
 
-    def run_tournament(self, mode: str = "production", train_window: Optional[int] = None, test_window: Optional[int] = None, step_size: Optional[int] = None):
+    def run_tournament(self, mode: str = "production", train_window: Optional[int] = None, test_window: Optional[int] = None, step_size: Optional[int] = None, run_dir: Optional[Path] = None):
         """Run a rolling-window backtest tournament."""
         if self.returns.empty:
-            self.load_data()
+            self.load_data(run_dir=run_dir)
 
         config = self.settings
-        train_window = train_window or config.train_window
-        test_window = test_window or config.test_window
-        step_size = step_size or config.step_size
+        train_window = int(train_window or config.train_window)
+        test_window = int(test_window or config.test_window)
+        step_size = int(step_size or config.step_size)
 
         profiles = config.profiles.split(",")
         engines = config.engines.split(",")
@@ -134,7 +147,9 @@ class BacktestEngine:
         }
 
         synthesizer = StrategySynthesizer()
-        run_dir = self.settings.prepare_summaries_run_dir()
+        if not run_dir:
+            run_dir = self.settings.prepare_summaries_run_dir()
+
         ledger = AuditLedger(run_dir)
 
         # Persistence for return series
@@ -145,19 +160,29 @@ class BacktestEngine:
         n_obs = len(self.returns)
         windows = list(range(train_window, n_obs - test_window, step_size))
         logger.info(f"Tournament Started: {n_obs} rows available. Windows: count={len(windows)}, train={train_window}, test={test_window}, step={step_size}")
+
         for i in windows:
             train_rets = self.returns.iloc[i - train_window : i]
             test_rets = self.returns.iloc[i : i + test_window]
 
             # 2. Pillar 1: Universe Selection
             regime_name = "NORMAL"
-            current_mode = "v4" if mode == "production" else "baseline"
+            current_mode = config.features.selection_mode
 
             selection_engine = build_selection_engine(current_mode)
             from tradingview_scraper.selection_engines.base import SelectionRequest
 
             req_select = SelectionRequest(top_n=config.top_n, threshold=config.threshold)
-            selection = selection_engine.select(returns=train_rets, raw_candidates=[], stats_df=self.stats, request=req_select)
+            selection = selection_engine.select(returns=train_rets, raw_candidates=self.raw_candidates, stats_df=self.stats, request=req_select)
+
+            # CR-FIX: Ensure winners exist in the returns matrix (Phase 225)
+            if selection.winners:
+                selection_winners = [w for w in selection.winners if w["symbol"] in train_rets.columns]
+                if len(selection_winners) != len(selection.winners):
+                    logger.warning(f"  [DATA GAP] Filtered {len(selection.winners) - len(selection_winners)} winners missing from returns matrix.")
+
+                # Mocking the winners list in selection response
+                object.__setattr__(selection, "winners", selection_winners)
 
             if selection.winners:
                 winners_syms = [w["symbol"] for w in selection.winners]
@@ -273,8 +298,18 @@ class BacktestEngine:
 
                                     if sharpe > 10.0 and ridge_attempt < max_ridge_retries and actual_profile not in ["market", "benchmark"]:
                                         current_ridge = 0.50 if ridge_attempt == 1 else 0.95
-                                        logging.warning(f"  [ADAPTIVE RIDGE] Window {i} ({actual_profile}) anomalous (Sharpe={sharpe:.2f}). Reloading MAX Ridge: {current_ridge:.2f}")
+                                        logger.warning(f"  [ADAPTIVE RIDGE] Window {i} ({actual_profile}) anomalous (Sharpe={sharpe:.2f}). Reloading MAX Ridge: {current_ridge:.2f}")
                                         continue
+
+                                    # CR-FIX: Hard Fallback to EW for persistent instability (Phase 225)
+                                    if sharpe > 10.0 and ridge_attempt == max_ridge_retries and actual_profile not in ["market", "benchmark"]:
+                                        logger.warning(f"  [HARD FALLBACK] Window {i} ({actual_profile}) remains unstable (Sharpe={sharpe:.2f}). Forcing Equal Weight.")
+                                        n_strat = len(returns_for_opt.columns)
+                                        if n_strat > 0:
+                                            ew_weights = pd.Series(1.0 / n_strat, index=returns_for_opt.columns)
+                                            dummy_weights = pd.DataFrame({"Symbol": ew_weights.index, "Weight": ew_weights.values})
+                                            final_flat_weights = synthesizer.flatten_weights(dummy_weights)
+                                            break
 
                                     final_flat_weights = flat_weights
                                     break
@@ -375,11 +410,12 @@ class BacktestEngine:
                 full_series_raw = pd.concat(series_list)
                 if isinstance(full_series_raw, (pd.Series, pd.DataFrame)):
                     full_series = full_series_raw[~full_series_raw.index.duplicated(keep="first")]
-                    full_series = full_series.sort_index()
+                    if hasattr(full_series, "sort_index"):
+                        full_series = full_series.sort_index()
                     out_path = returns_out / f"{key}.pkl"
-                    full_series.to_pickle(str(out_path))
+                    if hasattr(full_series, "to_pickle"):
+                        full_series.to_pickle(str(out_path))
                     logger.info(f"Saved stitched returns to {out_path}")
-
             except Exception as e:
                 logger.error(f"Failed to save returns for {key}: {e}")
 
@@ -394,17 +430,26 @@ if __name__ == "__main__":
     parser.add_argument("--train-window", type=int)
     parser.add_argument("--test-window", type=int)
     parser.add_argument("--step-size", type=int)
+    parser.add_argument("--run-id", help="Explicit run ID to use")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    engine = BacktestEngine()
-    tournament_results = engine.run_tournament(mode=args.mode, train_window=args.train_window, test_window=args.test_window, step_size=args.step_size)
-
     from tradingview_scraper.settings import get_settings
 
     config = get_settings()
+
+    # If run_id is provided, ensure settings uses it
+    if args.run_id:
+        os.environ["TV_RUN_ID"] = args.run_id
+        # Reload settings to pick up env var
+        config = get_settings()
+
     run_dir = config.prepare_summaries_run_dir()
+
+    engine = BacktestEngine()
+    tournament_results = engine.run_tournament(mode=args.mode, train_window=args.train_window, test_window=args.test_window, step_size=args.step_size, run_dir=run_dir)
+
     persist_tournament_artifacts(tournament_results, run_dir / "data")
 
     print("\n" + "=" * 50)

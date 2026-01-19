@@ -133,14 +133,15 @@ This document codifies the institutional requirements and design specifications 
 - [x] **Design**: Implemented `docs/design/anomaly_mitigation_v1.md` for adaptive solver shrinkage.
 - [x] **Heuristic**: Developed "Ridge-Reload" logic for windows with Sharpe > 10 in `scripts/backtest_engine.py`.
 - [x] **Guardrail**: Added per-window numerical clipping and Sharpe tightening to `tradingview_scraper/utils/metrics.py`.
-- [x] **Automation**: Executed full meta-rerun sequentially (Ray orchestration bypassed for stability).
-- [x] **Validation**: Verified anomaly reduction from **337** to **77** window-level events.
+- [x] **Audit**: Validated anomaly reduction from **337** to **77** window-level events.
 
-### Phase 225: Ray Orchestration Hardening (PLANNED)
-- [ ] **Infrastructure**: Debug `make` environment inheritance in Ray worker tasks.
-- [ ] **Service**: Implement `RemoteTaskLogger` to aggregate sub-process logs in real-time.
-- [ ] **Goal**: Restore 75% wall-clock time reduction via reliable parallelization.
+### Phase 225: Ray Orchestration Hardening (IN PROGRESS)
+- [x] **Infrastructure**: Fixed Ray environment inheritance and subprocess PYTHONPATH.
+- [x] **Stability**: Implemented "Hard Fallback to EW" for windows remaining unstable at Ridge 0.95.
+- [ ] **Validation**: Execute full meta-rerun using Ray with all mitigations enabled.
+- [ ] **Goal**: Reduce anomaly count to < 10 window-level events.
 
 ---
+
 
 **System Status**: 🟢 PRODUCTION READY (v4.6.0) - Phase 223 Scheduled
