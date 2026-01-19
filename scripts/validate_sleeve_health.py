@@ -24,6 +24,8 @@ def validate_sleeve_health(run_id: str, threshold: float = 0.75):
             try:
                 entry = json.loads(line)
                 if entry.get("type") == "action" and entry.get("step") == "backtest_optimize":
+                    if entry.get("status") == "intent":
+                        continue
                     total_optimizations += 1
                     if entry.get("status") == "success":
                         successful_optimizations += 1
