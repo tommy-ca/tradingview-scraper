@@ -23,15 +23,29 @@ logger = logging.getLogger("analyze_persistence")
 
 def analyze_persistence():
     settings = get_settings()
-    returns_path = Path(os.getenv("PORTFOLIO_RETURNS_PATH", "data/lakehouse/portfolio_returns.pkl"))
-    meta_path = Path(os.getenv("PORTFOLIO_META_PATH", "data/lakehouse/portfolio_meta.json"))
+    # CR-831: Workspace Isolation - Infer returns path from run context
+    run_dir = settings.summaries_runs_dir / settings.run_id if settings.run_id else None
+
+    returns_path = None
+    if run_dir:
+        returns_path = run_dir / "data" / "returns_matrix.parquet"
+
+    if not returns_path or not returns_path.exists():
+        # Fallback to env or legacy lakehouse
+        returns_path = Path(os.getenv("PORTFOLIO_RETURNS_PATH", "data/lakehouse/portfolio_returns.pkl"))
+
+    # meta_path is usually not used here, but for isolation:
+    # meta_path = Path(os.getenv("PORTFOLIO_META_PATH", "data/lakehouse/portfolio_meta.json"))
 
     if not returns_path.exists():
         logger.error(f"Returns matrix missing at {returns_path}")
         return
 
     logger.info(f"Loading returns from {returns_path}")
-    returns_df = cast(pd.DataFrame, pd.read_pickle(returns_path))
+    if str(returns_path).endswith(".parquet"):
+        returns_df = pd.read_parquet(returns_path)
+    else:
+        returns_df = cast(pd.DataFrame, pd.read_pickle(returns_path))
 
     if returns_df.empty:
         logger.error("Returns matrix is empty.")
@@ -97,13 +111,21 @@ def analyze_persistence():
     results.sort(key=lambda x: x["persistence_score"], reverse=True)
 
     # Save JSON
+    # CR-831: Workspace Isolation - Save to run data if available
     out_json = Path("data/lakehouse/persistence_metrics.json")
+    if run_dir:
+        out_json = run_dir / "data" / "persistence_metrics.json"
+
     with open(out_json, "w") as f:
         json.dump(results, f, indent=2)
     logger.info(f"Saved metrics to {out_json}")
 
     # Generate Report
-    report_path = settings.prepare_summaries_run_dir() / "persistence_report.md"
+    if run_dir:
+        report_path = run_dir / "reports" / "research" / "persistence_report.md"
+    else:
+        report_path = settings.prepare_summaries_run_dir() / "persistence_report.md"
+
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [

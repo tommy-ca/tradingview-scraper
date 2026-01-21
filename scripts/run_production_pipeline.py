@@ -7,7 +7,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from rich.console import Console
 from rich.progress import (
@@ -30,10 +30,12 @@ logger = logging.getLogger("production_pipeline")
 
 
 class ProductionPipeline:
-    def __init__(self, profile: str = "production", manifest: str = "configs/manifest.json", run_id: Optional[str] = None):
+    def __init__(self, profile: str = "production", manifest: str = "configs/manifest.json", run_id: Optional[str] = None, skip_analysis: bool = False, skip_validation: bool = False):
         self.profile = profile
         self.manifest_path = Path(manifest)
         self.run_id = run_id or datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.skip_analysis = skip_analysis
+        self.skip_validation = skip_validation
         self.console = Console()
 
         # Initialize environment BEFORE loading settings
@@ -45,9 +47,12 @@ class ProductionPipeline:
         # Promote common override env vars to TV_ prefixed settings vars
         self._promote_env_overrides()
 
-        # NOTE: Do not clear the settings cache here.
-        # Tests and callers may patch the singleton settings instance (e.g., summaries_dir, feat_audit_ledger).
+        # CR-FIX: Ensure settings are reloaded with the new environment variables
+        # This is critical for Ray/Worker reuse scenarios.
+        get_settings.cache_clear()
         self.settings = get_settings()
+
+        # Override specific settings instance fields if needed (though env vars should drive this)
         self.settings.run_id = self.run_id
         self.settings.profile = profile
         self.settings.manifest_path = self.manifest_path
@@ -454,8 +459,8 @@ class ProductionPipeline:
                 ("Strategy Synthesis", ["uv", "run", "scripts/synthesize_strategy_matrix.py"], None),
                 ("Health Audit", [*make_base, "data-audit", strict_health_arg], self.validate_health),
                 ("Persistence Analysis", [*make_base, "research-persistence"], None),
-                ("Regime Analysis", ["uv", "run", "python", "scripts/research_regime_v3.py"], None),
-                ("Factor Analysis", [*make_base, "port-analyze", f"RETURNS_MATRIX={self.run_dir}/data/synthetic_returns.parquet"], None),
+                # SPLIT: Critical Pre-Opt Analysis
+                ("Pre-Opt Analysis", [*make_base, "port-pre-opt", f"RETURNS_MATRIX={self.run_dir}/data/synthetic_returns.parquet"], None),
                 ("Optimization", [*make_base, "port-optimize", f"RETURNS_MATRIX={self.run_dir}/data/synthetic_returns.parquet"], self.validate_optimization),
                 (
                     "Weight Flattening",
@@ -469,12 +474,18 @@ class ProductionPipeline:
                     ],
                     None,
                 ),
-                ("Validation", [*make_base, "port-test", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json", f"RETURNS_MATRIX={self.run_dir}/data/returns_matrix.parquet"], None),
                 ("Reporting", [*make_base, "port-report", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json"], None),
-                # Gist Sync is optional and doesn't block the pipeline
-                # Can be enabled by GIST_SYNC=1 env var if needed, or run manually.
-                # Removing from default production flow to reduce noise.
             ]
+
+            # Optional Validation Step
+            if not self.skip_validation:
+                all_steps.append(
+                    ("Validation", [*make_base, "port-test", f"OPTIMIZED_FILE={self.run_dir}/data/portfolio_flattened.json", f"RETURNS_MATRIX={self.run_dir}/data/returns_matrix.parquet"], None)
+                )
+
+            # Optional Deep Analysis Step
+            if not self.skip_analysis:
+                all_steps.append(("Post-Analysis", [*make_base, "port-post-analysis", f"RETURNS_MATRIX={self.run_dir}/data/synthetic_returns.parquet"], None))
 
             if os.getenv("GIST_SYNC") == "1":
                 all_steps.append(("Gist Sync", [*make_base, "report-sync"], None))
@@ -508,11 +519,11 @@ class ProductionPipeline:
                 # If Health Audit fails, the pipeline fails. Recovery must be done via 'flow-data'.
                 if name == "Health Audit" and not success:
                     progress.console.print("[bold red]Health Audit failed. Aborting pipeline.[/]\n[yellow]Run 'make data-repair' or 'make flow-data' to fix the Lakehouse.[/]")
-                    sys.exit(1)
+                    raise RuntimeError("Health Audit failed")
 
                 if not success:
                     progress.console.print(f"[bold red]Pipeline aborted at step '{name}' due to failure.[/]")
-                    sys.exit(1)
+                    raise RuntimeError(f"Pipeline failed at step: {name}")
 
                 progress.advance(pipeline_task)
 
@@ -529,7 +540,9 @@ if __name__ == "__main__":
     parser.add_argument("--manifest", default="configs/manifest.json", help="Path to manifest file")
     parser.add_argument("--start-step", type=int, default=1, help="Step number to start from (1-14)")
     parser.add_argument("--run-id", help="Explicit run ID to use (for resuming)")
+    parser.add_argument("--skip-analysis", action="store_true", help="Skip heavy post-optimization analysis (Visuals)")
+    parser.add_argument("--skip-validation", action="store_true", help="Skip validation backtests")
     args = parser.parse_args()
 
-    pipeline = ProductionPipeline(profile=args.profile, manifest=args.manifest, run_id=args.run_id)
+    pipeline = ProductionPipeline(profile=args.profile, manifest=args.manifest, run_id=args.run_id, skip_analysis=args.skip_analysis, skip_validation=args.skip_validation)
     pipeline.execute(start_step=args.start_step)

@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional
 
 from tradingview_scraper.pipelines.selection.rankers.base import BaseRanker
 from tradingview_scraper.pipelines.selection.rankers.mps import MPSRanker
+from tradingview_scraper.pipelines.selection.rankers.regime import StrategyRegimeRanker
 from tradingview_scraper.pipelines.selection.rankers.signal import SignalRanker
 
 
@@ -20,6 +21,10 @@ class RankerFactory:
         if method == "signal":
             signal_name = config.get("signal", "recommend_ma")
             return SignalRanker(signal_name=signal_name)
+
+        if method == "regime":
+            strategy = config.get("strategy", "trend_following")
+            return StrategyRegimeRanker(strategy=strategy)
 
         # Default fallback
         return MPSRanker()

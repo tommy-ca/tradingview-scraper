@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from tradingview_scraper.settings import get_settings
+
 
 def _load_results(run_id: str, runs_root: Path) -> Dict[str, Any]:
     run_path = runs_root / run_id / "tournament_results.json"
@@ -48,7 +50,7 @@ def _print_matches(label: str, matches: List[Tuple[str, str, str, int]]) -> None
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit baseline availability in tournament results.")
     parser.add_argument("--run-id", default=os.getenv("TV_RUN_ID") or os.getenv("RUN_ID"))
-    parser.add_argument("--runs-root", default="artifacts/summaries/runs")
+    parser.add_argument("--runs-root", default=None)
     parser.add_argument("--strict", action="store_true", help="Fail if baseline availability is missing.")
     parser.add_argument("--require-raw-pool", action="store_true", help="Fail if raw_pool_ew windows are missing.")
     parser.add_argument("--json", action="store_true", help="Emit JSON summary.")
@@ -58,7 +60,8 @@ def main() -> int:
         print("Missing --run-id (or TV_RUN_ID/RUN_ID).", file=sys.stderr)
         return 2
 
-    runs_root = Path(args.runs_root)
+    settings = get_settings()
+    runs_root = Path(args.runs_root) if args.runs_root else settings.summaries_runs_dir
     data = _load_results(args.run_id, runs_root)
     results = data.get("results", {})
 

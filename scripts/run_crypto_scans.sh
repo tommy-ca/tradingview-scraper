@@ -22,7 +22,7 @@ echo "------------------------------------------"
 uv run python scripts/compose_pipeline.py --profile "$PROFILE"
 
 echo "------------------------------------------"
-echo "Crypto scans completed. Results are in export/<run_id>/"
+echo "Crypto scans completed. Results are in data/export/<run_id>/"
 echo ""
 echo "Next steps:"
 echo "  1. make data-prep-raw    # Aggregate scans into raw pool"

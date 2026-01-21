@@ -2,6 +2,7 @@ import json
 import logging
 import time
 
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.stream import Streamer
 from tradingview_scraper.symbols.technicals import Indicators
 
@@ -51,7 +52,8 @@ def fetch_high_res_data():
 
         time.sleep(1)
 
-    output_file = "export/high_res_research_bundle.json"
+    settings = get_settings()
+    output_file = settings.export_dir / "high_res_research_bundle.json"
     with open(output_file, "w") as f:
         json.dump(final_data, f, indent=2)
 

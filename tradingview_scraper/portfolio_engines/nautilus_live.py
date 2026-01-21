@@ -11,16 +11,12 @@ from dataclasses import dataclass
 from typing import Any, Literal, Optional
 
 try:
-    from nautilus_trader.backtest.config import BacktestEngineConfig
     from nautilus_trader.config import (
-        LiveDataEngineConfig,
-        LiveExecEngineConfig,
         LiveRiskEngineConfig,
         LoggingConfig,
         RiskEngineConfig,
         TradingNodeConfig,
     )
-    from nautilus_trader.live.config import LiveDataClientConfig, LiveExecClientConfig
 
     # Execution Clients
     try:
@@ -47,6 +43,8 @@ except ImportError:
     BinanceDataClientConfig: Any = None
     InteractiveBrokersExecClientConfig: Any = None
     InteractiveBrokersDataClientConfig: Any = None
+
+from tradingview_scraper.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +84,8 @@ def build_live_node_config(trader_id: str, exchange: LiveExchangeConfig, log_lev
     """
     Constructs a TradingNodeConfig for the specified live venue.
     """
-    if not HAS_NAUTILUS:
-        logger.warning("NautilusTrader not installed.")
+    if not HAS_NAUTILUS or TradingNodeConfig is None:
+        logger.warning("NautilusTrader not installed correctly.")
         return None
 
     if not exchange.is_valid:
@@ -107,7 +105,7 @@ def build_live_node_config(trader_id: str, exchange: LiveExchangeConfig, log_lev
                 us=False,  # Assuming Global
             )
 
-            if exchange.mode == "LIVE":
+            if exchange.mode == "LIVE" and BinanceExecClientConfig:
                 exec_client_config = BinanceExecClientConfig(api_key=exchange.api_key, api_secret=exchange.api_secret, us=False)
         else:
             logger.error("Binance adapter not found")
@@ -120,7 +118,7 @@ def build_live_node_config(trader_id: str, exchange: LiveExchangeConfig, log_lev
             try:
                 data_client_config = InteractiveBrokersDataClientConfig(gateway_host=exchange.gateway_host, gateway_port=exchange.gateway_port, client_id=1, read_only=False)
 
-                if exchange.mode == "LIVE":
+                if exchange.mode == "LIVE" and InteractiveBrokersExecClientConfig:
                     exec_client_config = InteractiveBrokersExecClientConfig(gateway_host=exchange.gateway_host, gateway_port=exchange.gateway_port, client_id=1, account_id=exchange.account_id or None)
             except Exception as e:
                 logger.error(f"Failed to config IBKR: {e}")
@@ -139,9 +137,12 @@ def build_live_node_config(trader_id: str, exchange: LiveExchangeConfig, log_lev
         exec_client_config = None
 
     # 3. Build Node Config
+    settings = get_settings()
+    log_dir = settings.artifacts_dir / "logs" / "live"
+
     node_config = TradingNodeConfig(
         trader_id=trader_id,
-        logging=LoggingConfig(log_level=log_level, log_file_format="json", log_directory="artifacts/logs/live", log_component_levels={"Nautilus": log_level}),
+        logging=LoggingConfig(log_level=log_level, log_file_format="json", log_directory=str(log_dir), log_component_levels={"Nautilus": log_level}),
         data_clients={venue_str: data_client_config} if data_client_config else {},
         exec_clients={venue_str: exec_client_config} if exec_client_config else {},
         risk_engine=LiveRiskEngineConfig(

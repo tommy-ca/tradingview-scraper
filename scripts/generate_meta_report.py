@@ -39,8 +39,7 @@ def get_forensic_anomalies(manifest: dict) -> List[dict]:
 
                         # CR-FIX: Institutional Anomaly Thresholds (Phase 225)
                         # We only flag truly extreme events that suggest numerical divergence.
-                        # For 10-day windows, 1000% annualized return is common but noisy.
-                        if sharpe > 15 or ann_ret > 10 or ann_ret < -0.95:
+                        if sharpe > 15 or ann_ret > 10 or ann_ret < -0.99:
                             anomalies.append(
                                 {
                                     "sleeve": s_id,

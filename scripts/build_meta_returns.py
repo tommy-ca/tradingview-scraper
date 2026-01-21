@@ -28,7 +28,8 @@ def get_meta_cache_key(meta_profile: str, prof: str, sleeves: List[Dict]) -> str
 
 
 def find_latest_run_for_profile(profile: str) -> Optional[Path]:
-    runs_dir = Path("artifacts/summaries/runs")
+    settings = get_settings()
+    runs_dir = settings.summaries_runs_dir
     if not runs_dir.exists():
         return None
 
@@ -61,8 +62,11 @@ def find_latest_run_for_profile(profile: str) -> Optional[Path]:
     return None
 
 
-def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[List[str]] = None, manifest_path: Path = Path("configs/manifest.json")):
+def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[List[str]] = None, manifest_path: Path = Path("configs/manifest.json"), base_dir: Optional[Path] = None):
     settings = get_settings()
+    # Default to lakehouse if no base_dir provided (Legacy compatibility)
+    work_dir = base_dir or settings.lakehouse_dir
+
     if not manifest_path.exists():
         logger.error(f"Manifest missing: {manifest_path}")
         return
@@ -89,7 +93,7 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
 
         # CR-842: Aggregation Caching (Phase 222)
         cache_key = get_meta_cache_key(meta_profile, prof, sleeves)
-        cache_dir = Path("data/lakehouse/.cache")
+        cache_dir = settings.lakehouse_dir / ".cache"
         cache_file = cache_dir / f"{meta_profile}_{prof}_{cache_key}.pkl"
         manifest_cache = cache_dir / f"{meta_profile}_{prof}_{cache_key}_manifest.json"
 
@@ -99,15 +103,19 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
             with open(manifest_cache, "r") as f:
                 cached_manifest = json.load(f)
 
-            m_path = Path("data/lakehouse") / f"meta_manifest_{meta_profile}_{prof}.json"
+            m_path = work_dir / f"meta_manifest_{meta_profile}_{prof}.json"
+            logger.info(f"  [CACHE HIT] Writing manifest to {m_path}")
             with open(m_path, "w") as f:
                 json.dump(cached_manifest, f, indent=2)
 
             # Legacy pkl update
             p_output_path = Path(output_path).parent / f"meta_returns_{meta_profile}_{prof}.pkl"
+            logger.info(f"  [CACHE HIT] Copying returns to {p_output_path}")
             import shutil
 
             shutil.copy(cache_file, p_output_path)
+            if not p_output_path.exists():
+                logger.error(f"  [CRITICAL] Failed to copy {cache_file} to {p_output_path}")
             continue
 
         meta_df = pd.DataFrame()
@@ -126,8 +134,8 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
                 logger.info(f"  [{s_id}] Resolving nested meta-profile: {sub_meta}")
 
                 # 1. Build Sub-Meta Returns
-                sub_returns_file = Path("data/lakehouse") / f"meta_returns_{sub_meta}_{prof}.pkl"
-                build_meta_returns(sub_meta, str(sub_returns_file), [prof], manifest_path)
+                sub_returns_file = work_dir / f"meta_returns_{sub_meta}_{prof}.pkl"
+                build_meta_returns(sub_meta, str(sub_returns_file), [prof], manifest_path, base_dir=work_dir)
 
                 if not sub_returns_file.exists():
                     logger.warning(f"  [{s_id}] Failed to build sub-meta returns for {sub_meta}")
@@ -136,7 +144,7 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
                 # 2. Optimize Sub-Meta (to get weights)
                 from scripts.optimize_meta_portfolio import optimize_meta
 
-                sub_opt_file = Path("data/lakehouse") / f"meta_optimized_{sub_meta}_{prof}.json"
+                sub_opt_file = work_dir / f"meta_optimized_{sub_meta}_{prof}.json"
                 optimize_meta(str(sub_returns_file), str(sub_opt_file), profile=prof, meta_profile=sub_meta)
 
                 if not sub_opt_file.exists():
@@ -163,7 +171,8 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
                 s_run_id = sleeve.get("run_id")
 
                 if s_run_id:
-                    run_path = Path("artifacts/summaries/runs") / s_run_id
+                    settings = get_settings()
+                    run_path = settings.summaries_runs_dir / s_run_id
                     if not run_path.exists():
                         logger.warning(f"Explicit Run ID {s_run_id} not found in artifacts. Searching dynamically...")
                         run_path = find_latest_run_for_profile(s_profile)
@@ -244,7 +253,7 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
             logger.info(f"✅ Meta-Returns ({meta_profile}/{prof}) saved to {p_output_path}")
 
             manifest_out = {"meta_profile": meta_profile, "risk_profile": prof, "sleeves": sleeve_metadata}
-            m_path = Path("data/lakehouse") / f"meta_manifest_{meta_profile}_{prof}.json"
+            m_path = work_dir / f"meta_manifest_{meta_profile}_{prof}.json"
             with open(m_path, "w") as f:
                 json.dump(manifest_out, f, indent=2)
 

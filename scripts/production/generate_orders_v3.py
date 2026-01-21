@@ -21,7 +21,7 @@ def generate_production_orders(source_run_id: str = "20260106-prod-q1", top_n: i
     settings = get_settings()
 
     # 1. Load Tournament Results to find the Winners
-    candidates_path = f"artifacts/summaries/runs/{source_run_id}/data/tournament_candidates.csv"
+    candidates_path = settings.summaries_runs_dir / source_run_id / "data" / "tournament_candidates.csv"
     if not os.path.exists(candidates_path):
         logger.error(f"Source run candidates not found: {candidates_path}")
         return
@@ -37,10 +37,10 @@ def generate_production_orders(source_run_id: str = "20260106-prod-q1", top_n: i
     logger.info(f"🏆 Identified {n_winners} unique winners from {source_run_id}")
 
     # 2. Load Live Data
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
-    clusters_path = "data/lakehouse/portfolio_clusters.json"
-    meta_path = "data/lakehouse/portfolio_meta.json"
-    stats_path = "data/lakehouse/antifragility_stats.json"
+    returns_path = settings.lakehouse_dir / "portfolio_returns.pkl"
+    clusters_path = settings.lakehouse_dir / "portfolio_clusters.json"
+    meta_path = settings.lakehouse_dir / "portfolio_meta.json"
+    stats_path = settings.lakehouse_dir / "antifragility_stats.json"
 
     with open(returns_path, "rb") as f:
         returns = cast(pd.DataFrame, pd.read_pickle(f))
@@ -60,7 +60,9 @@ def generate_production_orders(source_run_id: str = "20260106-prod-q1", top_n: i
 
     all_orders = []
     ts_str = datetime.now().strftime("%Y%m%d")
-    output_dir = "data/lakehouse/orders"
+    # CR-831: Output to Artifacts Orders, not Lakehouse directly
+    # Ideally orders should be in data/artifacts/orders/ for pickup
+    output_dir = settings.artifacts_dir / "orders"
     os.makedirs(output_dir, exist_ok=True)
 
     # 4. Iterate through unique winners and generate orders
@@ -126,7 +128,14 @@ def generate_production_orders(source_run_id: str = "20260106-prod-q1", top_n: i
         )
 
     # 5. Persist Unified JSON State
-    latest_path = "data/lakehouse/portfolio_optimized_v3.json"
+    # This is the "Current Production State", so lakehouse IS appropriate here?
+    # Or should it be in artifacts/latest?
+    # Let's keep it in lakehouse as it represents the "Live" state for execution engines to read.
+    # But let's verify if execution reads from lakehouse or artifacts.
+    # Nautilus reads from... config.
+    # Let's move it to artifacts/orders/latest_portfolio.json to be safe and symlink if needed.
+
+    latest_path = settings.artifacts_dir / "orders" / "portfolio_optimized_v3.json"
     with open(latest_path, "w") as f:
         json.dump({"winners": all_orders}, f, indent=2)
     logger.info(f"✅ Optimized State (V3) Persisted: {latest_path}")

@@ -15,7 +15,7 @@ from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("clustered_optimizer_v2")
 
-AUDIT_FILE = "data/lakehouse/selection_audit.json"
+AUDIT_FILE = os.getenv("SELECTION_AUDIT", "")
 
 
 def calculate_concentration_entropy(weights: List[float]) -> float:

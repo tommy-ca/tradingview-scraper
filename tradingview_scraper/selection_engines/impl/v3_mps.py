@@ -124,6 +124,29 @@ class SelectionEngineV3(BaseSelectionEngine):
         alpha_scores_clean = (alpha_s if isinstance(alpha_s, pd.Series) else pd.Series(alpha_s, index=returns.columns)).copy()
         alpha_scores = alpha_scores_clean.copy()
 
+        # CR-270: Strategy-Specific Regime Ranking
+        from tradingview_scraper.pipelines.selection.rankers.regime import StrategyRegimeRanker
+
+        ranker = StrategyRegimeRanker(enable_audit_log=False)
+        # Apply ranking to the whole active universe to adjust alpha scores
+        active_candidates = [{"symbol": s} for s in returns.columns]
+        ranked_cands = ranker.rank(active_candidates, returns, strategy=request.strategy)
+
+        # Create adjustment series
+        # Map rank_score from [-1, 1] to a multiplier like [0.5, 1.5]
+        rank_map = {c["symbol"]: c for c in ranked_cands}
+        for s in alpha_scores_clean.index:
+            if s in rank_map:
+                r_score = rank_map[s]["rank_score"]
+                # 1.0 + r_score (where r_score is usually -0.6 to 1.0 in current impl)
+                multiplier = max(0.1, 1.0 + r_score)
+                alpha_scores_clean.loc[s] *= multiplier
+                # Store metadata for audit
+                if s in candidate_map:
+                    candidate_map[s].update(
+                        {"rank_score": r_score, "asset_regime": rank_map[s]["asset_regime"], "asset_quadrant": rank_map[s]["asset_quadrant"], "asset_hurst": rank_map[s]["asset_hurst"]}
+                    )
+
         shrinkage, kappa_thresh, kappa = thresholds["shr_init"], thresholds["kappa_max"], 1e20
         corr = get_robust_correlation(returns, shrinkage=shrinkage)
         if not corr.empty:

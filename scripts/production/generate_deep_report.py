@@ -6,12 +6,15 @@ from typing import Any, cast
 
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("deep_report")
 
 
 def load_data(run_id: str):
-    run_dir = Path(f"artifacts/summaries/runs/{run_id}")
+    settings = get_settings()
+    run_dir = settings.summaries_runs_dir / run_id
     audit_path = run_dir / "audit.jsonl"
 
     # Try multiple possible result file names
@@ -22,7 +25,7 @@ def load_data(run_id: str):
 
     if not audit_path.exists():
         logger.error(f"Audit file not found: {audit_path}")
-        return None, None
+        return None, None, None
 
     audit_data = []
     with open(audit_path, "r") as f:
@@ -37,7 +40,21 @@ def load_data(run_id: str):
         with open(results_path[0], "r") as f:
             results = json.load(f)
 
-    return audit_data, results
+    # Load Stitched Returns for Global Metrics (Phase 233)
+    stitched_returns = {}
+
+    # run_dir is already settings.summaries_runs_dir / run_id
+    # run_data_dir is run_dir / "data"
+    returns_dir = run_dir / "data" / "returns"
+    if returns_dir.exists():
+        for pkl in returns_dir.glob("*.pkl"):
+            try:
+                key = pkl.stem  # e.g. custom_vectorbt_max_sharpe
+                stitched_returns[key] = pd.read_pickle(pkl)
+            except Exception as e:
+                logger.warning(f"Failed to load stitched returns {pkl}: {e}")
+
+    return audit_data, results, stitched_returns
 
 
 def analyze_funnel(audit_data):
@@ -81,8 +98,59 @@ def analyze_funnel(audit_data):
     return stats
 
 
-def analyze_matrix(results):
+def analyze_matrix(results, stitched_returns):
     rows = []
+
+    # Phase 233: Prefer Stitched Returns for Global Metrics
+    if stitched_returns:
+        from tradingview_scraper.utils.metrics import calculate_performance_metrics
+
+        for key, returns_series in stitched_returns.items():
+            # Key format: engine_simulator_profile (e.g. custom_vectorbt_max_sharpe)
+            parts = key.split("_")
+            if len(parts) >= 3:
+                # Naive parsing: assuming standard 3-part naming
+                # engine is usually first 1-2 words, simulator is 1 word, profile is rest
+                # But typically: market_vectorbt_market, custom_cvxportfolio_hrp
+
+                # Heuristic: simulator is one of known sims
+                sims = ["vectorbt", "cvxportfolio", "nautilus", "custom"]
+                sim = "unknown"
+                for s in sims:
+                    if s in parts:
+                        sim = s
+                        break
+
+                # If found, split around it
+                if sim != "unknown":
+                    try:
+                        sim_idx = parts.index(sim)
+                        eng = "_".join(parts[:sim_idx])
+                        prof = "_".join(parts[sim_idx + 1 :])
+                    except ValueError:
+                        eng, prof = "unknown", key
+                else:
+                    eng, sim, prof = "custom", "vectorbt", key  # Fallback
+
+                # Calculate Global Metrics
+                m = calculate_performance_metrics(returns_series)
+                rows.append(
+                    {
+                        "Simulator": sim,
+                        "Engine": eng,
+                        "Profile": prof,
+                        "Sharpe": round(float(m.get("sharpe", 0)), 4),
+                        "Return (%)": f"{float(m.get('annualized_return', 0)):.2%}",
+                        "MaxDD (%)": f"{float(m.get('max_drawdown', 0)):.2%}",
+                        "Vol (%)": f"{float(m.get('annualized_vol', 0)):.2%}",
+                        "Source": "Stitched",
+                    }
+                )
+
+        if rows:
+            return pd.DataFrame(rows).sort_values("Sharpe", ascending=False)
+
+    # Legacy Fallback: Average window results (Deprecated but kept for old runs)
     # Handle the 'grand_4d' format which is nested: rebalance_audit_results[reb][sel][sim][eng][prof]
     if "rebalance_audit_results" in results:
         res_map = results["rebalance_audit_results"]
@@ -156,6 +224,7 @@ def analyze_windows(audit_data):
         step = entry.get("step")
         status = entry.get("status")
 
+        # Atomic Backtest Optimization
         if step == "backtest_optimize":
             if status == "intent":
                 params = entry.get("intent", {}).get("params", {})
@@ -192,6 +261,40 @@ def analyze_windows(audit_data):
                     )
                     seen_windows.add(unique_key)
 
+        # Meta Optimization (Global/Static)
+        elif str(step).startswith("meta_optimize_") and status == "success":
+            ctx = entry.get("context", {})
+            profile = ctx.get("profile", "unknown")
+
+            # For meta, we often run multiple profiles (hrp, barbell, etc.)
+            # We should probably capture them all or just the primary one?
+            # Let's capture all but differentiate by profile in the Window column
+
+            weights_data = entry.get("data", {}).get("weights", [])
+            # Weights in meta are a list of dicts [{"Weight": ..., "Symbol": ...}] or dict?
+            # In optimize_meta we saved: weights_df.to_dict(orient="records") -> [{"Symbol": "...", "Weight": ...}]
+
+            n_assets = 0
+            winners_str = ""
+
+            if isinstance(weights_data, list):
+                n_assets = len(weights_data)
+                # Sort by weight
+                sorted_w = sorted(weights_data, key=lambda x: abs(float(x.get("Weight", 0))), reverse=True)
+                top_3 = sorted_w[:3]
+                winners_str = ", ".join([f"{w.get('Symbol')} ({float(w.get('Weight', 0)):.1%})" for w in top_3])
+
+            windows.append(
+                {
+                    "Window": f"Meta ({profile})",
+                    "Start": "Global",
+                    "Regime": "Meta-Fractal",
+                    "Quadrant": "N/A",
+                    "Assets": n_assets,
+                    "Winners": winners_str,
+                }
+            )
+
     df = pd.DataFrame(windows)
     if not df.empty and "Window" in df.columns:
         return df.sort_values("Window")
@@ -223,7 +326,18 @@ def analyze_outliers(results):
 
     if windows:
         df_w = pd.DataFrame(windows)
-        if "sharpe" not in df_w.columns or "returns" not in df_w.columns:
+
+        # Phase 233: Use period_return if available, else fallback to total_return, else returns
+        if "period_return" in df_w.columns:
+            ret_col = "period_return"
+        elif "total_return" in df_w.columns:
+            ret_col = "total_return"
+        elif "returns" in df_w.columns:
+            ret_col = "returns"
+        else:
+            return outliers
+
+        if "sharpe" not in df_w.columns:
             return outliers
 
         # Z-score based outlier detection on Sharpe
@@ -232,20 +346,25 @@ def analyze_outliers(results):
         std_s = df_w["sharpe"].std(ddof=0) if len(df_w) > 1 else 0.0
         df_w["z_score"] = (df_w["sharpe"] - mean_s) / (std_s + 1e-9)
 
-        # Heavy drawdown windows or extreme Sharpe outliers
-        mask = (df_w["returns"] < -0.15) | (df_w["z_score"].abs() > 2.0)
+        # Heavy drawdown windows (Period Return < -10%) or extreme Sharpe outliers
+        # Phase 233: This now correctly flags raw period losses, not annualized projections
+        mask = (df_w[ret_col] < -0.10) | (df_w["z_score"].abs() > 2.0)
         outliers = df_w[mask].copy()
+
+        # Rename for clarity
+        if ret_col != "returns":
+            outliers["returns"] = outliers[ret_col]
 
     return outliers
 
 
 def generate_report(run_id: str):
-    audit_data, results = load_data(run_id)
+    audit_data, results, stitched_returns = load_data(run_id)
     if not audit_data:
         return
 
     funnel_stats = analyze_funnel(audit_data)
-    matrix_df = analyze_matrix(results)
+    matrix_df = analyze_matrix(results, stitched_returns)
     window_df = analyze_windows(audit_data)
     outlier_df = analyze_outliers(results)
 
@@ -297,7 +416,8 @@ def generate_report(run_id: str):
         for stage in sample_trail:
             report.append(f"| {win_idx} | {stage['stage']} | {stage['event']} | {json.dumps(stage.get('data', {}))} |")
 
-    out_dir = Path(f"artifacts/summaries/runs/{run_id}/reports")
+    settings = get_settings()
+    out_dir = settings.summaries_runs_dir / run_id / "reports"
 
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "deep_forensic_audit_v3_4_6.md"

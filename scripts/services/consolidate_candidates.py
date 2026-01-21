@@ -4,12 +4,18 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("consolidate_candidates")
 
 
-def consolidate(run_id: str, output_path: str = "data/lakehouse/portfolio_candidates.json"):
-    export_dir = Path(f"export/{run_id}")
+def consolidate(run_id: str, output_path: str | None = None):
+    settings = get_settings()
+    export_dir = settings.export_dir / run_id
+    if not output_path:
+        output_path = str(settings.lakehouse_dir / "portfolio_candidates.json")
+
     if not export_dir.exists():
         logger.error(f"Export directory not found: {export_dir}")
         return
@@ -69,7 +75,7 @@ def consolidate(run_id: str, output_path: str = "data/lakehouse/portfolio_candid
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", required=True, help="Run ID to consolidate export files from")
-    parser.add_argument("--output", default="data/lakehouse/portfolio_candidates.json", help="Output path")
+    parser.add_argument("--output", default=None, help="Output path")
     args = parser.parse_args()
 
     consolidate(args.run_id, args.output)

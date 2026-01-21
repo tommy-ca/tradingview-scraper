@@ -1,14 +1,15 @@
 import json
-import os
 import time
 
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.stream import Streamer
 from tradingview_scraper.symbols.technicals import Indicators
 
 
 def research_historical_technicals():
-    mapping_file = "export/multi_quote_mapping.json"
-    if not os.path.exists(mapping_file):
+    settings = get_settings()
+    mapping_file = settings.export_dir / "multi_quote_mapping.json"
+    if not mapping_file.exists():
         print(f"[ERROR] Mapping file {mapping_file} not found.")
         return
 
@@ -60,6 +61,8 @@ def research_historical_technicals():
         research_results.append(entry)
         time.sleep(2)
 
+    # Use docs dir from relative path or settings if we had one?
+    # Current behavior is relative "docs/"
     output_file = "docs/historical_technicals_summary.json"
     with open(output_file, "w") as f:
         json.dump(research_results, f, indent=2)

@@ -2,12 +2,17 @@ import glob
 import logging
 import os
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cleanup")
 
 
 def cleanup():
-    files = glob.glob("export/*.json")
+    settings = get_settings()
+    # Use settings.export_dir
+    pattern = str(settings.export_dir / "*.json")
+    files = glob.glob(pattern)
     count = 0
     for f in files:
         try:
@@ -16,7 +21,7 @@ def cleanup():
         except Exception as e:
             logger.error(f"Failed to delete {f}: {e}")
 
-    logger.info(f"Deleted {count} files from export/")
+    logger.info(f"Deleted {count} files from {settings.export_dir}")
 
 
 if __name__ == "__main__":

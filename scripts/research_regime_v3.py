@@ -1,16 +1,14 @@
 import json
 import logging
 import os
-import sys
+from pathlib import Path
 from typing import Dict, Optional, cast
 
 import numpy as np
 import pandas as pd
 
-# Add project root to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from tradingview_scraper.regime import MarketRegimeDetector
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.metrics import calculate_max_drawdown
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -24,7 +22,8 @@ def calculate_tail_risk_metrics(returns: pd.DataFrame) -> Dict[str, float]:
         return metrics
 
     # Portfolio-level returns (equal weight for estimation)
-    port_ret = returns.mean(axis=1)
+    # Explicitly cast to Series to satisfy type checker
+    port_ret = cast(pd.Series, returns.mean(axis=1))
 
     # Max Drawdown
     mdd = calculate_max_drawdown(port_ret)
@@ -70,13 +69,26 @@ def calculate_alpha_capture_metrics(returns: pd.DataFrame) -> Dict[str, float]:
 
 
 def research_regime_v3():
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
+    settings = get_settings()
+    run_dir = settings.prepare_summaries_run_dir()
+
+    # CR-831: Workspace Isolation
+    default_returns = str(run_dir / "data" / "returns_matrix.parquet")
+    if not os.path.exists(default_returns):
+        default_returns = "data/lakehouse/portfolio_returns.pkl"
+
+    returns_path = os.getenv("RETURNS_MATRIX", default_returns)
+
     if not os.path.exists(returns_path):
-        logger.error("Returns matrix missing.")
+        logger.error(f"Returns matrix missing at {returns_path}")
         return
 
-    returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
-    logger.info(f"Loaded returns matrix with shape: {returns.shape}")
+    if str(returns_path).endswith(".parquet"):
+        returns = pd.read_parquet(returns_path)
+    else:
+        returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+
+    logger.info(f"Loaded returns matrix from {returns_path} with shape: {returns.shape}")
 
     detector = MarketRegimeDetector()
 
@@ -97,10 +109,14 @@ def research_regime_v3():
         logger.info(f"  - {k}: {v:.4f}")
 
     # 4. Persistence Integration
-    persistence_path = "data/lakehouse/persistence_metrics.json"
+    # Try to find persistence metrics in run dir first, then lakehouse
+    persistence_path = run_dir / "data" / "persistence_metrics.json"
+    if not persistence_path.exists():
+        persistence_path = Path("data/lakehouse/persistence_metrics.json")
+
     median_duration: Optional[float] = None
 
-    if os.path.exists(persistence_path):
+    if persistence_path.exists():
         with open(persistence_path, "r") as f:
             persistence_data = json.load(f)
 
@@ -118,7 +134,7 @@ def research_regime_v3():
             # Default fallback if no trends found
             recommended_window = 20
     else:
-        logger.warning("Persistence metrics not found. Run 'make research-persistence' first.")
+        logger.warning(f"Persistence metrics not found at {persistence_path}. Run 'make research-persistence' first.")
         recommended_window = 20  # Default
 
     # Save Enhanced Analysis
@@ -130,7 +146,13 @@ def research_regime_v3():
         "timestamp": pd.Timestamp.now().isoformat(),
     }
 
-    output_path = "data/lakehouse/regime_analysis_v3.json"
+    # CR-831: Output Isolation
+    default_output = str(run_dir / "data" / "regime_analysis_v3.json")
+    output_path = os.getenv("REGIME_ANALYSIS_OUTPUT", default_output)
+
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
     with open(output_path, "w") as f:
         json.dump(analysis_output, f, indent=2)
     logger.info(f"Enhanced regime analysis saved to {output_path}")

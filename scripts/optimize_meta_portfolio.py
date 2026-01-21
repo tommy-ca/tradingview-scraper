@@ -30,10 +30,18 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
     if profile is None:
         # CR-831: Workspace Isolation - Infer base directory from returns_path
         input_path = Path(returns_path)
-        base_dir = input_path.parent if input_path.is_file() else input_path
+        # If input_path is a directory, use it. If it's a file (or dummy file path), use parent.
+        if input_path.is_dir():
+            base_dir = input_path
+        else:
+            base_dir = input_path.parent
 
+        base_dir = base_dir.resolve()
+
+        logger.info(f"Searching for returns in: {base_dir}")
         # Search for all meta_returns_{meta_profile}_*.pkl in the resolved directory
         files = list(base_dir.glob(f"meta_returns_{m_prof}_*.pkl"))
+        logger.info(f"Found {len(files)} files matching meta_returns_{m_prof}_*.pkl")
 
         # If none found in run dir, try lakehouse (Legacy fallback)
         if not files:
@@ -50,7 +58,10 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
     else:
         # Try run_dir first, then lakehouse
         input_path = Path(returns_path)
-        base_dir = input_path.parent if input_path.is_file() else input_path
+        if input_path.is_dir():
+            base_dir = input_path
+        else:
+            base_dir = input_path.parent
 
         candidates = [
             base_dir / f"meta_returns_{m_prof}_{profile}.pkl",
@@ -149,10 +160,28 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
             with open(cluster_tree_path, "w") as f:
                 json.dump(artifact, f, indent=2)
 
+            if ledger:
+                ledger.record_outcome(
+                    step=f"meta_optimize_{target_profile}",
+                    status="success",
+                    output_hashes={"weights": get_df_hash(weights_df)},
+                    metrics={"n_assets": len(weights_df), "total_weight": weights_df["Weight"].sum()},
+                    data={"weights": weights_df.to_dict(orient="records")},
+                    context={"meta_profile": m_prof, "profile": str(target_profile)},
+                )
+
             logger.info(f"✅ Meta-optimized weights ({m_prof}/{target_profile}) saved to {p_output_path}")
             logger.info(f"🌳 Meta-cluster tree preserved at {cluster_tree_path}")
 
         except Exception as e:
+            if ledger:
+                ledger.record_outcome(
+                    step=f"meta_optimize_{target_profile}",
+                    status="error",
+                    output_hashes={},
+                    metrics={"error": str(e)},
+                    context={"meta_profile": m_prof},
+                )
             logger.error(f"Meta-optimization failed for {target_profile}: {e}")
 
 

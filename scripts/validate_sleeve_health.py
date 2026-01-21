@@ -2,14 +2,16 @@ import argparse
 import json
 import logging
 import sys
-from pathlib import Path
+
+from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("health_guardrail")
 
 
 def validate_sleeve_health(run_id: str, threshold: float = 0.75):
-    run_path = Path(f"artifacts/summaries/runs/{run_id}")
+    settings = get_settings()
+    run_path = settings.summaries_runs_dir / run_id
     audit_path = run_path / "audit.jsonl"
 
     if not audit_path.exists():

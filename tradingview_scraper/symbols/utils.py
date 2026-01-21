@@ -11,6 +11,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from tradingview_scraper.settings import get_settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -98,8 +100,14 @@ def generate_export_filepath(symbol, data_category, timeframe, file_extension, r
     symbol_lower = f"{str(symbol or '').lower()}_" if symbol else ""
     timeframe = f"{timeframe}_" if timeframe else ""
 
-    root_path = root_path or os.getcwd()
-    export_dir = os.path.join(root_path, "export")
+    settings = get_settings()
+    # Use settings.export_dir as the base
+    # If root_path is provided, we respect it, but generally we want to use the configured export_dir
+    if root_path:
+        export_dir = os.path.join(root_path, "export")
+    else:
+        export_dir = str(settings.export_dir)
+
     run_id_clean = _sanitize_export_run_id(str(run_id)) if run_id else ""
     if run_id_clean:
         export_dir = os.path.join(export_dir, run_id_clean)

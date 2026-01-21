@@ -1,15 +1,16 @@
 import json
-import os
 
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.screener import Screener
 
 
 def scan_arbitrage():
+    settings = get_settings()
     # 1. Load the multi-quote mapping
-    mapping_file = "export/multi_quote_mapping.json"
-    if not os.path.exists(mapping_file):
+    mapping_file = settings.export_dir / "multi_quote_mapping.json"
+    if not mapping_file.exists():
         print(f"[ERROR] Mapping file {mapping_file} not found. Run audit_multi_quote_pairs.py first.")
         return
 

@@ -4,13 +4,17 @@ import shutil
 import tarfile
 from pathlib import Path
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def archive_runs(runs_dir: str, archive_dir: str, keep: int, dry_run: bool = False):
-    runs_path = Path(runs_dir)
-    archive_path = Path(archive_dir)
+def archive_runs(runs_dir: str | None, archive_dir: str | None, keep: int, dry_run: bool = False):
+    settings = get_settings()
+    runs_path = Path(runs_dir) if runs_dir else settings.summaries_runs_dir
+    archive_path = Path(archive_dir) if archive_dir else settings.artifacts_dir / "archive"
+
     if not dry_run:
         archive_path.mkdir(parents=True, exist_ok=True)
 
@@ -65,8 +69,8 @@ def archive_runs(runs_dir: str, archive_dir: str, keep: int, dry_run: bool = Fal
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Archive old run artifacts")
-    parser.add_argument("--runs-dir", default="artifacts/summaries/runs", help="Directory containing run artifacts")
-    parser.add_argument("--archive-dir", default="artifacts/archive", help="Destination directory for archives")
+    parser.add_argument("--runs-dir", default=None, help="Directory containing run artifacts")
+    parser.add_argument("--archive-dir", default=None, help="Destination directory for archives")
     parser.add_argument("--keep", type=int, default=10, help="Number of recent runs to keep unarchived")
     parser.add_argument("--dry-run", action="store_true", help="Simulate actions without modifying files")
 

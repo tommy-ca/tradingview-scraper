@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import sys
-from pathlib import Path
 from typing import List, Optional
 
 sys.path.append(os.getcwd())
@@ -18,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("run_meta_pipeline")
 
 
-def run_meta_pipeline(meta_profile: str, profiles: Optional[List[str]] = None, execute_sleeves: bool = False):
+def run_meta_pipeline(meta_profile: str, profiles: Optional[List[str]] = None, execute_sleeves: bool = False, use_native_ray: bool = False, run_id: Optional[str] = None):
     """
     Streamlined Meta-Portfolio Pipeline (Alpha Flow).
     Executes Build -> Optimize -> Flatten -> Report in one go.
@@ -26,13 +25,32 @@ def run_meta_pipeline(meta_profile: str, profiles: Optional[List[str]] = None, e
     """
     settings = get_settings()
     target_profiles = profiles or settings.profiles.split(",")
-    lakehouse = Path("data/lakehouse")
+
+    # CR-851: Meta-Run Isolation (Phase 242)
+    import datetime
+
+    if not run_id:
+        ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        run_id = f"{meta_profile}_{ts}"
+
+    # Establish Isolated Workspace
+    run_dir = (settings.summaries_runs_dir / run_id).resolve()
+
+    # CR-FIX: Ensure global context for internal modules (AuditLedger, Settings)
+    os.environ["TV_RUN_ID"] = run_id
+    # Force reload settings to pick up new run_id
+    get_settings.cache_clear()
+
+    run_data_dir = run_dir / "data"
+    run_data_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"🚀 Starting Meta-Portfolio Pipeline: {meta_profile}")
+    logger.info(f"📂 Workspace: {run_dir}")
+    logger.info(f"📂 Data Dir: {run_data_dir}")
 
     # CR-850: Parallel Sleeve Execution (Phase 223)
     if execute_sleeves:
-        logger.info(">>> STAGE 0: Parallel Sleeve Production (Ray)")
+        logger.info(f">>> STAGE 0: Parallel Sleeve Production (Ray {'Native' if use_native_ray else 'Subprocess'})")
 
         # Load manifest to find sleeves that need execution
         with open("configs/manifest.json", "r") as f:
@@ -52,7 +70,13 @@ def run_meta_pipeline(meta_profile: str, profiles: Optional[List[str]] = None, e
                     sleeves_to_run.append({"profile": s["profile"], "run_id": new_run_id})
 
             if sleeves_to_run:
-                results = execute_parallel_sleeves(sleeves_to_run)
+                if use_native_ray:
+                    from scripts.parallel_orchestrator_native import execute_parallel_sleeves_native
+
+                    results = execute_parallel_sleeves_native(sleeves_to_run)
+                else:
+                    results = execute_parallel_sleeves(sleeves_to_run)
+
                 for res in results:
                     if res["status"] == "success":
                         logger.info(f"✅ Sleeve {res['profile']} complete ({res['duration']:.1f}s)")
@@ -64,21 +88,38 @@ def run_meta_pipeline(meta_profile: str, profiles: Optional[List[str]] = None, e
 
     # 1. Build Returns (Recursive)
     logger.info(">>> STAGE 1: Aggregating Sleeve Returns")
-    build_meta_returns(meta_profile, str(lakehouse / "meta_returns.pkl"), target_profiles)
+    # Output to isolated run directory
+    build_meta_returns(meta_profile, str(run_data_dir / "meta_returns.pkl"), target_profiles, base_dir=run_data_dir)
 
     # 2. Optimize
     logger.info(">>> STAGE 2: Meta-Optimization")
-    optimize_meta(str(lakehouse), str(lakehouse / "meta_optimized.json"), meta_profile=meta_profile)
+    # optimize_meta infers base_dir from input path (run_data_dir / "meta_returns.pkl")
+    optimize_meta(str(run_data_dir / "meta_returns.pkl"), str(run_data_dir / "meta_optimized.json"), meta_profile=meta_profile)
 
     # 3. Flatten
     logger.info(">>> STAGE 3: Recursive Weight Flattening")
     for prof in target_profiles:
         prof = prof.strip()
-        flatten_weights(meta_profile, str(lakehouse / "portfolio_optimized_meta.json"), profile=prof)
+        # flatten_weights needs to know where to look. We pass the output path in run_data_dir.
+        flatten_weights(meta_profile, str(run_data_dir / "portfolio_optimized_meta.json"), profile=prof)
 
     # 4. Reporting
     logger.info(">>> STAGE 4: Generating Forensic Report")
-    generate_meta_markdown_report(lakehouse, "artifacts/summaries/latest/meta_portfolio_report.md", target_profiles, meta_profile)
+    # Generate report inside the run directory AND latest summary
+    report_path = run_dir / "reports" / "meta_portfolio_report.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+
+    generate_meta_markdown_report(run_data_dir, str(report_path), target_profiles, meta_profile)
+
+    # Also update 'latest'
+    latest_path = settings.artifacts_dir / "summaries/latest/meta_portfolio_report.md"
+    latest_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import shutil
+
+        shutil.copy(report_path, latest_path)
+    except Exception as e:
+        logger.warning(f"Failed to update latest report: {e}")
 
     logger.info(f"✅ Meta-Portfolio Pipeline COMPLETE: {meta_profile}")
 
@@ -88,7 +129,9 @@ if __name__ == "__main__":
     parser.add_argument("--profile", required=True, help="Meta portfolio profile name")
     parser.add_argument("--profiles", help="Comma-separated risk profiles to process")
     parser.add_argument("--execute-sleeves", action="store_true", help="Execute sub-sleeves in parallel using Ray")
+    parser.add_argument("--use-native-ray", action="store_true", help="Use Ray Native Actors instead of Subprocess")
+    parser.add_argument("--run-id", help="Explicit Run ID")
     args = parser.parse_args()
 
     target_profs = args.profiles.split(",") if args.profiles else None
-    run_meta_pipeline(args.profile, target_profs, execute_sleeves=args.execute_sleeves)
+    run_meta_pipeline(args.profile, target_profs, execute_sleeves=args.execute_sleeves, use_native_ray=args.use_native_ray, run_id=args.run_id)

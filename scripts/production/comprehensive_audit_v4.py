@@ -6,14 +6,17 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("comprehensive_audit")
 
 
 class ComprehensiveAuditor:
     def __init__(self, run_id: str):
+        self.settings = get_settings()
         self.run_id = run_id
-        self.run_dir = Path(f"artifacts/summaries/runs/{run_id}")
+        self.run_dir = self.settings.summaries_runs_dir / run_id
         self.audit_path = self.run_dir / "audit.jsonl"
         self.records: List[Dict[str, Any]] = []
         self.windows: Dict[int, Dict[str, Any]] = {}

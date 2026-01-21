@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("institutional_audit")
 
@@ -38,7 +40,8 @@ class InstitutionalAuditor:
         self.funnel_stats: Dict[str, pd.DataFrame] = {}  # run_id -> DataFrame of windows
 
     def find_runs(self) -> List[Path]:
-        runs_dir = Path("artifacts/summaries/runs")
+        settings = get_settings()
+        runs_dir = settings.summaries_runs_dir
         if not runs_dir.exists():
             logger.error("Runs directory not found.")
             return []
@@ -298,7 +301,8 @@ class InstitutionalAuditor:
             print("- No extreme strategic anomalies detected in composite curves.")
 
         # Final Export
-        export_dir = Path("artifacts/reports")
+        settings = get_settings()
+        export_dir = settings.artifacts_dir / "reports"
         export_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         path = export_dir / f"composite_institutional_audit_{ts}.csv"

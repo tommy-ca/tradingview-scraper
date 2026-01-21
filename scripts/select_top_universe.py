@@ -12,11 +12,23 @@ from tradingview_scraper.settings import get_settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("select_top_universe")
 
-AUDIT_FILE = "data/lakehouse/selection_audit.json"
+
+def get_default_audit_file() -> str:
+    settings = get_settings()
+    # Prefer run-scoped audit if TV_RUN_ID is set (which select_top_universe should have)
+    if settings.run_id and settings.run_id != "default_run":
+        return str(settings.summaries_runs_dir / settings.run_id / "data" / "selection_audit.json")
+    return str(settings.logs_dir / "selection_audit.json")
+
+
+AUDIT_FILE = os.getenv("SELECTION_AUDIT", get_default_audit_file())
 
 
 def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
-    export_root = Path("export")
+    settings = get_settings()
+    # Allow override via env var for isolation (e.g. symlinked export dir)
+    # Default to settings.export_dir instead of hardcoded "export"
+    export_root = Path(os.getenv("TV_SCAN_DIR", str(settings.export_dir)))
     run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
 
     if run_id:

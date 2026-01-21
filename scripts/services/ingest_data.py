@@ -7,6 +7,8 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
+
 # Assume PersistentDataLoader is available via PYTHONPATH or install
 try:
     from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
@@ -19,8 +21,9 @@ logger = logging.getLogger("ingestion_service")
 
 
 class IngestionService:
-    def __init__(self, lakehouse_dir: Path = Path("data/lakehouse"), freshness_hours: int = 12):
-        self.lakehouse_dir = Path(lakehouse_dir)
+    def __init__(self, lakehouse_dir: Path | None = None, freshness_hours: int = 12):
+        settings = get_settings()
+        self.lakehouse_dir = lakehouse_dir or settings.lakehouse_dir
         self.freshness_hours = freshness_hours
         self.loader = PersistentDataLoader() if PersistentDataLoader else None
 
@@ -167,8 +170,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--candidates", help="Path to candidates.json", required=True)
-    parser.add_argument("--lakehouse", help="Path to lakehouse dir", default="data/lakehouse")
+    parser.add_argument("--lakehouse", help="Path to lakehouse dir", default=None)
     args = parser.parse_args()
 
-    service = IngestionService(lakehouse_dir=Path(args.lakehouse))
+    lakehouse_arg = Path(args.lakehouse) if args.lakehouse else None
+    service = IngestionService(lakehouse_dir=lakehouse_arg)
     service.process_candidate_file(Path(args.candidates))

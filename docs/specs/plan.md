@@ -517,15 +517,16 @@ Track all progress in `docs/specs/plan.md`.
 
 | Phase | Description | Status | Dependencies |
 | :--- | :--- | :--- | :--- |
-| 305 | Migrate StrategyRegimeRanker | Planned | None |
-| 310 | Discovery Module | Planned | None |
-| 315 | Filter Module Extraction | Planned | None |
-| 320 | Meta-Portfolio Module | Planned | 305, 315 |
+| 305 | Migrate StrategyRegimeRanker | **Completed** | None |
+| 310 | Discovery Module | **Completed** | None |
+| 315 | Filter Module Extraction | **Completed** | None |
+| 320 | Meta-Portfolio Module | **Completed** | 305, 315 |
 | 330 | Declarative Pipeline | Planned (Low) | 310-320 |
-| 340 | Stage Registry & SDK | Planned | 305-320 |
+| 340 | Stage Registry & SDK | **Completed** | 305-320 |
 | 345 | Ray Compute Layer | Planned | 340 |
 | 350 | Prefect Workflow | Planned | 340, 345 |
-| 355 | Claude Skills | Design Complete | 340 |
+| 355 | Claude Skills | **Completed** | 340 |
+
 | 360 | Observability | Planned (Optional) | 350 |
 
 ---

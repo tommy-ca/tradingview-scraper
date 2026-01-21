@@ -228,4 +228,4 @@ uv run -m tradingview_scraper.futures_universe_selector \
   --export json
 
 echo "----------------------------------------"
-echo "All global scans completed successfully. Results are in export/"
+echo "All global scans completed successfully. Results are in data/export/"

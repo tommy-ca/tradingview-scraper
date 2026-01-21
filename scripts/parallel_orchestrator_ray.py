@@ -1,7 +1,6 @@
 import logging
 import os
 import subprocess
-import sys
 import time
 from typing import Dict, List
 
@@ -11,16 +10,19 @@ logger = logging.getLogger("ray_orchestrator")
 
 
 @ray.remote(num_cpus=2, memory=3 * 1024 * 1024 * 1024)
-def run_sleeve_production(profile: str, run_id: str) -> Dict:
+def run_sleeve_production(profile: str, run_id: str, host_cwd: str) -> Dict:
     """
     Executes a single sleeve's production pipeline as a Ray task.
     """
     start_time = time.time()
     logger.info(f"🚀 [Ray] Starting production for {profile} (Run: {run_id})")
 
-    # CR-FIX: Ensure we run in the correct working directory and use same python
-    cwd = os.getcwd()
-    cmd = [sys.executable, "-m", "scripts.run_production_pipeline", "--profile", profile, "--run-id", run_id]
+    # CR-FIX: Use host_cwd to ensure artifacts are written to the host filesystem
+    # and we use the host's environment/dependencies correctly.
+    cwd = host_cwd
+
+    # Use uv from the host environment if available, otherwise sys.executable
+    cmd = ["uv", "run", "python", "-m", "scripts.run_production_pipeline", "--profile", profile, "--run-id", run_id]
 
     # Explicitly inherit and propagate important environment variables
     env = os.environ.copy()
@@ -28,8 +30,22 @@ def run_sleeve_production(profile: str, run_id: str) -> Dict:
     env["TV_PROFILE"] = profile
     env["TV_RUN_ID"] = run_id
 
-    # Force use of local python for Ray tasks
-    env["PATH"] = os.path.dirname(sys.executable) + ":" + env.get("PATH", "")
+    # CR-FIX: Unset VIRTUAL_ENV so 'uv' in the subprocess finds the host's .venv
+    # instead of the ephemeral Ray worker venv.
+    if "VIRTUAL_ENV" in env:
+        del env["VIRTUAL_ENV"]
+
+    # Force use of local python and uv for Ray tasks
+    # CR-FIX: Ensure 'uv' is in PATH for make commands
+    import shutil
+
+    uv_path = shutil.which("uv")
+    path_dirs = []
+    if uv_path:
+        path_dirs.append(os.path.dirname(uv_path))
+
+    # Prepend to existing PATH
+    env["PATH"] = ":".join(path_dirs) + ":" + env.get("PATH", "")
 
     try:
         # Capture output to prevent interleaving
@@ -52,7 +68,8 @@ def execute_parallel_sleeves(sleeves: List[Dict]) -> List[Dict]:
         # since we are running on a single node.
         ray.init(ignore_reinit_error=True)
 
-    futures = [run_sleeve_production.remote(s["profile"], s["run_id"]) for s in sleeves]
+    host_cwd = os.getcwd()
+    futures = [run_sleeve_production.remote(s["profile"], s["run_id"], host_cwd) for s in sleeves]
 
     results = ray.get(futures)
     return results

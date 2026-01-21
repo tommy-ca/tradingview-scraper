@@ -18,6 +18,7 @@ class SelectionRequest:
     threshold: float = 0.5
     max_clusters: int = 25
     min_momentum_score: float = 0.0
+    strategy: str = "trend_following"  # CR-270: Strategy-Specific Selection
     # Optional parameters for specific versions
     params: Dict[str, Any] = field(default_factory=dict)
 

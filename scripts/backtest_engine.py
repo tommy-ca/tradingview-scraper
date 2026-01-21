@@ -51,20 +51,26 @@ class BacktestEngine:
     def __init__(self):
         self.settings = get_settings()
         self.returns = pd.DataFrame()
+        self.features_matrix = pd.DataFrame()  # Dynamic Feature Matrix
         self.metadata = {}
         self.stats = pd.DataFrame()
+
+        # CR-265: Initialize Regime Detector
+        from tradingview_scraper.regime import MarketRegimeDetector
+
+        self.detector = MarketRegimeDetector(enable_audit_log=False)
 
     def load_data(self, run_dir: Optional[Path] = None):
         """Load returns and metadata from lakehouse or run directory."""
         if not run_dir:
             # Try to find latest run if not provided
-            runs_dir = Path("artifacts/summaries/runs")
+            runs_dir = self.settings.summaries_runs_dir
             if runs_dir.exists():
                 latest_runs = sorted([d for d in runs_dir.iterdir() if d.is_dir() and (d / "data" / "returns_matrix.parquet").exists()], key=os.path.getmtime, reverse=True)
                 if latest_runs:
                     run_dir = latest_runs[0]
 
-        data_dir = run_dir / "data" if run_dir else Path("data/lakehouse")
+        data_dir = run_dir / "data" if run_dir else self.settings.lakehouse_dir
         logger.info(f"Loading data from {data_dir}")
 
         # Load Candidates
@@ -86,15 +92,15 @@ class BacktestEngine:
 
         if not returns_path.exists():
             # Ultimate fallback to lakehouse
-            returns_path = Path("data/lakehouse/returns_matrix.parquet")
+            returns_path = self.settings.lakehouse_dir / "returns_matrix.parquet"
             if not returns_path.exists():
-                returns_path = Path("data/lakehouse/portfolio_returns.pkl")
+                returns_path = self.settings.lakehouse_dir / "portfolio_returns.pkl"
             if not returns_path.exists():
                 # Check for returns_matrix.pkl
-                returns_path = Path("data/lakehouse/returns_matrix.pkl")
+                returns_path = self.settings.lakehouse_dir / "returns_matrix.pkl"
             if not returns_path.exists():
                 # Check for individual symbols (not a matrix, but maybe it works?)
-                returns_path = Path("data/lakehouse/BINANCE_BTCUSDT_1d.parquet")
+                returns_path = self.settings.lakehouse_dir / "BINANCE_BTCUSDT_1d.parquet"
 
         if not returns_path.exists():
             raise FileNotFoundError(f"Returns matrix not found at {returns_path}")
@@ -109,6 +115,23 @@ class BacktestEngine:
             self.returns.index = pd.to_datetime(self.returns.index)
         if self.returns.index.tz is not None:
             self.returns.index = self.returns.index.tz_convert(None)
+
+        # Load Features Matrix (Dynamic Backtesting)
+        features_path = data_dir / "features_matrix.parquet"
+        if not features_path.exists():
+            features_path = self.settings.lakehouse_dir / "features_matrix.parquet"
+
+        if features_path.exists():
+            try:
+                self.features_matrix = pd.read_parquet(features_path)
+                logger.info(f"Loaded Features Matrix: {self.features_matrix.shape}")
+                # Ensure index alignment
+                if not isinstance(self.features_matrix.index, pd.DatetimeIndex):
+                    self.features_matrix.index = pd.to_datetime(self.features_matrix.index)
+                if self.features_matrix.index.tz is not None:
+                    self.features_matrix.index = self.features_matrix.index.tz_convert(None)
+            except Exception as e:
+                logger.warning(f"Failed to load features matrix: {e}")
 
         metadata_path = data_dir / "metadata_catalog.json"
         if not metadata_path.exists():
@@ -174,17 +197,104 @@ class BacktestEngine:
         logger.info(f"Tournament Started: {n_obs} rows available. Windows: count={len(windows)}, train={train_window}, test={test_window}, step={step_size}")
 
         for i in windows:
+            current_date = self.returns.index[i]
             train_rets = self.returns.iloc[i - train_window : i]
             test_rets = self.returns.iloc[i : i + test_window]
 
+            # --- DYNAMIC UNIVERSE FILTERING (Time-Travel) ---
+            # If features_matrix exists, filter candidates based on HISTORICAL rating at current_date
+            dynamic_filter_active = not self.features_matrix.empty
+
+            if dynamic_filter_active:
+                # Find the row in features_matrix corresponding to current_date (or latest prior)
+                # Using searchsorted to find insertion point, then take previous
+                # Assuming index is sorted
+                idx_loc = self.features_matrix.index.searchsorted(current_date)
+                if idx_loc > 0:
+                    # Use the rating available known AT or BEFORE the rebalance time
+                    # To define "Point-in-Time", we strictly use t <= current_date.
+                    # Actually, for "At Close" rebalance, we might know Today's rating.
+                    # Safest is row at idx_loc-1 if idx_loc == len or exact match.
+                    # searchsorted returns index where it *would* be inserted to maintain order.
+                    # If current_date exists, it returns that index (left).
+
+                    # We can simply use asof/reindex logic or exact lookup if daily aligned.
+                    try:
+                        # Use .loc with 'ffill' semantics manually or just check existence
+                        if current_date in self.features_matrix.index:
+                            current_features = self.features_matrix.loc[current_date]
+                        else:
+                            # Use most recent prior (backfill/ffill logic)
+                            prev_date = self.features_matrix.index[self.features_matrix.index < current_date][-1]
+                            current_features = self.features_matrix.loc[prev_date]
+
+                        # Extract 'recommend_all' (Composite Rating)
+                        # Structure is MultiIndex (symbol, feature) or if simple (symbol)
+                        # We implemented MultiIndex in backfill_features.py
+
+                        if isinstance(self.features_matrix.columns, pd.MultiIndex):
+                            # Slice the 'recommend_all' feature cross-section
+                            ratings = current_features.xs("recommend_all", level="feature")
+                        else:
+                            # Assuming single feature matrix
+                            ratings = current_features
+
+                        # Filter: Keep if Rating > Threshold (e.g. 0.0 or 0.1)
+                        # TV 'Buy' starts at 0.1. 'Strong Buy' at 0.5.
+                        # Let's be permissive > 0.0 (Buy territory)
+                        min_rating = 0.0
+                        valid_symbols = ratings[ratings > min_rating].index.tolist()
+
+                        # Intersect with train_rets
+                        valid_universe = [s for s in valid_symbols if s in train_rets.columns]
+
+                        if len(valid_universe) >= 2:  # Require at least 2 assets to form a portfolio
+                            # Apply Filter
+                            train_rets = train_rets[valid_universe]
+                            # Log filter impact
+                            logger.info(f"  [Window {i}] Dynamic Filter: {len(valid_universe)} / {len(ratings)} valid candidates (Rating > {min_rating})")
+                        else:
+                            logger.warning(f"  [Window {i}] Dynamic Filter too strict (found {len(valid_universe)}). Falling back to full universe.")
+
+                    except Exception as e:
+                        logger.warning(f"  [Window {i}] Dynamic Filter failed: {e}. Using static universe.")
+
             # 2. Pillar 1: Universe Selection
+
+            # CR-265: Dynamic Regime Detection
             regime_name = "NORMAL"
+            market_env = "NORMAL"
+
+            try:
+                # Need DataFrame for detection. train_rets has asset columns.
+                # Ideally use a broad market index or equal-weight of universe for regime detection
+                # But using the refinement universe (train_rets) is a good proxy for the 'tradable universe' regime
+                if not train_rets.empty and len(train_rets) > 60:
+                    regime_label, regime_score, quadrant = self.detector.detect_regime(train_rets)
+                    regime_name = regime_label
+                    market_env = quadrant
+                    # logger.info(f"  [Window {i}] Regime: {regime_name} ({regime_score:.2f}) | Quadrant: {market_env}")
+            except Exception as e:
+                logger.warning(f"  [Window {i}] Regime detection failed: {e}")
+
             current_mode = config.features.selection_mode
+
+            # CR-270: Infer Strategy from Global Profile
+            strategy = "trend_following"
+            global_profile = config.profile or ""
+            if "mean_rev" in global_profile.lower() or "meanrev" in global_profile.lower():
+                strategy = "mean_reversion"
+            elif "breakout" in global_profile.lower():
+                strategy = "breakout"
 
             selection_engine = build_selection_engine(current_mode)
             from tradingview_scraper.selection_engines.base import SelectionRequest
 
-            req_select = SelectionRequest(top_n=config.top_n, threshold=config.threshold)
+            req_select = SelectionRequest(
+                top_n=config.top_n,
+                threshold=config.threshold,
+                strategy=strategy,  # CR-270
+            )
             selection = selection_engine.select(returns=train_rets, raw_candidates=self.raw_candidates, stats_df=self.stats, request=req_select)
 
             # CR-FIX: Ensure winners exist in the returns matrix (Phase 225)
@@ -283,7 +393,7 @@ class BacktestEngine:
                                         profile=actual_profile,
                                         engine=target_engine,
                                         regime=regime_name,
-                                        market_environment=regime_name,
+                                        market_environment=market_env,
                                         cluster_cap=0.25,
                                         kappa_shrinkage_threshold=float(config.features.kappa_shrinkage_threshold),
                                         default_shrinkage_intensity=current_ridge,
@@ -408,6 +518,8 @@ class BacktestEngine:
                                             # CR-691: Numerical Clipping
                                             clamped_rets = daily_rets.clip(-1.0, 1.0)
                                             return_series[key].append(clamped_rets)
+                                        else:
+                                            logger.warning(f"  [METRICS] Daily returns missing or invalid type for {target_engine}_{sim_name}_{profile}: {type(daily_rets)}")
 
                                         if ledger:
                                             data_payload: Dict[str, Any] = {"daily_returns": []}
@@ -436,13 +548,30 @@ class BacktestEngine:
             try:
                 full_series_raw = pd.concat(series_list)
                 if isinstance(full_series_raw, (pd.Series, pd.DataFrame)):
-                    full_series = full_series_raw[~full_series_raw.index.duplicated(keep="first")]
+                    # Explicitly cast to satisfy static analyzer
+                    full_series = cast(pd.Series, full_series_raw[~full_series_raw.index.duplicated(keep="first")])
                     if hasattr(full_series, "sort_index"):
                         full_series = full_series.sort_index()
                     out_path = returns_out / f"{key}.pkl"
-                    if hasattr(full_series, "to_pickle"):
-                        full_series.to_pickle(str(out_path))
+                    full_series.to_pickle(str(out_path))
                     logger.info(f"Saved stitched returns to {out_path}")
+
+                    # CR-847: Also save explicit profile aliases for Meta-Builder discovery
+                    # e.g. "market_cvx_min_variance.pkl" -> "min_variance.pkl" if unambiguous, or keep namespaced.
+                    # Build Meta Returns looks for *_{prof}.pkl.
+                    # Current key format: {target_engine}_{sim_name}_{profile}
+                    # Example: custom_friction_barbell
+                    # This matches *_{prof}.pkl since it ends with _barbell.
+
+                    # Force save profile-only alias if unique
+                    parts = key.split("_")
+                    if len(parts) >= 3:
+                        prof_name = "_".join(parts[2:])  # e.g. "barbell", "min_variance"
+                        alias_path = returns_out / f"{prof_name}.pkl"
+                        if not alias_path.exists():
+                            full_series.to_pickle(str(alias_path))
+                            logger.info(f"Saved return alias to {alias_path}")
+
             except Exception as e:
                 logger.error(f"Failed to save returns for {key}: {e}")
 

@@ -221,9 +221,11 @@ class TradingViewScraperSettings(BaseSettings):
     )
 
     # Infrastructure
-    artifacts_dir: Path = Path("artifacts")
+    data_dir: Path = Path("data")
+    artifacts_dir: Path = Path("data/artifacts")
     lakehouse_dir: Path = Path("data/lakehouse")
     logs_dir: Path = Path("data/logs")
+    export_dir: Path = Path("data/export")
     summaries_dir: Path | None = None
     manifest_path: Path = Path("configs/manifest.json")
     profile: str = Field(default_factory=lambda: os.getenv("TV_PROFILE") or "")
@@ -487,6 +489,10 @@ if __name__ == "__main__":
             "portfolio_gapfill": "PORTFOLIO_GAPFILL",
             "portfolio_force_sync": "PORTFOLIO_FORCE_SYNC",
             "portfolio_dedupe_base": "PORTFOLIO_DEDUPE_BASE",
+            "data_dir": "TV_DATA_DIR",
+            "artifacts_dir": "TV_ARTIFACTS_DIR",
+            "export_dir": "TV_EXPORT_DIR",
+            "lakehouse_dir": "TV_LAKEHOUSE_DIR",
         }
         for field, env_name in mapping.items():
             if field == "portfolio_lookback_days":

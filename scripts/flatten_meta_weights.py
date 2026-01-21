@@ -22,7 +22,18 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
 
     # Resolve meta weights path based on profile and meta_profile
     # Try the new specific name first, then fallback
+    # CR-851: Workspace Isolation - output_path's parent is the base_dir
+    base_dir = Path(output_path).parent.resolve()
+
+    logger.info(f"Searching for meta-artifacts in: {base_dir}")
+    if base_dir.exists():
+        logger.info(f"Directory contents: {[f.name for f in base_dir.iterdir()]}")
+    else:
+        logger.error(f"Directory does not exist: {base_dir}")
+
     search_weights = [
+        base_dir / f"meta_optimized_{m_prof}_{target_profile}.json",
+        base_dir / f"meta_optimized_{target_profile}.json",
         Path("data/lakehouse") / f"meta_optimized_{m_prof}_{target_profile}.json",
         Path("data/lakehouse") / f"meta_optimized_{target_profile}.json",
     ]
@@ -34,13 +45,15 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
             break
 
     if not meta_weights_path:
-        logger.error(f"Meta-weights missing for {m_prof}/{target_profile}")
+        logger.error(f"Meta-weights missing for {m_prof}/{target_profile} in {base_dir} or lakehouse")
         return
 
     logger.info(f"Loading meta-weights from: {meta_weights_path}")
 
     # Try to find the specific manifest for the profile
     search_manifests = [
+        base_dir / f"meta_manifest_{m_prof}_{target_profile}.json",
+        base_dir / f"meta_manifest_{target_profile}.json",
         Path("data/lakehouse") / f"meta_manifest_{m_prof}_{target_profile}.json",
         Path("data/lakehouse") / f"meta_manifest_{target_profile}.json",
     ]
@@ -81,7 +94,7 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
             # Recursively flatten sub-meta
             # We don't call the function directly to avoid complicated path management here,
             # instead we just load the sub-meta's flattened file.
-            sub_flat_path = Path("data/lakehouse") / f"portfolio_optimized_meta_{sub_meta}_{target_profile}.json"
+            sub_flat_path = base_dir / f"portfolio_optimized_meta_{sub_meta}_{target_profile}.json"
 
             # Ensure sub-meta is flattened first
             if not sub_flat_path.exists():

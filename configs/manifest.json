@@ -134,12 +134,12 @@
         {
           "id": "long_all",
           "profile": "binance_spot_rating_all_long",
-          "run_id": "final_mitigated_all_long_v7"
+          "run_id": "final_prod_v2_all_long"
         },
         {
           "id": "short_all",
           "profile": "binance_spot_rating_all_short",
-          "run_id": "final_mitigated_all_short_v7"
+          "run_id": "final_prod_v2_all_short"
         }
       ],
       "meta_allocation": {
@@ -155,12 +155,12 @@
         {
           "id": "long_ma",
           "profile": "binance_spot_rating_ma_long",
-          "run_id": "final_mitigated_ma_long_v7"
+          "run_id": "final_prod_v2_ma_long"
         },
         {
           "id": "short_ma",
           "profile": "binance_spot_rating_ma_short",
-          "run_id": "final_mitigated_ma_short_v7"
+          "run_id": "final_prod_v2_ma_short"
         }
       ],
       "meta_allocation": {
@@ -180,11 +180,28 @@
       ],
       "meta_allocation": { "engine": "custom", "profile": "hrp", "min_weight": 0.05, "max_weight": 0.5 }
     },
+    "meta_crypto_rerun": {
+      "description": "Fractal Branch: Crypto-Only Matrix (Rerun)",
+      "sleeves": [
+        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "rerun_v3_long_all" },
+        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "rerun_v3_short_all" },
+        { "id": "ma_long", "profile": "binance_spot_rating_ma_long", "run_id": "rerun_v3_ma_long" },
+        { "id": "ma_short", "profile": "binance_spot_rating_ma_short", "run_id": "rerun_v3_ma_short" }
+      ],
+      "meta_allocation": { "engine": "custom", "profile": "hrp", "min_weight": 0.05, "max_weight": 0.5 }
+    },
     "meta_fractal_test": {
       "description": "Root: Global Macro Fractal (Crypto Branch + TradFi)",
       "sleeves": [
         { "id": "crypto_branch", "meta_profile": "meta_crypto_only" },
         { "id": "tradfi_sleeve", "profile": "institutional_etf", "run_id": "institutional_v1_long_all" }
+      ],
+      "meta_allocation": { "engine": "custom", "profile": "equal_weight" }
+    },
+    "meta_ray_test": {
+      "description": "Ray Integration Test Profile",
+      "sleeves": [
+        { "id": "test_sleeve", "profile": "binance_spot_rating_ma_long", "run_id": "ray_iso_test_baseline" }
       ],
       "meta_allocation": { "engine": "custom", "profile": "equal_weight" }
     },
@@ -464,6 +481,7 @@
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight,barbell,market,benchmark,risk_parity",
         "backtest_simulators": "cvxportfolio,vectorbt",
+        "benchmark_symbols": ["BINANCE:BTCUSDT"],
         "train_window": 252,
         "test_window": 10,
         "step_size": 10
@@ -502,6 +520,7 @@
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight,barbell,market,benchmark,risk_parity",
         "backtest_simulators": "cvxportfolio,vectorbt",
+        "benchmark_symbols": ["BINANCE:BTCUSDT"],
         "train_window": 252,
         "test_window": 10,
         "step_size": 10
@@ -538,6 +557,7 @@
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight,barbell,market,benchmark,risk_parity",
         "backtest_simulators": "cvxportfolio,vectorbt",
+        "benchmark_symbols": ["BINANCE:BTCUSDT"],
         "train_window": 252,
         "test_window": 10,
         "step_size": 10
@@ -581,6 +601,7 @@
         "engines": "custom,skfolio,riskfolio",
         "profiles": "hrp,min_variance,max_sharpe,equal_weight,barbell,market,benchmark,risk_parity",
         "backtest_simulators": "cvxportfolio,vectorbt",
+        "benchmark_symbols": ["BINANCE:BTCUSDT"],
         "train_window": 252,
         "test_window": 10,
         "step_size": 10

@@ -17,7 +17,15 @@ from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("natural_selection")
 
-AUDIT_FILE = "data/lakehouse/selection_audit.json"
+
+def get_default_audit_file() -> str:
+    settings = get_settings()
+    if settings.run_id and settings.run_id != "default_run":
+        return str(settings.summaries_runs_dir / settings.run_id / "data" / "selection_audit.json")
+    return str(settings.logs_dir / "selection_audit.json")
+
+
+AUDIT_FILE = get_default_audit_file()
 
 
 def run_selection(
@@ -71,7 +79,8 @@ def natural_selection(
     run_audit_file = os.getenv("SELECTION_AUDIT", default_audit)
 
     # Global audit file is only used as a fallback or shared history
-    shared_audit_file = "data/lakehouse/selection_audit.json"
+    # CR-831: Move shared history to logs
+    shared_audit_file = str(settings.logs_dir / "selection_audit.json")
 
     # Handle multiple modes
     modes = [m.strip() for m in (mode or settings.features.selection_mode).split(",") if m.strip()]

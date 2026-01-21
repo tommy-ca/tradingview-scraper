@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.overview import Overview
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -16,9 +17,10 @@ logger = logging.getLogger("ingest_features")
 
 
 class FeatureIngestionService:
-    def __init__(self, lakehouse_dir: Path = Path("data/lakehouse"), workers: int = 10):
-        self.lakehouse_dir = lakehouse_dir
-        self.features_dir = lakehouse_dir / "features" / "tv_technicals_1d"
+    def __init__(self, lakehouse_dir: Path | None = None, workers: int = 10):
+        settings = get_settings()
+        self.lakehouse_dir = lakehouse_dir or settings.lakehouse_dir
+        self.features_dir = self.lakehouse_dir / "features" / "tv_technicals_1d"
         self.features_dir.mkdir(parents=True, exist_ok=True)
         self.workers = workers
         self.overview = Overview()
@@ -189,9 +191,10 @@ class FeatureIngestionService:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--candidates", required=True, help="Path to candidates.json")
-    parser.add_argument("--lakehouse", default="data/lakehouse", help="Lakehouse root directory")
+    parser.add_argument("--lakehouse", default=None, help="Lakehouse root directory")
     parser.add_argument("--workers", type=int, default=10, help="Concurrency level")
     args = parser.parse_args()
 
-    service = FeatureIngestionService(lakehouse_dir=Path(args.lakehouse), workers=args.workers)
+    lakehouse_path = Path(args.lakehouse) if args.lakehouse else None
+    service = FeatureIngestionService(lakehouse_dir=lakehouse_path, workers=args.workers)
     service.process_candidate_file(Path(args.candidates))

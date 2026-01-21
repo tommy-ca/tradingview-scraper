@@ -127,20 +127,16 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
             # Compounded total return over the period
             total_return = float(qs.stats.comp(rets))
 
-            # CR-FIX: Standardize on arithmetic scaling for window-level reporting (Phase 225)
+            # Annualization
+            # CR-FIX: Standardize on linear scaling for window-level reporting (Phase 225)
             # This prevents the geometric wipe-out artifact where a 10-day loss compounds to -99.99%
             if n_obs < 30:
-                # Arithmetic scaling relative to the ACTUAL window duration (CR-Update)
-                # Instead of projecting 10 days to 365, we project 10 days to 252 (Market standard)
-                # and use geometric mean logic for consistency with stitched CAGR
-
-                # Projecting 10 days to 365 is 36.5x leverage.
-                # For short windows, we should report annualized returns conservatively.
-                # Use daily mean * 252
-                annualized_return = float(rets.mean() * 252.0)
+                # LINEAR SCALING (Arithmetic Simple)
+                daily_mean = float(rets.mean())
+                annualized_return = daily_mean * 252.0
                 vol = float(rets.std() * math.sqrt(252.0))
                 realized_vol = float(np.clip(vol, 0.0, 5.0))
-                sharpe = (rets.mean() * 252.0) / (vol + 1e-9)
+                sharpe = annualized_return / (vol + 1e-9)
             else:
                 # Standard geometric CAGR for long series
                 total_return = float(qs.stats.comp(rets))
@@ -162,11 +158,17 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
 
             max_drawdown = float(qs.stats.max_drawdown(rets))
 
+            # CR-FIX: Period Metrics (Phase 233)
+            # Explicitly return period-native metrics for window analysis
+            period_vol = float(rets.std() * math.sqrt(n_obs))
+
             return {
                 "total_return": total_return,
+                "period_return": total_return,
                 "annualized_return": annualized_return,
                 "return": annualized_return,
                 "realized_vol": realized_vol,
+                "period_vol": period_vol,
                 "annualized_vol": realized_vol,
                 "vol": realized_vol,
                 "sharpe": sharpe,
@@ -186,6 +188,7 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
 
         vol_daily = float(rets.std()) if len(rets) > 1 else 0.0
         vol_ann = float(np.clip(vol_daily * math.sqrt(ann_factor), 0.0, 10.0))
+        period_vol = float(vol_daily * math.sqrt(n_obs))
 
         if total_return <= -1.0:
             geom_mean = -1.0
@@ -199,10 +202,12 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
         max_drawdown = calculate_max_drawdown(rets)
         return {
             "total_return": float(total_return),
+            "period_return": float(total_return),
             "annualized_return": float(annualized_return),
             "return": float(annualized_return),
             "realized_vol": vol_ann,
             "annualized_vol": vol_ann,
+            "period_vol": period_vol,
             "vol": vol_ann,
             "sharpe": float(sharpe),
             "max_drawdown": float(max_drawdown),
