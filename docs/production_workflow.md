@@ -99,6 +99,6 @@ The "Tournament" evaluates an `Engine x Simulator` matrix to quantify the perfor
 | Command | Purpose |
 | :--- | :--- |
 | `make clean-all` | **Clean** | Wipe all data, exports, and summaries. |
-| `make clean-archive` | **Clean** | Archive old runs (keep 10) to `artifacts/archive`. |
+| `make clean-archive` | **Clean** | Archive old runs (keep 10) to `data/artifacts/archive`. |
 | `make check-archive` | **Clean** | Dry-run archive to preview deletions. |
 | `make report-sync` | **Report** | Synchronize artifacts to Gist. |

@@ -48,7 +48,7 @@ make flow-production PROFILE=production
 
 ### Logging & Visibility
 Every step of the production sequence persists its full execution trace in the run directory:
-- **Log Path**: `artifacts/summaries/runs/<RUN_ID>/logs/`
+- **Log Path**: `data/artifacts/summaries/runs/<RUN_ID>/logs/`
 - **Real-time Progress**: The orchestrator parses log output to provide dynamic progress bars for long-running tasks.
 - **Traceability**: All log paths are recorded in the `audit.jsonl` ledger for each step.
 
@@ -71,7 +71,7 @@ Every step of the production sequence persists its full execution trace in the r
 | `make port-report` | **Port** | Generate unified quant reports. |
 | `make report-sync` | **Report** | Synchronize artifacts to Gist. |
 | `make clean-all` | **Clean** | Wipe all data, exports, and summaries. |
-| `make clean-archive` | **Clean** | Archive old runs (keep 10) to `artifacts/archive`. |
+| `make clean-archive` | **Clean** | Archive old runs (keep 10) to `data/artifacts/archive`. |
 | `make check-archive` | **Clean** | Dry-run archive to preview deletions. |
 
 

@@ -41,3 +41,29 @@
 - **Description**: "Vol-HHI Corr" metric is NaN in reports because simulators do not natively return `top_assets`.
 - **Impact**: Reduced observability of concentration risk.
 - **Fix Scheduled**: Backlog.
+
+## 7. Ray Parallel Execution Failure
+- **Severity**: High (Infrastructure)
+- **Component**: `scripts/parallel_orchestrator_ray.py`
+- **Description**: Ray workers failed with `make: ... data-prep-raw Error 1` because `uv` was running inside the ephemeral Ray virtual environment but attempting to use the host's `.venv` paths, causing a mismatch warning and failure to find dependencies.
+- **Impact**: Multi-sleeve parallel execution failed; fallback to serial execution was required.
+- **Status**: **Fixed** in Phase 228 by unsetting `VIRTUAL_ENV` and propagating `uv` path from host to worker environment.
+
+## 8. Window 262 "Bankruptcy" Anomaly
+- **Severity**: Medium (Forensic Alert)
+- **Component**: `BacktestEngine` / `Market Data`
+- **Description**: Window 262 (May-June 2025) showed `-99.99%` annualized return across all profiles.
+- **Root Cause**: A market-wide crash in selected altcoins (Memecoins like ARC, PIPPIN) where assets lost ~40% in 10 days. Short-window annualization of a 40% loss mathematically approaches -100%.
+- **Verdict**: **Valid Market Event**. Not a data error. The system correctly identified a catastrophic drawdown period.
+- **Mathematical Explanation**: Geometric annualization of a -40% return over 10 days:
+  $$ R_{annual} = (1 + R_{period})^{(365 / days)} - 1 $$
+  $$ R_{annual} = (1 - 0.40)^{(36.5)} - 1 $$
+  $$ R_{annual} \approx 0.60^{36.5} - 1 \approx 8.1 \times 10^{-9} - 1 \approx -100\% $$
+  This correctly reflects that repeating this loss 36.5 times would result in total ruin.
+
+## 9. Missing Benchmark Configuration
+- **Severity**: Low (Reporting)
+- **Severity**: Low (Reporting)
+- **Component**: `manifest.json`
+- **Description**: `binance_spot_*` profiles lacked explicit `benchmark_symbols` definition, causing `benchmark` and `market` profiles to potentially fallback to unweighted universe averages or zeroes.
+- **Status**: **Fixed** in Phase 230 by explicitly setting `benchmark_symbols: ["BINANCE:BTCUSDT"]`.

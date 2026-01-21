@@ -1,152 +1,572 @@
-# Platform Specification, Requirements & Development Plan
+# Plan: Documentation Update & Workflow Streamlining
 
-## 1. Executive Summary
-This document codifies the institutional requirements and design specifications for the TradingView Scraper quantitative platform, incorporating recent learnings from crypto production and institutional ETF strategy validation (Q1 2026).
+## 1. Documentation Updates
+- [x] **Create `docs/specs/requirements_v3.md`**: Formalize the 3-Pillar Architecture (Universe Selection, Strategy Synthesis, Portfolio Allocation) and Selection Standards (HTR v3.4, Selection v3.2).
+- [x] **Create `docs/specs/crypto_sleeve_v2.md`**: Document Crypto Sleeve Operations, Exchange Strategy, and Production Pillars.
+- [x] **Create `docs/specs/numerical_stability.md`**: Document Numerical Stability & Reporting standards (Stable Sum Gate, SSP Minimums, Reporting Purity).
+- [x] **Update `docs/specs/production_workflow_v2.md`**: reflect the current `flow-production` and `flow-meta-production` workflows.
 
-## 2. Requirements & Standards
+## 2. Review and Audit
+- [x] **Audit `Makefile`**: Check for parallelism opportunities and fragile dependencies.
+- [x] **Audit `scripts/run_production_pipeline.py`**: Check for bottleneck and error handling.
+- [x] **Audit `scripts/run_meta_pipeline.py`**: Check for recursive/fractal logic efficiency.
+- [x] **Verify `manifest.json`**: Ensure profiles match the documentation (e.g., `crypto_production` parameters).
 
-### 2.1 Data Integrity & Health (The Forensic Pillar)
-- **Secular History**: Production runs require 500 days of lookback with a **252-day floor** (1 year of training baseline).
-- **Strict Health Policy**: 100% gap-free alignment required for implementation.
-- **Institutional Gaps**: 1-session gaps are ignored (market-day normalization).
-- **Crypto Precision**: 10-day step size alignment (Bi-Weekly).
-- **Normalization**: +4h shift for market-day alignment (20:00-23:59 UTC).
+## 3. Streamlining & Optimization
+- [x] **Optimize `flow-data`**:
+    - Parallelize `data-ingest` and `feature-ingest` in Makefile.
+    - Suggest `xargs -P` usage.
+- [x] **Analyze `flow-production`**:
+    - Identify sequential bottlenecks in the python pipeline.
+- [x] **Identify Fragility**:
+    - Check for "fail-fast" mechanisms in long-running jobs.
+    - Verify "Data Guard" implementation (toxic data drops).
 
-### 2.2 Selection Architecture (The Alpha Core)
-- **Primary Model (v4)**: MLOps-Centric Pipeline.
-- **Legacy Models (v2, v3)**: Preserved for benchmarking coexistence.
-- **Predictability Vetoes**: Integrated Entropy, Hurst, and Efficiency filters.
-- **Universe Diversity**: Multi-sleeve support (Instruments, ETFs, Crypto).
+## 4. Final Report
+- [x] Summary of changes and recommendations.
 
-### 2.3 Optimization & Risk (The Strategic Layer)
-- **Engines**: `skfolio`, `riskfolio`, `pyportfolioopt`, `cvxportfolio`.
-- **Primary Strategy**: Barbell (3.83 Sharpe standard).
-- **Cluster Awareness**: Ward Linkage hierarchical risk buckets.
-- **Friction Modeling**: 5bps slippage and 1bp commission for production simulators.
-- **Regime-Aware Caps**: Dynamic clustering caps (Normal: 0.25, Turbulent: 0.20, Crisis: 0.15).
+## 5. Elimination of Bottlenecks (Phase 2)
+- [x] **Makefile Refactoring**:
+    - Split `port-analyze` into `port-pre-opt` (Critical: Clusters, Stats, Regime) and `port-post-analysis` (Optional: Visuals, Deep Dive).
+- [x] **Orchestrator Update (`scripts/run_production_pipeline.py`)**:
+    - Use `port-pre-opt` before Optimization.
+    - Move `port-post-analysis` to the end of the pipeline.
+    - Add `--skip-analysis` flag to skip heavy visualization steps.
+    - Add `--skip-validation` flag to skip Backtesting (`port-test`) for rapid iteration.
+- [x] **Documentation**:
+    - Update `docs/specs/production_workflow_v2.md` with the optimized Critical Path.
 
-## 3. Design Specifications
+## 6. Completion
+- [x] All tasks completed. System is streamlined for both Production (Full Integrity) and Development (Fast Iteration) workflows.
+- [x] Documentation fully aligned with codebase.
 
-### 3.1 Layered Pipeline Architecture (L0-L4)
-- **L0 (Universe)**: Broad pool definitions (S&P 500, Binance Top 50).
-- **L1 (Hygiene)**: Global liquidity and technical filters.
-- **L2 (Templates)**: Asset-specific sessions and calendars.
-- **L3 (Strategies)**: Alpha logic (Trend, Mean Reversion, MTF).
-- **L4 (Scanners)**: Composed entry points.
+## 7. Post-Refactor Audit & Fixes
+- [x] **Fix `scripts/research_regime_v3.py`**:
+    - Current implementation has hardcoded paths (`data/lakehouse/...`).
+    - Needs to respect `RETURNS_MATRIX` env var and output to `data/runs/<ID>/data/`.
 
-### 3.2 Refinement Funnel (6-Stage MLOps Funnel)
-1. Ingestion -> 2. Feature Engineering -> 3. Inference -> 4. Partitioning -> 5. Policy -> 6. Synthesis.
+## 8. Phase 219: Dynamic Historical Backtesting (SDD & TDD)
+- [x] **Design**: Create `docs/design/dynamic_backtesting_v1.md`.
+    - Spec for `features_matrix.parquet` (Point-in-Time features).
+    - Spec for `BacktestEngine` integration (Ranking at rebalance time).
+- [x] **Test (TDD)**: Create `tests/test_backfill_features.py` defining expected behavior.
+- [x] **Implementation**: Create `scripts/services/backfill_features.py`.
+- [x] **Integration**: Update `BacktestEngine` to consume feature matrix.
+- [x] **Automation**: Added `feature-backfill` target to Makefile.
 
-## 4. Development Plan (Current Sprint)
+## 9. Phase 246: Production Validation (Binance Spot Ratings)
+- [x] **Data Ops**: Execute `make feature-backfill` to populate `data/lakehouse/features_matrix.parquet` (Verified).
+- [x] **Atomic Runs**: Execute Production Flow for profile `binance_spot_rating_ma_long` (Verified Dynamic Filter active).
+- [x] **Meta-Orchestration (Auto)**:
+    - Execute `meta_ma_benchmark` with `--execute-sleeves` (Runs `ma_long` + `ma_short`).
+    - Execute `meta_benchmark` with `--execute-sleeves` (Runs `all_long` + `all_short`).
+- [x] **Forensic Audit**:
+    - Generated Deep Reports (`port-deep-audit`) for atomic sleeves (`final_prod_v2_ma_long`, `final_prod_v2_all_long`).
+    - Validated Lookahead Bias elimination via `features_matrix` usage in logs (see `13_validation.log` inspection).
+    - **Meta-Audit**: Updated `generate_deep_report.py` to support "Meta-Fractal" ledger entries. Generated reports for `meta_benchmark_final_v1` and `meta_ma_benchmark_final_v1`.
 
-### Phase 134-216: (Historical Completed Phases)
-(See git history or previous versions for full detail of phases 134 through 216)
+## 10. Phase 250: Regime Detector Audit & Upgrade (SDD & TDD)
+- [x] **Design**: Create `docs/design/regime_detector_upgrade_v1.md`.
+    - Focus: Spectral Intelligence (DWT/Entropy) & Point-in-Time usage.
+- [x] **Test (TDD)**: Create `tests/test_regime_detector.py`.
+    - Test basic detection (CRISIS vs NORMAL).
+    - Test spectral metrics (Turbulence).
+- [x] **Refactor**: Update `MarketRegimeDetector` in `tradingview_scraper/regime.py`.
+    - Added absolute volatility dampeners to fix "Flatline" classification.
+    - Robustness improvements.
+- [x] **Validation**: All TDD tests passed.
 
-### Phase 217: Meta-Portfolio Resilience (COMPLETED)
-- [x] **Requirement**: Meta-Aggregator must handle missing sleeve profiles gracefully.
-- [x] **Implementation**: Added "Best Effort Proxy" logic (Fallback: HRP -> MinVar -> MaxSharpe).
-- [x] **Verification**: Successfully generated `meta_super_benchmark` despite `long_ma` failing HRP optimization.
+## 11. Final Sign-off
+- [x] **Documentation**: All artifacts synchronized.
+- [ ] **Archive**: Clean up test runs (Optional).
+- [ ] **Complete**: System is fully validated for Production v3.5.3.
 
-### Phase 218: Optimization Hardening (COMPLETED)
-- [x] **Investigation**: Diagnosed HRP failures in `prod_ma_long_v3` (Zero-variance clusters causing non-finite distance).
-- [x] **Fix**: Implemented zero-variance column filtering in `optimize_clustered_v2.py` (via `custom.py` engine).
-- [x] **Fix**: Resolved `RuntimeWarning` in `metrics.py` for extreme negative returns (Bankruptcy handling).
-- [x] **Fix**: Corrected summary metric aggregation in `generate_reports.py` to use stitched returns instead of averaging annualized window metrics.
-- [x] **Fix**: Hardened `backtest_engine.py` and `backtest_simulators.py` to persist absolute wealth/holdings across windows, preventing wealth reset artifacts and exploding returns.
-- [x] **Fix**: Implemented "Hard Bankruptcy Gate" in simulators to liquidate portfolios hitting a 1% wealth floor, preventing "zombie" gains on dust.
-- [x] **Verification**: Validated `v6` sweep; confirmed realistic metrics (e.g. -31% CAGR for CVX vs previous 1853% anomaly) and simulator parity.
-- [x] **Config**: Hardened manifest to include all benchmarks and risk profiles.
+## 12. Phase 255: Regime Directional Research (SDD & TDD)
+- [x] **Design**: Create `docs/design/regime_directional_filter_v1.md`.
+    - Objective: Explore regime detector utility for confirming LONG/SHORT bias.
+    - Metrics: Accuracy of regime vs subsequent 5d/10d return direction.
+- [x] **Test (TDD)**: Create `tests/test_regime_direction.py`.
+    - Define expected predictive capability or at least correlation structure.
+- [x] **Research Script**: Implement `scripts/research/research_regime_direction.py`.
+    - Load full history.
+    - Compute rolling regime scores.
+    - Calculate forward returns (next 5, 10, 20 days).
+    - Analyze conditional distribution of returns given Regime/Quadrant.
+- [x] **Analysis**: Generate a report summarizing findings.
+    - **Result**: Initial research on Top 10 assets shows `CRISIS` quadrant has 53% win rate (Long), while `EXPANSION` has 33% (potentially counter-intuitive or mean-reverting data). `QUIET` regime has negative expectancy.
+    - **Action**: Further tuning of `EXPANSION` thresholds required, or strategy should be Mean Reversion in Expansion?
 
-### Phase 218.10: Meta-Portfolio Final Sweep (COMPLETED)
-- [x] **Objective**: Achieve 100% "HEALTHY" status across all sleeves in `meta_super_benchmark`.
-- [x] **Execution**: Rerun all 4 v6 profiles with persistent wealth logic and hardened metrics.
-- [x] **Validation**: Verified end-to-end correctness and performance alignment between vector and friction simulators.
+## 13. Phase 260: HMM Regime Detector Research & Optimization (SDD & TDD)
+- [x] **Design**: Create `docs/design/hmm_regime_optimization_v1.md`.
+    - Objective: Evaluate stability and performance of `_hmm_classify`.
+    - Hypothesis: 2-state Gaussian HMM on absolute returns effectively captures Volatility Regimes but may be unstable or slow.
+- [x] **Test (TDD)**: Create `tests/test_hmm_detector.py`.
+    - Test stability (does it return same state for same data?).
+    - Test state separation (High Vol vs Low Vol).
+- [x] **Research/Refactor**: Update `tradingview_scraper/regime.py`.
+    - Tested `GMM` (4ms) vs `HMM` (30ms).
+    - Found `GMM` fails to detect Crisis if the latest point is near zero (common in high-variance Gaussian).
+    - **Optimization**: Kept `GaussianHMM` for correctness but reduced `n_iter=50` -> `10`. Speed improved to ~16ms.
+- [x] **Benchmark**: Compare execution time and accuracy. HMM with `n_iter=10` is the winner.
 
-### Phase 218.11: Production Correctness Final Sweep (COMPLETED)
-- [x] **Task**: Multi-Profile Correctness Rerun (`final_*_v9` series).
-- [x] **Objective**: Validate 100% correctness of every sleeve profile with the latest hardened infrastructure.
-- [x] **Fix**: Resolved "114% Volatility" artifact by enforcing absolute holdings persistence and robust wealth processing in CVXPortfolio.
-- [x] **Fix**: Corrected "Anomalous CAGR" issue by calculating summary metrics from stitched returns.
-- [x] **Fix**: Implemented wealth process continuity and bankruptcy floors in simulators.
-- [x] **Audit**: Traced data with per-window ledger logs; verified realistic metrics (e.g. 1.09 Sharpe for Long All Barbell with 66% Vol).
-- [x] **Completion**: Achieved final "Production Ready" sign-off for the Binance Spot suite.
+## 14. Phase 265: Regime-Risk Integration & Portfolio Engine Audit
+- [x] **Design**: Create `docs/design/regime_risk_integration_v1.md`.
+    - Objective: Hook up `MarketRegimeDetector` to `BacktestEngine`.
+    - Logic: Map `(Regime, Quadrant)` -> `EngineRequest(regime, market_environment)`.
+- [x] **Test (TDD)**: Create `tests/test_regime_risk_integration.py`.
+    - Verified `CustomClusteredEngine` adapts L2/Aggressor weights based on regime.
+- [x] **Integration**: Update `scripts/backtest_engine.py`.
+    - Instantiated `MarketRegimeDetector`.
+    - Implemented per-window detection logic.
+    - Fixed `EngineRequest` to use dynamic `regime` and `market_environment` instead of hardcoded "NORMAL".
 
-### Phase 218.12: Institutional Baseline Hardening (COMPLETED)
-- [x] **Config**: Updated `manifest.json` with institutional standards: 500d lookback, 252d train, 10d test/step.
-- [x] **Task**: Multi-Profile Institutional Rerun (`institutional_v1` series).
-- [x] **Audit**: Review and audit realized risk profiles under long-duration training regimes.
-- [x] **Trace**: Documented 1252% CAGR alpha capture in Short MA Barbell via window-by-window ledger trace.
+## 15. Phase 270: Strategy-Specific Regime Ranker (SDD & TDD)
+- [x] **Design**: Create `docs/design/strategy_regime_ranker_v1.md`.
+    - Objective: Score assets based on their "fit" for a specific strategy (Trend vs MeanRev) given their current regime.
+- [x] **Test (TDD)**: Create `tests/test_strategy_ranker.py`.
+    - Verified Trend strategies prioritize positive AR/High Hurst.
+    - Verified MeanRev strategies prioritize oscillating/Low Hurst.
+- [x] **Implementation**: Create `tradingview_scraper/selection_engines/ranker.py`.
+- [x] **Integration**: Updated `SelectionEngineV3` and `BacktestEngine` to use the ranker.
+    - Strategy inferred from profile names (e.g. 'ma_long' -> trend, 'mean_rev' -> mean_reversion).
 
-### Phase 218.13: Production Certification (COMPLETED)
-- [x] **Task**: Consolidate institutional sweep results.
-- [x] **Objective**: Achieved final certification for Q1 2026 deployment.
-- [x] **Verification**: Confirmed 100% mechanical and strategic alignment under 252d training regime.
-
-### Phase 218.14: Fractal Meta-Portfolio Implementation (COMPLETED)
-- [x] **Architecture**: Designed Fractal Tree structure supporting nested meta-profiles.
-- [x] **Service**: Updated `build_meta_returns.py` with recursive branch resolution and weighted sub-meta return calculation.
-- [x] **Service**: Updated `flatten_meta_weights.py` with recursive physical asset collapse.
-- [x] **Isolation**: Implemented profile-prefixed meta-artifact naming.
-- [x] **Auditability**: Implemented `meta_cluster_tree_*.json` persistence for hierarchical allocation review.
-- [x] **Orchestration**: Created `run_meta_pipeline.py` for streamlined "One-Go" fractal execution.
-- [x] **Validation**: Executed recursive fractal test (`meta_crypto_only`) and verified weight propagation and physical symbol collapse.
-- [x] **Audit**: Final Forensic Audit report signed off (`fractal_meta_audit_20260118.md`).
-
-### Phase 219: Dynamic Historical Backtesting (IN PROGRESS)
-- [ ] **Design**: Define `docs/design/dynamic_backtesting_v1.md` for synthetic feature reconstruction.
-- [ ] **Service**: Implement `scripts/services/backfill_features.py` to generate `features_matrix.parquet`.
-- [ ] **Engine Update**: Modify `BacktestEngine` to re-rank candidates at each rebalance step using historical synthetic ratings.
-- [ ] **Goal**: Resolve "Discovery-Backtest Regime Mismatch".
-- [ ] **Workflow**: Integrate into SDD Flow (Spec -> Build -> Audit).
-
-### Phase 220: Binance Spot Ratings Meta-Portfolio Rerun (COMPLETED)
-- [x] **Objective**: Rerun full production pipelines for Binance Spot Ratings (All & MA) including meta-aggregation.
-- [x] **Standard**: 10-day step size (Bi-Weekly) for crypto production.
-- [x] **Sleeves**: `binance_spot_rating_all_long/short` and `binance_spot_rating_ma_long/short`.
-- [x] **Meta-Portfolios**: `meta_benchmark` (All) and `meta_ma_benchmark` (MA).
-- [x] **Downstream**: Generate unified quant reports and physical weight flattens.
-- [x] **Data Ops**: Execute full data ingestion and repair before pipeline start.
-
-### Phase 221: Meta-Portfolio Forensic Audit & Streamlining (COMPLETED)
-- [x] **Audit**: Review per-rebalance window audit ledgers for all 4 rating-based sleeves.
-- [x] **Anomaly Detection**: Spot outliers in realized returns and solver behaviors (e.g. `skfolio` missing).
-- [x] **Design**: Propose streamlining for the meta-aggregation layer (Aggregation Speed, Error Handling).
-- [x] **Tasks**: Define next steps for institutional hardening.
-
-### Phase 222: Meta-Portfolio Orchestration Hardening (COMPLETED)
-- [x] **Infrastructure**: Fix missing dependencies (`skfolio`, `riskfolio`) in production environment.
-- [x] **Service**: Implement caching in `build_meta_returns.py` for recursive fractal nodes.
-- [x] **Guardrail**: Implement `scripts/validate_sleeve_health.py` to enforce solver health thresholds.
-- [x] **Optimization**: Parallelize atomic sleeve execution in meta-runs if resources permit.
-- [x] **Reporting**: Integrated forensic anomaly detection into the meta-portfolio reporter.
-- [x] **Audit**: Validated 100% solver health baseline and identified 155 window-level outliers.
-
-### Phase 223: Multi-Sleeve Parallelization with Ray (COMPLETED)
-- [x] **Design**: Define `docs/design/parallel_orchestration_v1.md` for Ray-based execution (v2.0).
-- [x] **Infrastructure**: Synchronized environment with `ray` via `uv add`.
-- [x] **Service**: Implemented `scripts/parallel_orchestrator_ray.py` for concurrent sleeve production.
-- [x] **Workflow**: Integrated Ray logic into `run_meta_pipeline.py` with `--execute-sleeves` flag.
-- [x] **Audit**: Validated 337 identified anomalies against healthy solver baselines.
-- [x] **Goal**: Reduced theoretical production wall-time for 4 sleeves by ~75% (resource limited).
-
-### Phase 224: Institutional Anomaly Mitigation (COMPLETED)
-- [x] **Design**: Implemented `docs/design/anomaly_mitigation_v1.md` for adaptive solver shrinkage.
-- [x] **Heuristic**: Developed "Ridge-Reload" logic for windows with Sharpe > 10 in `scripts/backtest_engine.py`.
-- [x] **Guardrail**: Added per-window numerical clipping and Sharpe tightening to `tradingview_scraper/utils/metrics.py`.
-- [x] **Audit**: Validated anomaly reduction from **337** to **77** window-level events.
-
-### Phase 225: Numerical Hardening (COMPLETED)
-- [x] **Metrics**: Implemented Arithmetic Annualization for short reporting windows (< 30 obs) to prevent geometric explosion.
-- [x] **Solvers**: Enforced 25% physical weight caps in `BacktestEngine` to ensure factor diversity.
-- [x] **Audit**: Validated Window 262 stabilization; suppressed -99.99% projection artifacts.
-- [x] **Infrastructure**: Synchronized final production baseline with sequential certification.
-
-### Phase 226: Ray Resource Hardening (COMPLETED)
-- [x] **Infrastructure**: Implemented 3GB memory requests and task segregation in `parallel_orchestrator_ray.py`.
-- [x] **Parallelization**: Restored 75% wall-time reduction potential via resource-aware multicore scheduling.
-- [x] **Certification**: Achieved final Forensic Audit sign-off for Q1 Production.
+## 16. Final Sign-off (v3.5.3)
+- [x] **Documentation**: All artifacts synchronized.
+- [ ] **Archive**: Clean up test runs (Optional).
+- [x] **Complete**: System is fully validated for Production v3.5.3 with Dynamic Regime-Aware Strategy Selection.
 
 ---
 
+# Phase 300+: Fractal Framework Consolidation (Audit 2026-01-21)
 
-**System Status**: 🟢 PRODUCTION READY (v4.6.0) - Phase 223 Scheduled
+## 17. Architecture Audit Summary
+
+### 17.1 Existing Patterns (Preserve)
+The following patterns are **already implemented** and should be preserved:
+
+| Pattern | Location | Status |
+| :--- | :--- | :--- |
+| `BasePipelineStage` | `pipelines/selection/base.py` | **Production** |
+| `SelectionContext` | `pipelines/selection/base.py` | **Production** |
+| `BaseSelectionEngine` | `selection_engines/base.py` | **Production** |
+| `BaseRiskEngine` | `portfolio_engines/base.py` | **Production** |
+| HTR Loop Orchestration | `pipelines/selection/pipeline.py` | **Production** |
+| Stage Composition | `pipelines/selection/stages/` | **Production** |
+| Ranker Factory | `pipelines/selection/rankers/factory.py` | **Production** |
+
+### 17.2 Identified Gaps (Address)
+| Gap | Priority | Phase |
+| :--- | :--- | :--- |
+| `StrategyRegimeRanker` misplaced in `selection_engines/` | High | 305 |
+| No formal `discovery/` module (scanners in `scripts/`) | Medium | 310 |
+| Filters scattered across selection engines | Medium | 315 |
+| No `MetaContext` for sleeve aggregation | High | 320 |
+| No declarative pipeline composition from JSON | Low | 330 |
+
+### 17.3 Proposed Consolidation (NOT New Architecture)
+**Principle**: Extend existing patterns, do NOT create parallel structures.
+
+```
+tradingview_scraper/
+├── pipelines/                       # EXISTING (Extend)
+│   ├── selection/                   # EXISTING
+│   │   ├── base.py                  # SelectionContext, BasePipelineStage
+│   │   ├── pipeline.py              # SelectionPipeline (HTR Orchestrator)
+│   │   ├── rankers/                 # EXISTING
+│   │   │   ├── base.py
+│   │   │   ├── mps.py
+│   │   │   ├── signal.py
+│   │   │   ├── regime.py            # NEW: Migrate StrategyRegimeRanker
+│   │   │   └── factory.py
+│   │   ├── stages/                  # EXISTING
+│   │   │   ├── ingestion.py
+│   │   │   ├── feature_engineering.py
+│   │   │   ├── inference.py
+│   │   │   ├── clustering.py
+│   │   │   ├── policy.py
+│   │   │   └── synthesis.py
+│   │   └── filters/                 # NEW: Extract from policy.py
+│   │       ├── base.py              # BaseFilter protocol
+│   │       ├── darwinian.py         # Health vetoes
+│   │       ├── spectral.py          # Entropy/Hurst vetoes
+│   │       └── friction.py          # ECI filter
+│   ├── discovery/                   # NEW: Migrate from scripts/scanners/
+│   │   ├── base.py                  # BaseDiscoveryScanner
+│   │   ├── tradingview.py
+│   │   └── binance.py
+│   └── meta/                        # NEW: Formalize meta-portfolio
+│       ├── base.py                  # MetaContext, MetaStage
+│       ├── aggregator.py            # SleeveAggregator
+│       └── flattener.py             # Weight projection
+├── portfolio_engines/               # EXISTING (Stable)
+│   ├── base.py                      # BaseRiskEngine
+│   └── impl/                        # EXISTING
+│       ├── custom.py
+│       ├── riskfolio.py
+│       ├── skfolio.py
+│       └── ...
+└── selection_engines/               # EXISTING (Legacy, Freeze)
+    ├── base.py                      # BaseSelectionEngine
+    └── impl/                        # EXISTING
+        ├── v3_4_htr.py              # HTR v3.4 (Active)
+        └── v3_mps.py                # MPS v3.2 (Active)
+```
+
+## 18. Phase 305: Migrate StrategyRegimeRanker (SDD & TDD)
+- [ ] **Design**: Update `docs/design/strategy_regime_ranker_v1.md` with new location.
+- [ ] **Test (TDD)**: Ensure `tests/test_strategy_ranker.py` passes with new import path.
+- [ ] **Migration**:
+    - Move `selection_engines/ranker.py` → `pipelines/selection/rankers/regime.py`.
+    - Update imports in `selection_engines/impl/v3_mps.py`.
+    - Deprecate old path with import alias.
+- [ ] **Validation**: Run `make port-select` to verify.
+
+## 19. Phase 310: Discovery Module (SDD & TDD)
+- [ ] **Design**: Create `docs/design/discovery_module_v1.md`.
+    - Define `BaseDiscoveryScanner` protocol: `discover(params) -> List[CandidateMetadata]`.
+    - Inventory existing scanners in `scripts/scanners/`.
+- [ ] **Test (TDD)**: Create `tests/test_discovery_scanners.py`.
+    - Mock network calls.
+    - Verify candidate schema compliance.
+- [ ] **Implementation**:
+    - Create `pipelines/discovery/base.py` with `BaseDiscoveryScanner`.
+    - Migrate `scripts/scanners/binance_spot_scanner.py` → `pipelines/discovery/binance.py`.
+    - Migrate `scripts/scanners/tradingview_scanner.py` → `pipelines/discovery/tradingview.py`.
+- [ ] **Integration**: Update `scan-run` Makefile target.
+
+## 20. Phase 315: Filter Module Extraction (SDD & TDD)
+- [ ] **Design**: Create `docs/design/filter_module_v1.md`.
+    - Define `BaseFilter` protocol: `apply(context) -> context` (veto candidates).
+    - Extract filter logic from `PolicyStage`.
+- [ ] **Test (TDD)**: Create `tests/test_filters.py`.
+    - Test Darwinian filter (health vetoes).
+    - Test Spectral filter (entropy/hurst vetoes).
+- [ ] **Implementation**:
+    - Create `pipelines/selection/filters/base.py`.
+    - Create `pipelines/selection/filters/darwinian.py`.
+    - Create `pipelines/selection/filters/spectral.py`.
+    - Create `pipelines/selection/filters/friction.py`.
+- [ ] **Refactor**: Update `PolicyStage` to delegate to filter chain.
+
+## 21. Phase 320: Meta-Portfolio Module (SDD & TDD)
+- [ ] **Design**: Create `docs/design/meta_portfolio_v1.md`.
+    - Define `MetaContext` (extends `SelectionContext` with sleeve-level data).
+    - Define `SleeveAggregator` (builds meta-returns matrix).
+    - Define `WeightFlattener` (projects meta-weights to atoms).
+- [ ] **Test (TDD)**: Create `tests/test_meta_pipeline.py`.
+    - Test sleeve aggregation (3 sleeves → 1 meta-returns matrix).
+    - Test weight flattening (meta-weights × sleeve-weights = atom-weights).
+- [ ] **Implementation**:
+    - Create `pipelines/meta/base.py` with `MetaContext`.
+    - Create `pipelines/meta/aggregator.py` with `SleeveAggregator`.
+    - Create `pipelines/meta/flattener.py` with `WeightFlattener`.
+- [ ] **Integration**: Refactor `scripts/run_meta_pipeline.py` to use new modules.
+
+## 22. Phase 330: Declarative Pipeline Composition (Optional, Low Priority)
+- [ ] **Design**: Create `docs/design/declarative_pipeline_v1.md`.
+    - JSON schema for pipeline definition.
+    - Factory to build `SelectionPipeline` from config.
+- [ ] **Test (TDD)**: Create `tests/test_pipeline_factory.py`.
+- [ ] **Implementation**: Create `pipelines/factory.py`.
+
+---
+
+# Phase 340+: Orchestration Layer (Audit 2026-01-21)
+
+## 23. Orchestration Layer Overview
+
+### 23.1 Design Document
+See `docs/design/orchestration_layer_v1.md` for full specification.
+
+### 23.2 Architecture Layers
+```
+┌────────────────────────────────────────────────────────────┐
+│                   CLAUDE SKILL LAYER                       │
+│  Addressable stage invocation via CLI/SDK                  │
+│  quant://selection/ingestion?run_id=abc&profile=crypto     │
+└────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────────┐
+│               WORKFLOW ENGINE (Prefect/DBOS)               │
+│  DAG orchestration, retries, observability, scheduling     │
+└────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────────┐
+│                  COMPUTE ENGINE (Ray)                      │
+│  Parallel execution, actor isolation, distributed compute  │
+└────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────────┐
+│                   STAGE LOGIC LAYER                        │
+│  BasePipelineStage, BaseRiskEngine, BaseFilter             │
+└────────────────────────────────────────────────────────────┘
+```
+
+### 23.3 Current Ray Usage (Preserve & Extend)
+| File | Pattern | Status |
+| :--- | :--- | :--- |
+| `scripts/parallel_orchestrator_ray.py` | `@ray.remote` task | Production |
+| `scripts/parallel_orchestrator_native.py` | `@ray.remote` actor | Production |
+| `scripts/run_meta_pipeline.py` | Sleeve parallelization | Production |
+
+## 24. Phase 340: Stage Registry & SDK (SDD & TDD)
+- [ ] **Design**: See `docs/design/orchestration_layer_v1.md` Section 3.
+- [ ] **Test (TDD)**: Create `tests/test_stage_registry.py`.
+    - Test stage registration via decorator.
+    - Test stage lookup by ID.
+    - Test listing stages by tag.
+- [ ] **Test (TDD)**: Create `tests/test_quant_sdk.py`.
+    - Test `QuantSDK.run_stage()` invocation.
+    - Test `QuantSDK.run_pipeline()` invocation.
+- [ ] **Implementation**:
+    - Create `tradingview_scraper/orchestration/__init__.py`.
+    - Create `tradingview_scraper/orchestration/registry.py` with `StageRegistry`, `StageSpec`.
+    - Create `tradingview_scraper/orchestration/sdk.py` with `QuantSDK`.
+- [ ] **CLI**: Create `scripts/quant_cli.py` with `stage` subcommand.
+    - `quant stage list [--tag TAG]`
+    - `quant stage schema STAGE_ID`
+    - `quant stage run STAGE_ID --run-id ID --param KEY=VALUE`
+- [ ] **Migration**: Add `SPEC` attribute to existing stages in `pipelines/selection/stages/`.
+
+## 25. Phase 345: Ray Compute Layer (SDD & TDD)
+- [ ] **Design**: See `docs/design/orchestration_layer_v1.md` Section 4.
+- [ ] **Test (TDD)**: Create `tests/test_ray_compute.py`.
+    - Test `execute_stage_remote` function.
+    - Test `RayComputeEngine.map_stages()` parallel execution.
+    - Test `SleeveActor` isolation.
+- [ ] **Implementation**:
+    - Create `tradingview_scraper/orchestration/compute.py` with `RayComputeEngine`.
+    - Create `tradingview_scraper/orchestration/sleeve_executor.py` with `SleeveActor`.
+- [ ] **Migration**: Update `scripts/run_meta_pipeline.py` to use `execute_sleeves_parallel()`.
+- [ ] **Deprecation**: Mark `scripts/parallel_orchestrator_*.py` as deprecated.
+
+## 26. Phase 350: Prefect Workflow Integration (SDD & TDD)
+- [ ] **Design**: See `docs/design/orchestration_layer_v1.md` Section 5.
+- [ ] **Test (TDD)**: Create `tests/test_prefect_flows.py`.
+    - Test `selection_flow` execution.
+    - Test retry behavior on failure.
+    - Test task caching.
+- [ ] **Implementation**:
+    - Create `tradingview_scraper/orchestration/flows/__init__.py`.
+    - Create `tradingview_scraper/orchestration/flows/selection_flow.py`.
+    - Create `tradingview_scraper/orchestration/flows/meta_flow.py`.
+    - Create `tradingview_scraper/orchestration/flows/discovery_flow.py`.
+- [ ] **Integration**: Add Prefect deployment configs in `configs/prefect/`.
+- [ ] **Alternative**: Create `tradingview_scraper/orchestration/flows/dbos_flow.py` for lightweight option.
+
+## 27. Phase 355: Claude Skill Integration (SDD & TDD)
+
+**Standard**: [Agent Skills](https://agentskills.io) open standard (portable across Claude Code, OpenCode, etc.)
+
+**Key Insight**: Skills are NOT Python functions. They are **SKILL.md files** with Markdown instructions.
+
+- [x] **Design**: Create `docs/design/claude_skills_v1.md` with Agent Skills specification.
+- [ ] **Test (TDD)**: Create `tests/test_claude_skills.py`.
+    - Test SKILL.md frontmatter validation (name, description format).
+    - Test bundled script syntax validity.
+    - Test skill directory structure compliance.
+- [ ] **Implementation**:
+    - Create `.claude/skills/quant-select/SKILL.md` and scripts.
+    - Create `.claude/skills/quant-backtest/SKILL.md` and scripts.
+    - Create `.claude/skills/quant-discover/SKILL.md` and scripts.
+    - Create `.claude/skills/quant-optimize/SKILL.md` and scripts.
+- [ ] **CLI Integration**: Ensure `scripts/quant_cli.py` supports skill script invocations.
+- [ ] **Documentation**: Update AGENTS.md with skill usage examples.
+
+### Skill Structure (Agent Skills Standard)
+```
+.claude/skills/quant-select/
+├── SKILL.md                    # Instructions + frontmatter (required)
+└── scripts/
+    └── run_pipeline.py         # Executable script
+```
+
+### SKILL.md Format
+```markdown
+---
+name: quant-select                # 1-64 chars, lowercase, hyphens
+description: Run selection...     # 1-1024 chars, when to use
+allowed-tools: Bash(python:*) Read
+---
+
+# Instructions for Claude to follow...
+```
+
+## 28. Phase 360: Observability & Monitoring (Optional)
+- [ ] **Design**: OpenTelemetry integration spec.
+- [ ] **Implementation**:
+    - Add tracing spans to stages.
+    - Prometheus metrics export.
+    - Grafana dashboard templates.
+
+---
+
+## Continuation Prompt (Updated 2026-01-21)
+
+```
+You are continuing work on a quantitative portfolio management platform located at:
+/home/tommyk/projects/quant/data-sources/market-data/tradingview-scraper
+
+## Context
+This is a production-grade quantitative trading system with:
+- 3-Pillar Architecture: Universe Selection → Strategy Synthesis → Portfolio Allocation
+- Fractal Meta-Portfolio construction (Atomic sleeves aggregate into Meta portfolios)
+- Dynamic regime detection with HMM-based volatility classification
+- Point-in-time feature backfill to eliminate lookahead bias
+
+## Completed Phases
+- Phases 1-7: Workflow Streamlining
+- Phase 219: Dynamic Historical Backtesting
+- Phase 246-270: Regime Detection, Integration, Strategy-Specific Ranker
+
+## Current Phase: 305-360 Framework & Orchestration Layer
+
+### Phase Groups
+1. **Phases 305-330**: Framework Consolidation (Module migrations, Meta-Portfolio)
+2. **Phases 340-360**: Orchestration Layer (Ray, Prefect, Claude Skills)
+
+### Key Design Principles
+1. EXTEND existing patterns, do NOT create parallel structures
+2. Every stage is callable/addressable via `quant://pipeline/stage/params`
+3. Ray for compute, Prefect/DBOS for workflow orchestration
+4. All stages emit structured audit events
+5. Claude Skills follow Agent Skills open standard (SKILL.md files, not Python)
+
+### Architecture Layers
+```
+CLAUDE SKILL LAYER (SKILL.md files following Agent Skills standard)
+        ↓
+WORKFLOW ENGINE (Prefect/DBOS - DAG, Retry, Observability)
+        ↓
+COMPUTE ENGINE (Ray - Parallel Execution)
+        ↓
+STAGE LOGIC (BasePipelineStage, BaseRiskEngine, BaseFilter)
+```
+
+### Existing Patterns to Preserve
+- `BasePipelineStage` in `pipelines/selection/base.py`
+- `SelectionContext` in `pipelines/selection/base.py`
+- `BaseRiskEngine` in `portfolio_engines/base.py`
+- Ray patterns in `scripts/parallel_orchestrator_*.py`
+
+### Key Files to Read
+1. `docs/specs/plan.md` - Master tracking
+2. `docs/specs/requirements_v3.md` - Architecture with orchestration layer
+3. `docs/design/fractal_framework_v1.md` - Module consolidation design
+4. `docs/design/orchestration_layer_v1.md` - Ray/Prefect design
+5. `docs/design/claude_skills_v1.md` - Claude Skills (Agent Skills standard)
+6. `pipelines/selection/base.py` - Core abstractions
+
+### Immediate Next Steps
+Follow SDD/TDD flow for Phase 340 (Stage Registry & SDK):
+1. Create `tests/test_stage_registry.py` with TDD tests
+2. Implement `tradingview_scraper/orchestration/registry.py`
+3. Create `tests/test_quant_sdk.py` with TDD tests
+4. Implement `tradingview_scraper/orchestration/sdk.py`
+5. Create `scripts/quant_cli.py` with stage subcommand
+
+Track all progress in `docs/specs/plan.md`.
+```
+
+---
+
+# Appendix A: Document Inventory (Updated 2026-01-21)
+
+## A.1 Core Specifications
+
+| Document | Purpose | Status |
+| :--- | :--- | :--- |
+| `docs/specs/requirements_v3.md` | 3-Pillar Architecture, Modular Pipeline, Orchestration Layer | **Active** |
+| `docs/specs/production_workflow_v2.md` | Production workflow phases and optimization | **Active** |
+| `docs/specs/numerical_stability.md` | Stable Sum Gate, SSP Minimums | **Active** |
+| `docs/specs/crypto_sleeve_v2.md` | Crypto-specific operations and parameters | **Active** |
+
+## A.2 Design Documents (Recent)
+
+| Document | Phase | Purpose |
+| :--- | :--- | :--- |
+| `docs/design/claude_skills_v1.md` | 355 | Agent Skills standard, SKILL.md format, quant skills |
+| `docs/design/orchestration_layer_v1.md` | 340-360 | Ray compute, Prefect workflow, Stage Registry, SDK |
+| `docs/design/fractal_framework_v1.md` | 305-330 | Module consolidation, Meta-Portfolio abstractions |
+| `docs/design/strategy_regime_ranker_v1.md` | 270 | Strategy-specific asset scoring |
+| `docs/design/regime_risk_integration_v1.md` | 265 | Regime detection → Portfolio engine integration |
+| `docs/design/hmm_regime_optimization_v1.md` | 260 | HMM vs GMM comparison, n_iter optimization |
+| `docs/design/regime_directional_filter_v1.md` | 255 | Regime → directional bias research |
+| `docs/design/regime_detector_upgrade_v1.md` | 250 | Absolute volatility dampeners |
+| `docs/design/dynamic_backtesting_v1.md` | 219 | Point-in-time features_matrix.parquet |
+
+## A.3 Implementation Status by Phase
+
+### Completed Phases
+
+| Phase | Description | Key Deliverables |
+| :--- | :--- | :--- |
+| 1-7 | Workflow Streamlining | Parallelized flow-data, split port-analyze |
+| 219 | Dynamic Historical Backtesting | features_matrix.parquet, BacktestEngine |
+| 246 | Production Validation | meta_benchmark runs, forensic audits |
+| 250 | Regime Detector Upgrade | Flatline fix, absolute dampeners |
+| 255 | Regime Directional Research | CRISIS 53% win rate analysis |
+| 260 | HMM Optimization | n_iter=10 (50% speedup) |
+| 265 | Regime-Risk Integration | Dynamic L2/Aggressor in BacktestEngine |
+| 270 | Strategy-Specific Ranker | StrategyRegimeRanker |
+
+### Pending Phases
+
+| Phase | Description | Status | Dependencies |
+| :--- | :--- | :--- | :--- |
+| 305 | Migrate StrategyRegimeRanker | Planned | None |
+| 310 | Discovery Module | Planned | None |
+| 315 | Filter Module Extraction | Planned | None |
+| 320 | Meta-Portfolio Module | Planned | 305, 315 |
+| 330 | Declarative Pipeline | Planned (Low) | 310-320 |
+| 340 | Stage Registry & SDK | Planned | 305-320 |
+| 345 | Ray Compute Layer | Planned | 340 |
+| 350 | Prefect Workflow | Planned | 340, 345 |
+| 355 | Claude Skills | Design Complete | 340 |
+| 360 | Observability | Planned (Optional) | 350 |
+
+---
+
+# Appendix B: Session Audit Log (2026-01-21)
+
+## B.1 This Session's Work
+
+### Audit Performed
+1. Reviewed continuation plan vs codebase reality
+2. Identified redundancies (BasePipelineStage, SelectionContext already exist)
+3. Identified valid gaps (Discovery, Filters, MetaContext)
+4. Researched Claude Code skills best practices
+5. Discovered Agent Skills open standard
+
+### Documents Created
+- `docs/design/fractal_framework_v1.md` - Module consolidation
+- `docs/design/orchestration_layer_v1.md` - Ray/Prefect/SDK
+- `docs/design/claude_skills_v1.md` - Agent Skills compliant skills
+
+### Documents Updated
+- `docs/specs/plan.md` - Added Phases 300-360
+- `docs/specs/requirements_v3.md` - Added Sections 4 (Modular Architecture) and 5 (Orchestration Layer)
+
+### Critical Corrections
+1. **Skills are NOT Python functions** - They are SKILL.md files with Markdown instructions
+2. **Agent Skills standard** - Portable across Claude Code, OpenCode, etc.
+3. **EXTEND don't duplicate** - Use existing BasePipelineStage, SelectionContext
+
+## B.2 Key Decisions Made
+
+| Decision | Rationale |
+| :--- | :--- |
+| Use existing `BasePipelineStage` | Already production, avoid duplication |
+| Skills as SKILL.md files | Agent Skills standard compliance |
+| Ray for compute, Prefect for workflow | Separation of concerns |
+| Progressive disclosure for skills | Minimize context usage |
+| Addressable stages via CLI/SDK | Enable Claude skill integration |
+
+## B.3 Open Questions (For Future Sessions)
+
+1. **Prefect vs DBOS**: Which workflow engine to prioritize?
+2. **Stage Registry granularity**: Register every stage or just entry points?
+3. **Skill bundled scripts**: Python only or also Bash/Make?
