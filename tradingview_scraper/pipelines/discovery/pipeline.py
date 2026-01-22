@@ -2,10 +2,12 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.discovery.base import (
     BaseDiscoveryScanner,
     CandidateMetadata,
 )
+from tradingview_scraper.pipelines.discovery.binance import BinanceDiscoveryScanner
 from tradingview_scraper.pipelines.discovery.tradingview import (
     TradingViewDiscoveryScanner,
 )
@@ -24,11 +26,13 @@ class DiscoveryPipeline:
         self.run_id = run_id or self.settings.run_id
         self.scanners: Dict[str, BaseDiscoveryScanner] = {
             "tradingview": TradingViewDiscoveryScanner(),
+            "binance": BinanceDiscoveryScanner(),
         }
 
     def register_scanner(self, scanner: BaseDiscoveryScanner):
         self.scanners[scanner.name] = scanner
 
+    @StageRegistry.register(id="discovery.full", name="Discovery Pipeline", description="Runs all configured scanners for a profile", category="discovery")
     def run_profile(self, profile_name: str) -> List[CandidateMetadata]:
         """
         Runs all scanners configured for a specific profile in the manifest.

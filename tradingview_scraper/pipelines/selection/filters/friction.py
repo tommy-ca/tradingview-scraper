@@ -3,6 +3,7 @@ from typing import List, Tuple
 
 import numpy as np
 
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
 from tradingview_scraper.settings import get_settings
@@ -10,6 +11,7 @@ from tradingview_scraper.settings import get_settings
 logger = logging.getLogger(__name__)
 
 
+@StageRegistry.register(id="selection.filter.friction", name="Friction Filter", description="Execution cost veto (ECI)", category="selection", tags=["filter"])
 class FrictionFilter(BaseFilter):
     """
     Execution Cost Index (ECI) veto: filters assets with excessive trading costs relative to alpha.

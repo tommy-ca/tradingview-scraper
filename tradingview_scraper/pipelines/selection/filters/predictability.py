@@ -3,6 +3,7 @@ from typing import List, Tuple
 
 import numpy as np
 
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
 from tradingview_scraper.settings import get_settings
@@ -10,6 +11,7 @@ from tradingview_scraper.settings import get_settings
 logger = logging.getLogger(__name__)
 
 
+@StageRegistry.register(id="selection.filter.predictability", name="Predictability Filter", description="Entropy and efficiency vetoes", category="selection", tags=["filter"])
 class PredictabilityFilter(BaseFilter):
     """
     Predictability vetoes: Entropy, Efficiency, Kurtosis, and Stability filters.

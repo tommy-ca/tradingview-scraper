@@ -1,12 +1,14 @@
 import logging
 from typing import List, Tuple
 
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
 
 logger = logging.getLogger(__name__)
 
 
+@StageRegistry.register(id="selection.filter.darwinian", name="Darwinian Filter", description="Health-based candidate vetoes", category="selection", tags=["filter"])
 class DarwinianFilter(BaseFilter):
     """
     Health-based vetoes: checks for missing data, low volume, and metadata completeness.
