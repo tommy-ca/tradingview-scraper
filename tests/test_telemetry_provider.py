@@ -1,5 +1,5 @@
-import logging
 import unittest
+
 from tradingview_scraper.telemetry.provider import TelemetryProvider
 from tradingview_scraper.telemetry.tracing import trace_span
 

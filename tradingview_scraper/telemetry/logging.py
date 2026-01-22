@@ -1,4 +1,5 @@
 import logging
+
 from opentelemetry import trace
 
 
@@ -15,6 +16,22 @@ class TelemetryLogRecord(logging.LogRecord):
         else:
             self.trace_id = "0" * 32
             self.span_id = "0" * 16
+
+
+def setup_logging(level: int = logging.INFO):
+    """
+    Globally configures logging to use the telemetry record factory.
+    Call this once at the start of any main script.
+    """
+    logging.setLogRecordFactory(TelemetryLogRecord)
+
+    # Configure root logger
+    fmt = "%(asctime)s %(levelname)s [%(trace_id)s|%(span_id)s] %(name)s: %(message)s"
+    logging.basicConfig(level=level, format=fmt, force=True)
+
+    # Silence noisy loggers
+    logging.getLogger("opentelemetry").setLevel(logging.WARNING)
+    logging.getLogger("ray").setLevel(logging.WARNING)
 
 
 def get_telemetry_logger(name: str) -> logging.Logger:

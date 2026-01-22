@@ -11,8 +11,10 @@ from scripts.audit_directional_sign_test import run_sign_test_for_meta_profile, 
 from tradingview_scraper.orchestration.compute import RayComputeEngine
 from tradingview_scraper.pipelines.meta.base import MetaContext
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.telemetry.logging import setup_logging
+from tradingview_scraper.telemetry.tracing import trace_span
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+setup_logging()
 logger = logging.getLogger("run_meta_pipeline")
 
 
@@ -20,6 +22,7 @@ def _load_manifest(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@trace_span("run_meta_pipeline")
 def run_meta_pipeline(
     meta_profile: str,
     profiles: Optional[List[str]] = None,

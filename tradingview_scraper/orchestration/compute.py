@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import ray
 
@@ -71,10 +71,16 @@ class RayComputeEngine:
         host_cwd = os.getcwd()
         env_vars = self._capture_env()
 
+        # Inject current trace context for distributed linkage
+        from tradingview_scraper.telemetry.context import inject_trace_context
+
+        trace_context = {}
+        inject_trace_context(trace_context)
+
         logger.info(f"Dispatching {len(sleeves)} sleeves to Ray cluster.")
 
         # 1. Spawn Actors (One per sleeve for total isolation)
-        actors = [SleeveActor.remote(host_cwd, env_vars) for _ in sleeves]
+        actors = [SleeveActor.remote(host_cwd, env_vars, trace_context) for _ in sleeves]
 
         # 2. Dispatch Pipeline Tasks
         futures = [a.run_pipeline.remote(s["profile"], s["run_id"]) for a, s in zip(actors, sleeves)]

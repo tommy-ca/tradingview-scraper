@@ -152,6 +152,20 @@
     - Refactor `tradingview_scraper/orchestration/compute.py` for context management.
     - Instrument `QuantSDK.run_stage` and `ProductionPipeline.run_step`.
 
+## 30. Phase 410: Telemetry Hardening & Context Propagation (SDD & TDD)
+- [x] **Design**: Update `docs/design/telemetry_standard_v1.md`.
+    - Specify Trace Context propagation mechanism for Ray (Injection/Extraction).
+    - Define standard metrics for `@trace_span`.
+- [x] **Test (TDD)**: Create `tests/test_distributed_tracing.py`.
+    - Verify `trace_id` is preserved across Ray actor boundaries.
+- [x] **Test (TDD)**: Create `tests/test_telemetry_metrics.py`.
+    - Verify `stage_duration_seconds` is emitted.
+- [x] **Implementation**:
+    - Add `tradingview_scraper/telemetry/context.py` for propagation helpers.
+    - Update `RayComputeEngine` and `SleeveActorImpl` for context crossing.
+    - Update `@trace_span` to emit metrics.
+    - Refactor pipeline entry points to establish root traces.
+
  ---
  
  # Phase 300+: Fractal Framework Consolidation (Audit 2026-01-21)

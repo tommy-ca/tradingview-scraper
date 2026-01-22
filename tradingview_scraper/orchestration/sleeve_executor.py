@@ -3,11 +3,14 @@ import os
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import ray
 
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.telemetry.context import extract_trace_context
+from tradingview_scraper.telemetry.provider import TelemetryProvider
+from tradingview_scraper.telemetry.tracing import trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +21,7 @@ class SleeveActorImpl:
     Handles process isolation, environment propagation, and artifact export.
     """
 
-    def __init__(self, host_cwd: str, env_vars: Dict[str, str]):
+    def __init__(self, host_cwd: str, env_vars: Dict[str, str], trace_context: Optional[Dict[str, str]] = None):
         self.host_cwd = host_cwd
 
         # 1. Environment Setup
@@ -31,12 +34,19 @@ class SleeveActorImpl:
 
         os.environ.update(env_vars)
 
-        # 2. Settings Initialization
+        # 2. Telemetry Initialization (Distributed Trace Linkage)
+        self.provider = TelemetryProvider()
+        self.provider.initialize(service_name="sleeve-actor")
+        self.trace_context = trace_context
+
+        # 3. Settings Initialization
         get_settings.cache_clear()
         self.settings = get_settings()
 
-        # 3. Workspace Isolation (Mixed Symlink Strategy)
+        # 4. Workspace Isolation (Mixed Symlink Strategy)
         self._setup_workspace()
+
+    def _setup_workspace(self):
 
     def _setup_workspace(self):
         """
@@ -80,6 +90,7 @@ class SleeveActorImpl:
         self.settings.artifacts_dir.mkdir(parents=True, exist_ok=True)
         self.settings.logs_dir.mkdir(parents=True, exist_ok=True)
 
+    @trace_span("sleeve_actor.run_pipeline")
     def run_pipeline(self, profile: str, run_id: str) -> Dict[str, Any]:
         """
         Executes the ProductionPipeline for the given profile.
@@ -91,19 +102,26 @@ class SleeveActorImpl:
         status = "success"
         error_msg = None
 
-        try:
-            from scripts.run_production_pipeline import ProductionPipeline
+        # Extract parent trace context if available
+        context = extract_trace_context(self.trace_context) if self.trace_context else None
 
-            # The pipeline class handles its own run_id directory preparation
-            pipeline = ProductionPipeline(profile=profile, run_id=run_id)
-            pipeline.execute()
+        from tradingview_scraper.telemetry.tracing import get_tracer
 
-        except Exception as e:
-            logger.error(f"❌ [Ray] Pipeline failed for {profile}: {e}", exc_info=True)
-            status = "error"
-            error_msg = str(e)
-        finally:
-            self._export_artifacts(run_id)
+        tracer = get_tracer()
+        with tracer.start_as_current_span("run_production_pipeline", context=context):
+            try:
+                from scripts.run_production_pipeline import ProductionPipeline
+
+                # The pipeline class handles its own run_id directory preparation
+                pipeline = ProductionPipeline(profile=profile, run_id=run_id)
+                pipeline.execute()
+
+            except Exception as e:
+                logger.error(f"❌ [Ray] Pipeline failed for {profile}: {e}", exc_info=True)
+                status = "error"
+                error_msg = str(e)
+            finally:
+                self._export_artifacts(run_id)
 
         duration = time.time() - start_time
         return {"profile": profile, "run_id": run_id, "status": status, "duration": duration, "error": error_msg, "node": ray.util.get_node_ip_address()}

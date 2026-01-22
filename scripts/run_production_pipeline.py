@@ -23,10 +23,11 @@ from rich.progress import (
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.telemetry.logging import setup_logging
 from tradingview_scraper.telemetry.tracing import trace_span
 from tradingview_scraper.utils.audit import AuditLedger
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+setup_logging()
 logger = logging.getLogger("production_pipeline")
 
 
@@ -356,6 +357,16 @@ class ProductionPipeline:
         self.console.print(f"[dim]Snapshot:[/] [green]✓[/] {snapshot_path.name}")
 
     def execute(self, start_step: int = 1):
+        from tradingview_scraper.telemetry.tracing import get_tracer
+
+        tracer = get_tracer()
+        with tracer.start_as_current_span(
+            f"pipeline:{self.profile}",
+            attributes={"profile": self.profile, "run_id": self.run_id, "type": "production"},
+        ):
+            self._execute_impl(start_step)
+
+    def _execute_impl(self, start_step: int = 1):
         self.console.print("\n[bold cyan]🚀 Starting Production Pipeline[/]")
         self.console.print(f"[dim]Profile:[/] {self.profile} | [dim]Run ID:[/] {self.run_id} | [dim]Start Step:[/] {start_step}\n")
 
