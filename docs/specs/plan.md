@@ -136,18 +136,18 @@
 - [x] **Complete**: System is fully validated for Production v3.5.3 with Dynamic Regime-Aware Strategy Selection.
  
  ## 29. Phase 400: Telemetry & Ray Lifecycle (SDD & TDD)
-- [ ] **Design**: Create `docs/design/telemetry_standard_v1.md`.
+- [x] **Design**: Create `docs/design/telemetry_standard_v1.md`.
     - Define OTel provider setup (Tracing, Metrics, Logging).
     - Define `trace_id` propagation rules for Ray workers.
-- [ ] **Design**: Create `docs/design/ray_lifecycle_v2.md`.
+- [x] **Design**: Create `docs/design/ray_lifecycle_v2.md`.
     - Graceful shutdown (`ray.shutdown`) via context manager.
     - Signal handling for cleanup.
-- [ ] **Test (TDD)**: Create `tests/test_telemetry_provider.py`.
+- [x] **Test (TDD)**: Create `tests/test_telemetry_provider.py`.
     - Verify trace spans are emitted and linked.
     - Verify log injection of trace IDs.
-- [ ] **Test (TDD)**: Create `tests/test_ray_lifecycle.py`.
+- [x] **Test (TDD)**: Create `tests/test_ray_lifecycle.py`.
     - Verify `ray.shutdown()` is called on exit/failure.
-- [ ] **Implementation**:
+- [x] **Implementation**:
     - Create `tradingview_scraper/telemetry/` package.
     - Refactor `tradingview_scraper/orchestration/compute.py` for context management.
     - Instrument `QuantSDK.run_stage` and `ProductionPipeline.run_step`.
