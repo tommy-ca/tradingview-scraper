@@ -932,14 +932,19 @@ Primary gate:
 - [x] **Hardening**: Implement Parallel Branch Execution and Context Merging in `DAGRunner`.
 
 ## 33. Phase 440: Forensic Hardening & Path Resolution (SDD & TDD)
-- [ ] **Design**: Update `docs/design/path_determinism_phase371_v1.md`.
-    - Specify rules for removing path literals from core scripts.
-    - Define "Strict Isolation" behavior for path resolution.
-- [ ] **Test (TDD)**: Create `tests/test_path_determinism.py`.
-    - Verify that scripts respect `TV_LAKEHOUSE_DIR` and `TV_SUMMARIES_DIR`.
-    - Verify that fallbacks are logged and disabled in `STRICT_ISOLATION`.
-- [ ] **Implementation**:
+- [x] **Design**: Update `docs/design/path_determinism_phase371_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_path_determinism.py`.
+- [x] **Implementation**:
     - Sweep `scripts/prepare_portfolio_data.py` for path literals and network defaults.
     - Sweep `scripts/optimize_meta_portfolio.py` and `flatten_meta_weights.py`.
     - Update `validate_meta_parity.py` for correct artifacts root and calendar joins.
     - Fix dead import in `prepare_portfolio_data.py`.
+
+## 34. Phase 450: Forensic Telemetry & Dashboarding (SDD & TDD)
+- [x] **Design**: Create `docs/design/forensic_telemetry_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_telensic_reporting.py`.
+- [x] **Implementation**:
+    - Implement `tradingview_scraper/telemetry/exporter.py` for run-specific span persistence.
+    - Update `QuantSDK.run_pipeline` to flush telemetry to the run directory upon completion.
+    - Update report generators (`risk.report_meta` and atomic reporting) to include Telemetry Stats.
+

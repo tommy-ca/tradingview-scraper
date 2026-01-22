@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional, Union, cast
 
 from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.telemetry.tracing import trace_span
@@ -122,18 +122,28 @@ class QuantSDK:
         """
         from tradingview_scraper.orchestration.runner import DAGRunner
         from tradingview_scraper.settings import get_settings
+        from tradingview_scraper.telemetry.provider import TelemetryProvider
         import json
 
         settings = get_settings()
+        run_id = params.get("run_id", settings.run_id)
 
-        # 1. Resolve DAG from manifest
+        # 1. Initialize Forensic Telemetry for the run
+        telemetry = TelemetryProvider()
+        if not telemetry.is_initialized:
+            telemetry.initialize(service_name="quant-orchestrator")
+
+        trace_file = settings.summaries_runs_dir / run_id / "data" / "forensic_trace.json"
+        exporter = telemetry.register_forensic_exporter(trace_file)
+
+        # 2. Resolve DAG from manifest
         with open(settings.manifest_path, "r") as f:
             manifest = json.load(f)
 
         pipeline_cfg = manifest.get("pipelines", {}).get(name)
         if not pipeline_cfg:
             # Fallback for core pipelines if missing from manifest
-            core_pipelines = {
+            core_pipelines: dict[str, list[str | list[str]]] = {
                 "alpha.full": [
                     "foundation.ingest",
                     "foundation.features",
@@ -149,21 +159,24 @@ class QuantSDK:
                 raise KeyError(f"Pipeline '{name}' not found in manifest or core defaults.")
             steps = core_pipelines[name]
         else:
-            steps = pipeline_cfg["steps"]
+            steps = cast(List[Union[str, List[str]]], pipeline_cfg["steps"])
 
         runner = DAGRunner(steps)
 
-        # 2. Initialize context if not provided
+        # 3. Initialize context if not provided
         if context is None:
             # Determine correct context type based on pipeline category
             if name.startswith("alpha"):
                 from tradingview_scraper.pipelines.selection.base import SelectionContext
 
-                context = SelectionContext(run_id=params.get("run_id", "unnamed_run"), params=params)
+                context = SelectionContext(run_id=run_id, params=params)
             elif name.startswith("meta"):
                 from tradingview_scraper.pipelines.meta.base import MetaContext
 
-                context = MetaContext(run_id=params.get("run_id", "unnamed_run"), meta_profile=params.get("profile", "meta_production"), sleeve_profiles=params.get("profiles", []))
+                context = MetaContext(run_id=run_id, meta_profile=params.get("profile", "meta_production"), sleeve_profiles=params.get("profiles", []))
 
-        # 3. Execute DAG
-        return runner.execute(context)
+        # 4. Execute DAG and Flush Telemetry
+        try:
+            return runner.execute(context)
+        finally:
+            exporter.save()

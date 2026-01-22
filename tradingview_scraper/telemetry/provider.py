@@ -1,4 +1,5 @@
 import threading
+from pathlib import Path
 
 from opentelemetry import metrics, trace
 from opentelemetry.sdk.metrics import MeterProvider
@@ -48,6 +49,15 @@ class TelemetryProvider:
         self.meter = metrics.get_meter(__name__)
 
         self._initialized = True
+
+    def register_forensic_exporter(self, output_path: Path):
+        """Registers a run-specific forensic exporter."""
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
+
+        exporter = ForensicSpanExporter(output_path)
+        trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(exporter))
+        return exporter
 
     @property
     def is_initialized(self) -> bool:

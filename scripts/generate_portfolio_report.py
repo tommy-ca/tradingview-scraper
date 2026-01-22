@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.telemetry.exporter import get_forensic_summary_md
 
 
 def draw_bar(weight: float, max_width: int = 15) -> str:
@@ -141,6 +142,11 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
 
     # 0. SYSTEM HEALTH SUMMARY
     md.append("## 🏥 System Health & Integrity")
+
+    # Trace Section (Phase 450)
+    # Resolve trace file from output_path's sibling data directory
+    trace_file = Path(output_path).parent.parent / "data" / "forensic_trace.json"
+    md.append(get_forensic_summary_md(trace_file) + "\n")
 
     health_status = "✅ HEALTHY"
     if returns_df is not None and not returns_df.empty:

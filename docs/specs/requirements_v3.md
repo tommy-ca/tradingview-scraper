@@ -439,6 +439,7 @@ Requirements:
  1. **Snapshot Isolation**: When a run begins, the platform SHOULD create a symlink-based snapshot of the Lakehouse to ensure immutability.
  2. **Lineage Linkage**: Every optimized portfolio MUST link back to the exact version (timestamp/hash) of the `features_matrix.parquet` used for inference.
  3. **Traceability**: The `trace_id` MUST be injected into all audit ledger entries across all L0-L4 stages.
+ 4. **Forensic Telemetry**: Every production run MUST persist its full OTel trace (spans and durations) to a `forensic_trace.json` file in the run directory for performance auditing.
  
  ## 12. The Unified DAG Orchestrator (v3.9+)
  

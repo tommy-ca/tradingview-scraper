@@ -12,6 +12,7 @@ import pandas as pd
 sys.path.append(os.getcwd())
 from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.telemetry.exporter import get_forensic_summary_md
 from tradingview_scraper.utils.metrics import calculate_performance_metrics
 
 logger = logging.getLogger("meta_reporting")
@@ -96,6 +97,11 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
     md.append("# 🌐 Multi-Sleeve Meta-Portfolio Report")
     md.append(f"**Root Profile:** `{meta_profile}`")
     md.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # Trace Section (Phase 450)
+    trace_file = meta_dir / "forensic_trace.json"
+    md.append("\n" + get_forensic_summary_md(trace_file))
+
     md.append("\n---")
 
     for prof in profiles:
