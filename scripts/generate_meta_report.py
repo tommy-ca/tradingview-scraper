@@ -170,16 +170,20 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
                 md.append(f"| **Win Rate** | {win_rate:.1%} |")
 
         # 1. SLEEVE ALLOCATION
-
         md.append("\n### 🧩 Sleeve Allocation")
         md.append("| Sleeve ID | Weight | Engine |")
         md.append("| :--- | :--- | :--- |")
 
         weights = sorted(meta_data.get("weights", []), key=lambda x: x["Weight"], reverse=True)
+        w_values = [w["Weight"] for w in weights]
+        n_eff = 1.0 / sum(w**2 for w in w_values) if w_values else 0
+
         for w in weights:
             s_id = w["Symbol"]
             weight = w["Weight"]
             md.append(f"| **{s_id}** | {weight:.2%} | Custom {prof} |")
+
+        md.append(f"\n**Effective Number of Sleeves (Diversity):** `{n_eff:.2f}`")
 
         # 2. SLEEVE CORRELATIONS
         if rets_path.exists():
@@ -203,12 +207,13 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
             with open(flat_path, "r") as f:
                 flat_data = json.load(f)
 
-            md.append("| Rank | Symbol | Description | Total Weight | Market |")
+            md.append("| Rank | Symbol | Total Weight | Contributors | Market |")
             md.append("| :--- | :--- | :--- | :--- | :--- |")
 
             flat_weights = flat_data.get("weights", [])
             for i, w in enumerate(flat_weights[:10]):
-                md.append(f"| {i + 1} | `{w['Symbol']}` | {w.get('Description', 'N/A')} | **{w['Weight']:.2%}** | {w.get('Market', 'N/A')} |")
+                contributors = ", ".join(w.get("Contributors", ["N/A"]))
+                md.append(f"| {i + 1} | `{w['Symbol']}` | **{w['Weight']:.2%}** | {contributors} | {w.get('Market', 'N/A')} |")
 
         # 4. SLEEVE DATA HEALTH (CR-828)
         manifest_path = meta_dir / f"meta_manifest_{meta_profile}_{prof}.json"

@@ -241,18 +241,24 @@ def build_meta_returns(
                         if fallbacks:
                             target_file = fallbacks[0]
 
-                if target_file and target_file.exists():
-                    s_rets_raw = pd.read_pickle(target_file)
-                    if isinstance(s_rets_raw, pd.Series):
-                        s_rets = s_rets_raw.to_frame(s_id)
-                    elif isinstance(s_rets_raw, pd.DataFrame):
-                        s_rets = s_rets_raw.iloc[:, 0].to_frame(s_id)
-                    else:
-                        logger.warning(f"  [{s_id}] Unknown return format in {target_file}")
-                        continue
+            if target_file and target_file.exists():
+                s_rets_raw = pd.read_pickle(target_file)
+
+                # CR-Hardening: Return Scaling Guard (Phase 580)
+                # Clip returns to physical bounds to prevent numerical explosion
+                if isinstance(s_rets_raw, (pd.Series, pd.DataFrame)):
+                    s_rets_raw = s_rets_raw.clip(lower=-1.0, upper=5.0)
+
+                if isinstance(s_rets_raw, pd.Series):
+                    s_rets = s_rets_raw.to_frame(s_id)
+                elif isinstance(s_rets_raw, pd.DataFrame):
+                    s_rets = s_rets_raw.iloc[:, 0].to_frame(s_id)
                 else:
-                    logger.warning(f"  [{s_id}] No return series found for {prof} in {run_path}")
+                    logger.warning(f"  [{s_id}] Unknown return format in {target_file}")
                     continue
+            else:
+                logger.warning(f"  [{s_id}] No return series found for {prof} in {run_path}")
+                continue
 
             # Robust Index Alignment (UTC Naive)
             s_rets.index = pd.to_datetime(s_rets.index)

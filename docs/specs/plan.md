@@ -1051,5 +1051,14 @@ Primary gate:
     - Integrate `build_meta_returns` into the backtest tournament.
     - Implement sleeve-level walk-forward returns extraction.
 
+## 47. Phase 580: Meta-Portfolio Resilience & Forensic Accuracy (SDD & TDD)
+- [x] **Audit**: Conduct `docs/audit/meta_pipeline_forensic_audit_v1.md`.
+- [x] **Design**: Create `docs/design/meta_resilience_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_meta_resilience.py`.
+- [x] **Implementation**:
+    - Build `ReturnScalingGuard` in `scripts/build_meta_returns.py`.
+    - Hardened `WeightFlattener` with physical concentration checks and contributor tracking.
+    - Update `generate_meta_report.py` with Effective N (Diversity) and contributor attribution.
+
 
 

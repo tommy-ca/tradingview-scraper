@@ -100,12 +100,104 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
 
     final_assets = defaultdict(float)
     asset_details = {}
+    asset_contributors = defaultdict(list)
 
     for s_id, s_weight in sleeve_weights.items():
         s_cfg = sleeve_map.get(s_id)
         if not s_cfg:
             logger.warning(f"No config found for sleeve {s_id}")
             continue
+
+        # CR-837: Fractal Recursive Support
+        if "meta_profile" in s_cfg:
+            sub_meta = s_cfg["meta_profile"]
+            logger.info(f"Descending into nested meta-portfolio: {sub_meta}")
+
+            # Recursively flatten sub-meta
+            sub_flat_path = base_dir / f"portfolio_optimized_meta_{sub_meta}_{target_profile}.json"
+
+            if not sub_flat_path.exists():
+                logger.info(f"Sub-meta {sub_meta} flattened file missing. Generating...")
+                flatten_weights(sub_meta, str(sub_flat_path), target_profile, depth=depth + 1, visited=current_visited)
+
+            if sub_flat_path.exists():
+                with open(sub_flat_path, "r") as f:
+                    sub_flat_data = json.load(f)
+
+                for asset in sub_flat_data.get("weights", []):
+                    sym = asset["Symbol"]
+                    w = asset.get("Net_Weight", asset["Weight"])
+                    final_assets[sym] += w * s_weight
+                    asset_contributors[sym].append(s_id)
+
+                    if sym not in asset_details or abs(w * s_weight) > abs(asset_details[sym].get("_contribution", 0)):
+                        asset_details[sym] = asset.copy()
+                        asset_details[sym]["_contribution"] = w * s_weight
+            else:
+                logger.warning(f"Failed to resolve sub-meta weights for {sub_meta}")
+            continue
+
+        run_path_raw = s_cfg.get("run_path")
+        run_id = s_cfg.get("run_id")
+
+        run_path: Optional[Path] = None
+        if run_path_raw:
+            rp = Path(str(run_path_raw))
+            if not rp.is_absolute():
+                rp = (Path.cwd() / rp).resolve()
+            if rp.exists():
+                run_path = rp
+
+        # Cache manifests can contain stale/relative paths; recover from run_id.
+        if run_path is None and run_id:
+            rp = (get_settings().summaries_runs_dir / str(run_id)).resolve()
+            if rp.exists():
+                run_path = rp
+
+        if run_path is None:
+            logger.warning(f"No run path found for sleeve {s_id}")
+            continue
+
+        logger.info(f"Extracting weights for atomic sleeve {s_id} (profile: {target_profile}) from {run_path}")
+
+        # Try prioritized isolated paths
+        search_paths = [
+            run_path / "data" / "portfolio_flattened.json",
+            run_path / "portfolio_flattened.json",
+            run_path / "data" / "portfolio_optimized_v2.json",
+            run_path / "portfolio_optimized_v2.json",
+        ]
+
+        opt_path = None
+        for sp in search_paths:
+            if sp.exists():
+                opt_path = sp
+                break
+
+        found_weights = False
+        if opt_path:
+            with open(opt_path, "r") as f:
+                opt_data = json.load(f)
+
+            if "profiles" in opt_data:
+                p_data = opt_data["profiles"].get(target_profile)
+                if p_data and "assets" in p_data:
+                    for asset in p_data["assets"]:
+                        sym_raw = asset["Symbol"]
+                        # Physical Asset Collapse: strip logic atom suffixes.
+                        sym = sym_raw.split("_", 1)[0] if "_" in sym_raw else sym_raw
+                        w = asset.get("Net_Weight", asset["Weight"])
+                        final_assets[sym] += w * s_weight
+                        asset_contributors[sym].append(s_id)
+
+                        if sym not in asset_details or abs(w * s_weight) > abs(asset_details[sym].get("_contribution", 0)):
+                            asset_details[sym] = asset.copy()
+                            asset_details[sym]["Symbol"] = sym
+                            asset_details[sym]["_contribution"] = w * s_weight
+                    found_weights = True
+
+        if not found_weights:
+            logger.warning(f"Could not find weights for profile {target_profile} in sleeve {s_id}")
 
         # CR-837: Fractal Recursive Support
         if "meta_profile" in s_cfg:
@@ -210,6 +302,9 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
         detail = asset_details.get(sym, {})
         direction = "LONG" if net_weight > 0 else "SHORT"
 
+        # CR-Hardening: Contribution Attribution (Phase 580)
+        contributors = list(set(asset_contributors.get(sym, [])))
+
         output_weights.append(
             {
                 "Symbol": sym,
@@ -220,12 +315,19 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
                 "Market": detail.get("Market", "UNKNOWN"),
                 "Direction": direction,
                 "Type": detail.get("Type", "CORE"),
+                "Contributors": contributors,
             }
         )
 
     # CR-Hardening: Stable Sum Gate (Phase 560)
-    expected_sum = sum(sleeve_weights.values())
+    expected_sum = sum(s_weight for s_weight in sleeve_weights.values())
     actual_sum = sum(w["Weight"] for w in output_weights)
+
+    # CR-Hardening: Physical Concentration Check (Phase 580)
+    MAX_ASSET_CAP = 0.25
+    concentrated_assets = [w["Symbol"] for w in output_weights if w["Weight"] > MAX_ASSET_CAP]
+    if concentrated_assets:
+        logger.warning(f"⚠️ HIGH CONCENTRATION DETECTED: {', '.join(concentrated_assets)} exceed {MAX_ASSET_CAP:.0%}")
 
     if abs(expected_sum - actual_sum) > 1e-4:
         logger.warning(f"⚠️ Weight Leakage Detected: Meta Sum={expected_sum:.4f}, Atomic Sum={actual_sum:.4f}")
