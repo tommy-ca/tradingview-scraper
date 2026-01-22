@@ -460,6 +460,13 @@ Requirements:
  1. **Weight of Evidence (WoE)**: Selection decisions MUST be backed by multiple independent ranking engines (e.g., Log-MPS + Signal Quality + Regime Fit).
  2. **Dynamic Weighting**: Ranker weights MUST be adjustable via the pipeline manifest to allow tuning for specific market environments.
  3. **Consensus Requirement**: Candidates MUST meet a minimum ensemble score threshold to be recruited into the winning pool, ensuring high-conviction selection.
+
+ ## 15. Real-time Pipeline Monitoring (v4.2+)
+ 
+ ### 15.1 Metrics Exposure
+ 1. **Prometheus Standard**: The platform MUST expose execution metrics (durations, success/failure counts, resource usage) via a Prometheus-compatible scrape endpoint or Pushgateway.
+ 2. **Stage-Level Granularity**: Metrics MUST be emitted at the individual stage level, allowing for bottleneck identification in real-time.
+ 3. **Live Dashboards**: The platform SHOULD provide Grafana dashboard templates for visualizing pipeline health, execution throughput, and alpha quality drift.
  
  ## 12. The Unified DAG Orchestrator (v3.9+)
  

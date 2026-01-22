@@ -55,6 +55,7 @@ dependencies = [
     "opentelemetry-api>=1.39.1",
     "opentelemetry-sdk>=1.39.1",
     "opentelemetry-semantic-conventions>=0.60b1",
+    "opentelemetry-exporter-prometheus>=0.60b1",
 ]
 
 [project.urls]

@@ -73,10 +73,10 @@ class QuantSDK:
             logger.error(f"Foundation Gate FAILED: Missing files: {missing}")
             return False
 
-                # 2. Registry Check
+        # 2. Registry Check
         registry = FoundationHealthRegistry(path=lakehouse / "foundation_health.json")
         logger.info(f"Foundation Registry: {len(registry.data)} symbols tracked")
-        
+
         # If specific symbols are provided (e.g. from a manifest), we should check them
         # For now, we report the count of toxic assets
         toxic_count = len([s for s, m in registry.data.items() if m.get("status") == "toxic"])
@@ -84,7 +84,7 @@ class QuantSDK:
             logger.warning(f"Foundation Gate: Found {toxic_count} toxic assets in registry")
 
         # 3. Freshness check
- (Optional, depending on STRICT_HEALTH)
+        # (Optional, depending on STRICT_HEALTH)
         if os.getenv("TV_STRICT_HEALTH") == "1":
             import time
 
@@ -212,6 +212,8 @@ class QuantSDK:
 
         # 4. Execute DAG and Flush Telemetry
         try:
-            return runner.execute(context)
+            result = runner.execute(context)
+            telemetry.flush_metrics(job_name=f"quant_{name}", grouping_key={"run_id": run_id})
+            return result
         finally:
             exporter.save()

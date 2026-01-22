@@ -973,3 +973,12 @@ Primary gate:
     - Implement `EnsembleRanker` in `tradingview_scraper/pipelines/selection/rankers/ensemble.py`.
     - Update `alpha.policy` to support multi-ranker ensembling via `RankerFactory`.
 
+## 38. Phase 490: Real-time Metrics & Prometheus Integration (SDD & TDD)
+- [x] **Spec**: Update `requirements_v3.md` with Section 15: Real-time Monitoring.
+- [x] **Design**: Create `docs/design/prometheus_monitoring_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_prometheus_metrics.py`.
+- [x] **Implementation**:
+    - Update `tradingview_scraper/telemetry/provider.py` to support Prometheus.
+    - Extend `@trace_span` to increment Prometheus counters and histograms.
+    - Support `TV_PROMETHEUS_PUSHGATEWAY` for batch metrics.
+
