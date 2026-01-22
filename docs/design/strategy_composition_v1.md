@@ -14,7 +14,9 @@ Exactly ONE logic per atom is enforced to ensure attribution purity.
 A **Complex Strategy** is a weighted composition of Atoms. In the 3-pillar architecture, Pillar 2 (Synthesis) focuses on producing these streams, while Pillar 3 (Allocation) manages the target risk profiles, including market neutrality.
 
 ### 2.1 Synthetic Long Normalization
-SHORT atoms are inverted in Pillar 2 ($R_{syn} = -1 \times R_{raw}$) so that convex solvers see all atoms as alpha-positive contributors.
+SHORT atoms are inverted in Pillar 2 so that convex solvers see all atoms as alpha-positive contributors:
+- $R_{syn,long} = R_{raw}$
+- $R_{syn,short} = -clip(R_{raw}, upper=1.0)$ (short loss cap at -100%)
 
 ### 2.2 Allocation Responsibility (CR-290)
 Market Neutrality is a **Pillar 3 (Allocation)** responsibility. Instead of pre-composing neutral pairs in the Synthesis layer, the Portfolio Engine is tasked with allocating across synthesized atoms while enforcing a global beta-neutrality constraint ($|w^T\beta| \le \text{Tolerance}$).

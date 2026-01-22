@@ -8,7 +8,8 @@ We implement **Synthetic Long Normalization** to allow direction-naive solvers t
 
 ### 2.1 The Transformation
 In **Pillar 2 (Synthesis)**, Strategy Atoms tagged with `direction: SHORT` undergo return inversion:
-$$R_{syn} = -1 \times R_{raw} \times Signal_{logic}$$
+$$R_{syn,short} = -clip(R_{raw}, upper=1.0) \times Signal_{logic}$$
+This enforces the synthetic short loss cap at `-100%` for extreme single-bar moves.
 
 ### 2.2 Numerical Impact
 1. **Positive Expected Return**: A falling asset ($R_{raw} < 0$) with a positive logic signal produces a positive synthetic return ($R_{syn} > 0$), making it attractive to the solver.
@@ -29,8 +30,10 @@ While the solver sees a "Long" position in a strategy atom, the backtest simulat
 The backtest simulator must calculate PnL using the raw returns and net weights:
 $$PnL = W_{net} \times R_{raw}$$
 By substitution:
-$$PnL = (-1 \times W_{syn}) \times R_{raw} = W_{syn} \times (-1 \times R_{raw}) = W_{syn} \times R_{syn}$$
-This proves that optimizing on synthetic long returns is mathematically equivalent to shorting the raw asset.
+$$PnL = (-1 \times W_{syn}) \times R_{raw}$$
+With the synthetic-short definition $R_{syn,short} = -clip(R_{raw}, upper=1.0)$, the solver-facing view is:
+$$W_{syn} \times R_{syn,short} = W_{syn} \times (-clip(R_{raw}, upper=1.0))$$
+This is equivalent to shorting the raw asset under the platform’s collateral-limited modeling (the `-100%` short loss cap).
 
 ### 3.3 Simulation Boundary (Nautilus Parity)
 To maintain architectural purity, the **Nautilus Simulator** must be strictly "Logic-Agnostic".

@@ -11,7 +11,7 @@ We confirm that **Synthetic Logic Symbols are Mandatory** and cannot be deprecat
 ### 1. The Solver's "Rising Equity" Requirement
 Optimization engines (Markowitz, HRP, MinVar) are fundamentally designed to maximize risk-adjusted returns based on input history.
 - **Problem**: If we feed raw `BTC` returns (which are rising) to a "Short Sleeve" optimizer, the optimizer will *buy* `BTC` because it has positive drift. It has no concept that the sleeve's mandate is "Short Only".
-- **Solution**: We must **invert** the return stream ($R_{syn} = -1 \times R_{raw}$) *before* the optimizer sees it. This creates a "Synthetic Asset" that rises when the physical asset falls. The optimizer then naturally allocates capital to this synthetic asset during downtrends, aligning mathematical optimization with the sleeve's strategic intent.
+- **Solution**: We must **invert** the return stream *before* the optimizer sees it ($R_{syn,short} = -clip(R_{raw}, upper=1.0)$). This creates a "Synthetic Asset" that rises when the physical asset falls, while enforcing the -100% short loss cap for extreme moves. The optimizer then naturally allocates capital to this synthetic asset during downtrends, aligning mathematical optimization with the sleeve's strategic intent.
 
 ### 2. Sleeve-Internal Optimization
 The Meta-Portfolio optimizes allocations *between* sleeves (e.g., 50% Long / 50% Short), but it relies on the Component Sleeves to be internally efficient.

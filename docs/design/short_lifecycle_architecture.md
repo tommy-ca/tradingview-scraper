@@ -6,8 +6,8 @@ To standardize the handling of SHORT positions throughout the investment lifecyc
 ## 2. The Short Strategy Atom
 In the v4 pipeline, a SHORT position is not merely a negative number; it is a distinct strategy atom with unique properties.
 - **Definition**: `Atom(Asset, Logic, SHORT)`
-- **Return Stream**: $R_{syn} = -1 \times R_{raw} - Cost_{borrow}$
-- **Risk Profile**: Unlimited downside (theoretically), requiring strict stop-loss and margin monitoring.
+- **Return Stream**: $R_{syn} = -clip(R_{raw}, upper=1.0) - Cost_{borrow}$ (enforces a -100% synthetic short loss cap)
+- **Risk Profile**: Short positions have theoretically unlimited downside; the -100% cap is a numerical guardrail aligned with collateral-limited modeling.
 
 ## 3. The 6-Stage Short Lifecycle
 
