@@ -1,8 +1,7 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from tradingview_scraper.orchestration.registry import StageRegistry
-from tradingview_scraper.pipelines.selection.base import SelectionContext
 
 logger = logging.getLogger(__name__)
 
@@ -20,17 +19,28 @@ class QuantSDK:
         """
         logger.info(f"SDK: Executing stage {id}")
         stage_callable = StageRegistry.get_stage(id)
+        spec = StageRegistry.get_spec(id)
 
         # If it's a class (BasePipelineStage), instantiate and execute
-        if isinstance(stage_callable, type):
-            # For BasePipelineStage implementations
-            instance = stage_callable(**params)
+        if spec.stage_class:
+            instance = spec.stage_class(**params)
             if context is None:
-                raise ValueError(f"Stage {id} requires a context object.")
+                # Some stages might create their own context if needed
+                # but for selection stages, it's usually required.
+                pass
             return instance.execute(context)
 
         # If it's a function/method
-        return stage_callable(context, **params)
+        # Functions might not take 'context' as first arg, but we'll try to be flexible
+        # If context is provided, we could pass it, but meta functions currently don't use it.
+        # Let's check the signature if possible or just call with params.
+        import inspect
+
+        sig = inspect.signature(stage_callable)
+        if "context" in sig.parameters:
+            return stage_callable(context=context, **params)
+        else:
+            return stage_callable(**params)
 
     @staticmethod
     def run_pipeline(name: str, profile: str, run_id: Optional[str] = None, **overrides) -> Any:

@@ -1,7 +1,6 @@
-import inspect
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Callable, Dict, List, Optional, Type
 
 from pydantic import BaseModel
 
@@ -18,6 +17,7 @@ class StageSpec:
     category: str  # "selection", "meta", "discovery", "risk"
     tags: List[str] = field(default_factory=list)
     params_schema: Optional[Type[BaseModel]] = None
+    stage_class: Optional[Type] = None
 
 
 class StageRegistry:
@@ -35,7 +35,9 @@ class StageRegistry:
 
         def decorator(func_or_cls: Callable):
             cls._stages[id] = func_or_cls
-            cls._specs[id] = StageSpec(id=id, name=name, description=description, category=category, tags=tags or [], params_schema=params_schema)
+            cls._specs[id] = StageSpec(
+                id=id, name=name, description=description, category=category, tags=tags or [], params_schema=params_schema, stage_class=func_or_cls if isinstance(func_or_cls, type) else None
+            )
             return func_or_cls
 
         return decorator
