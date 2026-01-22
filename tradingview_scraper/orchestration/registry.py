@@ -44,12 +44,14 @@ class StageRegistry:
 
     @classmethod
     def get_stage(cls, id: str) -> Callable:
+        cls._ensure_loaded()
         if id not in cls._stages:
             raise KeyError(f"Stage '{id}' not found in registry.")
         return cls._stages[id]
 
     @classmethod
     def get_spec(cls, id: str) -> StageSpec:
+        cls._ensure_loaded()
         if id not in cls._specs:
             raise KeyError(f"Stage '{id}' not found in registry.")
         return cls._specs[id]
@@ -69,20 +71,34 @@ class StageRegistry:
     @classmethod
     def _ensure_loaded(cls):
         """Internal helper to ensure core stage modules are imported."""
-        # This is a bit brute-force but ensures the registry is populated
-        try:
-            import tradingview_scraper.pipelines.selection.pipeline
-            import tradingview_scraper.pipelines.selection.stages.ingestion
-            import tradingview_scraper.pipelines.selection.stages.feature_engineering
-            import tradingview_scraper.pipelines.selection.stages.inference
-            import tradingview_scraper.pipelines.selection.stages.clustering
-            import tradingview_scraper.pipelines.selection.stages.policy
-            import tradingview_scraper.pipelines.selection.stages.synthesis
-            import scripts.build_meta_returns
-            import scripts.optimize_meta_portfolio
-            import scripts.flatten_meta_weights
-            import scripts.generate_meta_report
-            import scripts.optimize_clustered_v2
-            import tradingview_scraper.pipelines.discovery.pipeline
-        except ImportError as e:
-            logger.warning(f"StageRegistry: Some modules could not be loaded: {e}")
+        if hasattr(cls, "_loaded") and cls._loaded:
+            return
+
+        import pkgutil
+        import importlib
+        import tradingview_scraper.pipelines
+        import scripts
+
+        # 1. Discover all modules in pipelines package
+        for loader, module_name, is_pkg in pkgutil.walk_packages(tradingview_scraper.pipelines.__path__, tradingview_scraper.pipelines.__name__ + "."):
+            try:
+                importlib.import_module(module_name)
+            except Exception as e:
+                logger.warning(f"StageRegistry: Failed to load pipeline module {module_name}: {e}")
+
+        # 2. Specifically load script modules that register stages
+        script_modules = [
+            "scripts.build_meta_returns",
+            "scripts.optimize_meta_portfolio",
+            "scripts.flatten_meta_weights",
+            "scripts.generate_meta_report",
+            "scripts.optimize_clustered_v2",
+            "scripts.synthesize_strategy_matrix",
+        ]
+        for mod in script_modules:
+            try:
+                importlib.import_module(mod)
+            except Exception as e:
+                logger.warning(f"StageRegistry: Failed to load script module {mod}: {e}")
+
+        cls._loaded = True

@@ -83,12 +83,7 @@ class WorkspaceManager:
         logger.info(f"Creating Golden Snapshot for {self.run_id} at {snapshot_path}")
 
         # 1. Snapshot Metadata (Copy)
-        metadata_files = [
-            "portfolio_candidates.json",
-            "portfolio_candidates_raw.json",
-            "foundation_health.json",
-            "symbols.parquet",  # Small enough to copy? Maybe hardlink if large.
-        ]
+        metadata_files = ["portfolio_candidates.json", "portfolio_candidates_raw.json", "foundation_health.json", "symbols.parquet"]
 
         for f in metadata_files:
             src = self.lakehouse_dir / f
@@ -96,27 +91,26 @@ class WorkspaceManager:
                 shutil.copy2(src, snapshot_path / f)
 
         # 2. Snapshot Data Blobs (Hardlink)
-        # We only snapshot files relevant to the current run to save space/inodes.
-        # For now, let's hardlink everything in the root lakehouse.
-        for item in self.lakehouse_dir.iterdir():
-            if item.name in metadata_files:
+        self._hardlink_recursive(self.lakehouse_dir, snapshot_path, excludes=metadata_files)
+
+        return snapshot_path
+
+    def _hardlink_recursive(self, src_root: Path, dst_root: Path, excludes: List[str]):
+        """Recursively hardlinks files from src to dst, skipping excludes."""
+        for item in src_root.iterdir():
+            if item.name in excludes or item.name.startswith("."):
                 continue
-            if item.is_file() and item.suffix == ".parquet":
-                target = snapshot_path / item.name
+
+            target = dst_root / item.name
+            if item.is_file():
                 if not target.exists():
                     try:
                         os.link(item, target)
                     except OSError:
-                        # Fallback to symlink if hardlinks are not supported or cross-device
-                        os.symlink(item, target)
-            elif item.is_dir() and item.name == "features":
-                # Deep copy or link features? Features are large.
-                # For now, symlink the whole features tree.
-                target = snapshot_path / item.name
-                if not target.exists():
-                    os.symlink(item, target)
-
-        return snapshot_path
+                        shutil.copy2(item, target)  # Fallback for cross-device
+            elif item.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                self._hardlink_recursive(item, target, excludes=[])
 
     def resolve_run_input(self, filename: str) -> Path:
         """Resolves an input file, prioritizing the run directory, then snapshot, then lakehouse."""

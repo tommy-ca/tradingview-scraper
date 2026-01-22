@@ -1,10 +1,9 @@
 # Plan: Documentation Update & Workflow Streamlining
-
-## 1. Documentation Updates
-- [x] **Create `docs/specs/requirements_v3.md`**: Formalize the 3-Pillar Architecture (Universe Selection, Strategy Synthesis, Portfolio Allocation) and Selection Standards (HTR v3.4, Selection v3.2).
-- [x] **Create `docs/specs/crypto_sleeve_v2.md`**: Document Crypto Sleeve Operations, Exchange Strategy, and Production Pillars.
-- [x] **Create `docs/specs/numerical_stability.md`**: Document Numerical Stability & Reporting standards (Stable Sum Gate, SSP Minimums, Reporting Purity).
-- [x] **Update `docs/specs/production_workflow_v2.md`**: reflect the current `flow-production` and `flow-meta-production` workflows.
+## 44. Phase 550: Multi-Sleeve Production Rerun (Validation)
+- [ ] **Execution**: Execute `make flow-meta-production` for `meta_benchmark`.
+- [ ] **Execution**: Verify OTLP trace linkage for parallel sleeves.
+- [ ] **Execution**: Verify "Golden Snapshot" integrity post-run.
+- [ ] **Validation**: Verify `meta_portfolio_report.md` contains performance metrics for all ensembled sleeves.
 
 ## 2. Review and Audit
 - [x] **Audit `Makefile`**: Check for parallelism opportunities and fragile dependencies.
@@ -1025,6 +1024,17 @@ Primary gate:
     - Build `WorkspaceManager` utility.
     - Refactor `SleeveActorImpl` and `QuantSDK.run_pipeline` to use the manager.
     - Final sweep to remove all `data/` string literals from core tool logic.
+
+## 44. Phase 550: Composable Pipeline Evolution & Scalability Research
+- [x] **Audit**: Conduct `docs/audit/pipeline_composability_audit_v1.md`.
+- [ ] **Design**: Create `docs/design/composable_dag_v2.md`.
+    - Specify pluggable merge strategies.
+    - Define automated stage discovery (recursive package scanning).
+- [ ] **Research**: Evaluate `Pandera` for L1-L4 data contract enforcement.
+- [x] **Implementation**:
+    - Refactor `DAGRunner` to remove code duplication and support polymorphic merging.
+    - Refactor `StageRegistry` to use automated module discovery (pkgutil).
+    - Enhance `WorkspaceManager` to handle nested directory snapshots recursively.
 
 
 

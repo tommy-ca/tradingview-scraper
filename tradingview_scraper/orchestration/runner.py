@@ -135,37 +135,3 @@ class DAGRunner:
 
         # Fallback: override base with overlay
         return overlay
-
-        # 1. SelectionContext Merging
-        from tradingview_scraper.pipelines.selection.base import SelectionContext
-
-        if isinstance(base, SelectionContext) and isinstance(overlay, SelectionContext):
-            import pandas as pd
-
-            # Merge Feature Store (Concatenate distinct columns)
-            if not overlay.feature_store.empty:
-                if base.feature_store.empty:
-                    base.feature_store = overlay.feature_store
-                else:
-                    # Only add new columns
-                    new_cols = overlay.feature_store.columns.difference(base.feature_store.columns)
-                    if not new_cols.empty:
-                        base.feature_store = pd.concat([base.feature_store, overlay.feature_store[new_cols]], axis=1)
-
-            # Merge Audit Trail (Additive)
-            base.audit_trail.extend(overlay.audit_trail)
-
-            return base
-
-        # 2. Dict-based context (for generic/test steps)
-        if isinstance(base, dict) and isinstance(overlay, dict):
-            for k, v in overlay.items():
-                if k in base and isinstance(base[k], list) and isinstance(v, list):
-                    # Purely additive merge for lists (like audit trails)
-                    base[k].extend(v)
-                else:
-                    base[k] = v
-            return base
-
-        # Fallback: override base with overlay
-        return overlay

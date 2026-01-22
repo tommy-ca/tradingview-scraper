@@ -66,6 +66,12 @@ def run_meta_pipeline(
     logger.info(f"📂 Workspace: {run_dir}")
     logger.info(f"📂 Data Dir: {run_data_dir}")
 
+    from tradingview_scraper.orchestration.sdk import QuantSDK
+
+    # CR-855: Lakehouse Immutability (Snapshot)
+    if os.getenv("TV_STRICT_ISOLATION") == "1":
+        QuantSDK.create_snapshot(run_id)
+
     # CR-850: Parallel Sleeve Execution (Phase 223/345)
     if execute_sleeves:
         logger.info(">>> STAGE 0: Parallel Sleeve Production (Ray Compute Engine)")
@@ -119,8 +125,6 @@ def run_meta_pipeline(
     # 1. Build Returns (Recursive)
     logger.info(">>> STAGE 1: Aggregating Sleeve Returns")
     # Output to isolated run directory
-    from tradingview_scraper.orchestration.sdk import QuantSDK
-
     QuantSDK.run_stage(
         "meta.aggregation",
         meta_profile=meta_profile,
