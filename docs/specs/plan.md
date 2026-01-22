@@ -948,3 +948,18 @@ Primary gate:
     - Update `QuantSDK.run_pipeline` to flush telemetry to the run directory upon completion.
     - Update report generators (`risk.report_meta` and atomic reporting) to include Telemetry Stats.
 
+## 35. Phase 460: Data Pipeline Hardening (SDD & TDD)
+- [ ] **Spec**: Update `requirements_v3.md` with Microstructure Toxicity and Automatic Repair rules.
+- [ ] **Design**: Create `docs/design/data_pipeline_hardening_v1.md`.
+    - Define Advanced Toxicity metrics (Volume Z-Score, Price Stalls).
+    - Specify the "Golden Foundation" lifecycle.
+- [ ] **Test (TDD)**: Create `tests/test_advanced_toxicity.py`.
+    - Verify Volume Spike detection (> 10 sigma).
+    - Verify Price Stall detection (> 3 consecutive bars).
+- [ ] **Test (TDD)**: Create `tests/test_auto_repair.py`.
+    - Verify repair engine triggers on gap discovery.
+- [ ] **Implementation**:
+    - Build `AdvancedToxicityValidator` in `tradingview_scraper/pipelines/selection/base.py`.
+    - Automate `data-repair` within the `flow-data` cycle (Makefile update).
+    - Implement `FoundationHealthRegistry` to track "Golden" status.
+

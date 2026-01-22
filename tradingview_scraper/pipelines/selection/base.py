@@ -106,10 +106,15 @@ class IngestionValidator:
                     # Check for 0.0 exactly on weekends
                     # Use robust dayofweek check
                     try:
-                        days = pd.to_datetime(df.index).dayofweek
-                        weekends_mask = days >= 5
-                        if weekends_mask.any():
-                            weekend_vals = series[weekends_mask].dropna()
+                        # Extract the dayofweek from the index
+                        index_dt = pd.to_datetime(df.index)
+                        # Use list comprehension to avoid DatetimeIndex/Index confusion in LSP
+                        days = [t.dayofweek for t in index_dt]
+                        weekends_mask = [d >= 5 for d in days]
+
+                        if any(weekends_mask):
+                            # Filter series
+                            weekend_vals = series.iloc[weekends_mask].dropna()
                             if not weekend_vals.empty and (weekend_vals == 0.0).all():
                                 logger.warning(f"IngestionValidator: {col} failed 'No Padding' standard (Zeroes found on weekends)")
                                 failed_symbols.append(str(col))
@@ -118,3 +123,80 @@ class IngestionValidator:
                         logger.warning(f"IngestionValidator: Could not check weekends for {col}: {e}")
 
         return failed_symbols
+
+
+class AdvancedToxicityValidator:
+    """
+    Advanced Microstructure Toxicity Validator.
+    Detects Volume Spikes and Price Stalls.
+    """
+
+    @staticmethod
+    def is_volume_toxic(volume: pd.Series, sigma_threshold: float = 10.0) -> bool:
+        """Detects if the latest volume bar is a statistical outlier (> 10 sigma)."""
+        if len(volume) < 21:
+            return False
+
+        # Calculate trailing statistics (excluding latest)
+        trailing = volume.iloc[:-1]
+        mean_v = trailing.mean()
+        std_v = trailing.std()
+
+        if std_v == 0:
+            return float(volume.iloc[-1]) > float(mean_v) * 2  # Simple multiplier fallback
+
+        z_score = (float(volume.iloc[-1]) - float(mean_v)) / float(std_v)
+        return bool(z_score > sigma_threshold)
+
+    @staticmethod
+    def is_price_stalled(prices: pd.Series, threshold: int = 3) -> bool:
+        """Detects if price has been perfectly flat for N consecutive bars."""
+        if len(prices) < threshold + 1:
+            return False
+
+        # Calculate diffs
+        diffs = prices.diff().dropna()
+        recent_diffs = diffs.tail(threshold)
+
+        # If ALL recent diffs are EXACTLY zero
+        return bool((recent_diffs == 0).all())
+
+
+class FoundationHealthRegistry:
+    """
+    Manages the persistent health ledger for Lakehouse assets.
+    """
+
+    def __init__(self, path: Optional[Path] = None):
+        from tradingview_scraper.settings import get_settings
+
+        self.path = path or (get_settings().lakehouse_dir / "foundation_health.json")
+        self.data: Dict[str, Dict] = {}
+        self._load()
+
+    def _load(self):
+        if self.path.exists():
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    self.data = json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load health registry: {e}")
+                self.data = {}
+
+    def save(self):
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save health registry: {e}")
+
+    def update_status(self, symbol: str, status: str, **metrics):
+        self.data[symbol] = {
+            "status": status,
+            "last_audit": datetime.now().isoformat(),
+            **metrics,
+        }
+
+    def is_healthy(self, symbol: str) -> bool:
+        return self.data.get(symbol, {}).get("status") == "healthy"

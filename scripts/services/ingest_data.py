@@ -7,6 +7,10 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
+from tradingview_scraper.pipelines.selection.base import (
+    AdvancedToxicityValidator,
+    FoundationHealthRegistry,
+)
 from tradingview_scraper.settings import get_settings
 
 # Assume PersistentDataLoader is available via PYTHONPATH or install
@@ -29,6 +33,7 @@ class IngestionService:
 
         # Ensure lakehouse exists
         self.lakehouse_dir.mkdir(parents=True, exist_ok=True)
+        self.registry = FoundationHealthRegistry(path=self.lakehouse_dir / "foundation_health.json")
 
     def is_fresh(self, symbol: str) -> bool:
         """Check if symbol data exists and is fresh."""
@@ -108,11 +113,21 @@ class IngestionService:
 
                 if p_path.exists():
                     df = pd.read_parquet(p_path)
-                    if self.is_toxic(df):
-                        logger.warning(f"TOXIC DATA DETECTED for {symbol}. Deleting corrupted file.")
+
+                    is_toxic_ret = self.is_toxic(df)
+                    is_toxic_vol = AdvancedToxicityValidator.is_volume_toxic(df["volume"]) if "volume" in df.columns else False
+                    is_stalled = AdvancedToxicityValidator.is_price_stalled(df["close"]) if "close" in df.columns else False
+
+                    if is_toxic_ret or is_toxic_vol or is_stalled:
+                        reason = "return_spike" if is_toxic_ret else ("volume_spike" if is_toxic_vol else "price_stall")
+                        logger.warning(f"TOXIC DATA DETECTED for {symbol} (Reason: {reason}). Deleting corrupted file.")
                         os.remove(p_path)
+                        self.registry.update_status(symbol, status="toxic", reason=reason)
                     else:
                         logger.info(f"Successfully ingested {symbol}")
+                        self.registry.update_status(symbol, status="healthy")
+
+                    self.registry.save()
 
             except Exception as e:
                 logger.error(f"Failed to ingest {symbol}: {e}")

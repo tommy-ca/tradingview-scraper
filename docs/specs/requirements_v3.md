@@ -441,6 +441,18 @@ Requirements:
  3. **Traceability**: The `trace_id` MUST be injected into all audit ledger entries across all L0-L4 stages.
  4. **Forensic Telemetry**: Every production run MUST persist its full OTel trace (spans and durations) to a `forensic_trace.json` file in the run directory for performance auditing.
  
+ ## 13. Advanced DataOps Hardening (v4.0+)
+ 
+ ### 13.1 Microstructure Toxicity Standards
+ 1. **Price Stalls**: Assets with $> 3$ consecutive bars of zero price change (zero variance) MUST be vetoed if they are in a normally liquid asset class.
+ 2. **Volume Spikes**: Assets with a 1-day volume $> 10\sigma$ (10x standard deviation of trailing 20d volume) MUST be flagged as "Toxic Microstructure" and dropped.
+ 3. **Ghost Candles**: Crypto assets with zero volume during active trading windows MUST be flagged for repair or removal.
+ 
+ ### 13.2 Automated Foundation Resilience
+ 1. **Repair-Mandatory Lifecycle**: The DataOps pipeline (`flow-data`) MUST include a mandatory repair pass. No foundation is considered "Golden" until all discoverable gaps are either filled or declared unrepairable.
+ 2. **Health Registry**: The Lakehouse MUST maintain a `foundation_health.json` registry tracking the audit hash and repair status of every symbol.
+ 3. **Fail-Fast Foundation Gate**: The Alpha pipeline MUST abort if any required symbol in the run manifest lacks a "Healthy" status in the foundation registry.
+ 
  ## 12. The Unified DAG Orchestrator (v3.9+)
  
  The platform transitions from imperative script-based execution to a declarative Directed Acyclic Graph (DAG) model managed by the SDK.
