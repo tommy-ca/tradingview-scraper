@@ -35,9 +35,13 @@ Use this skill when the user wants to:
 
 2. **Run backtest**:
    ```bash
-   python scripts/backtest_engine.py --run-id $ARGUMENTS
+   make port-test RUN_ID=$ARGUMENTS
    ```
 
 3. **View results**:
-   - Equity curve: `data/artifacts/summaries/runs/<RUN_ID>/backtest_equity.png`
-   - Metrics: `data/artifacts/summaries/runs/<RUN_ID>/backtest_metrics.json`
+   - Equity curves: `data/artifacts/summaries/runs/<RUN_ID>/data/returns/*.pkl`
+   - Tournament results: `data/artifacts/summaries/runs/<RUN_ID>/data/tournament_results.csv`
+
+## Output
+
+Report the following metrics for the primary profiles (Sharpe, Ann. Return, MaxDD).
