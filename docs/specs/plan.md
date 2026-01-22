@@ -1002,17 +1002,29 @@ Primary gate:
     - Document Grafana/OTEL Collector setup for real-time forensic viewing.
 
 ## 41. Phase 520: TradingView Scanner Hardening & Data Pipeline Audit (SDD & TDD)
-- [ ] **Audit**: Create `docs/audit/data_pipeline_audit_v1.md` documenting the "Golden Path" and identified gaps.
-- [ ] **Design**: Create `docs/design/scanner_hardening_v1.md`.
-    - Specify "Sanity Gate" integration for discovery scanners.
-    - Define microstructure filters for the discovery phase (early fail-fast).
-- [ ] **Test (TDD)**: Create `tests/test_scanner_hardening.py`.
-    - Verify that scanners correctly apply `AdvancedToxicityValidator`.
-    - Verify path determinism for scanner configs.
-- [ ] **Implementation**:
+- [x] **Audit**: Create `docs/audit/data_pipeline_audit_v1.md` documenting the "Golden Path" and identified gaps.
+- [x] **Design**: Create `docs/design/scanner_hardening_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_scanner_hardening.py`.
+- [x] **Implementation**:
     - Refactor `TradingViewDiscoveryScanner` to utilize `AdvancedToxicityValidator`.
     - Integrate `FoundationHealthRegistry` into the discovery phase to prevent re-scanning of known toxic assets.
     - Update `DiscoveryPipeline` to handle fragmented scanner outputs more robustly.
+
+## 42. Phase 530: Rerun Data Pipelines for Meta-Portfolio Sleeves
+- [x] **Execution**: Run discovery for all 4 Binance Spot Rating sleeves.
+- [x] **Execution**: Ingest historical data for the discovered candidates.
+- [x] **Execution**: Perform mandatory repair pass and update health registry.
+- [x] **Execution**: Generate Point-in-Time feature matrix for Alpha runs.
+- [x] **Validation**: Verify `foundation_health.json` reflects the new assets.
+
+## 43. Phase 540: Workspace Isolation & Data Lineage Audit (SDD & TDD)
+- [x] **Audit**: Create `docs/audit/workspace_isolation_audit_v1.md` documenting current path usage and isolation gaps.
+- [x] **Design**: Create `docs/design/workspace_isolation_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_workspace_isolation.py`.
+- [x] **Implementation**:
+    - Build `WorkspaceManager` utility.
+    - Refactor `SleeveActorImpl` and `QuantSDK.run_pipeline` to use the manager.
+    - Final sweep to remove all `data/` string literals from core tool logic.
 
 
 

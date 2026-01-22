@@ -95,16 +95,20 @@ class RayComputeEngine:
         if telemetry.is_initialized:
             # opentelemetry-sdk internal access to our forensic exporter
             from opentelemetry import trace
+            from opentelemetry.sdk.trace import TracerProvider
             from opentelemetry.sdk.trace.export import SimpleSpanProcessor
             from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
 
             tp = trace.get_tracer_provider()
             forensic_exporter = None
-            if hasattr(tp, "_active_span_processor"):
-                for proc in tp._active_span_processor._span_processors:
-                    if isinstance(proc, SimpleSpanProcessor) and isinstance(proc.span_exporter, ForensicSpanExporter):
-                        forensic_exporter = proc.span_exporter
-                        break
+            if isinstance(tp, TracerProvider):
+                # Accessing private attribute for forensic collection
+                processors = getattr(tp, "_active_span_processor", None)
+                if processors:
+                    for proc in processors._span_processors:
+                        if isinstance(proc, SimpleSpanProcessor) and isinstance(proc.span_exporter, ForensicSpanExporter):
+                            forensic_exporter = proc.span_exporter
+                            break
 
             if forensic_exporter:
                 logger.info(f"Collecting telemetry from {len(actors)} worker nodes")

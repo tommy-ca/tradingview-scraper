@@ -29,27 +29,28 @@ class MarketRegimeDetector:
         crisis_threshold: float = 1.8,
         quiet_threshold: float = 0.7,
         *,
-        audit_path: str | Path = "data/lakehouse/regime_audit.jsonl",
+        audit_path: str | Path | None = None,
         enable_audit_log: bool = True,
         # CRP-270: Injectable weights
         weights: Optional[Dict[str, float]] = None,
     ):
         self.crisis_threshold = crisis_threshold
         self.quiet_threshold = quiet_threshold
+        settings = get_settings()
 
         if str(os.getenv("TV_DISABLE_REGIME_AUDIT", "")).strip() in {"1", "true", "TRUE", "yes", "YES"}:
             enable_audit_log = False
 
         env_path = str(os.getenv("TV_REGIME_AUDIT_PATH", "")).strip()
         if env_path:
-            audit_path = env_path
-        elif isinstance(audit_path, str) and "lakehouse" in audit_path:
-            # Isolate to logs directory by default if still pointing to lakehouse
-            settings = get_settings()
-            audit_path = settings.logs_dir / "regime_audit.jsonl"
+            self.audit_path = Path(env_path)
+        elif audit_path:
+            self.audit_path = Path(audit_path)
+        else:
+            # Standard location: logs/regime_audit.jsonl (Phase 540)
+            self.audit_path = settings.logs_dir / "regime_audit.jsonl"
 
         self.enable_audit_log = bool(enable_audit_log)
-        self.audit_path = Path(audit_path) if audit_path else None
 
         # CRP-270: Set Weights
         self.weights = weights or {

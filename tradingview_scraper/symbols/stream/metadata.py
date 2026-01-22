@@ -1,6 +1,7 @@
 import logging
 import os
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Optional, Set, cast
 
 import exchange_calendars as xcals
@@ -125,10 +126,13 @@ class MetadataCatalog:
     providing lookup and search capabilities.
     """
 
-    def __init__(self, base_path: str = "data/lakehouse"):
-        self.base_path = base_path
-        self.catalog_path = os.path.join(self.base_path, "symbols.parquet")
-        os.makedirs(self.base_path, exist_ok=True)
+    def __init__(self, base_path: str | Path | None = None):
+        from tradingview_scraper.settings import get_settings
+
+        settings = get_settings()
+        self.base_path = Path(base_path) if base_path else settings.lakehouse_dir
+        self.catalog_path = self.base_path / "symbols.parquet"
+        self.base_path.mkdir(parents=True, exist_ok=True)
         self._df = self._load_catalog()
 
     def _load_catalog(self) -> pd.DataFrame:
@@ -437,10 +441,13 @@ class ExchangeCatalog:
     Manages the exchange metadata catalog for the Data Lakehouse.
     """
 
-    def __init__(self, base_path: str = "data/lakehouse"):
-        self.base_path = base_path
-        self.catalog_path = os.path.join(self.base_path, "exchanges.parquet")
-        os.makedirs(self.base_path, exist_ok=True)
+    def __init__(self, base_path: str | Path | None = None):
+        from tradingview_scraper.settings import get_settings
+
+        settings = get_settings()
+        self.base_path = Path(base_path) if base_path else settings.lakehouse_dir
+        self.catalog_path = self.base_path / "exchanges.parquet"
+        self.base_path.mkdir(parents=True, exist_ok=True)
         self._df = self._load_catalog()
 
     def _load_catalog(self) -> pd.DataFrame:

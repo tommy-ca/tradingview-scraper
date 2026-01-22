@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import timedelta
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import pandas as pd
@@ -16,9 +17,12 @@ class LakehouseStorage:
     Standardizes on a single file per symbol/interval.
     """
 
-    def __init__(self, base_path: str = "data/lakehouse"):
-        self.base_path = base_path
-        os.makedirs(self.base_path, exist_ok=True)
+    def __init__(self, base_path: str | Path | None = None):
+        from tradingview_scraper.settings import get_settings
+
+        settings = get_settings()
+        self.base_path = Path(base_path) if base_path else settings.lakehouse_dir
+        self.base_path.mkdir(parents=True, exist_ok=True)
 
     def _get_path(self, symbol: str, interval: str) -> str:
         safe_symbol = symbol.replace(":", "_")

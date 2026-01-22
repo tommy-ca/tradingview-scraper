@@ -121,15 +121,15 @@ def optimize_clustered_portfolio(run_id: Optional[str] = None, risk_profiles: Op
         default_returns = str(run_dir / "data" / "returns_matrix.parquet")
 
     if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
+        default_returns = str(settings.lakehouse_dir / "portfolio_returns.pkl")
 
     default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
     if not os.path.exists(default_clusters):
-        default_clusters = "data/lakehouse/portfolio_clusters.json"
+        default_clusters = str(settings.lakehouse_dir / "portfolio_clusters.json")
 
     default_meta = str(run_dir / "data" / "portfolio_meta.json")
     if not os.path.exists(default_meta):
-        default_meta = "data/lakehouse/portfolio_meta.json"
+        default_meta = str(settings.lakehouse_dir / "portfolio_meta.json")
 
     returns_path = os.getenv("RETURNS_MATRIX", default_returns)
     clusters_path = os.getenv("CLUSTERS_FILE", default_clusters)
@@ -148,7 +148,7 @@ def optimize_clustered_portfolio(run_id: Optional[str] = None, risk_profiles: Op
     logger.info(f"Regime Detected for Optimization: {regime} (Score: {score:.2f}) | Quadrant: {quadrant}")
 
     # Load enhanced regime analysis if available (Phase 60 Update)
-    regime_analysis_path = "data/lakehouse/regime_analysis_v3.json"
+    regime_analysis_path = str(settings.lakehouse_dir / "regime_analysis_v3.json")
     regime_metrics = {}
     recommended_window = 20
     if os.path.exists(regime_analysis_path):

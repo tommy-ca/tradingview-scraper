@@ -316,21 +316,22 @@ if __name__ == "__main__":
     run_dir = settings.prepare_summaries_run_dir()
 
     # CR-831: Workspace Isolation
+    # Use settings.lakehouse_dir instead of hardcoded strings
     default_optimized = run_dir / "data" / "portfolio_optimized_v2.json"
     if not default_optimized.exists():
-        default_optimized = Path("data/lakehouse/portfolio_optimized_v2.json")
+        default_optimized = settings.lakehouse_dir / "portfolio_optimized_v2.json"
 
     default_returns = run_dir / "data" / "returns_matrix.parquet"
     if not default_returns.exists():
-        default_returns = Path("data/lakehouse/portfolio_returns.pkl")
+        default_returns = settings.lakehouse_dir / "portfolio_returns.pkl"
 
     default_candidates = run_dir / "data" / "portfolio_candidates.json"
     if not default_candidates.exists():
-        default_candidates = Path("data/lakehouse/portfolio_candidates.json")
+        default_candidates = settings.lakehouse_dir / "portfolio_candidates.json"
 
     default_stats = run_dir / "data" / "antifragility_stats.json"
     if not default_stats.exists():
-        default_stats = Path("data/lakehouse/antifragility_stats.json")
+        default_stats = settings.lakehouse_dir / "antifragility_stats.json"
 
     out_p = settings.run_reports_dir / "portfolio" / "report.md"
     out_p.parent.mkdir(parents=True, exist_ok=True)

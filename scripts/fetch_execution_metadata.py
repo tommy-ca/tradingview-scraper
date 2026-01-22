@@ -207,8 +207,13 @@ def fetch_metadata(candidates_path: str):
 
 
 if __name__ == "__main__":
+    from tradingview_scraper.settings import get_settings
+
+    settings = get_settings()
+    default_cand = str(settings.lakehouse_dir / "portfolio_candidates.json")
+
     parser = argparse.ArgumentParser(description="Fetch execution metadata from exchanges")
-    parser.add_argument("--candidates", default="data/lakehouse/portfolio_candidates.json", help="Path to candidates file")
+    parser.add_argument("--candidates", default=default_cand, help="Path to candidates file")
     args = parser.parse_args()
 
     fetch_metadata(args.candidates)

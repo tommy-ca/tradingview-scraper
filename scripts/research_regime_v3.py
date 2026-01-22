@@ -73,9 +73,10 @@ def research_regime_v3():
     run_dir = settings.prepare_summaries_run_dir()
 
     # CR-831: Workspace Isolation
+    # Use settings.lakehouse_dir instead of hardcoded strings
     default_returns = str(run_dir / "data" / "returns_matrix.parquet")
     if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
+        default_returns = str(settings.lakehouse_dir / "portfolio_returns.pkl")
 
     returns_path = os.getenv("RETURNS_MATRIX", default_returns)
 
@@ -112,7 +113,7 @@ def research_regime_v3():
     # Try to find persistence metrics in run dir first, then lakehouse
     persistence_path = run_dir / "data" / "persistence_metrics.json"
     if not persistence_path.exists():
-        persistence_path = Path("data/lakehouse/persistence_metrics.json")
+        persistence_path = settings.lakehouse_dir / "persistence_metrics.json"
 
     median_duration: Optional[float] = None
 

@@ -1,6 +1,7 @@
 import logging
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -36,10 +37,14 @@ class ExecutionMetadataCatalog:
 
     REQUIRED_COLS = ["symbol", "venue", "lot_size", "min_notional", "step_size", "tick_size", "maker_fee", "taker_fee", "contract_size", "updated_at"]
 
-    def __init__(self, base_path: str = "data/lakehouse"):
-        self.base_path = base_path
-        self.catalog_path = os.path.join(self.base_path, "execution.parquet")
-        os.makedirs(self.base_path, exist_ok=True)
+    def __init__(self, base_path: str | Path | None = None):
+        from tradingview_scraper.settings import get_settings
+
+        settings = get_settings()
+
+        self.base_path = Path(base_path) if base_path else settings.lakehouse_dir
+        self.catalog_path = self.base_path / "execution.parquet"
+        self.base_path.mkdir(parents=True, exist_ok=True)
         self._df = self._load_catalog()
         if not os.path.exists(self.catalog_path):
             self.save()

@@ -237,7 +237,7 @@ class ProductionPipeline:
         path = self.run_dir / "data" / "portfolio_candidates.json"
         if not path.exists():
             # Fallback to shared location for legacy support
-            path = Path("data/lakehouse/portfolio_candidates.json")
+            path = self.settings.lakehouse_dir / "portfolio_candidates.json"
 
         if not path.exists():
             return {}
@@ -304,7 +304,7 @@ class ProductionPipeline:
         path = self.run_dir / "data" / "portfolio_optimized_v2.json"
         if not path.exists():
             # Fallback to shared location for legacy support
-            path = Path("data/lakehouse/portfolio_optimized_v2.json")
+            path = self.settings.lakehouse_dir / "portfolio_optimized_v2.json"
 
         if not path.exists():
             return {}
@@ -337,12 +337,14 @@ class ProductionPipeline:
         resolved["replay_context"] = {"run_id": self.run_id, "timestamp": datetime.now().isoformat(), "git_commit": "unknown", "manifest_source": str(self.manifest_path), "foundation_hashes": {}}
 
         # Hash Foundation Files (Index lists)
-        foundation_files = ["data/index/sp500_symbols.txt", "data/index/nasdaq100_symbols.txt", "data/index/dw30_symbols.txt"]
-        for f_path in foundation_files:
-            p = Path(f_path)
+        # Use settings-derived paths for index files (Phase 540)
+        index_dir = self.settings.data_dir / "index"
+        foundation_files = ["sp500_symbols.txt", "nasdaq100_symbols.txt", "dw30_symbols.txt"]
+        for f_name in foundation_files:
+            p = index_dir / f_name
             if p.exists():
                 sha = hashlib.sha256(p.read_bytes()).hexdigest()
-                resolved["replay_context"]["foundation_hashes"][f_path] = sha
+                resolved["replay_context"]["foundation_hashes"][str(p)] = sha
 
         try:
             resolved["replay_context"]["git_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.STDOUT).decode().strip()

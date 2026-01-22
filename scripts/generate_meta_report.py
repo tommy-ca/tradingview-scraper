@@ -276,9 +276,13 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
 if __name__ == "__main__":
     import argparse
 
+    settings = get_settings()
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--meta-dir", default="data/lakehouse")
-    parser.add_argument("--output", default="artifacts/summaries/latest/meta_portfolio_report.md")
+    parser.add_argument("--meta-dir", default=str(settings.lakehouse_dir))
+
+    default_out = str(settings.summaries_dir / "latest" / "meta_portfolio_report.md") if settings.summaries_dir else "artifacts/summaries/latest/meta_portfolio_report.md"
+    parser.add_argument("--output", default=default_out)
     parser.add_argument("--profiles", help="Comma-separated risk profiles to report")
     parser.add_argument("--meta-profile", help="Meta profile name (e.g. meta_super_benchmark)")
     args = parser.parse_args()
@@ -286,7 +290,6 @@ if __name__ == "__main__":
     meta_dir = Path(args.meta_dir)
     out_p = Path(args.output)
 
-    settings = get_settings()
     m_prof = args.meta_profile or os.getenv("PROFILE") or "meta_production"
 
     target_profiles = args.profiles.split(",") if args.profiles else ["barbell", "hrp", "min_variance", "equal_weight", "max_sharpe"]

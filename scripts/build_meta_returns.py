@@ -283,7 +283,11 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", required=True, help="Meta portfolio profile name")
-    parser.add_argument("--output", default="data/lakehouse/meta_returns.pkl")
+
+    settings = get_settings()
+    default_out = str(settings.lakehouse_dir / "meta_returns.pkl")
+
+    parser.add_argument("--output", default=default_out)
     parser.add_argument("--profiles", help="Comma-separated risk profiles to build")
     args = parser.parse_args()
 

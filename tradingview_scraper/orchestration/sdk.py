@@ -102,31 +102,13 @@ class QuantSDK:
     @staticmethod
     def create_snapshot(run_id: str) -> Path:
         """
-        Creates a symlink-based snapshot of the Lakehouse for run immutability.
-        Returns the path to the snapshot directory.
+        Creates a 'Golden Snapshot' of the Lakehouse for run immutability.
+        Uses WorkspaceManager for hybrid copy/link strategy.
         """
-        from tradingview_scraper.settings import get_settings
-        import os
-        from pathlib import Path
+        from tradingview_scraper.utils.workspace import WorkspaceManager
 
-        settings = get_settings()
-        lakehouse = settings.lakehouse_dir
-        snapshot_dir = (settings.data_dir / "snapshots" / run_id).resolve()
-        snapshot_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"SDK: Creating Lakehouse snapshot for {run_id} at {snapshot_dir}")
-
-        for item in lakehouse.iterdir():
-            if item.is_file():
-                target = snapshot_dir / item.name
-                if not target.exists():
-                    os.symlink(item, target)
-            elif item.is_dir() and not item.name.startswith("."):
-                target = snapshot_dir / item.name
-                if not target.exists():
-                    os.symlink(item, target)
-
-        return snapshot_dir
+        manager = WorkspaceManager(run_id)
+        return manager.create_golden_snapshot()
 
     @staticmethod
     @trace_span("sdk.repair_foundation")

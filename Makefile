@@ -80,13 +80,14 @@ endif
 endif
 endif
 
-# Paths
-ARTIFACTS_DIR ?= data/artifacts
+# Paths (Phase 540: Workspace Isolation)
+LAKEHOUSE ?= $(or $(TV_LAKEHOUSE_DIR),data/lakehouse)
+ARTIFACTS_DIR ?= $(or $(TV_ARTIFACTS_DIR),data/artifacts)
 SUMMARIES_ROOT ?= $(ARTIFACTS_DIR)/summaries
 SUMMARY_DIR ?= $(SUMMARIES_ROOT)/latest
 SUMMARY_RUN_DIR ?= $(SUMMARIES_ROOT)/runs/$(TV_RUN_ID)
-META_CATALOG_PATH ?= data/lakehouse/symbols.parquet
-TARGETED_CANDIDATES ?= data/lakehouse/portfolio_candidates_targeted.json
+META_CATALOG_PATH ?= $(LAKEHOUSE)/symbols.parquet
+TARGETED_CANDIDATES ?= $(LAKEHOUSE)/portfolio_candidates_targeted.json
 TARGETED_LOOKBACK ?= 200
 TARGETED_BATCH ?= 2
 
@@ -105,7 +106,6 @@ export TV_EXPORT_RUN_ID := $(RUN_ID)
 
 # workspace paths
 RUN_DATA_DIR ?= $(SUMMARIES_ROOT)/runs/$(RUN_ID)/data
-LAKEHOUSE ?= data/lakehouse
 
 # artifacts
 CANDIDATES_RAW := $(RUN_DATA_DIR)/portfolio_candidates_raw.json

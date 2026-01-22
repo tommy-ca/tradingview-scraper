@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional, Union
 
 import pandas as pd
@@ -25,11 +26,17 @@ class PersistentDataLoader:
     Encapsulates the forward-accumulation pattern to build deep history over time.
     """
 
-    def __init__(self, lakehouse_path: str = "data/lakehouse", websocket_jwt_token: str = "unauthorized_user_token"):
+    def __init__(self, lakehouse_path: str | Path | None = None, websocket_jwt_token: str = "unauthorized_user_token"):
+        from tradingview_scraper.settings import get_settings
+
+        settings = get_settings()
+
+        path_str = str(lakehouse_path) if lakehouse_path else str(settings.lakehouse_dir)
+
         self.loader = DataLoader(websocket_jwt_token=websocket_jwt_token)
-        self.storage = LakehouseStorage(base_path=lakehouse_path)
-        self.catalog = MetadataCatalog(base_path=lakehouse_path)
-        self.ex_catalog = ExchangeCatalog(base_path=lakehouse_path)
+        self.storage = LakehouseStorage(base_path=path_str)
+        self.catalog = MetadataCatalog(base_path=path_str)
+        self.ex_catalog = ExchangeCatalog(base_path=path_str)
         self.overview = Overview()
         self.streamer = Streamer(export_result=False, websocket_jwt_token=websocket_jwt_token)
 
