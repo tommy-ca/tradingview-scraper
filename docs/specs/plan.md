@@ -983,16 +983,25 @@ Primary gate:
     - Support `TV_PROMETHEUS_PUSHGATEWAY` for batch metrics.
 
 ## 39. Phase 500: OpenTelemetry API Standardization (SDD & TDD)
-- [ ] **Spec**: Update `requirements_v3.md` with Signal Unification and API standards.
-- [ ] **Design**: Create `docs/design/telemetry_standard_v2.md`.
-- [ ] **Test (TDD)**: Create `tests/test_otel_logging_bridge.py`.
-    - Verify that standard logging is captured by OTel.
-- [ ] **Test (TDD)**: Create `tests/test_otel_metrics_api.py`.
-    - Verify standard OTel meter instruments.
-- [ ] **Implementation**:
+- [x] **Spec**: Update `requirements_v3.md` with Signal Unification and API standards.
+- [x] **Design**: Create `docs/design/telemetry_standard_v2.md`.
+- [x] **Test (TDD)**: Create `tests/test_otel_logging_bridge.py`.
+- [x] **Test (TDD)**: Create `tests/test_otel_metrics_api.py`.
+- [x] **Implementation**:
     - Add `opentelemetry-sdk-logs` and `opentelemetry-exporter-otlp`.
     - Refactor `TelemetryProvider` for standard API compliance.
     - Migrate logging to OTel `LoggingHandler`.
     - Replace hardcoded Prometheus logic with OTel-native configuration.
+
+## 40. Phase 510: OTLP Forensic Export & Collector Integration (SDD & TDD)
+- [ ] **Design**: Create `docs/design/otlp_collector_v1.md`.
+    - Define OTLP export configuration for Traces, Metrics, and Logs.
+    - Specify "Universal Frontend" strategy using OTel APIs.
+- [ ] **Test (TDD)**: Create `tests/test_otlp_export_config.py`.
+    - Verify that OTLP endpoints are correctly resolved from environment variables.
+- [ ] **Implementation**:
+    - Update `TelemetryProvider` to register OTLP exporters based on environment.
+    - Standardize distributed trace merging to use OTLP propagation by default.
+    - Document Grafana/OTEL Collector setup for real-time forensic viewing.
 
 

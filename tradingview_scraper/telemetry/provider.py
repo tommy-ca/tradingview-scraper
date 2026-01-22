@@ -43,7 +43,16 @@ class TelemetryProvider:
         if console_export:
             tracer_provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
 
-        # OTLP support could be added here via env vars automatically if OTLP exporter is installed
+        # OTLP Trace Exporter
+        if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+            try:
+                from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+                tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+                logger.info("OTel: OTLP Trace exporter registered")
+            except ImportError:
+                logger.warning("OTLP Trace exporter requested but not installed.")
+
         trace.set_tracer_provider(tracer_provider)
         self.tracer = trace.get_tracer(__name__)
 
@@ -51,6 +60,16 @@ class TelemetryProvider:
         metric_readers = []
         if console_export:
             metric_readers.append(PeriodicExportingMetricReader(ConsoleMetricExporter()))
+
+        # OTLP Metric Exporter
+        if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+            try:
+                from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+
+                metric_readers.append(PeriodicExportingMetricReader(OTLPMetricExporter()))
+                logger.info("OTel: OTLP Metric exporter registered")
+            except ImportError:
+                logger.warning("OTLP Metric exporter requested but not installed.")
 
         # Prometheus (Legacy support via reader)
         if self.prometheus_endpoint:
@@ -74,6 +93,16 @@ class TelemetryProvider:
         logger_provider = LoggerProvider(resource=resource)
         if console_export:
             logger_provider.add_log_record_processor(BatchLogRecordProcessor(ConsoleLogExporter()))
+
+        # OTLP Log Exporter
+        if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+            try:
+                from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+
+                logger_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
+                logger.info("OTel: OTLP Log exporter registered")
+            except ImportError:
+                logger.warning("OTLP Log exporter requested but not installed.")
 
         _logs.set_logger_provider(logger_provider)
 
