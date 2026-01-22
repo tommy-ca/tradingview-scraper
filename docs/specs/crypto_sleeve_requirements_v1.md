@@ -11,6 +11,9 @@ Includes standard certification for Rating-Based Strategy Benchmarks:
 - `binance_spot_rating_all_long/short`
 - `binance_spot_rating_ma_long/short`
 
+Atomic pipeline runbook (baseline ratings):
+- `docs/runbooks/binance_spot_ratings_all_long_short_runbook_v1.md`
+
 ### 1.3 Status
 **Production Certified** (2026-01-16) - Deep Audit Standard v3.6.4.
 **Rerun Scheduled** (2026-01-18) - Meta-Portfolio stress test for All/MA Rating profiles.
@@ -104,7 +107,7 @@ The system MUST support the [Fractal Hierarchical Meta-Portfolio Specification](
 | CR-233 | MUST | ✅ | **Hybrid Barbell**: The `barbell` strategy must optimize its core layer using the engine's native solver, allowing for backend-specific risk-management profiles. |
 | CR-240 | MUST | ✅ | **Baseline Selection Standard**: The system must provide a `baseline` selection engine that passes through all candidates to the portfolio engines, enabling quantification of Selection Alpha. |
 | CR-250 | MUST | ✅ | **Statistical Sample Floor**: Forensic audits and tournaments must utilize at least 15 candidates (via HTR Stage 4 fallback) to ensure numerical differentiation between solvers and prevent constrained convergence to bit-perfect identical weights. |
-| CR-260 | MUST | ✅ | **Directional Synthetic Longs**: Portfolio engines must handle `SHORT` candidates by inverting their returns ($R_{syn} = -1 \times R_{raw}$) before optimization to ensure risk-parity and convex engines treat them as alpha-positive stability contributors. |
+| CR-260 | MUST | ✅ | **Directional Synthetic Longs**: Portfolio engines must handle `SHORT` candidates by inverting their returns before optimization ($R_{syn,short} = -clip(R_{raw}, upper=1.0)$) to enforce the -100% short loss cap and ensure decision-naive solvers treat shorts as alpha-positive stability contributors. |
 | CR-261 | MUST | ✅ | **Regime-Direction Alignment**: The `MarketRegimeDetector` must influence the late-binding asset direction, specifically enforcing tighter filters on `LONG` candidates during `CRISIS` or `TURBULENT` regimes. |
 | CR-270 | MUST | ✅ | **Synthesis-Allocation Decoupling**: Decision logic (regime mapping, directional inversion) is abstracted into the Strategy Synthesis layer. Portfolio engines are "Decision-Naive" and operate only on processed return streams. |
 | CR-271 | MUST | ✅ | **Atomic Strategy Interface**: The platform supports "Atomic Strategies" (Asset, Logic, TimeScale) as optimization candidates. Each Atom must have exactly ONE logic. |

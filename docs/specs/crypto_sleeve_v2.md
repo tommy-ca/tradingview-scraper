@@ -24,7 +24,7 @@ Agents must ensure every production run adheres to the following five pillars:
 - **Selection Scarcity Protocol (SSP)**: Robust multi-stage fallbacks (Max-Sharpe -> Min-Var -> EW) when winner pool is sparse ($N < 15$).
 
 ### IV. Directional Purity
-- **Inversion**: SHORT candidate returns are inverted ($R_{synthetic} = -1 \times R_{raw}$) before optimization.
+- **Inversion**: SHORT candidate returns are inverted with a -100% loss cap before optimization ($R_{synthetic,short} = -clip(R_{raw}, upper=1.0)$).
 - **Goal**: Risk-parity engines (HRP/MinVar) correctly reward stable downward drift.
 
 ### V. Toxic Data Guard

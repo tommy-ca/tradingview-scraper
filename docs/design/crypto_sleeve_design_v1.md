@@ -89,7 +89,7 @@ To ensure that all quantitative models (Selection, HRP, MVO) operate with maximu
 1.  **Late-Binding Direction**: At each rebalance boundary (production or backtest window), the system calculates the recent momentum ($M$) for all candidates.
 2.  **Alpha Alignment**: The raw returns matrix ($R_{raw}$) is transformed into an alpha-aligned matrix ($R_{\alpha}$):
     - If $M > 0$, asset is **LONG**; $R_{\alpha} = R_{raw}$
-    - If $M < 0$, asset is **SHORT**; $R_{\alpha} = -1 \times R_{raw}$
+    - If $M < 0$, asset is **SHORT**; $R_{\alpha} = -clip(R_{raw}, upper=1.0)$ (short loss cap at -100%)
 3.  **Model Invariance**: Portfolio engines receive the $R_{\alpha}$ matrix. Because all assets now display positive expected returns, HRP and MVO models correctly reward stable price trends regardless of their physical direction. This eliminates the need for direction-aware code paths in the optimizers.
 4.  **Forensic Replay**: The assigned direction and synthetic weights are recorded in the `audit.jsonl` ledger, enabling full reconstruction of the `Net_Weight` ($W_{net} = W_{synthetic} \times \text{sign}(M)$).
 
