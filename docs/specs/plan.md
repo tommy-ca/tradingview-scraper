@@ -1027,14 +1027,32 @@ Primary gate:
 
 ## 44. Phase 550: Composable Pipeline Evolution & Scalability Research
 - [x] **Audit**: Conduct `docs/audit/pipeline_composability_audit_v1.md`.
-- [ ] **Design**: Create `docs/design/composable_dag_v2.md`.
-    - Specify pluggable merge strategies.
-    - Define automated stage discovery (recursive package scanning).
-- [ ] **Research**: Evaluate `Pandera` for L1-L4 data contract enforcement.
+- [x] **Design**: Create `docs/design/composable_dag_v2.md`.
+- [x] **Research**: Evaluate `Pandera` for L1-L4 data contract enforcement.
 - [x] **Implementation**:
     - Refactor `DAGRunner` to remove code duplication and support polymorphic merging.
     - Refactor `StageRegistry` to use automated module discovery (pkgutil).
     - Enhance `WorkspaceManager` to handle nested directory snapshots recursively.
+
+## 45. Phase 560: Meta-Portfolio Pipeline Deep Audit & Hardening (SDD & TDD)
+- [x] **Audit**: Create `docs/audit/meta_pipeline_audit_v1.md`.
+- [x] **Design**: Create `docs/design/meta_pipeline_hardening_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_meta_hardening.py`.
+- [x] **Implementation**:
+    - Build `MetaHardeningValidator` (integrated in scripts).
+    - Update `build_meta_returns.py` with depth and cycle checks.
+    - Update `flatten_meta_weights.py` with conservation checks and recursion safety.
+
+## 46. Phase 570: Recursive Backtest Integration (SDD & TDD)
+- [ ] **Design**: Create `docs/design/recursive_meta_backtest_v1.md`.
+    - Specify how `BacktestEngine` handles meta-profiles by dynamically re-optimizing sleeve weights.
+    - Define fractal backtesting protocol (nested rebalancing).
+- [ ] **Test (TDD)**: Create `tests/test_recursive_backtest.py`.
+    - Verify that a meta-portfolio backtest correctly invokes sub-sleeve rebalancing.
+- [ ] **Implementation**:
+    - Refactor `BacktestEngine` to support meta-profile recursive walk-forward.
+    - Integrate `meta.aggregation` and `risk.optimize_meta` into the backtest loop.
+    - Update forensic reports to show meta-level equity curves and drawdown.
 
 
 

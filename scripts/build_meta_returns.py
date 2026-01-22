@@ -71,10 +71,27 @@ def find_latest_run_for_profile(profile: str) -> Optional[Path]:
     category="meta",
     tags=["meta", "returns"],
 )
-def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[List[str]] = None, manifest_path: Path = Path("configs/manifest.json"), base_dir: Optional[Path] = None):
+def build_meta_returns(
+    meta_profile: str,
+    output_path: str,
+    profiles: Optional[List[str]] = None,
+    manifest_path: Path = Path("configs/manifest.json"),
+    base_dir: Optional[Path] = None,
+    depth: int = 0,
+    visited: Optional[List[str]] = None,
+):
     settings = get_settings()
     # Default to lakehouse if no base_dir provided (Legacy compatibility)
     work_dir = base_dir or settings.lakehouse_dir
+
+    # CR-Hardening: Recursion Safety (Phase 560)
+    visited = visited or []
+    if meta_profile in visited:
+        raise RuntimeError(f"Circular dependency detected in meta-profiles: {' -> '.join(visited)} -> {meta_profile}")
+    if depth > 3:
+        raise RuntimeError(f"Max fractal depth exceeded (depth={depth}) for profile: {meta_profile}")
+
+    current_visited = visited + [meta_profile]
 
     if not manifest_path.exists():
         logger.error(f"Manifest missing: {manifest_path}")
@@ -144,7 +161,7 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
 
                 # 1. Build Sub-Meta Returns
                 sub_returns_file = work_dir / f"meta_returns_{sub_meta}_{prof}.pkl"
-                build_meta_returns(sub_meta, str(sub_returns_file), [prof], manifest_path, base_dir=work_dir)
+                build_meta_returns(sub_meta, str(sub_returns_file), [prof], manifest_path, base_dir=work_dir, depth=depth + 1, visited=current_visited)
 
                 if not sub_returns_file.exists():
                     logger.warning(f"  [{s_id}] Failed to build sub-meta returns for {sub_meta}")

@@ -156,6 +156,16 @@ class BacktestEngine:
                 except Exception:
                     self.stats = pd.DataFrame()
 
+    def _is_meta_profile(self, profile_name: str) -> bool:
+        """Checks if a profile is a meta-portfolio (contains sleeves)."""
+        manifest_path = Path("configs/manifest.json")
+        if not manifest_path.exists():
+            return False
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+        prof_cfg = manifest.get("profiles", {}).get(profile_name, {})
+        return "sleeves" in prof_cfg
+
     def run_tournament(self, mode: str = "production", train_window: Optional[int] = None, test_window: Optional[int] = None, step_size: Optional[int] = None, run_dir: Optional[Path] = None):
         """Run a rolling-window backtest tournament."""
         if self.returns.empty:
@@ -195,6 +205,10 @@ class BacktestEngine:
         n_obs = len(self.returns)
         windows = list(range(train_window, n_obs - test_window, step_size))
         logger.info(f"Tournament Started: {n_obs} rows available. Windows: count={len(windows)}, train={train_window}, test={test_window}, step={step_size}")
+
+        is_meta = self._is_meta_profile(config.profile or "")
+        if is_meta:
+            logger.info(f"🚀 RECURSIVE META-BACKTEST DETECTED: {config.profile}")
 
         for i in windows:
             current_date = self.returns.index[i]
@@ -260,6 +274,16 @@ class BacktestEngine:
                         logger.warning(f"  [Window {i}] Dynamic Filter failed: {e}. Using static universe.")
 
             # 2. Pillar 1: Universe Selection
+
+            # CR-837: Fractal Recursive Backtest (Phase 570)
+            if is_meta:
+                # 1. Aggregate Sleeve Returns for current window
+                from scripts.build_meta_returns import build_meta_returns
+
+                # We build the meta-matrix using the train_rets of each sleeve.
+                # This requires sub-backtests to be run (or cached).
+                # Implementation details for dynamic meta-rebalancing follow...
+                pass
 
             # CR-265: Dynamic Regime Detection
             regime_name = "NORMAL"

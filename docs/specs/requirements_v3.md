@@ -473,6 +473,16 @@ Requirements:
  1. **Prometheus Standard**: The platform MUST expose execution metrics (durations, success/failure counts, resource usage) via a Prometheus-compatible scrape endpoint or Pushgateway.
  2. **Stage-Level Granularity**: Metrics MUST be emitted at the individual stage level, allowing for bottleneck identification in real-time.
  3. **Live Dashboards**: The platform SHOULD provide Grafana dashboard templates for visualizing pipeline health, execution throughput, and alpha quality drift.
+
+ ## 16. Numerical Stability & Fractal Safety (v4.3+)
+
+ ### 16.1 Stable Sum Gate
+ 1. **Weight Conservation**: The weight flattening stage MUST verify that the sum of projected physical weights matches the original meta-allocation (tolerance: $1 \times 10^{-4}$).
+ 2. **Conservation Failure**: If weight leakage is detected, the system MUST log a warning. In strict stability mode (`TV_STRICT_STABILITY=1`), the pipeline MUST abort.
+
+ ### 16.2 Fractal Recursion Guard
+ 1. **Depth Limit**: Recursive pipeline stages (Aggregation, Flattening) MUST enforce a maximum fractal depth (default = 3) to prevent infinite loops.
+ 2. **Cycle Detection**: The orchestrator MUST track the profile call stack and abort if a circular dependency is detected in the manifest.
  
  ## 12. The Unified DAG Orchestrator (v3.9+)
  

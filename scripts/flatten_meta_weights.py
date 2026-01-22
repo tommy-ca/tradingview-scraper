@@ -5,7 +5,7 @@ import os
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import pandas as pd
 
@@ -24,9 +24,19 @@ logger = logging.getLogger("flatten_meta_weights")
     category="risk",
     tags=["meta", "risk"],
 )
-def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] = None):
+def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] = None, depth: int = 0, visited: Optional[List[str]] = None):
     # Resolve Meta Profile from settings if not passed
     m_prof = meta_profile or os.getenv("PROFILE") or "meta_production"
+
+    # CR-Hardening: Recursion Safety (Phase 560)
+    visited = visited or []
+    if m_prof in visited:
+        raise RuntimeError(f"Circular dependency detected in meta-profiles: {' -> '.join(visited)} -> {m_prof}")
+    if depth > 3:
+        raise RuntimeError(f"Max fractal depth exceeded (depth={depth}) for profile: {m_prof}")
+
+    current_visited = visited + [m_prof]
+
     target_profile = profile or "barbell"  # Default legacy
     settings = get_settings()
     lakehouse_dir = settings.lakehouse_dir
@@ -110,7 +120,7 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
             # Ensure sub-meta is flattened first
             if not sub_flat_path.exists():
                 logger.info(f"Sub-meta {sub_meta} flattened file missing. Generating...")
-                flatten_weights(sub_meta, str(sub_flat_path), target_profile)
+                flatten_weights(sub_meta, str(sub_flat_path), target_profile, depth=depth + 1, visited=current_visited)
 
             if sub_flat_path.exists():
                 with open(sub_flat_path, "r") as f:
@@ -212,6 +222,15 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
                 "Type": detail.get("Type", "CORE"),
             }
         )
+
+    # CR-Hardening: Stable Sum Gate (Phase 560)
+    expected_sum = sum(sleeve_weights.values())
+    actual_sum = sum(w["Weight"] for w in output_weights)
+
+    if abs(expected_sum - actual_sum) > 1e-4:
+        logger.warning(f"⚠️ Weight Leakage Detected: Meta Sum={expected_sum:.4f}, Atomic Sum={actual_sum:.4f}")
+        if os.getenv("TV_STRICT_STABILITY") == "1":
+            raise RuntimeError(f"Weight Conservation Failure: {expected_sum} != {actual_sum}")
 
     result = {
         "metadata": {"meta_profile": m_prof, "risk_profile": target_profile, "sleeve_weights": sleeve_weights, "generated_at": str(pd.Timestamp.now())},
