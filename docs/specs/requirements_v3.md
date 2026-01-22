@@ -483,6 +483,13 @@ Requirements:
  ### 16.2 Fractal Recursion Guard
  1. **Depth Limit**: Recursive pipeline stages (Aggregation, Flattening) MUST enforce a maximum fractal depth (default = 3) to prevent infinite loops.
  2. **Cycle Detection**: The orchestrator MUST track the profile call stack and abort if a circular dependency is detected in the manifest.
+
+ ## 17. Fractal Backtesting Protocol (v4.4+)
+ 
+ ### 17.1 Recursive Walk-Forward
+ 1. **Two-Tier Optimization**: Meta-portfolio backtests MUST simulate rebalancing at both the atomic sleeve level and the meta-allocation level.
+ 2. **Dynamic Meta-Rebalancing**: At each rebalance window, the meta-allocation between sleeves MUST be re-calculated using the realized returns of those sleeves up to that point.
+ 3. **Performance Consistency**: Equity curves generated for a meta-portfolio MUST be the result of a continuous walk-forward process that accounts for sleeve-level churn and meta-level reallocation.
  
  ## 12. The Unified DAG Orchestrator (v3.9+)
  

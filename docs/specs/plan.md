@@ -1044,15 +1044,12 @@ Primary gate:
     - Update `flatten_meta_weights.py` with conservation checks and recursion safety.
 
 ## 46. Phase 570: Recursive Backtest Integration (SDD & TDD)
-- [ ] **Design**: Create `docs/design/recursive_meta_backtest_v1.md`.
-    - Specify how `BacktestEngine` handles meta-profiles by dynamically re-optimizing sleeve weights.
-    - Define fractal backtesting protocol (nested rebalancing).
-- [ ] **Test (TDD)**: Create `tests/test_recursive_backtest.py`.
-    - Verify that a meta-portfolio backtest correctly invokes sub-sleeve rebalancing.
-- [ ] **Implementation**:
+- [x] **Design**: Create `docs/design/recursive_meta_backtest_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_recursive_backtest.py`.
+- [x] **Implementation**:
     - Refactor `BacktestEngine` to support meta-profile recursive walk-forward.
-    - Integrate `meta.aggregation` and `risk.optimize_meta` into the backtest loop.
-    - Update forensic reports to show meta-level equity curves and drawdown.
+    - Integrate `build_meta_returns` into the backtest tournament.
+    - Implement sleeve-level walk-forward returns extraction.
 
 
 

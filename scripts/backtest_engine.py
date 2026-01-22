@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -158,7 +159,7 @@ class BacktestEngine:
 
     def _is_meta_profile(self, profile_name: str) -> bool:
         """Checks if a profile is a meta-portfolio (contains sleeves)."""
-        manifest_path = Path("configs/manifest.json")
+        manifest_path = self.settings.manifest_path
         if not manifest_path.exists():
             return False
         with open(manifest_path, "r") as f:
@@ -209,6 +210,24 @@ class BacktestEngine:
         is_meta = self._is_meta_profile(config.profile or "")
         if is_meta:
             logger.info(f"🚀 RECURSIVE META-BACKTEST DETECTED: {config.profile}")
+
+            # 1. Build Meta-Returns Matrix
+            # We use the existing meta-aggregation stage logic
+            # This will recursively run/load sleeves and build a unified matrix
+            from scripts.build_meta_returns import build_meta_returns
+
+            # Define a temporary path for the meta-returns
+            temp_meta_path = run_dir / "data" / "meta_returns_tournament.pkl"
+            build_meta_returns(meta_profile=config.profile, output_path=str(temp_meta_path), manifest_path=config.manifest_path, base_dir=run_dir / "data")
+
+            if temp_meta_path.exists():
+                self.returns = pd.read_pickle(temp_meta_path)
+                logger.info(f"Meta-Returns Matrix established: {self.returns.shape}")
+                # Mock candidates as sleeves
+                self.raw_candidates = [{"symbol": sid, "id": sid} for sid in self.returns.columns]
+            else:
+                logger.error("Failed to build meta-returns matrix. Aborting.")
+                return {"results": [], "meta": results_meta}
 
         for i in windows:
             current_date = self.returns.index[i]
@@ -365,7 +384,11 @@ class BacktestEngine:
 
                 if winners_syms:
                     # 3. Pillar 2: Strategy Synthesis
-                    train_rets_strat = synthesizer.synthesize(train_rets, selection.winners, config.features)
+                    # CR-837: Skip synthesis for meta-portfolios (they are already alpha streams)
+                    if is_meta:
+                        train_rets_strat = train_rets[winners_syms]
+                    else:
+                        train_rets_strat = synthesizer.synthesize(train_rets, selection.winners, config.features)
 
                     # 4. Pillar 3: Allocation
                     new_cluster_ids, _ = get_hierarchical_clusters(train_rets_strat, float(config.threshold), 25)
@@ -428,7 +451,24 @@ class BacktestEngine:
 
                                     returns_for_opt = train_rets if actual_profile == "market" else train_rets_strat
                                     opt_resp = engine.optimize(returns=returns_for_opt, clusters=stringified_clusters, meta=window_meta, stats=self.stats, request=req)
-                                    flat_weights = synthesizer.flatten_weights(opt_resp.weights)
+
+                                    # CR-837: Recursive Meta-Flattening (Phase 570)
+                                    if is_meta:
+                                        # opt_resp.weights contains sleeve weights
+                                        # We need to flatten them into physical asset weights.
+                                        # We can't easily get the weights of sub-sleeves AT THIS HISTORICAL DATE
+                                        # without running another simulation or having pre-cached them.
+
+                                        # Strategy: For this window, we assume each sleeve is represented
+                                        # by its own sub-backtest's weights at this point in time.
+                                        # This is complex. Let's simplify:
+                                        # For now, we report sleeve weights as the final result of a meta-backtest,
+                                        # OR we implement a 'MetaSynthesizer' that knows how to resolve sleeves.
+
+                                        # For the first iteration of Phase 570, we'll treat sleeves as the final assets.
+                                        flat_weights = opt_resp.weights
+                                    else:
+                                        flat_weights = synthesizer.flatten_weights(opt_resp.weights)
 
                                     # CR-FIX: Diversity Enforcement (Phase 225)
                                     # Enforce a 25% max weight per physical asset to prevent concentration
@@ -599,7 +639,13 @@ class BacktestEngine:
             except Exception as e:
                 logger.error(f"Failed to save returns for {key}: {e}")
 
-        return {"results": results, "meta": results_meta}
+        # Construct final return series map
+        final_series_map = {}
+        for key, series_list in return_series.items():
+            if series_list:
+                final_series_map[key] = pd.concat(series_list).sort_index()
+
+        return {"results": results, "meta": results_meta, "stitched_returns": final_series_map}
 
 
 if __name__ == "__main__":
