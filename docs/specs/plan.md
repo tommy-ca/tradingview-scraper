@@ -965,5 +965,11 @@ Primary gate:
     - Update `SleeveActor` to collect OTel spans from its local buffer.
     - Update `RayComputeEngine` to aggregate spans from all actors.
     - Integrate merged traces into the master `forensic_trace.json`.
-    - Implement `FoundationHealthRegistry` to track "Golden" status.
+
+## 37. Phase 480: Multi-Engine Dynamic Selection (SDD & TDD)
+- [x] **Design**: Create `docs/design/multi_engine_selection_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_ensemble_selection.py`.
+- [x] **Implementation**:
+    - Implement `EnsembleRanker` in `tradingview_scraper/pipelines/selection/rankers/ensemble.py`.
+    - Update `alpha.policy` to support multi-ranker ensembling via `RankerFactory`.
 

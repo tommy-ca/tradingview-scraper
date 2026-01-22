@@ -14,13 +14,15 @@ class BaseRanker(ABC):
     def rank(self, candidates: List[str], context: SelectionContext, ascending: bool = False) -> List[str]:
         """
         Sorts the candidate list based on the ranker's logic.
-
-        Args:
-            candidates: List of symbol IDs (atoms) to sort.
-            context: Full selection context (features, inference_outputs, metadata).
-            ascending: Sort direction (True=Low->High, False=High->Low).
-
-        Returns:
-            A new list of symbol IDs sorted by rank.
         """
         pass
+
+    def score(self, candidates: List[str], context: SelectionContext) -> List[float]:
+        """
+        Optional: returns raw scores for candidates.
+        If not implemented, returns ranks as scores.
+        """
+        # Default implementation: use rank to return normalized scores [0, 1]
+        sorted_ids = self.rank(candidates, context, ascending=True)
+        id_to_rank = {id_: i / (len(sorted_ids) - 1) if len(sorted_ids) > 1 else 1.0 for i, id_ in enumerate(sorted_ids)}
+        return [id_to_rank.get(c, 0.0) for c in candidates]

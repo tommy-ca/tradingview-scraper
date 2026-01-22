@@ -26,5 +26,19 @@ class RankerFactory:
             strategy = config.get("strategy", "trend_following")
             return StrategyRegimeRanker(strategy=strategy)
 
+        if method == "ensemble":
+            from tradingview_scraper.pipelines.selection.rankers.ensemble import EnsembleRanker
+
+            ensemble_config = config.get("ensemble", {})
+            rankers_map = {}
+            weights_map = {}
+
+            for name, r_config in ensemble_config.items():
+                r_method = r_config.get("method", "mps")
+                rankers_map[name] = RankerFactory.get_ranker(r_method, r_config)
+                weights_map[name] = float(r_config.get("weight", 1.0))
+
+            return EnsembleRanker(rankers=rankers_map, weights=weights_map)
+
         # Default fallback
         return MPSRanker()

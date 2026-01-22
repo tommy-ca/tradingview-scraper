@@ -453,6 +453,13 @@ Requirements:
  1. **Repair-Mandatory Lifecycle**: The DataOps pipeline (`flow-data`) MUST include a mandatory repair pass. No foundation is considered "Golden" until all discoverable gaps are either filled or declared unrepairable.
  2. **Health Registry**: The Lakehouse MUST maintain a `foundation_health.json` registry tracking the audit hash and repair status of every symbol.
  3. **Fail-Fast Foundation Gate**: The Alpha pipeline MUST abort if any required symbol in the run manifest lacks a "Healthy" status in the foundation registry.
+
+ ## 14. Multi-Engine Selection Policy (v4.1+)
+ 
+ ### 14.1 Ensemble Scoring
+ 1. **Weight of Evidence (WoE)**: Selection decisions MUST be backed by multiple independent ranking engines (e.g., Log-MPS + Signal Quality + Regime Fit).
+ 2. **Dynamic Weighting**: Ranker weights MUST be adjustable via the pipeline manifest to allow tuning for specific market environments.
+ 3. **Consensus Requirement**: Candidates MUST meet a minimum ensemble score threshold to be recruited into the winning pool, ensuring high-conviction selection.
  
  ## 12. The Unified DAG Orchestrator (v3.9+)
  
