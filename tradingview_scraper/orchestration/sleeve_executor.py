@@ -3,7 +3,7 @@ import os
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import ray
 
@@ -45,8 +45,6 @@ class SleeveActorImpl:
 
         # 4. Workspace Isolation (Mixed Symlink Strategy)
         self._setup_workspace()
-
-    def _setup_workspace(self):
 
     def _setup_workspace(self):
         """
@@ -125,6 +123,21 @@ class SleeveActorImpl:
 
         duration = time.time() - start_time
         return {"profile": profile, "run_id": run_id, "status": status, "duration": duration, "error": error_msg, "node": ray.util.get_node_ip_address()}
+
+    def get_telemetry_spans(self) -> List[Dict[str, Any]]:
+        """Returns the captured telemetry spans from this worker."""
+        # Find the forensic exporter in the tracer provider
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
+
+        tp = trace.get_tracer_provider()
+        # opentelemetry-sdk internal access
+        if hasattr(tp, "_active_span_processor"):
+            for proc in tp._active_span_processor._span_processors:
+                if isinstance(proc, SimpleSpanProcessor) and isinstance(proc.span_exporter, ForensicSpanExporter):
+                    return proc.span_exporter.spans
+        return []
 
     def _export_artifacts(self, run_id: str):
         """Copies local artifacts back to the host filesystem."""

@@ -88,7 +88,32 @@ class RayComputeEngine:
         # 3. Collect Results
         results = ray.get(futures)
 
-        # 4. Cleanup Actors
+        # 4. Collect Distributed Telemetry (Phase 470)
+        from tradingview_scraper.telemetry.provider import TelemetryProvider
+
+        telemetry = TelemetryProvider()
+        if telemetry.is_initialized:
+            # opentelemetry-sdk internal access to our forensic exporter
+            from opentelemetry import trace
+            from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+            from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
+
+            tp = trace.get_tracer_provider()
+            forensic_exporter = None
+            if hasattr(tp, "_active_span_processor"):
+                for proc in tp._active_span_processor._span_processors:
+                    if isinstance(proc, SimpleSpanProcessor) and isinstance(proc.span_exporter, ForensicSpanExporter):
+                        forensic_exporter = proc.span_exporter
+                        break
+
+            if forensic_exporter:
+                logger.info(f"Collecting telemetry from {len(actors)} worker nodes")
+                telemetry_futures = [a.get_telemetry_spans.remote() for a in actors]
+                worker_traces = ray.get(telemetry_futures)
+                for spans in worker_traces:
+                    forensic_exporter.spans.extend(spans)
+
+        # 5. Cleanup Actors
         for a in actors:
             ray.kill(a)
 

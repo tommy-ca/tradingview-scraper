@@ -440,6 +440,7 @@ Requirements:
  2. **Lineage Linkage**: Every optimized portfolio MUST link back to the exact version (timestamp/hash) of the `features_matrix.parquet` used for inference.
  3. **Traceability**: The `trace_id` MUST be injected into all audit ledger entries across all L0-L4 stages.
  4. **Forensic Telemetry**: Every production run MUST persist its full OTel trace (spans and durations) to a `forensic_trace.json` file in the run directory for performance auditing.
+ 5. **Distributed Trace Unification**: Traces generated on parallel Ray worker nodes MUST be collected and unified into the master `forensic_trace.json` to provide a complete view of distributed executions.
  
  ## 13. Advanced DataOps Hardening (v4.0+)
  

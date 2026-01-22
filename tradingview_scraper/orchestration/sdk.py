@@ -73,13 +73,18 @@ class QuantSDK:
             logger.error(f"Foundation Gate FAILED: Missing files: {missing}")
             return False
 
-        # 2. Registry Check
+                # 2. Registry Check
         registry = FoundationHealthRegistry(path=lakehouse / "foundation_health.json")
-        # We need the symbols from the manifest/run context to check registry
-        # For now, we log health summary
         logger.info(f"Foundation Registry: {len(registry.data)} symbols tracked")
+        
+        # If specific symbols are provided (e.g. from a manifest), we should check them
+        # For now, we report the count of toxic assets
+        toxic_count = len([s for s, m in registry.data.items() if m.get("status") == "toxic"])
+        if toxic_count > 0:
+            logger.warning(f"Foundation Gate: Found {toxic_count} toxic assets in registry")
 
-        # 3. Freshness check (Optional, depending on STRICT_HEALTH)
+        # 3. Freshness check
+ (Optional, depending on STRICT_HEALTH)
         if os.getenv("TV_STRICT_HEALTH") == "1":
             import time
 

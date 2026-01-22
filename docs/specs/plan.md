@@ -949,17 +949,21 @@ Primary gate:
     - Update report generators (`risk.report_meta` and atomic reporting) to include Telemetry Stats.
 
 ## 35. Phase 460: Data Pipeline Hardening (SDD & TDD)
-- [ ] **Spec**: Update `requirements_v3.md` with Microstructure Toxicity and Automatic Repair rules.
-- [ ] **Design**: Create `docs/design/data_pipeline_hardening_v1.md`.
-    - Define Advanced Toxicity metrics (Volume Z-Score, Price Stalls).
-    - Specify the "Golden Foundation" lifecycle.
-- [ ] **Test (TDD)**: Create `tests/test_advanced_toxicity.py`.
-    - Verify Volume Spike detection (> 10 sigma).
-    - Verify Price Stall detection (> 3 consecutive bars).
-- [ ] **Test (TDD)**: Create `tests/test_auto_repair.py`.
-    - Verify repair engine triggers on gap discovery.
-- [ ] **Implementation**:
+- [x] **Spec**: Update `requirements_v3.md` with Microstructure Toxicity and Automatic Repair rules.
+- [x] **Design**: Create `docs/design/data_pipeline_hardening_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_advanced_toxicity.py`.
+- [x] **Test (TDD)**: Create `tests/test_auto_repair.py`.
+- [x] **Implementation**:
     - Build `AdvancedToxicityValidator` in `tradingview_scraper/pipelines/selection/base.py`.
     - Automate `data-repair` within the `flow-data` cycle (Makefile update).
+    - Implement `FoundationHealthRegistry` to track "Golden" status.
+
+## 36. Phase 470: Distributed Forensic Merging (SDD & TDD)
+- [x] **Design**: Create `docs/design/distributed_forensic_merging_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_distributed_telemetry_merge.py`.
+- [x] **Implementation**:
+    - Update `SleeveActor` to collect OTel spans from its local buffer.
+    - Update `RayComputeEngine` to aggregate spans from all actors.
+    - Integrate merged traces into the master `forensic_trace.json`.
     - Implement `FoundationHealthRegistry` to track "Golden" status.
 
