@@ -11,6 +11,12 @@
 - [x] **Validation**: Verify that the tournament output includes meta-level Sharpe and Drawdown.
 - [x] **Documentation**: Update forensic reports to display recursive backtest results.
 
+## 49. Phase 600: Production Deployment Ready (Final Audit)
+- [x] **Design**: Create `docs/design/production_deployment_audit_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_production_integrity.py`.
+- [x] **Execution**: Run `make flow-meta-production PROFILE=meta_production`.
+- [x] **Validation**: Final sign-off on the generated institutional reports.
+
 ## 3. Streamlining & Optimization
 - [x] **Optimize `flow-data`**:
     - Parallelize `data-ingest` and `feature-ingest` in Makefile.
