@@ -14,15 +14,21 @@ except ImportError:
     DataProfile = None  # type: ignore
     get_symbol_profile = None  # type: ignore
 
+from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
+from tradingview_scraper.settings import get_settings
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("repair_data")
 
 
 class RepairService:
-    def __init__(self, lakehouse_dir: Path = Path("data/lakehouse")):
-        self.lakehouse_dir = lakehouse_dir
+    def __init__(self, lakehouse_dir: Path | None = None):
+        settings = get_settings()
+        self.lakehouse_dir = lakehouse_dir or settings.lakehouse_dir
+        self.registry = FoundationHealthRegistry(path=self.lakehouse_dir / "foundation_health.json")
+
         if PersistentDataLoader:
-            self.loader = PersistentDataLoader()
+            self.loader = PersistentDataLoader(lakehouse_path=str(self.lakehouse_dir))
         else:
             self.loader = None
             logger.error("PersistentDataLoader not available.")
@@ -45,9 +51,11 @@ class RepairService:
         try:
             with open(path, "r") as f:
                 data = json.load(f)
-                if isinstance(data, dict) and "data" in data:
+                if isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
                     return data["data"]
-                return data
+                if isinstance(data, list):
+                    return data
+                return []
         except Exception as e:
             logger.error(f"Failed to load candidates: {e}")
             return []
@@ -62,15 +70,18 @@ class RepairService:
         targets = []
         for c in candidates:
             symbol = c.get("symbol")
-            if not symbol:
+            if not symbol or not self.loader:
                 continue
 
             # Determine profile for efficient filtering
             # We can use the catalog attached to loader, or the helper
             meta = self.loader.catalog.get_instrument(symbol)
-            profile = get_symbol_profile(symbol, meta)
 
-            is_crypto = profile == DataProfile.CRYPTO
+            profile = None
+            if get_symbol_profile:
+                profile = get_symbol_profile(symbol, meta)
+
+            is_crypto = profile == DataProfile.CRYPTO if DataProfile else False
 
             if asset_type == "crypto" and not is_crypto:
                 continue
@@ -95,6 +106,14 @@ class RepairService:
                         total_filled += filled
                         symbols_repaired += 1
                         logger.info(f"  -> Filled {filled} gaps.")
+                        self.registry.update_status(symbol, status="healthy", gaps_filled=filled)
+                    else:
+                        # If no gaps found and already healthy, keep it.
+                        # If it was toxic, maybe repair fixed it?
+                        # (Usually repair only fills gaps, doesn't fix price stalls)
+                        pass
+
+                    self.registry.save()
                     break
                 except Exception as e:
                     if "429" in str(e) and attempt < retries:
@@ -115,11 +134,12 @@ if __name__ == "__main__":
     parser.add_argument("--candidates", help="Path to candidates file")
     parser.add_argument("--type", choices=["crypto", "trad", "all"], default="all", help="Asset type filter")
     parser.add_argument("--max-fills", type=int, default=15, help="Max gaps to fill per symbol")
-    parser.add_argument("--lakehouse", default="data/lakehouse", help="Lakehouse root")
+    parser.add_argument("--lakehouse", help="Lakehouse root")
 
     args = parser.parse_args()
 
-    service = RepairService(lakehouse_dir=Path(args.lakehouse))
+    lakehouse_arg = Path(args.lakehouse) if args.lakehouse else None
+    service = RepairService(lakehouse_dir=lakehouse_arg)
     candidates = service.load_candidates(args.candidates)
 
     if candidates:

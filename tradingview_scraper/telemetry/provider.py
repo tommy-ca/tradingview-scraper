@@ -1,6 +1,8 @@
-import threading
 import logging
+import os
+import threading
 from pathlib import Path
+
 from typing import Any, Dict, List, Optional
 
 from opentelemetry import metrics, trace, _logs

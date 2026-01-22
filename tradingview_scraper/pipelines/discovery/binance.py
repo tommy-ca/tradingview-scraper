@@ -7,6 +7,8 @@ from tradingview_scraper.pipelines.discovery.base import (
     BaseDiscoveryScanner,
     CandidateMetadata,
 )
+from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
+from tradingview_scraper.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,10 @@ class BinanceDiscoveryScanner(BaseDiscoveryScanner):
     Discovery scanner that sources assets from Binance (Spot/Perp) via CCXT.
     """
 
+    def __init__(self):
+        self.settings = get_settings()
+        self.registry = FoundationHealthRegistry(path=self.settings.lakehouse_dir / "foundation_health.json")
+
     @property
     def name(self) -> str:
         return "binance"
@@ -23,12 +29,6 @@ class BinanceDiscoveryScanner(BaseDiscoveryScanner):
     def discover(self, params: Dict[str, Any]) -> List[CandidateMetadata]:
         """
         Executes discovery on Binance and maps results to CandidateMetadata.
-
-        Args:
-            params:
-                - asset_type: "spot" (default) or "swap" (futures)
-                - quote: "USDT" (default)
-                - min_volume: Minimum 24h volume filter
         """
         asset_type = params.get("asset_type", "spot")
         quote = params.get("quote", "USDT")
@@ -50,7 +50,19 @@ class BinanceDiscoveryScanner(BaseDiscoveryScanner):
                 if market.get("quote") != quote:
                     continue
 
-                # Filter by volume if ticker available
+                # 1. Registry-Aware Veto (Phase 520)
+                base = market.get("base")
+                quote_curr = market.get("quote")
+                clean_symbol = f"{base}{quote_curr}"
+                identity = f"BINANCE:{clean_symbol}"
+
+                if not self.registry.is_healthy(identity) and identity in self.registry.data:
+                    reg_entry = self.registry.data[identity]
+                    if reg_entry.get("status") == "toxic":
+                        logger.info(f"Discovery Gate: Vetoing known TOXIC asset: {identity}")
+                        continue
+
+                # 2. Filter by volume if ticker available
                 ticker = tickers.get(symbol, {})
                 volume_raw = ticker.get("quoteVolume", 0)
                 volume = float(volume_raw) if volume_raw is not None else 0.0
@@ -59,14 +71,6 @@ class BinanceDiscoveryScanner(BaseDiscoveryScanner):
                     continue
 
                 # Map to CandidateMetadata
-                # CCXT symbol is typically BTC/USDT.
-                # Downstream expects BINANCE:BTCUSDT
-                base = market.get("base")
-                quote_curr = market.get("quote")
-                clean_symbol = f"{base}{quote_curr}"
-
-                identity = f"BINANCE:{clean_symbol}"
-
                 cand = CandidateMetadata(
                     symbol=identity,
                     exchange="BINANCE",

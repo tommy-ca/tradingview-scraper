@@ -9,6 +9,11 @@ from tradingview_scraper.pipelines.discovery.base import (
     BaseDiscoveryScanner,
     CandidateMetadata,
 )
+from tradingview_scraper.pipelines.selection.base import (
+    AdvancedToxicityValidator,
+    FoundationHealthRegistry,
+)
+from tradingview_scraper.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +23,10 @@ class TradingViewDiscoveryScanner(BaseDiscoveryScanner):
     Discovery scanner that leverages the TradingView Screener API
     via FuturesUniverseSelector.
     """
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.registry = FoundationHealthRegistry(path=self.settings.lakehouse_dir / "foundation_health.json")
 
     @property
     def name(self) -> str:
@@ -37,18 +46,35 @@ class TradingViewDiscoveryScanner(BaseDiscoveryScanner):
             selector = FuturesUniverseSelector(cfg)
 
             # 2. Run the selector
-            # Note: run() handles screening and post-filtering
             result = selector.run()
 
             if result.get("status") not in ["success", "partial_success"]:
                 logger.error(f"TradingView screen failed: {result.get('errors')}")
                 return []
 
-            # 3. Map to CandidateMetadata
+            # 3. Map to CandidateMetadata with Sanity Gate
             candidates = []
             for row in result.get("data", []):
                 raw_symbol = row.get("symbol")
                 if not raw_symbol:
+                    continue
+
+                # Registry-Aware Veto (Phase 520)
+                if not self.registry.is_healthy(raw_symbol) and raw_symbol in self.registry.data:
+                    reg_entry = self.registry.data[raw_symbol]
+                    if reg_entry.get("status") == "toxic":
+                        logger.info(f"Discovery Gate: Vetoing known TOXIC asset: {raw_symbol} (Reason: {reg_entry.get('reason')})")
+                        continue
+
+                # Microstructure Veto (Fail-fast in discovery)
+                # Note: Scanners often return single OHLCV snapshot.
+                # If they return a list (historical), we can use AdvancedToxicityValidator.
+                # FuturesUniverseSelector rows contain 'volume' and 'close'.
+
+                # Heuristic: if selector didn't already filter it, we do a basic check here
+                vol = row.get("volume", 0)
+                if vol == 0:
+                    logger.info(f"Discovery Gate: Vetoing zero-volume asset: {raw_symbol}")
                     continue
 
                 # Extract exchange from symbol if not present in row

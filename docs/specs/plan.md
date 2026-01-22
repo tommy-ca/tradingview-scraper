@@ -994,14 +994,25 @@ Primary gate:
     - Replace hardcoded Prometheus logic with OTel-native configuration.
 
 ## 40. Phase 510: OTLP Forensic Export & Collector Integration (SDD & TDD)
-- [ ] **Design**: Create `docs/design/otlp_collector_v1.md`.
-    - Define OTLP export configuration for Traces, Metrics, and Logs.
-    - Specify "Universal Frontend" strategy using OTel APIs.
-- [ ] **Test (TDD)**: Create `tests/test_otlp_export_config.py`.
-    - Verify that OTLP endpoints are correctly resolved from environment variables.
-- [ ] **Implementation**:
+- [x] **Design**: Create `docs/design/otlp_collector_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_otlp_export_config.py`.
+- [x] **Implementation**:
     - Update `TelemetryProvider` to register OTLP exporters based on environment.
     - Standardize distributed trace merging to use OTLP propagation by default.
     - Document Grafana/OTEL Collector setup for real-time forensic viewing.
+
+## 41. Phase 520: TradingView Scanner Hardening & Data Pipeline Audit (SDD & TDD)
+- [ ] **Audit**: Create `docs/audit/data_pipeline_audit_v1.md` documenting the "Golden Path" and identified gaps.
+- [ ] **Design**: Create `docs/design/scanner_hardening_v1.md`.
+    - Specify "Sanity Gate" integration for discovery scanners.
+    - Define microstructure filters for the discovery phase (early fail-fast).
+- [ ] **Test (TDD)**: Create `tests/test_scanner_hardening.py`.
+    - Verify that scanners correctly apply `AdvancedToxicityValidator`.
+    - Verify path determinism for scanner configs.
+- [ ] **Implementation**:
+    - Refactor `TradingViewDiscoveryScanner` to utilize `AdvancedToxicityValidator`.
+    - Integrate `FoundationHealthRegistry` into the discovery phase to prevent re-scanning of known toxic assets.
+    - Update `DiscoveryPipeline` to handle fragmented scanner outputs more robustly.
+
 
 

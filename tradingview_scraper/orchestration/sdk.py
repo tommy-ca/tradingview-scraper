@@ -77,11 +77,12 @@ class QuantSDK:
         registry = FoundationHealthRegistry(path=lakehouse / "foundation_health.json")
         logger.info(f"Foundation Registry: {len(registry.data)} symbols tracked")
 
-        # If specific symbols are provided (e.g. from a manifest), we should check them
-        # For now, we report the count of toxic assets
+        # If run_id is provided, we report summary stats
         toxic_count = len([s for s, m in registry.data.items() if m.get("status") == "toxic"])
         if toxic_count > 0:
             logger.warning(f"Foundation Gate: Found {toxic_count} toxic assets in registry")
+            # Fail-fast only if STRICT_HEALTH is enabled and we have specific symbols to check
+            # (Note: we don't know the current universe here without the manifest)
 
         # 3. Freshness check
         # (Optional, depending on STRICT_HEALTH)

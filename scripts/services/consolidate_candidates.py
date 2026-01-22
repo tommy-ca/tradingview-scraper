@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List
 
+from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.candidates import normalize_candidate_record
 
@@ -18,6 +19,8 @@ def consolidate(run_id: str, output_path: str | None = None):
     if not output_path:
         output_path = str(settings.lakehouse_dir / "portfolio_candidates.json")
 
+    registry = FoundationHealthRegistry(path=settings.lakehouse_dir / "foundation_health.json")
+
     if not export_dir.exists():
         logger.error(f"Export directory not found: {export_dir}")
         return
@@ -26,6 +29,7 @@ def consolidate(run_id: str, output_path: str | None = None):
 
     by_symbol: Dict[str, Dict[str, Any]] = {}
     dropped_invalid = 0
+    dropped_toxic = 0
 
     # Find all .json files, excluding 'ohlc_' prefix just in case (though we fixed that)
     files = sorted(export_dir.glob("*.json"))
@@ -69,6 +73,14 @@ def consolidate(run_id: str, output_path: str | None = None):
                     dropped_invalid += 1
                     continue
 
+                # Registry Veto (Fail-fast in consolidation)
+                if not registry.is_healthy(sym) and sym in registry.data:
+                    reg_entry = registry.data[sym]
+                    if reg_entry.get("status") == "toxic":
+                        logger.debug(f"Consolidation Gate: Dropping known TOXIC asset: {sym}")
+                        dropped_toxic += 1
+                        continue
+
                 existing = by_symbol.get(sym)
                 if existing is None:
                     by_symbol[sym] = normalized
@@ -98,6 +110,8 @@ def consolidate(run_id: str, output_path: str | None = None):
     logger.info(f"Consolidated {len(all_candidates)} unique candidates from run {run_id}.")
     if dropped_invalid:
         logger.warning("Dropped %s invalid candidate records while consolidating (strict=%s).", dropped_invalid, strict_schema)
+    if dropped_toxic:
+        logger.warning("Dropped %s TOXIC assets found in health registry.", dropped_toxic)
 
     # Write output
     out_p = Path(output_path)

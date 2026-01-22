@@ -225,6 +225,7 @@ class TradingViewScraperSettings(BaseSettings):
     lakehouse_dir: Path = Path("data/lakehouse")
     logs_dir: Path = Path("data/logs")
     export_dir: Path = Path("data/export")
+    configs_dir: Path = Path("configs")
     summaries_dir: Path | None = None
     manifest_path: Path = Path("configs/manifest.json")
     profile: str = Field(default_factory=lambda: os.getenv("TV_PROFILE") or "")

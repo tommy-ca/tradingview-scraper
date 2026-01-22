@@ -74,7 +74,7 @@ class DiscoveryPipeline:
             scanner_paths = p_config.get("scanners", [])
             for s_path in scanner_paths:
                 # Handle path resolution (relative to configs/)
-                full_path = Path("configs") / s_path
+                full_path = self.settings.configs_dir / s_path
                 if not full_path.exists() and not full_path.suffix:
                     full_path = full_path.with_suffix(".yaml")
 
@@ -93,7 +93,7 @@ class DiscoveryPipeline:
 
             scanner_paths = s_config.get("scanners", [])
             for s_path in scanner_paths:
-                full_path = Path("configs") / s_path
+                full_path = self.settings.configs_dir / s_path
                 if not full_path.exists() and not full_path.suffix:
                     full_path = full_path.with_suffix(".yaml")
 
