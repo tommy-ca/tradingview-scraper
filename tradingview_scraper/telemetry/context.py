@@ -1,6 +1,6 @@
 from typing import Dict, Optional
-from opentelemetry import propagate, trace
-from opentelemetry.trace import Context
+from opentelemetry import propagate
+from opentelemetry.context.context import Context
 
 
 def inject_trace_context(carrier: Dict[str, str]) -> None:

@@ -393,10 +393,16 @@ Requirements:
  ## 9. Telemetry & Compute Resilience (v3.7+)
  
  ### 9.1 Observability Standard (OpenTelemetry)
- 1. **Tracing**: Every pipeline run MUST generate a unique `trace_id`. Spans MUST be created for each stage execution (`QuantSDK.run_stage`) and sub-step (`ProductionPipeline.run_step`).
- 2. **Context Propagation**: The `trace_id` MUST be propagated to distributed Ray workers to ensure end-to-end trace visibility.
- 3. **Metrics**: Standard performance metrics (Duration, Success Rate) MUST be emitted for all registered stages.
- 4. **Unified Logging**: Logs MUST be structured and MUST include `trace_id` and `span_id` when available to enable forensic correlation.
+ 1. **Signal Unification**: The platform MUST utilize the standard OpenTelemetry APIs for all observability signals: Tracing, Metrics, and Logging.
+ 2. **Standard APIs**:
+    - **Tracing**: Use `opentelemetry.trace.get_tracer` for span management.
+    - **Metrics**: Use `opentelemetry.metrics.get_meter` for instrument management (Histograms, Counters, Gauges).
+    - **Logging**: Use `opentelemetry.sdk.logs` and the standard Python `logging` bridge (OTel `LoggingHandler`).
+ 3. **Backend Neutrality**: The platform MUST NOT couple business logic to specific backends (e.g., Prometheus/Jaeger). Signal delivery MUST be configurable via standard OTel environment variables (e.g., `OTEL_EXPORTER_OTLP_ENDPOINT`).
+ 4. **Context Propagation**: The `trace_id` MUST be propagated across all distributed boundaries (Ray workers, child processes) using standard W3C TraceContext headers.
+ 5. **Unified Logging**: Logs MUST be structured and MUST include `trace_id` and `span_id` linked to the active OTel context.
+ 6. **Forensic Telemetry**: Every production run MUST persist its full OTel trace (spans and durations) to a `forensic_trace.json` file in the run directory for performance auditing.
+ 7. **Distributed Trace Unification**: Traces generated on parallel Ray worker nodes MUST be collected and unified into the master `forensic_trace.json` to provide a complete view of distributed executions.
  
  ### 9.2 Ray Lifecycle & Resource Management
  1. **Graceful Shutdown**: The `RayComputeEngine` MUST ensure `ray.shutdown()` is called upon task completion or failure to prevent resource leakage.

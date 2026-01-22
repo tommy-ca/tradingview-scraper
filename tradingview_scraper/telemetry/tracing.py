@@ -30,10 +30,6 @@ def trace_span(name: str, attributes: Optional[dict] = None):
             tracer = get_tracer()
             provider = TelemetryProvider()
 
-            start_time = time.time()
-            status = "success"
-            error_type = None
-
             with tracer.start_as_current_span(name) as span:
                 if attributes:
                     for k, v in attributes.items():
@@ -45,17 +41,11 @@ def trace_span(name: str, attributes: Optional[dict] = None):
                         provider.success_counter.add(1, {"stage_id": name})
                     return result
                 except Exception as e:
-                    status = "failure"
-                    error_type = type(e).__name__
                     if hasattr(provider, "failure_counter"):
-                        provider.failure_counter.add(1, {"stage_id": name, "error_type": error_type})
+                        provider.failure_counter.add(1, {"stage_id": name, "error_type": type(e).__name__})
                     span.record_exception(e)
                     span.set_status(trace.Status(trace.StatusCode.ERROR))
                     raise
-                finally:
-                    duration = time.time() - start_time
-                    if hasattr(provider, "duration_histogram"):
-                        provider.duration_histogram.record(duration, {"stage_id": name, "status": status})
 
         return wrapper
 

@@ -982,3 +982,17 @@ Primary gate:
     - Extend `@trace_span` to increment Prometheus counters and histograms.
     - Support `TV_PROMETHEUS_PUSHGATEWAY` for batch metrics.
 
+## 39. Phase 500: OpenTelemetry API Standardization (SDD & TDD)
+- [ ] **Spec**: Update `requirements_v3.md` with Signal Unification and API standards.
+- [ ] **Design**: Create `docs/design/telemetry_standard_v2.md`.
+- [ ] **Test (TDD)**: Create `tests/test_otel_logging_bridge.py`.
+    - Verify that standard logging is captured by OTel.
+- [ ] **Test (TDD)**: Create `tests/test_otel_metrics_api.py`.
+    - Verify standard OTel meter instruments.
+- [ ] **Implementation**:
+    - Add `opentelemetry-sdk-logs` and `opentelemetry-exporter-otlp`.
+    - Refactor `TelemetryProvider` for standard API compliance.
+    - Migrate logging to OTel `LoggingHandler`.
+    - Replace hardcoded Prometheus logic with OTel-native configuration.
+
+
