@@ -77,6 +77,9 @@ def map_to_probability(series: pd.Series, method: str = "rank", sigma: float = 3
     - minmax: Linear scaling relative to window extrema.
     - cdf: Cumulative Distribution Function (Normal).
     """
+    # CR-FIX: Ensure numeric Series to avoid TypeError in scipy/numpy ufuncs (Phase 353)
+    series = pd.to_numeric(series, errors="coerce")
+
     if series.empty:
         return series
 

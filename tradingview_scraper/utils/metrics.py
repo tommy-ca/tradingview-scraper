@@ -133,8 +133,8 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
             if n_obs < 30:
                 # LINEAR SCALING (Arithmetic Simple)
                 daily_mean = float(rets.mean())
-                annualized_return = daily_mean * 252.0
-                vol = float(rets.std() * math.sqrt(252.0))
+                annualized_return = daily_mean * float(ann_factor)
+                vol = float(rets.std() * math.sqrt(float(ann_factor)))
                 realized_vol = float(np.clip(vol, 0.0, 5.0))
                 sharpe = annualized_return / (vol + 1e-9)
             else:

@@ -1,9 +1,11 @@
 import logging
-from typing import Any, Dict, Set
-
-import pandas as pd
+from typing import Any, Dict, List, Optional, Set
 
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
+from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
+from tradingview_scraper.pipelines.selection.filters.darwinian import DarwinianFilter
+from tradingview_scraper.pipelines.selection.filters.friction import FrictionFilter
+from tradingview_scraper.pipelines.selection.filters.predictability import PredictabilityFilter
 from tradingview_scraper.settings import get_settings
 
 logger = logging.getLogger("pipelines.selection.policy")
@@ -14,6 +16,9 @@ class SelectionPolicyStage(BasePipelineStage):
     Stage 5: Selection Policy.
     Applies vetoes, executes Top-N recruitment per cluster, and handles HTR fallbacks.
     """
+
+    def __init__(self, filters: Optional[List[BaseFilter]] = None):
+        self.filters = filters or [DarwinianFilter(), PredictabilityFilter(), FrictionFilter()]
 
     @property
     def name(self) -> str:
@@ -39,8 +44,17 @@ class SelectionPolicyStage(BasePipelineStage):
         relaxation_stage = int(params.get("relaxation_stage", 1))
         top_n = int(params.get("top_n", 2))
 
-        # 2. Apply Vetoes
-        disqualified = self._apply_vetoes(features, candidate_map, settings, params)
+        # 2. Apply Vetoes (Modular Filter Chain)
+        disqualified: Set[str] = set()
+        for f in self.filters:
+            _, vetoed = f.apply(context)
+            disqualified.update(vetoed)
+
+        # Ensure benchmark exemption
+        for b_idx in settings.benchmark_symbols:
+            b = str(b_idx)
+            if b in disqualified:
+                disqualified.remove(b)
 
         # Ensure we only consider candidates from the provided raw_pool (Intent Preservation)
         eligible_pool = set(candidate_map.keys())
@@ -145,10 +159,6 @@ class SelectionPolicyStage(BasePipelineStage):
 
             if longs:
                 # Use Ranker
-                # Note: Longs are usually Descending (High Score).
-                # If global direction is Ascending (for Short profile), we might have a conflict if we mix directions.
-                # However, the profile is usually Long-Only or Short-Only.
-                # If mixed, we assume the Ranker logic applies to the primary objective.
                 ranked_longs = ranker.rank(longs, context, ascending=is_ascending)
                 recruitment_buffer.update(ranked_longs[:top_n])
 
@@ -229,59 +239,3 @@ class SelectionPolicyStage(BasePipelineStage):
         context.log_event(self.name, "SelectionComplete", {"stage": relaxation_stage, "n_winners": len(winners), "n_vetoed": len(disqualified), "n_shorts": n_shorts_final})
 
         return context
-
-    def _apply_vetoes(self, features: pd.DataFrame, candidate_map: Dict[str, Any], settings: Any, params: Dict[str, Any]) -> Set[str]:
-        disqualified: Set[str] = set()
-
-        # Thresholds
-        t_entropy = float(params.get("entropy_max_threshold", settings.features.entropy_max_threshold))
-        t_efficiency = float(params.get("efficiency_min_threshold", settings.features.efficiency_min_threshold))
-
-        for s_idx in features.index:
-            s = str(s_idx)
-            # 1. Metadata Vetoes
-            meta = candidate_map.get(s, {})
-            if any(f not in meta for f in ["tick_size", "lot_size", "price_precision"]):
-                # Allow if benchmark? v3 logic exempts benchmarks.
-                pass
-
-            # 2. Predictability Vetoes (if enabled)
-            if settings.features.feat_predictability_vetoes:
-                ent = float(features.loc[s, "entropy"])
-                eff = float(features.loc[s, "efficiency"])
-                kurt = float(features.loc[s, "kurtosis"])
-                asset_vol_inv = float(features.loc[s, "stability"])
-                vol_val = 1.0 / (asset_vol_inv + 1e-9)
-
-                if ent > t_entropy:
-                    disqualified.add(s)
-                if eff < t_efficiency:
-                    disqualified.add(s)
-                # CR-630: Tail Risk Hardening
-                if kurt > 20.0:  # Institutional "Fat Tail" limit
-                    disqualified.add(s)
-                if vol_val > 2.5:  # Hard cap on asset-level volatility (250%)
-                    disqualified.add(s)
-
-                # CR-801: Velocity & Stability Vetoes (Phase 156)
-                # Prune "Blow-Off Top" artifacts identified in forensic audit (e.g. FHEUSDT.P)
-                roc_val = float(features.loc[s, "roc"]) if "roc" in features.columns else 0.0
-                vol_d_val = float(features.loc[s, "volatility_d"]) if "volatility_d" in features.columns else 0.0
-
-                if roc_val > 100.0 or roc_val < -80.0:
-                    disqualified.add(s)
-                if vol_d_val > 100.0:
-                    disqualified.add(s)
-
-            # 3. Regime Veto (Darwinian)
-            surv = float(features.loc[s, "survival"])
-            if surv < 0.1:
-                disqualified.add(s)
-
-        # Benchmark Exemption
-        for b_idx in settings.benchmark_symbols:
-            b = str(b_idx)
-            if b in disqualified:
-                disqualified.remove(b)
-
-        return disqualified

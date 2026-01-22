@@ -19,7 +19,7 @@ class SelectionPipeline:
     Manages the Hierarchical Threshold Relaxation (HTR) loop and stage execution graph.
     """
 
-    def __init__(self, run_id: str = "v4_run", candidates_path: str = "data/lakehouse/portfolio_candidates.json", returns_path: str = "data/lakehouse/portfolio_returns.csv"):
+    def __init__(self, run_id: str = "v4_run", candidates_path: str | None = None, returns_path: str | None = None):
         self.run_id = run_id
         self.settings = get_settings()
 

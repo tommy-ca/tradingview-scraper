@@ -1,8 +1,6 @@
 import logging
 from typing import List, Tuple
 
-import pandas as pd
-
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
 
@@ -34,9 +32,9 @@ class DarwinianFilter(BaseFilter):
                 continue
 
             # 2. Check Data Health (Darwinian Gate)
-            # (Currently this uses 'Regime_Survival_Score' if available in inference_outputs)
+            # (Standard: survival column in inference_outputs)
             if symbol in context.inference_outputs.index:
-                survival = context.inference_outputs.get("survival", pd.Series(1.0, index=context.inference_outputs.index)).get(symbol, 1.0)
+                survival = context.inference_outputs.loc[symbol, "survival"] if "survival" in context.inference_outputs.columns else 1.0
                 if survival < 0.1:
                     vetoed.append(symbol)
                     context.log_event("Filter", "Veto", {"symbol": symbol, "reason": "Failed Darwinian Health Gate", "score": float(survival)})

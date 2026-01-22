@@ -80,9 +80,9 @@ class FeatureEngineeringStage(BasePipelineStage):
             {
                 "momentum": mom,
                 "stability": stability,
-                "entropy": entropy.fillna(1.0).clip(0, 1),  # Raw Permutation Entropy (Noise)
-                "efficiency": efficiency,
-                "hurst_clean": (1.0 - (hurst.fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1),
+                "entropy": pd.to_numeric(entropy, errors="coerce").fillna(1.0).clip(0, 1),  # Raw Permutation Entropy (Noise)
+                "efficiency": pd.to_numeric(efficiency, errors="coerce"),
+                "hurst_clean": (1.0 - (pd.to_numeric(hurst, errors="coerce").fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1),
                 "adx": adx,
                 "recommend_all": rec_all,
                 "recommend_ma": rec_ma,
@@ -97,7 +97,7 @@ class FeatureEngineeringStage(BasePipelineStage):
                 "kurtosis": kurt.fillna(0.0),
                 "cvar": cvar.fillna(-0.1),
             }
-        )
+        ).astype(float)  # Force global numeric consistency (CR-FIX Phase 353)
 
         context.feature_store = features
         context.log_event(self.name, "FeaturesGenerated", {"n_features": len(features.columns), "n_assets": len(features)})

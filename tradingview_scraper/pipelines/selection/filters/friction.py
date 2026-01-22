@@ -2,7 +2,6 @@ import logging
 from typing import List, Tuple
 
 import numpy as np
-import pandas as pd
 
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
@@ -27,17 +26,17 @@ class FrictionFilter(BaseFilter):
         eci_hurdle = context.params.get("eci_hurdle", 0.02)
 
         candidate_map = {c["symbol"]: c for c in context.raw_pool if "symbol" in c}
-
         # We need momentum and volatility for ECI calculation
-        # These are usually in inference_outputs
+        # Standard: symbols as rows (index), metrics as columns
         metrics = context.inference_outputs
 
         for symbol in context.returns_df.columns:
-            if symbol not in metrics.columns:
+            if symbol not in metrics.index:
                 continue
 
-            mom = metrics.loc["momentum", symbol] if "momentum" in metrics.index else 0.0
-            vol = metrics.loc["stability", symbol] if "stability" in metrics.index else 1.0  # Stability is 1/vol
+            mom = metrics.loc[symbol, "momentum"] if "momentum" in metrics.columns else 0.0
+            vol = metrics.loc[symbol, "stability"] if "stability" in metrics.columns else 1.0  # Stability is 1/vol
+
             vol_abs = 1.0 / (vol + 1e-9)
 
             meta = candidate_map.get(symbol, {})
