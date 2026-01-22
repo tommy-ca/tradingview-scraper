@@ -900,3 +900,46 @@ References:
 
 Primary gate:
 - DataOps MUST normalize and validate candidate exports before writing `data/lakehouse/portfolio_candidates.json`.
+
+## 30. Phase 410: Telemetry Hardening & Context Propagation (SDD & TDD)
+- [x] **Design**: Update `docs/design/telemetry_standard_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_distributed_tracing.py`.
+- [x] **Test (TDD)**: Create `tests/test_telemetry_metrics.py`.
+- [x] **Implementation**:
+    - Add `tradingview_scraper/telemetry/context.py` for propagation helpers.
+    - Update `RayComputeEngine` and `SleeveActorImpl` for context crossing.
+    - Update `@trace_span` to emit metrics.
+    - Refactor pipeline entry points to establish root traces.
+
+## 31. Phase 420: DataOps & MLOps Lifecycle Hardening (SDD & TDD)
+- [x] **Spec**: Update `requirements_v3.md` with Data Contract and Model Lineage rules.
+- [x] **Design**: Create `docs/design/atomic_pipeline_v2_mlops.md`.
+- [x] **Test (TDD)**: Create `tests/test_data_contracts.py`.
+- [x] **Test (TDD)**: Create `tests/test_model_lineage.py`.
+- [x] **Implementation**:
+    - Refactor `StageRegistry` IDs for semantic correctness.
+    - Implement `QuantSDK.validate_foundation()`.
+    - Build `IngestionValidator` with strict PIT checks.
+    - Implement Lakehouse Snapshot (symlink-based) for run immutability.
+
+## 32. Phase 430: Unified DAG Orchestrator (SDD & TDD)
+- [x] **Design**: Create `docs/design/unified_dag_orchestrator_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_dag_orchestration.py`.
+- [x] **Implementation**:
+    - Implement `tradingview_scraper/orchestration/runner.py`.
+    - Integrate `DAGRunner` into `QuantSDK.run_pipeline()`.
+    - Refactor `scripts/run_production_pipeline.py` into a thin SDK wrapper.
+- [x] **Hardening**: Implement Parallel Branch Execution and Context Merging in `DAGRunner`.
+
+## 33. Phase 440: Forensic Hardening & Path Resolution (SDD & TDD)
+- [ ] **Design**: Update `docs/design/path_determinism_phase371_v1.md`.
+    - Specify rules for removing path literals from core scripts.
+    - Define "Strict Isolation" behavior for path resolution.
+- [ ] **Test (TDD)**: Create `tests/test_path_determinism.py`.
+    - Verify that scripts respect `TV_LAKEHOUSE_DIR` and `TV_SUMMARIES_DIR`.
+    - Verify that fallbacks are logged and disabled in `STRICT_ISOLATION`.
+- [ ] **Implementation**:
+    - Sweep `scripts/prepare_portfolio_data.py` for path literals and network defaults.
+    - Sweep `scripts/optimize_meta_portfolio.py` and `flatten_meta_weights.py`.
+    - Update `validate_meta_parity.py` for correct artifacts root and calendar joins.
+    - Fix dead import in `prepare_portfolio_data.py`.

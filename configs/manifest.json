@@ -54,6 +54,29 @@
       "adaptive_fallback_profile": "erc"
     }
   },
+  "pipelines": {
+    "alpha.full": {
+      "description": "Standard L1-L4 Atomic Alpha Pipeline",
+      "steps": [
+        "foundation.ingest",
+        "foundation.features",
+        "alpha.inference",
+        "alpha.clustering",
+        "alpha.policy",
+        "alpha.synthesis",
+        "risk.optimize"
+      ]
+    },
+    "meta.full": {
+      "description": "Fractal Meta-Portfolio Aggregation Pipeline",
+      "steps": [
+        "meta.aggregation",
+        "risk.optimize_meta",
+        "risk.flatten_meta",
+        "risk.report_meta"
+      ]
+    }
+  },
   "profiles": {
     "production": "production_2026_q1",
     "production_2026_q1": {

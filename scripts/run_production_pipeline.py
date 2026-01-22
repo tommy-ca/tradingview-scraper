@@ -600,7 +600,14 @@ if __name__ == "__main__":
     parser.add_argument("--run-id", help="Explicit run ID to use (for resuming)")
     parser.add_argument("--skip-analysis", action="store_true", help="Skip heavy post-optimization analysis (Visuals)")
     parser.add_argument("--skip-validation", action="store_true", help="Skip validation backtests")
+    parser.add_argument("--sdk", action="store_true", help="Use the new SDK-driven DAG orchestrator")
     args = parser.parse_args()
+
+    if args.sdk:
+        from tradingview_scraper.orchestration.sdk import QuantSDK
+
+        QuantSDK.run_pipeline("alpha.full", profile=args.profile, run_id=args.run_id)
+        sys.exit(0)
 
     pipeline = ProductionPipeline(profile=args.profile, manifest=args.manifest, run_id=args.run_id, skip_analysis=args.skip_analysis, skip_validation=args.skip_validation)
     pipeline.execute(start_step=args.start_step)

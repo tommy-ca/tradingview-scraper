@@ -176,7 +176,14 @@ if __name__ == "__main__":
     parser.add_argument("--use-native-ray", action="store_true", help="Use Ray Native Actors instead of Subprocess")
     parser.add_argument("--run-id", help="Explicit Run ID")
     parser.add_argument("--manifest", default="configs/manifest.json", help="Manifest path (default: configs/manifest.json)")
+    parser.add_argument("--sdk", action="store_true", help="Use the new SDK-driven DAG orchestrator")
     args = parser.parse_args()
+
+    if args.sdk:
+        from tradingview_scraper.orchestration.sdk import QuantSDK
+
+        QuantSDK.run_pipeline("meta.full", profile=args.profile, run_id=args.run_id, profiles=args.profiles)
+        sys.exit(0)
 
     target_profs = args.profiles.split(",") if args.profiles else None
     run_meta_pipeline(args.profile, target_profs, execute_sleeves=args.execute_sleeves, use_native_ray=args.use_native_ray, run_id=args.run_id, manifest=args.manifest)

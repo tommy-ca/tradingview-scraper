@@ -44,9 +44,21 @@ Replace `Path("data/lakehouse")` with `get_settings().lakehouse_dir`.
 
 Prefer constructor defaults of `None`, and resolve defaults from settings inside `__init__`.
 
-## 4. Acceptance Criteria (TDD)
+## 4. Alpha Read-Only & Network Isolation (CR-MLOps)
+
+### 4.1 Unsafe Default Prevention
+**Target**: `scripts/prepare_portfolio_data.py`
+
+1. Change `PORTFOLIO_DATA_SOURCE` default from `"fetch"` to `"lakehouse_only"`.
+2. Fail-fast if `"fetch"` is requested but `TV_STRICT_ISOLATION=1`.
+
+### 4.2 Dead Import Cleanup
+Remove reference to the non-existent `DataPipelineOrchestrator` in `prepare_portfolio_data.py`.
+
+## 5. Acceptance Criteria (TDD)
 1. `validate_meta_parity()` resolves the run directory via `settings.summaries_runs_dir`.
 2. `validate_meta_parity()` does not pad missing returns with zeros (Phase 374 overlaps here).
 3. Meta scripts use `settings.lakehouse_dir` for fallbacks.
 4. Modular selection ingestion defaults are settings-driven.
+5. `prepare_portfolio_data.py` defaults to read-only lakehouse mode.
 

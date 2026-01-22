@@ -14,7 +14,7 @@ from tradingview_scraper.settings import get_settings
 logger = logging.getLogger("pipelines.selection.orchestrator")
 
 
-@StageRegistry.register(id="alpha.full", name="Selection Pipeline", description="HTR selection pipeline with 4-stage relaxation", category="alpha")
+@StageRegistry.register(id="alpha.selection_v4", name="Selection Pipeline v4", description="HTR selection pipeline with 4-stage relaxation", category="alpha")
 class SelectionPipeline:
     """
     The Orchestrator for the MLOps-Centric Selection Pipeline (v4).

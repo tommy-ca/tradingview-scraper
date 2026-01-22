@@ -259,8 +259,13 @@ def get_full_report_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Se
                     benchmark.index = b_idx.tz_localize(None)
 
             idx = rets.index.union(benchmark.index)
-            benchmark = benchmark.reindex(idx).fillna(0.0)
-            rets = rets.reindex(idx).fillna(0.0)
+            benchmark = benchmark.reindex(idx)
+            rets = rets.reindex(idx)
+
+            # Align via intersection to avoid artificial padding (Phase 374)
+            common_idx = rets.dropna().index.intersection(benchmark.dropna().index)
+            benchmark = benchmark.loc[common_idx]
+            rets = rets.loc[common_idx]
 
         n_obs = len(rets)
 

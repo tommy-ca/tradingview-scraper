@@ -17,6 +17,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("portfolio_data_prep")
 
 
+def get_data_source() -> str:
+    """Returns the effective data source mode from environment."""
+    return os.getenv("PORTFOLIO_DATA_SOURCE", "lakehouse_only")
+
+
 def prepare_portfolio_universe():
     """
     Preparation Stage (Pillar 0).
@@ -32,9 +37,6 @@ def prepare_portfolio_universe():
 
     preselected_file = os.getenv("CANDIDATES_FILE") or os.getenv("CANDIDATES_SELECTED")
     if not preselected_file or not os.path.exists(preselected_file):
-        preselected_file = os.getenv("CANDIDATES_RAW") or default_c_raw
-
-    if not os.path.exists(preselected_file):
         # CR-FIX: Strict Isolation (Phase 234)
         strict_iso = os.getenv("TV_STRICT_ISOLATION") == "1"
 
@@ -43,7 +45,7 @@ def prepare_portfolio_universe():
             preselected_file = str(active_settings.lakehouse_dir / "portfolio_candidates_raw.json")
 
         if strict_iso:
-            logger.error("[STRICT ISOLATION] Candidate manifest missing in RUN_DIR. Fallback to Lakehouse denied.")
+            logger.error("[STRICT ISOLATION] Candidate manifest missing in RUN_DIR. Fallback to Lakehouse (%s) denied.", active_settings.lakehouse_dir)
             preselected_file = ""
 
     if not preselected_file or not os.path.exists(preselected_file):
@@ -77,8 +79,7 @@ def prepare_portfolio_universe():
 
     # 3. Fetch/Load Data
     # Phase 372: Alpha Read-Only Enforcement
-    # Default to lakehouse-only. DataOps is responsible for network ingestion via `make flow-data`.
-    source_mode = os.getenv("PORTFOLIO_DATA_SOURCE", "lakehouse_only")
+    source_mode = get_data_source()
 
     if source_mode != "lakehouse_only":
         raise RuntimeError(
@@ -197,25 +198,28 @@ def prepare_portfolio_universe():
         returns_df = returns_df.loc[~tradfi_all_nan]
 
     min_days = int(active_settings.min_days_floor)
-    if min_days > 0 and lookback_days >= min_days:
+    if min_days > 0 and not returns_df.empty:
         counts = returns_df.count()
-        short_history = [str(c) for c, v in counts.items() if v < min_days]
+        short_history = [str(c) for c in returns_df.columns if counts[c] < min_days]
         if short_history:
             returns_df = returns_df.drop(columns=short_history)
             logger.info("Dropped %d symbols due to insufficient secular history (< %d days): %s", len(short_history), min_days, ", ".join(short_history))
 
     TOXIC_THRESHOLD = 5.0
-    max_abs_rets = returns_df.abs().max()
-    toxic_assets = [str(c) for c, v in max_abs_rets.items() if v > TOXIC_THRESHOLD]
-    if toxic_assets:
-        returns_df = returns_df.drop(columns=toxic_assets)
-        logger.warning(f"Dropped {len(toxic_assets)} TOXIC assets: {', '.join(toxic_assets)}")
+    if not returns_df.empty:
+        max_abs_rets = returns_df.abs().max()
+        toxic_assets = [str(c) for c in returns_df.columns if max_abs_rets[c] > TOXIC_THRESHOLD]
+        if toxic_assets:
+            returns_df = returns_df.drop(columns=toxic_assets)
+            logger.warning(f"Dropped {len(toxic_assets)} TOXIC assets: {', '.join(toxic_assets)}")
 
-    variances = returns_df.var(ddof=0)
-    zero_vars = [str(c) for c, v in variances.items() if v == 0]
-    if zero_vars:
-        returns_df = returns_df.drop(columns=zero_vars)
-        logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
+    if not returns_df.empty:
+        # Standardize on Series for diagnostic sanity
+        vars_s: pd.Series = cast(pd.Series, returns_df.var(ddof=0))
+        zero_vars = [str(c) for c in returns_df.columns if vars_s.get(c, 1.0) == 0.0]
+        if zero_vars:
+            returns_df = returns_df.drop(columns=zero_vars)
+            logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
 
     # 7. Deduplication
     dedupe_env = os.getenv("PORTFOLIO_DEDUPE_BASE")

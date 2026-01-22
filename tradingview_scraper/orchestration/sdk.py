@@ -115,10 +115,55 @@ class QuantSDK:
         return snapshot_dir
 
     @staticmethod
-    def run_pipeline(name: str, profile: str, run_id: Optional[str] = None, **overrides) -> Any:
+    def run_pipeline(name: str, context: Optional[Any] = None, **params) -> Any:
         """
-        Executes a full named pipeline (e.g., 'selection.full').
+        Executes a full named pipeline (e.g., 'alpha.full').
+        Resolves the DAG from the manifest and executes using DAGRunner.
         """
-        logger.info(f"SDK: Running pipeline {name} for profile {profile}")
-        # (This will be implemented as we migrate full pipelines to the new orchestrator)
-        pass
+        from tradingview_scraper.orchestration.runner import DAGRunner
+        from tradingview_scraper.settings import get_settings
+        import json
+
+        settings = get_settings()
+
+        # 1. Resolve DAG from manifest
+        with open(settings.manifest_path, "r") as f:
+            manifest = json.load(f)
+
+        pipeline_cfg = manifest.get("pipelines", {}).get(name)
+        if not pipeline_cfg:
+            # Fallback for core pipelines if missing from manifest
+            core_pipelines = {
+                "alpha.full": [
+                    "foundation.ingest",
+                    "foundation.features",
+                    "alpha.inference",
+                    "alpha.clustering",
+                    "alpha.policy",
+                    "alpha.synthesis",
+                    "risk.optimize",
+                ],
+                "meta.full": ["meta.aggregation", "risk.optimize_meta", "risk.flatten_meta", "risk.report_meta"],
+            }
+            if name not in core_pipelines:
+                raise KeyError(f"Pipeline '{name}' not found in manifest or core defaults.")
+            steps = core_pipelines[name]
+        else:
+            steps = pipeline_cfg["steps"]
+
+        runner = DAGRunner(steps)
+
+        # 2. Initialize context if not provided
+        if context is None:
+            # Determine correct context type based on pipeline category
+            if name.startswith("alpha"):
+                from tradingview_scraper.pipelines.selection.base import SelectionContext
+
+                context = SelectionContext(run_id=params.get("run_id", "unnamed_run"), params=params)
+            elif name.startswith("meta"):
+                from tradingview_scraper.pipelines.meta.base import MetaContext
+
+                context = MetaContext(run_id=params.get("run_id", "unnamed_run"), meta_profile=params.get("profile", "meta_production"), sleeve_profiles=params.get("profiles", []))
+
+        # 3. Execute DAG
+        return runner.execute(context)

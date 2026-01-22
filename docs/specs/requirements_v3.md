@@ -439,4 +439,18 @@ Requirements:
  1. **Snapshot Isolation**: When a run begins, the platform SHOULD create a symlink-based snapshot of the Lakehouse to ensure immutability.
  2. **Lineage Linkage**: Every optimized portfolio MUST link back to the exact version (timestamp/hash) of the `features_matrix.parquet` used for inference.
  3. **Traceability**: The `trace_id` MUST be injected into all audit ledger entries across all L0-L4 stages.
+ 
+ ## 12. The Unified DAG Orchestrator (v3.9+)
+ 
+ The platform transitions from imperative script-based execution to a declarative Directed Acyclic Graph (DAG) model managed by the SDK.
+ 
+ ### 12.1 Execution Model
+ 1. **Declarative Definition**: Pipelines MUST be defined as a sequence of addressable stage IDs (e.g., `["foundation.ingest", "alpha.inference", ...]`).
+ 2. **Context Persistence**: The `QuantSDK` MUST manage the lifecycle of the execution context, ensuring it is passed between stages and persisted to the run directory upon completion.
+ 3. **Atomic Rollback**: If any stage in the DAG fails, the orchestrator MUST mark the run as `FAILED` in the audit ledger and skip subsequent dependent stages.
+ 
+ ### 12.2 Integration Standards
+ 1. **SDK-First**: All high-level workflows (`flow-production`, `flow-meta`) MUST be thin wrappers around `QuantSDK.run_pipeline()`.
+ 2. **Telemetry Coverage**: The DAG runner MUST create a root span for the entire pipeline and child spans for each stage, preserving the parent `trace_id`.
+ 3. **Resource Provisioning**: For parallel branches in the DAG, the orchestrator MUST automatically provision Ray actors or tasks based on the stage category.
 

@@ -52,6 +52,9 @@ dependencies = [
     "filelock>=3.20.1",
     "tqdm>=4.67.1",
     "ray>=2.53.0",
+    "opentelemetry-api>=1.39.1",
+    "opentelemetry-sdk>=1.39.1",
+    "opentelemetry-semantic-conventions>=0.60b1",
 ]
 
 [project.urls]

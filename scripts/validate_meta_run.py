@@ -118,18 +118,23 @@ def _calendar_sanity(rets: pd.DataFrame) -> Dict[str, object]:
     if idx.tz is not None:
         idx = idx.tz_convert(None)
 
-    d = idx.normalize()
+    # Cast to DatetimeIndex to satisfy static analysis for normalize/dayofweek
+    dt_index = cast(pd.DatetimeIndex, idx)
+    d = dt_index.normalize()
     unique_days = pd.Index(d).unique().sort_values()
-    day_diffs = unique_days.to_series().diff().dropna()
+
+    # Cast unique_days to DatetimeIndex for dayofweek
+    dt_unique = cast(pd.DatetimeIndex, unique_days)
+    day_diffs = dt_unique.to_series().diff().dropna()
     gaps = day_diffs[day_diffs > pd.Timedelta(days=1)]
 
     # For crypto-only runs we EXPECT weekend presence (Sat/Sun).
-    dow = unique_days.dayofweek  # Mon=0 ... Sun=6
+    dow = dt_unique.dayofweek  # Mon=0 ... Sun=6
     has_sat = bool((dow == 5).any())
     has_sun = bool((dow == 6).any())
 
     return {
-        "n_days": int(unique_days.size),
+        "n_days": int(dt_unique.size),
         "has_saturday": has_sat,
         "has_sunday": has_sun,
         "n_gaps_gt_1d": int(gaps.size),
@@ -139,7 +144,10 @@ def _calendar_sanity(rets: pd.DataFrame) -> Dict[str, object]:
 
 def _load_meta_returns(base_dir: Path, meta_profile: str, risk_profile: str) -> pd.DataFrame:
     path = base_dir / f"meta_returns_{meta_profile}_{risk_profile}.pkl"
-    return pd.read_pickle(path)
+    data = pd.read_pickle(path)
+    if isinstance(data, pd.Series):
+        return data.to_frame()
+    return cast(pd.DataFrame, data)
 
 
 def _load_meta_optimized(base_dir: Path, meta_profile: str, risk_profile: str) -> Dict:

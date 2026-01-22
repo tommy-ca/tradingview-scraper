@@ -37,6 +37,23 @@ class TestPrefectFlows(unittest.TestCase):
                 self.assertIn("alpha.policy", called_ids)
                 self.assertIn("alpha.synthesis", called_ids)
 
+    def test_sdk_pipeline_execution(self):
+        """Verify the full DAG execution via QuantSDK."""
+        from tradingview_scraper.orchestration.sdk import QuantSDK
+
+        with patch("tradingview_scraper.orchestration.sdk.QuantSDK.run_stage") as mock_run:
+            from tradingview_scraper.pipelines.selection.base import SelectionContext
+
+            mock_ctx = SelectionContext(run_id="test", params={})
+            mock_run.return_value = mock_ctx
+
+            QuantSDK.run_pipeline("alpha.full", profile="test", run_id="test")
+
+            # Should have called at least foundation.ingest and risk.optimize
+            called_ids = [call.args[0] for call in mock_run.call_args_list]
+            self.assertIn("foundation.ingest", called_ids)
+            self.assertIn("risk.optimize", called_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

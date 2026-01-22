@@ -2,6 +2,8 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
+from typing import Any, Dict, cast
 
 import pandas as pd
 
@@ -13,21 +15,30 @@ from tradingview_scraper.portfolio_engines.nautilus_adapter import run_nautilus_
 from tradingview_scraper.settings import get_settings
 
 
+def _resolve_run_dir(run_id: str) -> Path:
+    """Resolves run directory using settings and partial ID match."""
+    settings = get_settings()
+    run_dir = (settings.summaries_runs_dir / run_id).resolve()
+    if not run_dir.exists():
+        # Try finding by partial ID if needed
+        matching = sorted(list(settings.summaries_runs_dir.glob(f"*{run_id}*")), key=os.path.getmtime, reverse=True)
+        if matching:
+            return matching[0]
+    return run_dir
+
+
 def validate_meta_parity(run_id: str, profile: str = "hrp"):
     print(f"🚀 Starting Nautilus Parity Validation for Run: {run_id} (Profile: {profile})")
 
     # 1. Resolve Paths
     settings = get_settings()
-    run_dir = (settings.summaries_runs_dir / run_id).resolve()
+    run_dir = _resolve_run_dir(run_id)
     if not run_dir.exists():
-        # Try finding by partial ID if needed
-        matching = list(settings.summaries_runs_dir.glob(f"*{run_id}*"))
-        if matching:
-            run_dir = matching[0]
-            run_id = run_dir.name
-        else:
-            print(f"❌ Run directory not found: {run_id}")
-            return
+        print(f"❌ Run directory not found: {run_id}")
+        return
+
+    # Use the resolved run_id from the directory name
+    run_id = run_dir.name
 
     returns_path = run_dir / "data" / "returns_matrix.parquet"
     weights_path = run_dir / "data" / "portfolio_optimized_v2.json"
@@ -82,22 +93,23 @@ def validate_meta_parity(run_id: str, profile: str = "hrp"):
 
     # 3. Run Vectorized Simulator (Baseline)
     print("\n[1/2] Running Vectorized Simulator (Baseline)...")
-    vector_res = ReturnsSimulator().simulate(returns=returns, weights_df=weights_df, initial_holdings=None)
+    # Explicitly cast to DataFrame to satisfy static analysis
+    v_returns = cast(pd.DataFrame, returns)
+    v_weights = cast(pd.DataFrame, weights_df)
+    vector_res = ReturnsSimulator().simulate(returns=v_returns, weights_df=v_weights, initial_holdings=None)
 
     # 4. Run Nautilus Simulator (High-Fidelity)
     print("[2/2] Running Nautilus Simulator...")
-    nautilus_res = run_nautilus_backtest(returns=returns, weights_df=weights_df, initial_holdings=None, settings=settings)
+    nautilus_res = run_nautilus_backtest(returns=v_returns, weights_df=v_weights, initial_holdings=None, settings=settings)
 
     # 5. Compare Results
-    metrics = ["sharpe", "annualized_return", "annualized_vol", "max_drawdown"]
-
-    from typing import Any, Dict
+    metrics_list = ["sharpe", "annualized_return", "annualized_vol", "max_drawdown"]
 
     audit_record: Dict[str, Any] = {
         "run_id": run_id,
         "profile": profile,
-        "vectorized": {m: vector_res.get(m, 0.0) for m in metrics},
-        "nautilus": {m: nautilus_res.get(m, 0.0) for m in metrics},
+        "vectorized": {m: vector_res.get(m, 0.0) for m in metrics_list},
+        "nautilus": {m: nautilus_res.get(m, 0.0) for m in metrics_list},
         "delta": {},
         "divergence_pct": 0.0,
     }
@@ -106,7 +118,7 @@ def validate_meta_parity(run_id: str, profile: str = "hrp"):
     print(f"{'Metric':<20} | {'Vectorized':<15} | {'Nautilus':<15} | {'Delta':<10}")
     print("-" * 80)
 
-    for m in metrics:
+    for m in metrics_list:
         v_vec = vector_res.get(m, 0.0)
         v_nau = nautilus_res.get(m, 0.0)
         delta = float(v_nau) - float(v_vec)

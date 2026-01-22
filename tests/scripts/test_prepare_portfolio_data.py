@@ -79,9 +79,5 @@ def test_prep_lakehouse_fail_missing(mock_settings, mock_env):
         # Currently the script just logs error and continues or returns empty matrix.
         # We want to assert that it does NOT try to sync/ingest.
 
-        # We need to mock DataPipelineOrchestrator because the current script calls it.
-        # We want to ensure it is NOT called in lakehouse_only mode (Future state).
-        # For now, let's just run it and see if load is called.
-
         prepare_portfolio_universe()
         loader.load.assert_called()
