@@ -12,6 +12,7 @@ import pandas as pd
 
 sys.path.append(os.getcwd())
 from scripts.validate_sleeve_health import validate_sleeve_health
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -22,7 +23,8 @@ def get_meta_cache_key(meta_profile: str, prof: str, sleeves: List[Dict]) -> str
     """Generate a unique key based on sleeve profiles and run_ids."""
     components = [meta_profile, prof]
     for s in sleeves:
-        components.append(f"{s['id']}:{s.get('run_id', 'dynamic')}")
+        s_id = s.get("id") or s.get("profile") or "unknown"
+        components.append(f"{s_id}:{s.get('run_id', 'dynamic')}")
 
     return hashlib.sha256("|".join(components).encode()).hexdigest()[:16]
 
@@ -62,6 +64,9 @@ def find_latest_run_for_profile(profile: str) -> Optional[Path]:
     return None
 
 
+@StageRegistry.register(
+    id="meta.returns", name="Meta Return Aggregation", description="Aggregates returns from multiple atomic sleeves into a meta-returns matrix.", category="meta", tags=["meta", "returns"]
+)
 def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[List[str]] = None, manifest_path: Path = Path("configs/manifest.json"), base_dir: Optional[Path] = None):
     settings = get_settings()
     # Default to lakehouse if no base_dir provided (Legacy compatibility)
@@ -184,7 +189,9 @@ def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[L
                     continue
 
                 # CR-840: Health Guardrail (Phase 222)
-                if not validate_sleeve_health(run_path.name, threshold=0.75):
+                # Meta aggregation consumes the `custom_*` return streams; don't veto a sleeve due to
+                # optional engines (e.g. riskfolio) missing in the environment.
+                if not validate_sleeve_health(run_path.name, threshold=0.75, engines=["custom"]):
                     logger.warning(f"  [{s_id}] VETOED: Solver health below 75%. Skipping.")
                     continue
 

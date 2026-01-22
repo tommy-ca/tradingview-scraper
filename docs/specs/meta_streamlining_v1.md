@@ -23,6 +23,14 @@ The current meta-portfolio pipeline (`run_meta_pipeline.py`) is functionally cor
 ### 2.4 Parallel Sleeve Execution
 - **Mechanism**: Use `ProcessPoolExecutor` in `run_meta_pipeline.py` to trigger underlying atomic production runs in parallel (if `run_id` is not provided).
 
+### 2.5 Manifest Resolution (Correctness Hardening)
+- **Requirement**: Meta orchestration MUST NOT hard-code `configs/manifest.json`.
+- **Mechanism**:
+  - Accept `--manifest` CLI arg in `scripts/run_meta_pipeline.py` (default `configs/manifest.json`).
+  - Export `TV_MANIFEST_PATH=<manifest>` before calling `get_settings()`.
+  - Use `settings.manifest_path` everywhere a manifest is loaded (including sleeve execution).
+- **Rationale**: Without this, meta runs are not replayable when alternative manifests are used (e.g., canary/prod forks).
+
 ## 3. Implementation Plan
 1. **Stage 1**: Implement `validate_sleeve_health.py`.
 2. **Stage 2**: Add caching to `build_meta_returns.py`.

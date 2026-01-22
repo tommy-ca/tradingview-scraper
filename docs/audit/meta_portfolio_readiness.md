@@ -17,8 +17,24 @@ Verify the correctness, numerical stability, and directional integrity of the Pi
 - [ ] **Atom Identity**: Cross-reference the consolidated meta-report against `portfolio_candidates.json` to ensure assets like `BINANCE:BTCUSDT_rating_all_long_LONG` are correctly mapped and weighted.
 
 ### 3.2 Directional Correction Audit (The Sign Test)
-- [ ] **Short Inversion**: Verify that returns for `SHORT` atoms were inverted *before* being ensembled into the synthetic equity curve.
+- [x] **Short Inversion**: Verify that returns for `SHORT` atoms were inverted *before* being ensembled into the synthetic equity curve.
 - [ ] **Beta Validation**: Calculate the correlation of the `long_all` and `short_all` sleeves to a BTC benchmark. The short sleeve should exhibit a negative correlation in its *raw* form and a positive (alpha-seeking) correlation in its *synthetic* form.
+
+**Implementation (Spec v1)**:
+- Spec: `docs/specs/directional_correction_sign_test_v1.md`
+- Tool: `scripts/audit_directional_sign_test.py`
+- Note: Synthetic shorts respect a `-100%` loss cap via `synthetic_SHORT == -clip(raw, upper=1.0)`.
+- Gate Artifact: `data/artifacts/summaries/runs/<RUN_ID>/data/directional_sign_test.json` (required when `feat_directional_sign_test_gate=true`)
+
+Run against a single sleeve:
+```bash
+uv run python scripts/audit_directional_sign_test.py --run-id rerun_v3_short_all
+```
+
+Run against all sleeves pinned in a meta profile:
+```bash
+uv run python scripts/audit_directional_sign_test.py --meta-profile meta_crypto_only --risk-profile hrp
+```
 
 ### 3.4 Tail Risk & Concentration Audit (v3.9.5)
 The `meta_super_benchmark` (4-sleeve HRP) has been audited for concentration and tail risk:
@@ -36,6 +52,9 @@ Execute a head-to-head comparison to validate "Better together" logic:
 | **Isolated Long** | `binance_spot_rating_all_long` | Baseline performance. |
 | **Isolated Short** | `binance_spot_rating_all_short` | Profitable in downtrends, negative beta. |
 | **Mixed Ensemble** | `meta_benchmark` (HRP) | Lower Volatility, Smoother Equity Curve, Net Beta < 0.3. |
+
+Atomic sleeve audit plan (prerequisite):
+- `docs/audit/binance_spot_ratings_atomic_audit_plan_v1.md`
 
 ## 5. Certification Criteria
 - [x] Zero `null` logic fields in metadata.

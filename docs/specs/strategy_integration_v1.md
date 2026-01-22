@@ -106,7 +106,9 @@ Technical ratings must be preserved from the **Discovery** stage through the **L
 
 ### 6.4 Directional Validation Profiles
 - **Baseline Isolation**: Simple Spot LONG and Spot SHORT profiles (e.g., `binance_spot_rating_all_long/short`) are used to validate the individual efficacy of directional signals.
+- **Runbook**: `docs/runbooks/binance_spot_ratings_all_long_short_runbook_v1.md`
 - **Ensemble Integrity**: These profiles provide the ground truth for "Synthetic Return Streams", ensuring that when they are combined in a Meta-Portfolio, the resulting Sharpe gain is driven by true diversification rather than mathematical artifacts.
+- **Audit Contract**: Atomic sleeves intended for meta inclusion SHOULD satisfy the artifact + reproducibility contract in `docs/design/atomic_sleeve_audit_contract_v1.md`.
 
 ## 8. Meta-Portfolio Ensembling (Pillar 4)
 The Pillar 4 layer enables the creation of "Portfolios of Portfolios" by ensembling synthetic return streams.
@@ -126,6 +128,9 @@ To validate the system's ability to ensemble mixed-direction alpha, the followin
     - **Net Beta Reduction**: The ensemble must demonstrate lower correlation to BTC than the Long sleeve.
     - **Sharpe Gain**: The ensembled equity curve must achieve a higher Sharpe ratio than either isolated sleeve through diversification.
     - **Weight Fidelity**: Meta-optimized weights must correctly reflect the relative risk contribution of each directional stream.
+5. **Directional Correction Gate (Hard)**:
+    - Run the Directional Correction Sign Test on both sleeves and require PASS before meta ensembling.
+    - Spec: `docs/specs/directional_correction_sign_test_v1.md`
 
 ### 8.3 Meta-Performance Attribution (Pillar 4 Metrics)
 To ensure transparency in ensembled portfolios, meta-reports must provide:
@@ -138,7 +143,10 @@ To ensure transparency in ensembled portfolios, meta-reports must provide:
 To maximize meta-portfolio diversification, the system prioritizes granular technical factors over composite signals.
 - **Trend Module (MA)**: Driven by `Recommend.MA` across 14 moving averages. Target for `binance_spot_rating_ma` sleeves.
 - **Momentum Module (OSC)**: Driven by `Recommend.Other` across oscillators (RSI, Stochastic, etc.). Target for `binance_spot_rating_osc` sleeves.
-- **Normalization**: All granular modules must follow the **Synthetic Long Normalization** standard ($R_{syn} = -1 \times R_{raw}$ for SHORTS) before meta-aggregation.
+- **Normalization**: All granular modules must follow the **Synthetic Long Normalization** standard before meta-aggregation:
+  - $R_{syn,long} = R_{raw}$
+  - $R_{syn,short} = -clip(R_{raw}, upper=1.0)$ (short loss cap at -100%)
+  - Reference audit: `docs/specs/directional_correction_sign_test_v1.md`
 
 ## 13. Institutional Liquidity Preservation
 To prevent alpha dilution and ensure tradeability, the system maintains strict liquidity floors for all asset classes.
@@ -152,4 +160,3 @@ To eliminate sequential script bottlenecks, data ingestion is promoted to "Pilla
 - **Dependency Tracking**: Pillar 1 (Discovery) tasks trigger Pillar 0 (Ingestion) requests. Pillar 2 (Synthesis) waits for Pillar 0 completion.
 - **Parallelism**: Data fetching is parallelized at the symbol level using a managed worker pool, with rate-limiting handled centrally.
 - **Forensic Ledger**: Every data unit (Symbol/Interval) maintains its own audit trail within the run-specific ledger, identifying exactly which fetch attempt provided the data.
-

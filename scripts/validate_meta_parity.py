@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 import sys
-from pathlib import Path
 
 import pandas as pd
 
@@ -18,10 +17,11 @@ def validate_meta_parity(run_id: str, profile: str = "hrp"):
     print(f"🚀 Starting Nautilus Parity Validation for Run: {run_id} (Profile: {profile})")
 
     # 1. Resolve Paths
-    run_dir = Path(f"artifacts/summaries/runs/{run_id}")
+    settings = get_settings()
+    run_dir = (settings.summaries_runs_dir / run_id).resolve()
     if not run_dir.exists():
         # Try finding by partial ID if needed
-        matching = list(Path("artifacts/summaries/runs").glob(f"*{run_id}*"))
+        matching = list(settings.summaries_runs_dir.glob(f"*{run_id}*"))
         if matching:
             run_dir = matching[0]
             run_id = run_dir.name
@@ -34,7 +34,7 @@ def validate_meta_parity(run_id: str, profile: str = "hrp"):
 
     # Fallback to meta-optimized if needed (for meta-portfolios)
     if "meta" in run_id or not weights_path.exists():
-        weights_path = Path("data/lakehouse") / f"portfolio_optimized_meta_{profile}.json"
+        weights_path = settings.lakehouse_dir / f"portfolio_optimized_meta_{profile}.json"
         # If still not found, check run dir for meta output
         if not weights_path.exists():
             weights_path = run_dir / "data" / f"portfolio_optimized_meta_{profile}.json"
@@ -69,12 +69,16 @@ def validate_meta_parity(run_id: str, profile: str = "hrp"):
 
     # Ensure alignment
     common = [s for s in weights_df["Symbol"] if s in returns.columns]
-    returns = returns[common].fillna(0.0)
+    returns = returns[common]
+    before_rows = int(len(returns))
+    returns = returns.dropna(axis=0, how="any")
+    after_rows = int(len(returns))
     weights_df = weights_df[weights_df["Symbol"].isin(common)]
 
+    dropped = before_rows - after_rows
+    dropped_pct = (dropped / before_rows) if before_rows else 0.0
     print(f"📊 Testing on {len(common)} assets over {len(returns)} days.")
-
-    settings = get_settings()
+    print(f"📅 Alignment: rows {before_rows} -> {after_rows} (dropped {dropped} = {dropped_pct:.1%})")
 
     # 3. Run Vectorized Simulator (Baseline)
     print("\n[1/2] Running Vectorized Simulator (Baseline)...")
@@ -87,7 +91,9 @@ def validate_meta_parity(run_id: str, profile: str = "hrp"):
     # 5. Compare Results
     metrics = ["sharpe", "annualized_return", "annualized_vol", "max_drawdown"]
 
-    audit_record = {
+    from typing import Any, Dict
+
+    audit_record: Dict[str, Any] = {
         "run_id": run_id,
         "profile": profile,
         "vectorized": {m: vector_res.get(m, 0.0) for m in metrics},

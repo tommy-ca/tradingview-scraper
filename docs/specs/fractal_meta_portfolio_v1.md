@@ -23,10 +23,18 @@ The Fractal Meta-Portfolio architecture enables hierarchical risk allocation by 
 - The system MUST persist the **Hierarchical Cluster Tree** (`meta_cluster_tree_*.json`) at each level.
 - This artifact preserves the uncollapsed strategy-level weights for review before they are merged into symbols.
 
+### 2.5 Directional Correction (Sign Test)
+- The system MUST implement **Synthetic Long Normalization** for SHORT atoms before optimization/ensembling:
+  - `R_syn_short = -clip(R_raw, upper=1.0)` (short loss cap at -100%)
+  - `R_syn_long = R_raw`
+- A deterministic audit MUST be available to prove SHORT inversion occurs **before** meta-layer ensembling.
+- Reference: `docs/specs/directional_correction_sign_test_v1.md`
+
 ## 3. Data Pipeline Orchestration
 
 ### 3.1 Streamlined Execution (`run_meta_pipeline.py`)
 The meta-portfolio pipeline is unified into a single command that executes the following stages sequentially:
+0.  **Directional Gate**: Executes the Directional Correction Sign Test (when enabled) and persists `directional_sign_test.json`.
 1.  **Aggregation**: Recursively joins return series from all sleeves.
 2.  **Optimization**: Applies HRP/MVO solvers at the current hierarchy level.
 3.  **Flattening**: Recursively multiplies weights down to physical symbols.

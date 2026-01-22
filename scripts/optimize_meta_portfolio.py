@@ -6,9 +6,11 @@ import sys
 from pathlib import Path
 from typing import Optional, cast
 
+import numpy as np
 import pandas as pd
 
 sys.path.append(os.getcwd())
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.portfolio_engines import build_engine
 from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
 from tradingview_scraper.settings import get_settings
@@ -18,10 +20,96 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("optimize_meta_portfolio")
 
 
+def _project_bounded_simplex(weights: np.ndarray, *, min_weight: float, max_weight: float) -> np.ndarray:
+    """Project weights onto the bounded simplex.
+
+    Constraints:
+    - sum(w) == 1
+    - min_weight <= w_i <= max_weight for all i
+    """
+    w = np.asarray(weights, dtype=float).copy()
+    n = int(w.size)
+    if n <= 0:
+        return w
+
+    min_w = float(min_weight)
+    max_w = float(max_weight)
+    if min_w < 0 or max_w <= 0 or min_w > max_w:
+        raise ValueError(f"invalid bounds min={min_w} max={max_w}")
+    if n * min_w > 1.0 + 1e-12:
+        raise ValueError(f"infeasible bounds: n*min_weight={n * min_w} > 1")
+    if n * max_w < 1.0 - 1e-12:
+        raise ValueError(f"infeasible bounds: n*max_weight={n * max_w} < 1")
+
+    w = np.nan_to_num(w, nan=0.0, posinf=0.0, neginf=0.0)
+    w[w < 0] = 0.0
+    w = np.clip(w, min_w, max_w)
+
+    for _ in range(200):
+        s = float(w.sum())
+        if abs(s - 1.0) <= 1e-10:
+            break
+
+        if s > 1.0:
+            delta = s - 1.0
+            room = w - min_w
+            mask = room > 1e-12
+            total_room = float(room[mask].sum())
+            if total_room <= 1e-18:
+                break
+            w[mask] -= delta * (room[mask] / total_room)
+            w = np.maximum(w, min_w)
+        else:
+            delta = 1.0 - s
+            room = max_w - w
+            mask = room > 1e-12
+            total_room = float(room[mask].sum())
+            if total_room <= 1e-18:
+                break
+            w[mask] += delta * (room[mask] / total_room)
+            w = np.minimum(w, max_w)
+
+    s = float(w.sum())
+    if s <= 0:
+        w = np.array([1.0 / n] * n, dtype=float)
+        w = np.clip(w, min_w, max_w)
+        w = w / float(w.sum())
+    elif abs(s - 1.0) > 1e-8:
+        diff = 1.0 - s
+        if diff > 0:
+            idx = int(np.argmax(max_w - w))
+            w[idx] = min(max_w, w[idx] + diff)
+        else:
+            idx = int(np.argmax(w - min_w))
+            w[idx] = max(min_w, w[idx] + diff)
+
+    return w
+
+
+def _load_meta_allocation_bounds(manifest_path: Path, meta_profile: str) -> tuple[Optional[float], Optional[float]]:
+    if not manifest_path.exists():
+        return None, None
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None, None
+
+    cfg = (data.get("profiles") or {}).get(meta_profile) or {}
+    alloc = cfg.get("meta_allocation") or {}
+    min_w = alloc.get("min_weight")
+    max_w = alloc.get("max_weight")
+    try:
+        return (float(min_w) if min_w is not None else None), (float(max_w) if max_w is not None else None)
+    except Exception:
+        return None, None
+
+
+@StageRegistry.register(id="meta.optimize", name="Meta Optimization", description="Solves for optimal sleeve allocations in a meta-portfolio.", category="meta", tags=["meta", "risk"])
 def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = None, meta_profile: Optional[str] = None):
     settings = get_settings()
     run_dir = settings.prepare_summaries_run_dir()
     ledger = AuditLedger(run_dir) if settings.features.feat_audit_ledger else None
+    lakehouse_dir = settings.lakehouse_dir
 
     # Resolve Meta Profile from settings if not passed
     m_prof = meta_profile or os.getenv("PROFILE") or "meta_production"
@@ -45,13 +133,13 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
 
         # If none found in run dir, try lakehouse (Legacy fallback)
         if not files:
-            files = list(Path("data/lakehouse").glob(f"meta_returns_{m_prof}_*.pkl"))
+            files = list(lakehouse_dir.glob(f"meta_returns_{m_prof}_*.pkl"))
 
         # Global fallback to old pattern if no profile-specific ones found
         if not files:
             files = list(base_dir.glob("meta_returns_*.pkl"))
             if not files:
-                files = list(Path("data/lakehouse").glob("meta_returns_*.pkl"))
+                files = list(lakehouse_dir.glob("meta_returns_*.pkl"))
 
         if not files and input_path.exists() and input_path.is_file():
             files = [input_path]
@@ -65,9 +153,9 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
 
         candidates = [
             base_dir / f"meta_returns_{m_prof}_{profile}.pkl",
-            Path("data/lakehouse") / f"meta_returns_{m_prof}_{profile}.pkl",
+            lakehouse_dir / f"meta_returns_{m_prof}_{profile}.pkl",
             base_dir / f"meta_returns_{profile}.pkl",
-            Path("data/lakehouse") / f"meta_returns_{profile}.pkl",
+            lakehouse_dir / f"meta_returns_{profile}.pkl",
         ]
         files = [c for c in candidates if c.exists()]
 
@@ -132,6 +220,20 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
             if weights_df.empty:
                 continue
 
+            # Enforce meta-layer sleeve bounds from the manifest (min/max sleeve weights).
+            # This is a meta-portfolio requirement to prevent over-concentration in a single sleeve.
+            min_w, max_w = _load_meta_allocation_bounds(settings.manifest_path, m_prof)
+            if min_w is not None and max_w is not None and "Weight" in weights_df.columns:
+                try:
+                    w_raw = np.asarray(weights_df["Weight"], dtype=float)
+                    w_proj = _project_bounded_simplex(w_raw, min_weight=float(min_w), max_weight=float(max_w))
+                    weights_df = weights_df.copy()
+                    weights_df["Weight"] = w_proj
+                    if "Net_Weight" in weights_df.columns:
+                        weights_df["Net_Weight"] = w_proj
+                except Exception as exc:
+                    logger.warning(f"Failed to apply meta_allocation bounds for {m_prof}/{target_profile}: {exc}")
+
             # Save specific matrix result
             p_output_path = Path(output_path).parent / f"meta_optimized_{m_prof}_{target_profile}.json"
 
@@ -186,9 +288,13 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
 
 
 if __name__ == "__main__":
+    settings = get_settings()
+    default_returns = str(settings.prepare_summaries_run_dir() / "data")
+    default_output = str(settings.prepare_summaries_run_dir() / "data" / "meta_optimized.json")
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--returns", default="data/lakehouse/meta_returns.pkl")
-    parser.add_argument("--output", default="data/lakehouse/meta_optimized.json")
+    parser.add_argument("--returns", default=default_returns)
+    parser.add_argument("--output", default=default_output)
     parser.add_argument("--profile", help="Specific risk profile to optimize (e.g. hrp)")
     parser.add_argument("--meta-profile", help="Meta profile name (e.g. meta_super_benchmark)")
     args = parser.parse_args()

@@ -10,15 +10,20 @@ from typing import Optional
 import pandas as pd
 
 sys.path.append(os.getcwd())
+from tradingview_scraper.orchestration.registry import StageRegistry
+from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("flatten_meta_weights")
 
 
+@StageRegistry.register(id="meta.flatten", name="Weight Flattening", description="Projects meta-weights (sleeve allocations) to individual asset weights.", category="meta", tags=["meta", "risk"])
 def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] = None):
     # Resolve Meta Profile from settings if not passed
     m_prof = meta_profile or os.getenv("PROFILE") or "meta_production"
     target_profile = profile or "barbell"  # Default legacy
+    settings = get_settings()
+    lakehouse_dir = settings.lakehouse_dir
 
     # Resolve meta weights path based on profile and meta_profile
     # Try the new specific name first, then fallback
@@ -34,8 +39,8 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
     search_weights = [
         base_dir / f"meta_optimized_{m_prof}_{target_profile}.json",
         base_dir / f"meta_optimized_{target_profile}.json",
-        Path("data/lakehouse") / f"meta_optimized_{m_prof}_{target_profile}.json",
-        Path("data/lakehouse") / f"meta_optimized_{target_profile}.json",
+        lakehouse_dir / f"meta_optimized_{m_prof}_{target_profile}.json",
+        lakehouse_dir / f"meta_optimized_{target_profile}.json",
     ]
 
     meta_weights_path = None
@@ -54,8 +59,8 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
     search_manifests = [
         base_dir / f"meta_manifest_{m_prof}_{target_profile}.json",
         base_dir / f"meta_manifest_{target_profile}.json",
-        Path("data/lakehouse") / f"meta_manifest_{m_prof}_{target_profile}.json",
-        Path("data/lakehouse") / f"meta_manifest_{target_profile}.json",
+        lakehouse_dir / f"meta_manifest_{m_prof}_{target_profile}.json",
+        lakehouse_dir / f"meta_manifest_{target_profile}.json",
     ]
 
     meta_manifest_path = None
@@ -117,8 +122,24 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
                 logger.warning(f"Failed to resolve sub-meta weights for {sub_meta}")
             continue
 
-        run_path = s_cfg.get("run_path")
-        if not run_path:
+        run_path_raw = s_cfg.get("run_path")
+        run_id = s_cfg.get("run_id")
+
+        run_path: Optional[Path] = None
+        if run_path_raw:
+            rp = Path(str(run_path_raw))
+            if not rp.is_absolute():
+                rp = (Path.cwd() / rp).resolve()
+            if rp.exists():
+                run_path = rp
+
+        # Cache manifests can contain stale/relative paths; recover from run_id.
+        if run_path is None and run_id:
+            rp = (get_settings().summaries_runs_dir / str(run_id)).resolve()
+            if rp.exists():
+                run_path = rp
+
+        if run_path is None:
             logger.warning(f"No run path found for sleeve {s_id}")
             continue
 
@@ -126,10 +147,10 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
 
         # Try prioritized isolated paths
         search_paths = [
-            Path(run_path) / "data" / "portfolio_flattened.json",
-            Path(run_path) / "portfolio_flattened.json",
-            Path(run_path) / "data" / "portfolio_optimized_v2.json",
-            Path(run_path) / "portfolio_optimized_v2.json",
+            run_path / "data" / "portfolio_flattened.json",
+            run_path / "portfolio_flattened.json",
+            run_path / "data" / "portfolio_optimized_v2.json",
+            run_path / "portfolio_optimized_v2.json",
         ]
 
         opt_path = None
@@ -147,12 +168,15 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
                 p_data = opt_data["profiles"].get(target_profile)
                 if p_data and "assets" in p_data:
                     for asset in p_data["assets"]:
-                        sym = asset["Symbol"]
+                        sym_raw = asset["Symbol"]
+                        # Physical Asset Collapse: strip logic atom suffixes.
+                        sym = sym_raw.split("_", 1)[0] if "_" in sym_raw else sym_raw
                         w = asset.get("Net_Weight", asset["Weight"])
                         final_assets[sym] += w * s_weight
 
                         if sym not in asset_details or abs(w * s_weight) > abs(asset_details[sym].get("_contribution", 0)):
                             asset_details[sym] = asset.copy()
+                            asset_details[sym]["Symbol"] = sym
                             asset_details[sym]["_contribution"] = w * s_weight
                     found_weights = True
 
@@ -198,10 +222,13 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
 
 
 if __name__ == "__main__":
+    settings = get_settings()
+    default_output = str(settings.prepare_summaries_run_dir() / "data" / "portfolio_optimized_meta.json")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", help="Meta portfolio profile name (e.g. meta_super_benchmark)")
     parser.add_argument("--risk-profile", help="Specific risk profile to flatten (e.g. hrp)")
-    parser.add_argument("--output", default="data/lakehouse/portfolio_optimized_meta.json")
+    parser.add_argument("--output", default=default_output)
     args = parser.parse_args()
 
     flatten_weights(args.profile, args.output, args.risk_profile)

@@ -10,50 +10,81 @@ import numpy as np
 import pandas as pd
 
 sys.path.append(os.getcwd())
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.metrics import calculate_performance_metrics
 
 logger = logging.getLogger("meta_reporting")
 
 
-def get_forensic_anomalies(manifest: dict) -> List[dict]:
-    """Audit each sleeve for window-level anomalies."""
-    anomalies = []
+def get_forensic_anomalies(
+    manifest: dict,
+    *,
+    sharpe_abs_threshold: float = 10.0,
+    vol_threshold: float = 2.0,
+    max_rows: int = 250,
+) -> List[dict]:
+    """Scan sleeve audit ledgers for extreme-window anomalies.
+
+    Spec: `docs/specs/meta_streamlining_v1.md` (CR-845).
+    - Flag windows with Sharpe > 10 (absolute) or annualized vol > 200%.
+    - Keep this lightweight: line-by-line JSONL scan, capped results.
+    """
+    anomalies: List[dict] = []
+
     for sleeve in manifest.get("sleeves", []):
-        s_id = sleeve["id"]
-        run_path = Path(sleeve["run_path"])
+        s_id = sleeve.get("id", "unknown")
+        run_path = Path(sleeve.get("run_path", ""))
         audit_path = run_path / "audit.jsonl"
         if not audit_path.exists():
             continue
 
-        with open(audit_path, "r") as f:
-            for line in f:
-                try:
-                    entry = json.loads(line)
-                    if entry.get("type") == "action" and entry.get("step") == "backtest_simulate":
-                        outcome = entry.get("outcome", {})
-                        metrics = outcome.get("metrics", {})
-                        sharpe = metrics.get("sharpe", 0)
-                        # CR-FIX: Handle both key variations
-                        ann_ret = metrics.get("ann_ret") or metrics.get("annualized_return") or 0
+        try:
+            with open(audit_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if len(anomalies) >= max_rows:
+                        return anomalies
+                    try:
+                        entry = json.loads(line)
+                    except Exception:
+                        continue
 
-                        # CR-FIX: Institutional Anomaly Thresholds (Phase 225)
-                        # We only flag truly extreme events that suggest numerical divergence.
-                        if sharpe > 15 or ann_ret > 10 or ann_ret < -0.99:
-                            anomalies.append(
-                                {
-                                    "sleeve": s_id,
-                                    "window": entry.get("context", {}).get("window_index"),
-                                    "profile": entry.get("context", {}).get("profile"),
-                                    "sharpe": sharpe,
-                                    "ann_ret": ann_ret,
-                                }
-                            )
-                except Exception:
-                    continue
+                    if entry.get("type") != "action" or entry.get("status") != "success":
+                        continue
+                    if entry.get("step") != "backtest_simulate":
+                        continue
+
+                    ctx = entry.get("context", {}) or {}
+                    prof = str(ctx.get("profile", "")).strip()
+                    win = ctx.get("window_index")
+
+                    outcome = entry.get("outcome", {}) or {}
+                    metrics = outcome.get("metrics", {}) or {}
+
+                    sharpe = float(metrics.get("sharpe", 0.0) or 0.0)
+                    ann_ret = float(metrics.get("annualized_return", 0.0) or 0.0)
+                    ann_vol = float(metrics.get("annualized_vol", 0.0) or 0.0)
+
+                    if abs(sharpe) > sharpe_abs_threshold or ann_vol > vol_threshold:
+                        anomalies.append(
+                            {
+                                "sleeve": s_id,
+                                "window": int(win) if win is not None else -1,
+                                "profile": prof or "unknown",
+                                "sharpe": sharpe,
+                                "ann_ret": ann_ret,
+                                "ann_vol": ann_vol,
+                            }
+                        )
+        except Exception:
+            continue
+
+    # Deterministic ordering: most extreme Sharpe first, then vol.
+    anomalies.sort(key=lambda a: (abs(a["sharpe"]), a["ann_vol"]), reverse=True)
     return anomalies
 
 
+@StageRegistry.register(id="meta.report", name="Forensic Meta Report", description="Generates a unified markdown report for meta-portfolio performance.", category="meta", tags=["meta", "reporting"])
 def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: List[str], meta_profile: str = "meta_production"):
     md = []
     md.append("# 🌐 Multi-Sleeve Meta-Portfolio Report")

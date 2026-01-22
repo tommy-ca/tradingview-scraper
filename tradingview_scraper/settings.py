@@ -50,6 +50,8 @@ class FeatureFlags(BaseModel):
     feat_dynamic_direction: bool = False
     feat_short_direction: bool = True
     feat_market_neutral: bool = False
+    feat_directional_sign_test_gate: bool = False
+    feat_directional_sign_test_gate_atomic: bool = False
     feature_lookback: int = 120
     selection_mode: str = "v4"
 
@@ -122,9 +124,6 @@ class FeatureFlags(BaseModel):
     }
     clipping_sigma_v2_1: float = 3.49
     top_n_v2_1: int = 2
-
-    # Selection Specification Mode: 'v2', 'v3', 'legacy'
-    selection_mode: str = "v3"
 
 
 class ManifestSettingsSource(PydanticBaseSettingsSource):
