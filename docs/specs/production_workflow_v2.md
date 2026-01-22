@@ -28,6 +28,10 @@ The production workflow is divided into three distinct phases to ensure data int
     - Produces `data/lakehouse/features_matrix.parquet` for point-in-time correct simulations.
 
 ### Phase 2: Alpha Production (`flow-production`)
+**Binance Ratings Baselines (Atomic LONG/SHORT)**:
+- Runbook: `docs/runbooks/binance_spot_ratings_all_long_short_runbook_v1.md`
+- One-command: `make flow-binance-spot-rating-all-ls`
+
 **Goal**: Generate a single-sleeve portfolio (e.g., "Crypto Trend Following" or "US Equities").
 **Orchestrator**: `scripts/run_production_pipeline.py`
 
@@ -44,8 +48,10 @@ The production workflow is divided into three distinct phases to ensure data int
     - Filters for secular history and momentum.
 
 3.  **Strategy Synthesis**:
-    - Inverts Short candidates ($R_{syn} = -1 \times R$).
+    - Inverts Short candidates with a -100% loss cap ($R_{syn,short} = -clip(R_{raw}, upper=1.0)$).
     - Construct "Strategy Atoms".
+    - For directional sleeves (e.g., `binance_spot_rating_all_short`), certify inversion correctness with the Directional Correction Sign Test (`docs/specs/directional_correction_sign_test_v1.md`).
+    - If `feat_directional_sign_test_gate_atomic` is enabled, the production orchestrator fails fast on sign-test violations and persists `directional_sign_test_pre_opt.json` / `directional_sign_test.json` in the run directory.
 
 4.  **Pre-Opt Analysis (`port-pre-opt`)**:
     - **Critical Path**: Calculates Correlation Clusters (HRP), Antifragility Stats, and Regime Caps.
@@ -57,6 +63,7 @@ The production workflow is divided into three distinct phases to ensure data int
 
 6.  **Reporting (`port-report`)**:
     - Generates unified tearsheets and weight files immediately.
+    - If `feat_directional_sign_test_gate_atomic` is enabled, runs `scripts/validate_atomic_run.py` as a final artifact + audit gate.
 
 7.  **Validation (`port-test`)** *(Optional)*:
     - Runs backtests (VectorBT/Nautilus) on the optimized weights.
@@ -74,13 +81,17 @@ The production workflow is divided into three distinct phases to ensure data int
     - Uses **Ray** to execute child profiles (e.g., `crypto_long`, `crypto_short`) in parallel.
     - Each sleeve runs a full Phase 2 cycle.
 
-2.  **Recursive Aggregation**:
+2.  **Directional Correction Gate (Sign Test)**:
+    - When enabled via `feat_directional_sign_test_gate`, the meta orchestrator runs the Directional Correction Sign Test before aggregation.
+    - Fails fast if any pinned sleeve violates SHORT inversion semantics at the sleeve boundary.
+
+3.  **Recursive Aggregation**:
     - Builds a "Meta-Returns" matrix (Sleeves become Assets).
 
-3.  **Meta-Optimization**:
+4.  **Meta-Optimization**:
     - Allocates risk budget across sleeves (e.g., Risk Parity).
 
-4.  **Flattening**:
+5.  **Flattening**:
     - Projects meta-weights down to individual assets.
 
 ## 2. Key Improvements (v2)

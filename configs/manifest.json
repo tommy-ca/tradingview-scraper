@@ -170,13 +170,76 @@
         "max_weight": 0.95
       }
     },
+    "meta_benchmark_ray": {
+      "description": "Ray-Driven Meta-Portfolio Benchmark (Long + Short Rating All)",
+      "sleeves": [
+        {
+          "id": "long_all",
+          "profile": "binance_spot_rating_all_long",
+          "run_id": ""
+        },
+        {
+          "id": "short_all",
+          "profile": "binance_spot_rating_all_short",
+          "run_id": ""
+        }
+      ],
+      "meta_allocation": {
+        "engine": "custom",
+        "profile": "hrp",
+        "min_weight": 0.05,
+        "max_weight": 0.95
+      }
+    },
+    "meta_ma_benchmark_ray": {
+      "description": "Ray-Driven Meta-Portfolio MA Benchmark (Long + Short Rating MA)",
+      "sleeves": [
+        {
+          "id": "long_ma",
+          "profile": "binance_spot_rating_ma_long",
+          "run_id": ""
+        },
+        {
+          "id": "short_ma",
+          "profile": "binance_spot_rating_ma_short",
+          "run_id": ""
+        }
+      ],
+      "meta_allocation": {
+        "engine": "custom",
+        "profile": "hrp",
+        "min_weight": 0.05,
+        "max_weight": 0.95
+      }
+    },
     "meta_crypto_only": {
       "description": "Fractal Branch: Crypto-Only Matrix",
+      "sleeves": [
+        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "rerun_v3_long_all" },
+        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "rerun_v3_short_all" },
+        { "id": "ma_long", "profile": "binance_spot_rating_ma_long", "run_id": "rerun_v3_ma_long" },
+        { "id": "ma_short", "profile": "binance_spot_rating_ma_short", "run_id": "rerun_v3_ma_short" }
+      ],
+      "features": { "feat_directional_sign_test_gate": true },
+      "meta_allocation": { "engine": "custom", "profile": "hrp", "min_weight": 0.05, "max_weight": 0.5 }
+    },
+    "meta_crypto_only_v9": {
+      "description": "Fractal Branch: Crypto-Only Matrix (Pinned v9 Sleeves)",
       "sleeves": [
         { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "final_long_all_v9" },
         { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "final_short_all_v9" },
         { "id": "ma_long", "profile": "binance_spot_rating_ma_long", "run_id": "final_long_ma_v9" },
         { "id": "ma_short", "profile": "binance_spot_rating_ma_short", "run_id": "final_short_ma_v9" }
+      ],
+      "meta_allocation": { "engine": "custom", "profile": "hrp", "min_weight": 0.05, "max_weight": 0.5 }
+    },
+    "meta_crypto_only_ray": {
+      "description": "Fractal Branch: Crypto-Only Matrix (Fresh Sleeves via Ray)",
+      "sleeves": [
+        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "" },
+        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "" },
+        { "id": "ma_long", "profile": "binance_spot_rating_ma_long", "run_id": "" },
+        { "id": "ma_short", "profile": "binance_spot_rating_ma_short", "run_id": "" }
       ],
       "meta_allocation": { "engine": "custom", "profile": "hrp", "min_weight": 0.05, "max_weight": 0.5 }
     },
@@ -489,7 +552,8 @@
       "features": {
         "selection_mode": "v4",
         "feat_short_direction": false,
-        "entropy_max_threshold": 0.999
+        "entropy_max_threshold": 0.999,
+        "feat_directional_sign_test_gate_atomic": true
       },
       "discovery": {
         "enabled_markets": [
@@ -528,7 +592,8 @@
       "features": {
         "selection_mode": "v4",
         "feat_short_direction": true,
-        "entropy_max_threshold": 0.999
+        "entropy_max_threshold": 0.999,
+        "feat_directional_sign_test_gate_atomic": true
       },
       "discovery": {
         "enabled_markets": [

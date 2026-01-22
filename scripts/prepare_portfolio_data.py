@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 import math
@@ -39,9 +38,9 @@ def prepare_portfolio_universe():
         # CR-FIX: Strict Isolation (Phase 234)
         strict_iso = os.getenv("TV_STRICT_ISOLATION") == "1"
 
-        preselected_file = "data/lakehouse/portfolio_candidates.json"
+        preselected_file = str(active_settings.lakehouse_dir / "portfolio_candidates.json")
         if not os.path.exists(preselected_file):
-            preselected_file = "data/lakehouse/portfolio_candidates_raw.json"
+            preselected_file = str(active_settings.lakehouse_dir / "portfolio_candidates_raw.json")
 
         if strict_iso:
             logger.error("[STRICT ISOLATION] Candidate manifest missing in RUN_DIR. Fallback to Lakehouse denied.")
@@ -77,25 +76,14 @@ def prepare_portfolio_universe():
     logger.info(f"Portfolio Universe: {len(universe)} atoms across {len(physical_map)} physical assets.")
 
     # 3. Fetch/Load Data
-    source_mode = os.getenv("PORTFOLIO_DATA_SOURCE", "fetch")
+    # Phase 372: Alpha Read-Only Enforcement
+    # Default to lakehouse-only. DataOps is responsible for network ingestion via `make flow-data`.
+    source_mode = os.getenv("PORTFOLIO_DATA_SOURCE", "lakehouse_only")
 
     if source_mode != "lakehouse_only":
-        from tradingview_scraper.pipelines.data.orchestrator import DataPipelineOrchestrator
-
-        # Ingestion Phase (Network)
-        # Note: In strict isolation, we assume data is already present or linked.
-        # But if allowed, we trigger ingestion here.
-        loader = PersistentDataLoader()
-        orchestrator = DataPipelineOrchestrator(loader)
-        force_sync = os.getenv("PORTFOLIO_FORCE_SYNC") == "1"
-        orchestrator.ingest_universe(universe, force_sync=force_sync, lookback_days=lookback_days)
-
-        if ledger:
-            ledger.record_intent(
-                step="data_ingestion",
-                params={"lookback_days": lookback_days, "force_sync": force_sync},
-                input_hashes={"candidates": hashlib.sha256(json.dumps(universe).encode()).hexdigest()},
-            )
+        raise RuntimeError(
+            "Alpha/Prep is read-only by default. Network ingestion must run in DataOps. Run `make flow-data` (or `make data-ingest`) first, then re-run with PORTFOLIO_DATA_SOURCE=lakehouse_only."
+        )
 
     # 4. Alignment Phase (Disk -> Memory)
     price_data = {}
@@ -110,7 +98,7 @@ def prepare_portfolio_universe():
         try:
             # We use a new loader instance per thread/task
             # Note: websocket_jwt_token logic removed for simplicity in this consolidation unless needed
-            local_loader = PersistentDataLoader()
+            local_loader = PersistentDataLoader(lakehouse_path=str(active_settings.lakehouse_dir))
 
             # If not lakehouse_only, we might want to ensure sync here too?
             # But step 3 already did ingest_universe which handles batching.

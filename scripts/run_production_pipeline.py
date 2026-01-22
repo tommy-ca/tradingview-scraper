@@ -93,6 +93,21 @@ class ProductionPipeline:
         with open(path, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
 
+    def run_directional_sign_test_gate(self, *, require_optimizer_normalization: bool, output_name: str) -> None:
+        from scripts.audit_directional_sign_test import run_sign_test_for_run_dir, write_findings_json
+
+        findings = run_sign_test_for_run_dir(
+            self.run_dir,
+            atol=0.0,
+            require_optimizer_normalization=bool(require_optimizer_normalization),
+            risk_profile="hrp",
+        )
+        out_path = self.run_dir / "data" / output_name
+        write_findings_json(findings, out_path)
+
+        if any(f.level == "ERROR" for f in findings):
+            raise RuntimeError(f"Directional Sign Test failed ({out_path.name})")
+
     def run_step(
         self,
         name: str,
@@ -202,10 +217,11 @@ class ProductionPipeline:
 
     def validate_discovery(self) -> Dict[str, Any]:
         """Discovery Gate: Verify export directory contains results."""
-        export_dir = Path("export") / self.run_id
+        settings = get_settings()
+        export_dir = settings.export_dir / self.run_id
         if not export_dir.exists():
             # Try finding the latest directory if ID mismatch (discovery scripts sometimes use their own ts)
-            dirs = sorted(Path("export").glob("*"), key=os.path.getmtime, reverse=True)
+            dirs = sorted(settings.export_dir.glob("*"), key=os.path.getmtime, reverse=True)
             if dirs:
                 export_dir = dirs[0]
 
@@ -514,6 +530,24 @@ class ProductionPipeline:
                 # Snapshot the manifest after Cleanup (Step 1)
                 if absolute_step == 1 and success:
                     self.snapshot_resolved_manifest()
+
+                # Directional Sign Test Gate (Atomic)
+                # - Pre-opt: proves inversion correctness at the sleeve boundary (post-synthesis).
+                # - Post-opt: adds optimizer normalization sanity once weights exist.
+                if self.settings.features.feat_directional_sign_test_gate_atomic and success:
+                    if name == "Strategy Synthesis":
+                        progress.console.print("[bold blue]>>> Gate: Directional Sign Test (Pre-Opt)[/]")
+                        self.run_directional_sign_test_gate(require_optimizer_normalization=False, output_name="directional_sign_test_pre_opt.json")
+                    if name == "Optimization":
+                        progress.console.print("[bold blue]>>> Gate: Directional Sign Test (Post-Opt)[/]")
+                        self.run_directional_sign_test_gate(require_optimizer_normalization=True, output_name="directional_sign_test.json")
+                    if name == "Reporting":
+                        progress.console.print("[bold blue]>>> Gate: Atomic Validation (Artifacts + Sign Test)[/]")
+                        from scripts.validate_atomic_run import validate_atomic_run
+
+                        rc = validate_atomic_run(run_id=self.run_id, profile=self.profile, manifest_path=self.manifest_path)
+                        if int(rc) != 0:
+                            raise RuntimeError("Atomic validation failed")
 
                 # Integrated Recovery is REMOVED to enforce Strict Pipeline Separation
                 # If Health Audit fails, the pipeline fails. Recovery must be done via 'flow-data'.

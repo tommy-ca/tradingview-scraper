@@ -28,7 +28,9 @@ To ensure institutional reproducibility, the platform implements a standardized 
 
 ### 10.6 Stage 6: Recursive Strategy Synthesis (Pillar 2)
 - **Process**: Generation of Strategy Atoms `(Asset, Logic, Direction)`.
-- **Normalization**: SHORT inversion ($R_{syn} = -1 \times R_{raw}$) to prepare for Pillar 3.
+- **Normalization**: SHORT inversion with a -100% loss cap to prepare for Pillar 3:
+  - $R_{syn,long} = R_{raw}$
+  - $R_{syn,short} = -clip(R_{raw}, upper=1.0)$
 - **Implementation**: Handled by `SynthesisStage` in the v4 MLOps pipeline.
 
 ## 11. Traceability & Audit Standards

@@ -1,7 +1,6 @@
 import logging
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from tradingview_scraper.pipelines.discovery.base import (
     BaseDiscoveryScanner,
@@ -70,14 +69,13 @@ class DiscoveryPipeline:
             # Run for each scanner path in the pipeline
             scanner_paths = p_config.get("scanners", [])
             for s_path in scanner_paths:
-                # Composable parameters
-                params = {"config_path": s_path, "interval": p_config.get("interval", "1d")}
                 # Handle path resolution (relative to configs/)
                 full_path = Path("configs") / s_path
                 if not full_path.exists() and not full_path.suffix:
                     full_path = full_path.with_suffix(".yaml")
 
-                cands = scanner.discover(str(full_path))
+                params = {"config_path": str(full_path), "interval": p_config.get("interval", "1d"), "pipeline": p_name}
+                cands = scanner.discover(params)
                 all_candidates.extend(cands)
 
         # 3. Execute Strategies
@@ -95,7 +93,8 @@ class DiscoveryPipeline:
                 if not full_path.exists() and not full_path.suffix:
                     full_path = full_path.with_suffix(".yaml")
 
-                cands = scanner.discover(str(full_path))
+                params = {"config_path": str(full_path), "interval": s_config.get("interval", "1d"), "strategy": s_name}
+                cands = scanner.discover(params)
                 # Inject logic metadata
                 for c in cands:
                     if "logic" not in c.metadata:

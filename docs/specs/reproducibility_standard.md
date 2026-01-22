@@ -13,7 +13,8 @@ To determine the final value of any setting, the platform resolves multiple sour
 5.  **L1: Code Defaults**: Hardcoded fallbacks in the Pydantic models.
 
 ## 3. The Resolved Manifest (`resolved_manifest.json`)
-Every production run must generate a `resolved_manifest.json` in its run directory (`artifacts/summaries/runs/<RUN_ID>/`).
+Every production run must generate a `resolved_manifest.json` snapshot in its run directory:
+- `data/artifacts/summaries/runs/<RUN_ID>/config/resolved_manifest.json`
 
 ### 3.1 Content Requirements
 - **Final Values**: The exact parameters used for the run after the 5-layer resolution.
@@ -25,10 +26,21 @@ Every production run must generate a `resolved_manifest.json` in its run directo
     - SHA-256 hashes of all foundational symbol files (e.g., `sp500_symbols.txt`).
     - Schema version of the manifest.
 
+### 3.2 Path Determinism (No Hard-Coded Paths)
+To keep runs replayable across environments:
+- All filesystem paths used by pipelines MUST be derived from settings (e.g., `settings.export_dir`, `settings.lakehouse_dir`, `settings.manifest_path`).
+- Orchestrators MUST NOT hard-code `configs/manifest.json` when a manifest override is in effect (`TV_MANIFEST_PATH`).
+- Scripts MUST resolve run directories via `settings.summaries_runs_dir` (never `artifacts/summaries/runs/...`).
+
 ## 4. Replayability Protocol
-A past run can be perfectly replicated by passing the `resolved_manifest.json` as the source manifest:
+Replayability is defined as the ability to reconstruct the run **without guessing**:
+- Inputs: the original manifest (`TV_MANIFEST_PATH`), the profile (`TV_PROFILE`), and any environment overrides.
+- Evidence: `resolved_manifest.json` + `audit.jsonl` provide the effective settings and step-by-step trace.
+
+**Note**: `resolved_manifest.json` is a settings snapshot; it is not required to be a valid multi-profile manifest.
+
 ```bash
-make flow-production MANIFEST=artifacts/summaries/runs/20251231-120000/resolved_manifest.json
+make flow-production PROFILE=<PROFILE> MANIFEST=<PATH_TO_ORIGINAL_MANIFEST> TV_RUN_ID=<RUN_ID>
 ```
 
 ## 5. Execution Traces (Logs)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from pydantic import ValidationError
 
-from tradingview_scraper.futures_universe_selector import SelectorConfig
+from tradingview_scraper.futures_universe_selector import DEFAULT_MOMENTUM, SelectorConfig
 
 yaml: ModuleType | None
 try:
@@ -152,18 +153,17 @@ def _lint_config(path: Path, strict: bool) -> List[LintIssue]:
             issues.append(LintIssue("WARN", "CFG_MARKET_CAP_FILE", path, f"market_cap_file not found: {config.market_cap_file}"))
 
     # --- Contradictions / dead config ---
-    if config.include_perps_only and config.exclude_perps:
+    def _bool_attr(name: str) -> bool:
+        # Linter must stay compatible with evolving SelectorConfig schemas.
+        # Some fields exist only in older configs and are ignored by the model;
+        # we treat them as disabled to avoid crashing the lint pass.
+        return bool(getattr(config, name, False))
+
+    if _bool_attr("include_perps_only") and _bool_attr("exclude_perps"):
         issues.append(LintIssue("ERROR", "CFG_CONTRADICTION_PERPS", path, "include_perps_only=true conflicts with exclude_perps=true"))
 
-    if config.include_dated_futures_only and config.exclude_dated_futures:
-        issues.append(
-            LintIssue(
-                "ERROR",
-                "CFG_CONTRADICTION_DATED",
-                path,
-                "include_dated_futures_only=true conflicts with exclude_dated_futures=true (universe will be empty)",
-            )
-        )
+    if _bool_attr("include_dated_futures_only") and _bool_attr("exclude_dated_futures"):
+        issues.append(LintIssue("ERROR", "CFG_CONTRADICTION_DATED", path, "include_dated_futures_only=true conflicts with exclude_dated_futures=true (universe will be empty)"))
 
     if config.include_stable_bases and config.exclude_stable_bases:
         issues.append(LintIssue("ERROR", "CFG_CONTRADICTION_STABLE", path, "include_stable_bases=true conflicts with exclude_stable_bases=true"))
@@ -171,10 +171,10 @@ def _lint_config(path: Path, strict: bool) -> List[LintIssue]:
     if config.group_duplicates and not config.dedupe_by_symbol:
         issues.append(LintIssue("WARN", "CFG_DEAD_GROUP_DUPES", path, "group_duplicates=true has no effect unless dedupe_by_symbol=true"))
 
-    if config.prefer_perps and config.exclude_perps:
+    if _bool_attr("prefer_perps") and _bool_attr("exclude_perps"):
         issues.append(LintIssue("WARN", "CFG_DEAD_PREFER_PERPS", path, "prefer_perps=true has no effect when exclude_perps=true"))
 
-    if config.attach_perp_counterparts and config.exclude_perps:
+    if config.attach_perp_counterparts and _bool_attr("exclude_perps"):
         issues.append(
             LintIssue(
                 "WARN",
@@ -244,12 +244,28 @@ def _lint_config(path: Path, strict: bool) -> List[LintIssue]:
         if field and field not in effective_columns:
             issues.append(LintIssue("WARN", "CFG_MOMENTUM_FIELD", path, f"momentum_composite_fields contains '{field}' not in columns"))
 
-    # Trend horizons
-    for horizons in [
-        config.trend.momentum.horizons or {},
-        config.trend.confirmation_momentum.horizons or {},
-    ]:
+    # Trend horizons (mirror selector runtime defaults to avoid false positives)
+    if config.trend.momentum.enabled:
+        horizons = config.trend.momentum.horizons or {}
+        if horizons == DEFAULT_MOMENTUM:
+            if config.trend.timeframe == "daily":
+                horizons = {"change": 0.0, "Perf.W": 0.0}
+            elif config.trend.timeframe == "weekly":
+                horizons = {"Perf.W": 0.0}
+        if not horizons:
+            if config.trend.timeframe == "daily":
+                horizons = {"change": 0.0, "Perf.W": 0.0}
+            elif config.trend.timeframe == "weekly":
+                horizons = {"Perf.W": 0.0}
+            else:
+                horizons = DEFAULT_MOMENTUM
+
         for field in horizons.keys():
+            if field and field not in effective_columns:
+                issues.append(LintIssue("ERROR", "CFG_TREND_FIELD", path, f"trend horizon field '{field}' not in columns"))
+
+    if config.trend.confirmation_momentum.enabled:
+        for field in (config.trend.confirmation_momentum.horizons or {}).keys():
             if field and field not in effective_columns:
                 issues.append(LintIssue("ERROR", "CFG_TREND_FIELD", path, f"trend horizon field '{field}' not in columns"))
 
@@ -257,9 +273,10 @@ def _lint_config(path: Path, strict: bool) -> List[LintIssue]:
     for screen in [config.trend_screen, config.confirm_screen, config.execute_screen]:
         if not screen:
             continue
-        for field in (screen.momentum.horizons or {}).keys():
-            if field and field not in effective_columns:
-                issues.append(LintIssue("ERROR", "CFG_SCREEN_FIELD", path, f"screen horizon field '{field}' not in columns"))
+        if screen.momentum.enabled:
+            for field in (screen.momentum.horizons or {}).keys():
+                if field and field not in effective_columns:
+                    issues.append(LintIssue("ERROR", "CFG_SCREEN_FIELD", path, f"screen horizon field '{field}' not in columns"))
 
     if strict:
         strict_issues = [LintIssue("ERROR", "STRICT", issue.path, f"{issue.code}: {issue.message}") for issue in issues if issue.level == "WARN"]
@@ -273,9 +290,44 @@ def iter_config_files(configs_dir: Path) -> Iterable[Path]:
     yield from sorted(configs_dir.rglob("*.yml"))
 
 
+def _iter_paths(paths: List[str]) -> Iterable[Path]:
+    for raw in paths:
+        # Support globs (e.g. configs/base/universes/binance*.yaml)
+        if any(ch in raw for ch in ["*", "?", "[", "]"]):
+            for match in sorted(glob.glob(raw, recursive=True)):
+                yield Path(match)
+            continue
+
+        yield Path(raw)
+
+
+def iter_config_files_from_args(configs_dir: Path, paths: Optional[List[str]]) -> Iterable[Path]:
+    if not paths:
+        yield from iter_config_files(configs_dir)
+        return
+
+    resolved: List[Path] = []
+    for candidate in _iter_paths(paths):
+        if candidate.is_dir():
+            resolved.extend(list(iter_config_files(candidate)))
+        elif candidate.is_file():
+            if candidate.suffix.lower() in {".yaml", ".yml"}:
+                resolved.append(candidate)
+        else:
+            # Ignore missing glob expansions; explicit non-existent paths should be surfaced.
+            raise FileNotFoundError(str(candidate))
+
+    seen = set()
+    for path in sorted((p.resolve() for p in resolved), key=lambda p: str(p)):
+        if path not in seen:
+            seen.add(path)
+            yield path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Lint TradingView universe selector configs")
     parser.add_argument("--configs-dir", default="configs", help="Config directory root (default: configs)")
+    parser.add_argument("--path", action="append", help="File/dir/glob to lint (repeatable). Overrides --configs-dir discovery.")
     parser.add_argument("--strict", action="store_true", help="Treat warnings as errors")
     args = parser.parse_args()
 
@@ -285,7 +337,13 @@ def main() -> int:
         return 2
 
     all_issues: List[LintIssue] = []
-    for path in iter_config_files(configs_dir):
+    try:
+        paths = list(iter_config_files_from_args(configs_dir, args.path))
+    except FileNotFoundError as exc:
+        print(f"configs path not found: {exc}")
+        return 2
+
+    for path in paths:
         all_issues.extend(_lint_config(path, strict=args.strict))
 
     errors = [i for i in all_issues if i.level == "ERROR"]

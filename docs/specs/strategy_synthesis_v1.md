@@ -8,7 +8,9 @@ A **Strategy Atom** is the fundamental unit of alpha, defined as a quartet:
 `Atom = (Asset, AlphaLogic, Direction, TimeScale)`
 
 - **Attribution Purity**: Each atom MUST have exactly ONE alpha logic.
-- **Normalization**: SHORT atoms are inverted ($R_{syn} = -1 \times R_{raw}$) to ensure positive-alpha bias for solvers.
+- **Normalization**: SHORT atoms are inverted (with a -100% loss cap) to ensure positive-alpha bias for solvers:
+  - $R_{syn,long} = R_{raw}$
+  - $R_{syn,short} = -clip(R_{raw}, upper=1.0)$
 - **ID Pattern**: `{Asset}_{Logic}_{Direction}_{TimeScale}`
 
 ## 3. The 3-Pillar Integration Standard

@@ -18,7 +18,11 @@ class CandidateMetadata:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        if not self.identity:
+        if self.identity:
+            return
+        if isinstance(self.symbol, str) and ":" in self.symbol:
+            self.identity = self.symbol
+        else:
             self.identity = f"{self.exchange}:{self.symbol}"
 
 

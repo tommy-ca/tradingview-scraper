@@ -3,7 +3,6 @@ from typing import Any, Dict, List
 
 from tradingview_scraper.futures_universe_selector import (
     FuturesUniverseSelector,
-    SelectorConfig,
     load_config,
 )
 from tradingview_scraper.pipelines.discovery.base import (
@@ -30,9 +29,11 @@ class TradingViewDiscoveryScanner(BaseDiscoveryScanner):
         """
         # 1. Load config (handles inheritance if base_preset is in params)
         try:
-            # If params is a string, it's a path to a config file
-            # If params is a dict, it's the config itself
-            cfg = load_config(params)
+            config_source: Any = params
+            if isinstance(params, dict) and params.get("config_path"):
+                config_source = str(params["config_path"])
+
+            cfg = load_config(config_source)
             selector = FuturesUniverseSelector(cfg)
 
             # 2. Run the selector
@@ -46,21 +47,29 @@ class TradingViewDiscoveryScanner(BaseDiscoveryScanner):
             # 3. Map to CandidateMetadata
             candidates = []
             for row in result.get("data", []):
-                symbol = row.get("symbol")
-                if not symbol:
+                raw_symbol = row.get("symbol")
+                if not raw_symbol:
                     continue
 
                 # Extract exchange from symbol if not present in row
                 exchange = row.get("exchange")
-                if not exchange and ":" in symbol:
-                    exchange = symbol.split(":")[0]
+                if not exchange and ":" in raw_symbol:
+                    exchange = raw_symbol.split(":")[0]
                 exchange = exchange or "UNKNOWN"
 
                 # Determine asset type
                 # (This is a bit heuristic, could be improved)
                 asset_type = row.get("type", "spot")
-                if symbol.endswith(".P"):
+                if str(raw_symbol).endswith(".P"):
                     asset_type = "perp"
+
+                # Normalize identity: downstream expects `EXCHANGE:SYMBOL` in the `symbol` field.
+                if ":" in str(raw_symbol):
+                    symbol = str(raw_symbol)
+                    if exchange == "UNKNOWN":
+                        exchange = symbol.split(":")[0]
+                else:
+                    symbol = f"{exchange}:{raw_symbol}"
 
                 cand = CandidateMetadata(
                     symbol=symbol,

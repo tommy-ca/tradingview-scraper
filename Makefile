@@ -175,12 +175,12 @@ scan-run: ## Execute composable discovery scanners
 	TV_EXPORT_RUN_ID=$(RUN_ID) $(PY) scripts/compose_pipeline.py --profile $(PROFILE)
 
 scan-audit: ## Lint scanner configurations
-	$(PY) scripts/lint_universe_configs.py
+	$(PY) scripts/lint_universe_configs.py --configs-dir configs
 
 crypto-scan-audit: ## Validate crypto scanner configurations
 	$(PY) scripts/lint_universe_configs.py --path configs/scanners/crypto/
-	$(PY) scripts/lint_universe_configs.py --path configs/base/universes/binance*.yaml
-	$(PY) scripts/lint_universe_configs.py --path configs/base/templates/crypto*.yaml
+	$(PY) scripts/lint_universe_configs.py --path 'configs/base/universes/binance*.yaml'
+	$(PY) scripts/lint_universe_configs.py --path 'configs/base/templates/crypto*.yaml'
 
 # --- DATA Namespace ---
 flow-data: ## [DataOps] Full Data Cycle: Discovery -> Ingestion -> Meta -> Features -> Lakehouse
@@ -303,6 +303,20 @@ baseline-guardrail: ## Compare raw_pool_ew invariance across two runs (RUN_A, RU
 	fi
 	$(PY) scripts/raw_pool_invariance_guardrail.py --run-a $(RUN_A) --run-b $(RUN_B)
 
+atomic-validate: ## Validate an atomic sleeve run (RUN_ID + PROFILE required)
+	@if [ -z "$(RUN_ID)" ] || [ -z "$(PROFILE)" ]; then \
+		echo "Set RUN_ID and PROFILE (e.g. RUN_ID=20260118-161253 PROFILE=binance_spot_rating_all_long)."; \
+		exit 1; \
+	fi
+	$(PY) python scripts/validate_atomic_run.py --run-id $(RUN_ID) --profile $(PROFILE) --manifest-path $(MANIFEST)
+
+atomic-audit: ## Audit an atomic sleeve run (sign test + atomic validation) (RUN_ID + PROFILE required)
+	@if [ -z "$(RUN_ID)" ] || [ -z "$(PROFILE)" ]; then \
+		echo "Set RUN_ID and PROFILE (e.g. RUN_ID=20260118-161253 PROFILE=binance_spot_rating_all_long)."; \
+		exit 1; \
+	fi
+	$(PY) python scripts/run_atomic_audit.py --run-id $(RUN_ID) --profile $(PROFILE) --manifest-path $(MANIFEST)
+
 report-sync: ## Synchronize artifacts to private Gist
 	@echo ">>> Preparing Gist Payload..."
 	@rm -rf data/artifacts/gist_payload && mkdir -p data/artifacts/gist_payload
@@ -324,6 +338,18 @@ flow-prelive: ## Production pre-live workflow (including slow Nautilus simulator
 
 flow-dev: ## Rapid iteration development execution
 	$(MAKE) flow-production PROFILE=development
+
+flow-binance-spot-rating-all-ls: ## Run Binance Spot Rating ALL long+short atomic pipelines + audits
+	@echo ">>> Preconditions: run \"make flow-data\" first for fresh lakehouse inputs."
+	@ts=$$(date +%Y%m%d-%H%M%S); \
+	run_long=binance_spot_rating_all_long_$${ts}; \
+	run_short=binance_spot_rating_all_short_$${ts}; \
+	echo ">>> RUN_LONG=$$run_long"; \
+	echo ">>> RUN_SHORT=$$run_short"; \
+	TV_RUN_ID=$$run_long $(MAKE) flow-production PROFILE=binance_spot_rating_all_long; \
+	TV_RUN_ID=$$run_short $(MAKE) flow-production PROFILE=binance_spot_rating_all_short; \
+	$(MAKE) atomic-audit RUN_ID=$$run_long PROFILE=binance_spot_rating_all_long; \
+	$(MAKE) atomic-audit RUN_ID=$$run_short PROFILE=binance_spot_rating_all_short
 
 flow-meta-production: ## Run multi-sleeve meta-portfolio flow (Streamlined Fractal Tree)
 	@echo ">>> STAGE: META-PORTFOLIO PIPELINE (Fractal Matrix)"

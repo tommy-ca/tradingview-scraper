@@ -13,7 +13,9 @@ The platform is organized into three orthogonal pillars to ensure logical purity
 
 ### Pillar 2: Strategy Synthesis (Alpha Generation)
 - **The Strategy Atom**: Smallest unit of alpha, defined as `(Asset, Logic)`. Each atom MUST have exactly ONE logic.
-- **Synthetic Long Normalization**: SHORT return streams are inverted ($R_{syn} = -1 \times R_{raw}$) to ensure positive-alpha bias for solvers.
+- **Synthetic Long Normalization**: SHORT return streams are inverted to ensure positive-alpha bias for solvers:
+  - $R_{syn,long} = R_{raw}$
+  - $R_{syn,short} = -clip(R_{raw}, upper=1.0)$ (short loss cap at -100%)
 - **Composition**: Atoms can be ensembled into complex strategies (e.g., Long/Short pairs).
 - **Directional Purity**: Synthetic shorts are treated as distinct positive-alpha streams.
 
@@ -21,6 +23,13 @@ The platform is organized into three orthogonal pillars to ensure logical purity
 - **Decision-Naive Solvers**: Mathematical engines (`skfolio`, `riskfolio`) that optimize provided streams without "market views".
 - **Synthetic Hierarchical Clustering**: Clustering is performed on *synthesized* return streams to identify logic-space correlations.
 - **Constraint Delegation**: Targets like **Market Neutrality** are handled as native solver constraints ($|w^T\beta| \le 0.15$), ensuring global optimality.
+
+### Pillar 4 (Meta): Fractal Ensembling (Meta-Allocation)
+- **Atomic Sleeves as Inputs**: Meta portfolios treat completed sleeve runs as assets.
+- **Directional Integrity Gate**: Mixed-direction meta workflows MUST enforce a Directional Correction “Sign Test” at the sleeve boundary before ensembling.
+- **Run Artifact Contracts**: Atomic sleeves MUST be meta-eligible only if required artifacts exist and are reproducible (see `docs/design/atomic_sleeve_audit_contract_v1.md`).
+- **Automation**: Atomic sleeve runs SHOULD be validated via `scripts/validate_atomic_run.py` before pinning into meta profiles.
+- **Spec Reference**: `docs/specs/atomic_run_validation_v1.md`
 
 ## 2. Selection Standards (The Alpha Core)
 
@@ -54,7 +63,8 @@ The platform is organized into three orthogonal pillars to ensure logical purity
 2. **Single Responsibility**: Each stage/filter/ranker performs exactly one transformation.
 3. **Composability**: Pipelines are chains of stages; stages can be swapped/reordered.
 4. **Fractal Design**: Meta-portfolios treat sleeves as assets (recursive application).
-5. **Audit Trail**: Every stage logs to `context.audit_trail`.
+5. **Fail-Fast Gates**: Meta workflows MUST support deterministic preflight gates (e.g., the Directional Correction “Sign Test”) controlled by feature flags and persisted as run artifacts.
+6. **Audit Trail**: Every stage logs to `context.audit_trail`.
 
 ### 4.2 Core Abstractions
 
@@ -249,8 +259,133 @@ allowed-tools: Bash(python:*) Read
 #### Progressive Disclosure
 
 Skills use progressive disclosure to minimize context usage:
-1. **Discovery** (~100 tokens): Only `name` + `description` loaded at startup
-2. **Activation** (<5000 tokens): Full SKILL.md loaded when invoked
-3. **Execution** (on-demand): Referenced files loaded as needed
+### 5.7 Compute Resilience & Resource Awareness
+- **Dynamic Resource Capping**: The orchestrator must support environment-based resource limits (e.g. `TV_ORCH_CPUS`, `TV_ORCH_MEM_GB`) to prevent OOM in constrained environments.
+- **Stateful Isolation**: Distributed workers (Ray Actors) utilize a mixed-symlink strategy to share massive datasets (Lakehouse) while maintaining isolated output environments.
+- **Fail-Fast Protocols**: Parallel executions are subject to a 100% success gate; partial failures trigger immediate pipeline abortion to preserve meta-portfolio integrity.
 
-See: `docs/design/claude_skills_v1.md` for complete specification.
+---
+
+## 6. Phase 370: Correctness Hardening (SDD + TDD)
+
+This phase formalizes a set of **correctness invariants** that are foundational to audit integrity. These items are intentionally “boring”: they prevent silent drift and make the platform easier to reason about.
+
+### 6.1 Settings Determinism Invariants
+1. **No duplicate field names** in configuration models (Pydantic / Settings).
+   - Rationale: duplicate declarations silently override earlier defaults and can create environment-dependent behavior.
+2. **Single source of truth** for `features.selection_mode`.
+   - Default MUST be stable and documented.
+   - Manifest overrides MUST take precedence over code defaults.
+   - Env overrides MUST take precedence over manifest.
+3. **Path derivation** MUST not use hard-coded relative strings when a settings field exists.
+   - Example: use `settings.export_dir` not `Path("export")`.
+
+### 6.2 DataOps / Alpha Contract Invariants
+1. **Discovery export path** MUST be `settings.export_dir / <RUN_ID>` (default `data/export/<RUN_ID>`).
+2. **Ingestion lakehouse path** MUST be consistent end-to-end:
+   - the writer (sync) and the validator (toxicity checks) MUST read/write the same `lakehouse_dir`.
+3. **Alpha cycle is read-only** with respect to external network I/O:
+   - Alpha pipelines MUST not call TradingView/CCXT/WebSocket endpoints.
+   - DataOps is the only flow permitted to mutate the lakehouse.
+
+### 6.3 Meta-Portfolio Contract Invariants
+1. **No hard-coded manifest path usage** inside meta orchestration.
+   - Meta must resolve the active manifest via settings (`TV_MANIFEST_PATH`) or explicit CLI arg.
+2. **Meta reproducibility** requires deterministic sleeve resolution:
+   - meta runs MUST persist the resolved sleeve list (including run IDs) used for aggregation.
+3. **Meta joins** must be calendar-safe:
+   - crypto↔tradfi aggregation uses **inner join** on dates; never zero-fill calendar gaps.
+
+### 6.4 Discovery Schema / Identity Invariants
+1. `CandidateMetadata.identity` MUST be exactly `EXCHANGE:SYMBOL` (single prefix).
+2. Discovery scanners MUST accept a structured params object (dict) with at least:
+   - `config_path` (scanner config path)
+   - `interval` (optional)
+   - `strategy` / `logic` tag (optional)
+
+---
+
+## 7. Pipeline Audit Remediation Phases (371–374)
+
+These phases are the next steps derived from the “Full Data + Meta Pipeline Audit Plan (SDD Edition)” in `docs/specs/plan.md`.
+
+### 7.1 Phase 371: Path Determinism Sweep
+**Goal**: Remove brittle, environment-dependent path literals from core tooling.
+
+Requirements:
+1. All scripts MUST derive filesystem paths from `TradingViewScraperSettings` when a settings field exists:
+   - `settings.summaries_runs_dir` (never `artifacts/summaries/...`)
+   - `settings.lakehouse_dir` (never `Path("data/lakehouse")` in core logic)
+   - `settings.export_dir` (never `Path("export")`)
+2. Legacy fallbacks are permitted only if:
+   - they are settings-derived, and
+   - they are explicitly logged (for auditability).
+
+### 7.2 Phase 372: Alpha Read-Only Enforcement
+**Goal**: Make it difficult/impossible to accidentally introduce network I/O into the Alpha cycle.
+
+Requirements:
+1. Any “alpha/prep” entrypoint MUST default to **read-only** mode (Lakehouse-only).
+2. Network ingestion MUST be an explicit opt-in and MUST be treated as DataOps (not Alpha).
+3. If a network path is requested but unsupported, the script MUST fail fast with a clear remediation message (e.g., “run `make flow-data` first”).
+
+### 7.3 Phase 373: Modular Pipeline Safety
+**Goal**: Ensure modular pipelines (`tradingview_scraper/pipelines/*`) are safe by default.
+
+Requirements:
+1. Modular pipeline stages MUST NOT silently read from shared mutable locations unless explicitly configured.
+2. Defaults MUST bias toward **run-dir isolation**:
+   - if a stage needs `candidates` / `returns`, it SHOULD first look in `settings.summaries_runs_dir / <run_id> / data/`.
+3. Legacy fallbacks to shared mutable locations (e.g., `settings.lakehouse_dir`) are permitted only if:
+   - `TV_STRICT_ISOLATION != 1`, and
+   - the stage logs that it used a fallback path.
+4. When `TV_STRICT_ISOLATION=1`, modular stages MUST fail fast if run-dir inputs are missing (no shared fallbacks).
+
+### 7.4 Phase 374: Validation Tools “No Padding” Compliance
+**Goal**: Prevent validation/reporting utilities from introducing calendar artifacts.
+
+Requirements:
+1. Validation tools MUST NOT `fillna(0.0)` to align returns for TradFi or mixed calendar computations.
+2. Alignment MUST use calendar-safe joins:
+   - inner join on dates for mixed calendars
+   - explicit reporting of how many rows were dropped due to alignment
+3. Validation tools MUST resolve run directories via settings, not hard-coded paths.
+
+---
+
+## 8. Phase 380: Contract Tightening (SDD + TDD)
+
+This phase tightens **DataOps boundary contracts** to prevent “silent shape drift” from propagating
+into selection, optimization, and meta ensembling.
+
+### 8.1 Candidate Schema Contract (Canonical)
+
+The platform defines a canonical candidate record schema (compatible with `CandidateMetadata`):
+
+Required fields:
+1. `symbol` MUST be a string in `EXCHANGE:SYMBOL` format.
+2. `exchange` MUST be a string equal to the `symbol` prefix.
+3. `asset_type` MUST be a non-empty string (default `"spot"` if unknown).
+4. `identity` MUST be exactly `EXCHANGE:SYMBOL` (single prefix; equals `symbol`).
+5. `metadata` MUST be a dict (free-form; can store scanner-specific fields).
+
+Optional fields (when known):
+- `market_cap_rank`, `volume_24h`, `sector`, `industry`
+
+### 8.2 DataOps Validator Gate (Fail-Fast)
+
+The DataOps consolidation boundary MUST normalize and validate all discovery exports before
+writing `data/lakehouse/portfolio_candidates.json`.
+
+Requirements:
+1. Heterogeneous inputs MAY be normalized (e.g., legacy `"Symbol"` → `"symbol"`), but outputs MUST be canonical.
+2. When strict schema is enabled (`TV_STRICT_CANDIDATE_SCHEMA=1` or `TV_STRICT_HEALTH=1`), invalid records MUST raise
+   and fail the DataOps run (no silent drops).
+3. When strict schema is disabled, invalid records MAY be dropped, but the count MUST be logged.
+
+### 8.3 Deterministic Consolidation Semantics
+
+To preserve reproducibility:
+1. Candidate export files MUST be processed deterministically (stable ordering).
+2. Duplicate candidates MUST be de-duplicated by canonical `symbol`.
+3. Duplicate candidate metadata MUST be merged deterministically (do not lose fields).

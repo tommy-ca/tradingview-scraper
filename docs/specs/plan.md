@@ -515,17 +515,22 @@ Track all progress in `docs/specs/plan.md`.
 
 ### Pending Phases
 
+### Phase Roadmap: Architecture & Integration (300-360)
+
 | Phase | Description | Status | Dependencies |
 | :--- | :--- | :--- | :--- |
-| 305 | Migrate StrategyRegimeRanker | **Completed** | None |
-| 310 | Discovery Module | **Completed** | None |
-| 315 | Filter Module Extraction | **Completed** | None |
-| 320 | Meta-Portfolio Module | **Completed** | 305, 315 |
-| 330 | Declarative Pipeline | Planned (Low) | 310-320 |
-| 340 | Stage Registry & SDK | **Completed** | 305-320 |
-| 345 | Ray Compute Layer | Planned | 340 |
-| 350 | Prefect Workflow | Planned | 340, 345 |
+| 345 | **Ray Compute Layer (Sleeves)** | **Completed** | 340 |
+| 346 | **Ray Integration Validation (Meta)** | **Completed** | 345 |
+| 347 | **SDK-Driven Meta Orchestration** | **Completed** | 340, 346 |
+| 348 | **Orchestration Hardening** | **Completed** | 347 |
+| 350 | **Prefect Workflow Integration** | Planned | 340, 345 |
+| 351 | **Orchestration Forensic Audit** | **Completed** | 347, 350 |
+| 352 | **Ray Production Re-Validation** | **Completed** | 348, 351 |
+| 353 | **Full Ray Production Run** | In Progress | 352 |
 | 355 | Claude Skills | **Completed** | 340 |
+
+
+| 360 | Observability & Monitoring | Planned | 350 |
 
 | 360 | Observability | Planned (Optional) | 350 |
 
@@ -571,3 +576,333 @@ Track all progress in `docs/specs/plan.md`.
 1. **Prefect vs DBOS**: Which workflow engine to prioritize?
 2. **Stage Registry granularity**: Register every stage or just entry points?
 3. **Skill bundled scripts**: Python only or also Bash/Make?
+
+---
+
+# Appendix C: Full Data + Meta Pipeline Audit Plan (2026-01-22)
+
+This appendix is the **active checklist** for reviewing and auditing:
+1) the **DataOps** pipeline (`flow-data`) and
+2) the **Meta-Portfolio** pipeline (`flow-meta-production`)
+
+Goal: produce a high-integrity “contract-level” understanding of the platform’s end-to-end behavior, surface defects, and define a prioritized remediation backlog.
+
+## C.1 Scope & Non-Negotiables
+
+### In Scope
+- Data cycle: discovery → ingestion → metadata → feature ingestion → feature backfill → repair/audit.
+- Alpha cycle touchpoints that consume lakehouse outputs (read-only contract enforcement).
+- Meta-portfolio: sleeve aggregation → meta optimization → recursive flattening → reporting/audit gates.
+
+### Out of Scope (For This Pass)
+- Live trading / OMS / MT5 execution (unless meta/atomic artifacts rely on these paths).
+- Strategy research changes (signal design), unless required for correctness (e.g., SHORT inversion semantics).
+
+### Non-Negotiables (Institutional Standards)
+- **No padding weekends for TradFi**: never zero-fill to align calendars (inner-join only for crypto↔tradfi correlation/meta).
+- **Point-in-time fidelity**: backtests must not use future features / “latest ratings” for historical decisions.
+- **Replayability**: every production decision must be reconstructable from `audit.jsonl` + `resolved_manifest.json`.
+- **Isolation**: the Alpha cycle must not make outbound network calls; only DataOps can mutate the lakehouse.
+
+## C.2 Pipeline Map (Entry Points + Artifact Contracts)
+
+### Data Cycle (“flow-data”)
+- **Entry**: `make flow-data`
+- **Stages / Commands**
+  - Discovery: `make scan-run` → `scripts/compose_pipeline.py` → `tradingview_scraper/pipelines/discovery/`
+  - Price ingestion: `make data-ingest` → `scripts/services/ingest_data.py` → `PersistentDataLoader` → `data/lakehouse/*_1d.parquet`
+  - Metadata: `make meta-ingest` → `scripts/build_metadata_catalog.py`, `scripts/fetch_execution_metadata.py`
+  - Feature ingestion: `make feature-ingest` → `scripts/services/ingest_features.py` → `data/lakehouse/features/tv_technicals_1d/`
+  - PIT features: `make feature-backfill` → `scripts/services/backfill_features.py` → `data/lakehouse/features_matrix.parquet`
+  - Repair: `make data-repair` → `scripts/services/repair_data.py`
+
+### Alpha Cycle (“flow-production”)
+- **Entry**: `make flow-production PROFILE=<profile>`
+- **Orchestrator**: `scripts/run_production_pipeline.py`
+- **Contract**: assumes DataOps already produced a clean lakehouse; Alpha flow is read-only and snapshots into `data/artifacts/summaries/runs/<RUN_ID>/`.
+
+### Meta Cycle (“flow-meta-production”)
+- **Entry**: `make flow-meta-production PROFILE=<meta_profile>`
+- **Orchestrator**: `scripts/run_meta_pipeline.py`
+- **Stages (SDK)**
+  - Build meta returns: `QuantSDK.run_stage("meta.returns", ...)` → `scripts/build_meta_returns.py`
+  - Optimize meta: `QuantSDK.run_stage("meta.optimize", ...)` → `scripts/optimize_meta_portfolio.py`
+  - Flatten: `QuantSDK.run_stage("meta.flatten", ...)` → `scripts/flatten_meta_weights.py`
+  - Report: `QuantSDK.run_stage("meta.report", ...)` → `scripts/generate_meta_report.py`
+
+## C.3 Audit Checklist (What “PASS” Looks Like)
+
+### C.3.1 Settings / Manifest / Override Precedence
+- Confirm the precedence chain is stable:
+  - `configs/manifest.json` defaults
+  - profile overrides
+  - `TV_*` env overrides (including `MAKE` wrappers)
+  - resolved snapshot: `data/artifacts/summaries/runs/<RUN_ID>/config/resolved_manifest.json`
+- PASS if:
+  - `make env-check` passes.
+  - `resolved_manifest.json` contains the effective values (no missing blocks, no “mystery defaults”).
+
+### C.3.2 Discovery → Export Contract
+- Verify discovery produces export files at:
+  - `data/export/<RUN_ID>/*.json`
+- Verify candidate schema contains at least:
+  - `symbol` (string, ideally `EXCHANGE:SYMBOL`)
+  - optional: `exchange`, `type/profile`, `metadata.logic` / strategy tag
+- PASS if:
+  - `make scan-run` produces ≥1 export JSON file.
+  - `make data-ingest` can parse and ingest without schema errors.
+
+### C.3.3 Ingestion / Lakehouse Integrity
+- Verify each ingested symbol produces:
+  - `data/lakehouse/<SAFE_SYMBOL>_1d.parquet`
+- Verify ingestion guardrails:
+  - freshness skip works (mtime-based)
+  - toxicity checks run on newly ingested files (|r| bounds as spec’d)
+  - no silent “write elsewhere” mismatch between fetcher and validator
+- PASS if:
+  - `make data-audit` reports zero missing bars in strict mode for production profiles.
+  - repair can fill gaps and does not introduce duplicates/out-of-order candles.
+
+### C.3.4 Feature Store / PIT Feature Fidelity
+- Verify `feature-ingest` writes snapshot partitions under:
+  - `data/lakehouse/features/tv_technicals_1d/date=YYYY-MM-DD/part-*.parquet`
+- Verify `feature-backfill` produces:
+  - `data/lakehouse/features_matrix.parquet` (point-in-time correct)
+- PASS if:
+  - backtests and selection stages that claim PIT actually read from `features_matrix.parquet` (and audit ledger records the hash).
+
+### C.3.5 Alpha Cycle (“flow-production”) Read-Only Enforcement
+- Verify Alpha pipeline does NOT call network APIs (no TradingView/CCXT/WebSocket).
+- Verify Alpha pipeline snapshots lakehouse inputs into `run_dir/data/`.
+- PASS if:
+  - a run can be replayed using only artifacts in `data/artifacts/summaries/runs/<RUN_ID>/`.
+
+### C.3.6 Meta Cycle (“flow-meta-production”) Forensic Integrity
+- Verify meta aggregation joins sleeve returns via **inner join** on dates.
+- Verify sleeve health guardrail is applied (>= 75% success for consumed streams).
+- Verify directional sign test gate behavior:
+  - meta-level gate (`feat_directional_sign_test_gate`)
+  - atomic-level gate (`feat_directional_sign_test_gate_atomic`)
+- PASS if:
+  - meta artifacts exist in isolated meta run dir, and `latest/meta_portfolio_report.md` is updated.
+  - flattened weights sum and sign conventions are sane (short weights negative at physical layer).
+
+## C.4 Initial Issues Spotted (From Repo Recon)
+
+These are concrete, code-level items worth addressing early because they can silently corrupt “truth” in the audit chain.
+
+### High Priority (Correctness / Reproducibility)
+1. **Duplicate `selection_mode` in settings**
+   - Location: `tradingview_scraper/settings.py`
+   - Observation: `FeatureFlags` defines `selection_mode` twice (two different defaults). In Python/Pydantic, the latter declaration wins, which can silently override manifest defaults and CLI overrides.
+   - Risk: non-deterministic or surprising selection behavior across environments.
+
+2. **Discovery validation path mismatch**
+   - Location: `scripts/run_production_pipeline.py`
+   - Observation: `validate_discovery()` checks `export/<RUN_ID>` but DataOps writes to `data/export/<RUN_ID>`.
+   - Risk: false “0 discovery files” metrics in audit ledger / progress output.
+
+3. **Lakehouse path injection mismatch in ingestion**
+   - Location: `scripts/services/ingest_data.py`, `tradingview_scraper/symbols/stream/persistent_loader.py`
+   - Observation: ingestion can be given a custom `lakehouse_dir`, but `PersistentDataLoader()` is created without that path; validator then checks a different directory than the writer.
+   - Risk: toxicity checks can silently validate the wrong file (or miss newly written data).
+
+4. **Meta pipeline manifest path hardcode (sleeve execution)**
+   - Location: `scripts/run_meta_pipeline.py`
+   - Observation: when `--execute-sleeves` is enabled, the manifest is opened via a hard-coded `configs/manifest.json`, rather than `settings.manifest_path` (or a CLI arg).
+   - Risk: meta runs become non-replayable when alternative manifests are used.
+
+### Medium Priority (Schema / Maintainability)
+1. **Discovery scanner interface mismatch**
+   - Location: `tradingview_scraper/pipelines/discovery/base.py`, `tradingview_scraper/pipelines/discovery/tradingview.py`, `tradingview_scraper/pipelines/discovery/pipeline.py`
+   - Observation: base scanner API expects a dict of params, but `DiscoveryPipeline` calls `discover(str(path))` and also creates but doesn’t use a params dict.
+   - Risk: future scanners will diverge or break composition.
+
+2. **Candidate identity double-prefix risk**
+   - Location: `tradingview_scraper/pipelines/discovery/base.py`, `tradingview_scraper/pipelines/discovery/tradingview.py`
+   - Observation: if `symbol` is already `EXCHANGE:SYMBOL`, `CandidateMetadata.identity` can become `EXCHANGE:EXCHANGE:SYMBOL`.
+   - Risk: downstream consumers that rely on `identity` for uniqueness will behave incorrectly.
+
+3. **Legacy “fill NaNs with 0” pipeline remains**
+   - Location: `tradingview_scraper/pipeline.py`
+   - Observation: returns alignment uses `fillna(0.0)` which violates the platform’s “No Padding” standard for TradFi calendars.
+   - Risk: an unused-but-present orchestrator can be mistakenly used as reference or invoked by accident.
+
+## C.5 Remediation Backlog (Proposed)
+
+### Phase 370: Correctness Hardening (High Priority)
+- Remove duplicate `selection_mode` field in settings; add a single authoritative default.
+- Fix `validate_discovery()` to use `data/export/<RUN_ID>` (or read `settings.export_dir`).
+- Ensure ingestion and validation share the same lakehouse base path (plumb through `PersistentDataLoader(lakehouse_path=...)`).
+- Un-hardcode manifest path usage in meta pipeline sleeve execution path.
+
+### Phase 380: Contract Tightening (Medium Priority)
+- Standardize discovery output schema and enforce with a validator (fail fast in DataOps).
+- Normalize `CandidateMetadata` identity rules and document expected symbol formats.
+- Move or clearly mark legacy orchestrators to avoid accidental use.
+
+### Phase 390: Meta Pipeline Robustness (Medium Priority)
+- Treat meta cache artifacts as a first-class, auditable dependency:
+  - include cache key + underlying sleeve run IDs in the meta run’s audit ledger.
+- Strengthen invariants on flattening:
+  - enforce stable sum gate at meta layer
+  - verify sign conventions after recursion
+
+## C.6 SDD / TDD Worklist (Phase 370)
+
+- Primary TODO list (live checklist): `docs/specs/phase370_correctness_hardening_todo.md`
+- Design reference (how-to): `docs/design/correctness_hardening_phase370_v1.md`
+- Requirements reference (what/why): `docs/specs/requirements_v3.md` (Section 6)
+
+---
+
+# Appendix D: Full Data + Meta Pipeline Audit Plan (SDD Edition) (2026-01-22)
+
+This appendix is the **living, specs-driven** plan to review and audit:
+- the **full DataOps pipeline** (Discovery → Ingestion → Metadata → Features → PIT Backfill → Repair/Audit)
+- the **full Meta-Portfolio pipeline** (Sleeves → Meta Returns → Meta Optimize → Flatten → Report)
+
+The goal is to keep the audit work **tightly coupled** to SDD:
+1) update specs/requirements (what/why),
+2) update design docs (how),
+3) add tests (TDD),
+4) implement changes,
+5) validate via forensic artifacts.
+
+## D.1 References (SDD Source of Truth)
+- SDD process: `docs/specs/sdd_flow.md`
+- Requirements (incl. Phase 370 invariants): `docs/specs/requirements_v3.md`
+- DataOps contract: `docs/specs/dataops_architecture_v1.md`
+- Meta pipeline streamlining: `docs/specs/meta_streamlining_v1.md`
+- Reproducibility/determinism: `docs/specs/reproducibility_standard.md`
+- Phase 370 design: `docs/design/correctness_hardening_phase370_v1.md`
+- Phase 370 checklist: `docs/specs/phase370_correctness_hardening_todo.md`
+
+## D.2 Audit Execution Runbook (What to Run)
+
+### D.2.1 Preflight (Always)
+- `make env-check`
+- `make scan-audit`
+- `make data-audit STRICT_HEALTH=1` (production-integrity check)
+
+### D.2.2 DataOps (Mutates lakehouse; allowed network)
+- `make flow-data PROFILE=<profile>`
+- `make feature-backfill` (when PIT backtests are required)
+- `make data-repair` (when health audit indicates gaps/staleness)
+
+### D.2.3 Atomic Alpha (Must be read-only)
+- `make flow-production PROFILE=<profile>`
+- Optional: `make atomic-audit RUN_ID=<RUN_ID> PROFILE=<profile>`
+
+### D.2.4 Meta (Fractal)
+- `make flow-meta-production PROFILE=<meta_profile>`
+- Optional gates:
+  - `uv run scripts/audit_directional_sign_test.py --meta-profile <meta_profile>`
+  - `uv run scripts/validate_sleeve_health.py --run-id <RUN_ID>`
+
+## D.3 Audit Gates (PASS/FAIL Criteria)
+
+### DataOps Gates
+- Export path is correct and non-empty: `data/export/<RUN_ID>/*.json`
+- Lakehouse ingestion is consistent: `data/lakehouse/<SAFE_SYMBOL>_1d.parquet` created and health-auditable
+- Toxic data is dropped before optimizer exposure (|daily return| threshold)
+- Metadata is present for all symbols used downstream (tick size / pricescale / timezone / session)
+
+### Alpha Gates
+- Alpha run is replayable from:
+  - `data/artifacts/summaries/runs/<RUN_ID>/config/resolved_manifest.json`
+  - `data/artifacts/summaries/runs/<RUN_ID>/audit.jsonl`
+  - `data/artifacts/summaries/runs/<RUN_ID>/data/*`
+- Alpha run does not make outbound network calls (TradingView/CCXT/WebSocket)
+
+### Meta Gates
+- Meta uses inner join on dates; never zero-fill calendar gaps
+- Meta artifacts live inside the meta run’s isolated dir (not in lakehouse unless explicitly intended)
+- Meta uses active manifest (no hard-coded `configs/manifest.json`)
+
+## D.4 Issues & Improvements (Current Findings)
+
+These are the next high-value items to audit/remediate after Phase 370 correctness hardening.
+
+### D.4.1 Alpha/Prep: Default network behavior is unsafe
+- File: `scripts/prepare_portfolio_data.py:80`
+- Current: `PORTFOLIO_DATA_SOURCE` defaults to `"fetch"`.
+- Risk: if invoked without the Makefile guardrail, it can pull network data during an “Alpha” run, violating the read-only contract.
+- SDD action: change default to `"lakehouse_only"` and require explicit opt-in to network ingestion.
+
+### D.4.2 Alpha/Prep: Dead import path for ingestion orchestrator
+- File: `scripts/prepare_portfolio_data.py:83`
+- Current: imports `tradingview_scraper.pipelines.data.orchestrator.DataPipelineOrchestrator` but no such module exists.
+- Risk: any run with `PORTFOLIO_DATA_SOURCE != lakehouse_only` will fail at runtime.
+- SDD action: either implement the missing module or remove/replace this code path (and document the supported ingestion entrypoints).
+
+### D.4.3 Alpha/Prep: Hard-coded lakehouse candidate fallback
+- File: `scripts/prepare_portfolio_data.py:42`
+- Current: falls back to `"data/lakehouse/portfolio_candidates.json"` (string literal).
+- Risk: violates determinism/path invariants; bypasses `settings.lakehouse_dir`.
+- SDD action: use `settings.lakehouse_dir` when fallback is permitted, and deny fallback when `TV_STRICT_ISOLATION=1`.
+
+### D.4.4 Modular Selection Pipeline: Hard-coded lakehouse defaults
+- Files:
+  - `tradingview_scraper/pipelines/selection/stages/ingestion.py:22`
+  - `tradingview_scraper/pipelines/selection/pipeline.py:22`
+- Current: default candidates/returns paths are `data/lakehouse/...`.
+- Risk: modular pipeline is easier to accidentally call; defaults should be settings-driven and/or require explicit paths.
+- SDD action: accept paths from settings or require caller-provided paths in constructors.
+
+### D.4.5 Meta/Validation: Wrong artifacts root + calendar padding
+- File: `scripts/validate_meta_parity.py:21`
+- Current: uses `artifacts/summaries/...` (missing `data/` prefix) and fills missing returns with `0.0` (`scripts/validate_meta_parity.py:72`).
+- Risk: validation tool can silently point to the wrong run dir and violates “No Padding”.
+- SDD action: resolve run dir via `get_settings().summaries_runs_dir` and align returns via inner join / dropna.
+
+### D.4.6 Meta scripts still contain lakehouse hard-coded fallbacks
+- Files:
+  - `scripts/optimize_meta_portfolio.py:135`
+  - `scripts/flatten_meta_weights.py:40`
+- Risk: conflicts with the determinism standard (“derive paths from settings”), and makes multi-env runs brittle.
+- SDD action: replace `Path("data/lakehouse")` with `settings.lakehouse_dir` and log the resolved paths to the audit ledger.
+
+## D.5 Next SDD Phases (Proposed)
+
+### Phase 371: Path Determinism Sweep (High Priority)
+- Replace literal `data/lakehouse` / `artifacts/summaries` strings with settings-derived paths across core scripts.
+- Add targeted tests for the most invoked entrypoints (prep, validate, meta).
+
+### Phase 372: Alpha Read-Only Enforcement (High Priority)
+- Make read-only the default for any “alpha” entrypoint (`prepare_portfolio_data`).
+- Add a “deny network” guardrail that fails fast unless an explicit DataOps mode is enabled.
+
+### Phase 373: Modular Pipeline Safety (Medium Priority)
+- Ensure `pipelines/selection/*` cannot silently read stale shared lakehouse artifacts without the run-dir context.
+
+### Phase 374: Validation Tools “No Padding” Compliance (Medium Priority)
+- Update parity/validation tools to use calendar-safe joins (inner join / dropna) and log alignment stats.
+
+## D.6 Active SDD/TDD Checklist (Phases 371–374)
+- TODO list: `docs/specs/phase371_374_sdd_todo.md`
+- Design docs:
+  - `docs/design/path_determinism_phase371_v1.md`
+  - `docs/design/alpha_readonly_enforcement_phase372_v1.md`
+  - `docs/design/modular_pipeline_safety_phase373_v1.md`
+  - `docs/design/validation_no_padding_phase374_v1.md`
+
+## D.7 Status Update (Phases 371–374)
+
+As of **2026-01-22**, Phases **371–374** are implemented and tracked via:
+- Checklist: `docs/specs/phase371_374_sdd_todo.md`
+- Tests:
+  - `tests/test_phase371_374_sdd.py`
+  - `tests/test_phase373_modular_pipeline_safety.py`
+
+## D.8 Next Phase: 380 Contract Tightening (Candidate Schema Gate)
+
+Focus: tighten the **DataOps discovery→lakehouse boundary** so candidates are canonical and fail-fast in strict runs.
+
+References:
+- Requirements: `docs/specs/requirements_v3.md` (Section 8)
+- Design: `docs/design/contract_tightening_phase380_v1.md`
+- TODO checklist: `docs/specs/phase380_contract_tightening_todo.md`
+
+Primary gate:
+- DataOps MUST normalize and validate candidate exports before writing `data/lakehouse/portfolio_candidates.json`.

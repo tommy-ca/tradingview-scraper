@@ -25,7 +25,7 @@ class IngestionService:
         settings = get_settings()
         self.lakehouse_dir = lakehouse_dir or settings.lakehouse_dir
         self.freshness_hours = freshness_hours
-        self.loader = PersistentDataLoader() if PersistentDataLoader else None
+        self.loader = PersistentDataLoader(lakehouse_path=str(self.lakehouse_dir)) if PersistentDataLoader else None
 
         # Ensure lakehouse exists
         self.lakehouse_dir.mkdir(parents=True, exist_ok=True)

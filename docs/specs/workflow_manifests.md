@@ -130,7 +130,10 @@ To ensure a **solid benchmark baseline** for backtesting risk profiles, enforce 
 
 Suggested automation targets:
 - `make baseline-audit`: validate `market` + `benchmark` availability and report coverage
+- `make flow-binance-spot-rating-all-ls`: run both Binance Spot Rating ALL long/short atomic pipelines + audits
 - `make baseline-guardrail`: compare `raw_pool_ew` summaries across selection modes for the same universe source
+- `make atomic-validate RUN_ID=<RUN_ID> PROFILE=<PROFILE>`: validate a single sleeve run against the atomic artifact contract
+- `make atomic-audit RUN_ID=<RUN_ID> PROFILE=<PROFILE>`: run sign test + atomic validation (writes `*_audit.json` artifacts)
 
 ## 7. Schema Reference
 
@@ -148,3 +151,5 @@ Suggested automation targets:
 | :--- | :--- | :--- |
 | `dominant_signal` | str | Signal to prioritize in Log-MPS (e.g., `recommend_ma`). |
 | `dominant_signal_weight` | float | Weight multiplier for dominant signal (Default: 3.0). |
+| `feat_directional_sign_test_gate` | bool | Meta-only: if enabled, `run_meta_pipeline.py` runs the Directional Correction Sign Test and fails fast on violations; persists `directional_sign_test.json` in the meta run directory. |
+| `feat_directional_sign_test_gate_atomic` | bool | Atomic-only: if enabled, `run_production_pipeline.py` runs the Directional Correction Sign Test as a fail-fast gate (after synthesis and again post-optimization) and persists JSON artifacts in the sleeve run directory. |
