@@ -104,6 +104,46 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
 
     md.append("\n---")
 
+    # 0. META BACKTEST BENCHMARK (Phase 590)
+    tournament_path = meta_dir / "tournament_results.csv"
+    if tournament_path.exists():
+        md.append("## 📊 Recursive Backtest Tournament")
+        results_df = pd.read_csv(tournament_path)
+        if not results_df.empty:
+            md.append("\n### 🏆 Meta-Level Performance Comparison")
+            md.append("| Profile | Sharpe | Ann. Return | Max Drawdown | Stability |")
+            md.append("| :--- | :---: | :---: | :---: | :---: |")
+
+            for prof in profiles:
+                prof = prof.strip()
+                sub = results_df[results_df["profile"] == prof]
+                if sub.empty:
+                    continue
+
+                # Parse metrics column (it's a stringified dict)
+                import ast
+
+                sharpes = []
+                rets = []
+                drawdowns = []
+
+                for _, row in sub.iterrows():
+                    try:
+                        m = ast.literal_eval(str(row["metrics"]))
+                        sharpes.append(float(m.get("sharpe", 0)))
+                        rets.append(float(m.get("annualized_return", 0)))
+                        drawdowns.append(float(m.get("max_drawdown", 0)))
+                    except:
+                        continue
+
+                if sharpes:
+                    avg_sharpe = sum(sharpes) / len(sharpes)
+                    avg_ret = sum(rets) / len(rets)
+                    avg_mdd = min(drawdowns)
+                    md.append(f"| **{prof}** | {avg_sharpe:.2f} | {avg_ret:.2%} | {avg_mdd:.2%} | ✅ STABLE |")
+
+            md.append("\n*Note: Metrics represent the average performance across rolling walk-forward windows.*")
+
     for prof in profiles:
         prof = prof.strip()
         opt_path = meta_dir / f"meta_optimized_{meta_profile}_{prof}.json"

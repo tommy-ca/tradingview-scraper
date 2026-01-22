@@ -4,12 +4,12 @@
 - [ ] **Execution**: Verify OTLP trace linkage for parallel sleeves.
 - [ ] **Execution**: Verify "Golden Snapshot" integrity post-run.
 - [ ] **Validation**: Verify `meta_portfolio_report.md` contains performance metrics for all ensembled sleeves.
-
-## 2. Review and Audit
-- [x] **Audit `Makefile`**: Check for parallelism opportunities and fragile dependencies.
-- [x] **Audit `scripts/run_production_pipeline.py`**: Check for bottleneck and error handling.
-- [x] **Audit `scripts/run_meta_pipeline.py`**: Check for recursive/fractal logic efficiency.
-- [x] **Verify `manifest.json`**: Ensure profiles match the documentation (e.g., `crypto_production` parameters).
+## 48. Phase 590: Recursive Backtest Benchmarking (Validation)
+- [x] **Design**: Create `docs/design/meta_backtest_benchmarking_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_meta_backtest_benchmarking.py`.
+- [x] **Execution**: Run recursive backtest for `meta_benchmark` profile.
+- [x] **Validation**: Verify that the tournament output includes meta-level Sharpe and Drawdown.
+- [x] **Documentation**: Update forensic reports to display recursive backtest results.
 
 ## 3. Streamlining & Optimization
 - [x] **Optimize `flow-data`**:

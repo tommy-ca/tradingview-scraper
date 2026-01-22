@@ -81,8 +81,6 @@ class BacktestEngine:
 
         self.raw_candidates = []
         if cands_path.exists():
-            import json
-
             with open(cands_path, "r") as f:
                 self.raw_candidates = json.load(f)
 
@@ -140,8 +138,6 @@ class BacktestEngine:
 
         if metadata_path.exists():
             with open(metadata_path, "r") as f:
-                import json
-
                 self.metadata = json.load(f)
 
         stats_path = data_dir / "stats_matrix.parquet"
@@ -167,29 +163,136 @@ class BacktestEngine:
         prof_cfg = manifest.get("profiles", {}).get(profile_name, {})
         return "sleeves" in prof_cfg
 
-    def run_tournament(self, mode: str = "production", train_window: Optional[int] = None, test_window: Optional[int] = None, step_size: Optional[int] = None, run_dir: Optional[Path] = None):
+    def _get_sleeve_returns(self, sleeve: Dict, train_window: int, test_window: int, step_size: int) -> pd.Series:
+        """
+        Generates walk-forward returns for a sub-sleeve.
+        Uses child engine and caching to minimize compute.
+        """
+        s_profile = sleeve["profile"]
+        s_id = sleeve["id"]
+
+        # CR-842: Recursive Caching (Phase 570)
+        cache_dir = self.settings.lakehouse_dir / ".cache" / "backtests"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Cache key based on profile and window parameters
+        cache_key = f"{s_profile}_{train_window}_{test_window}_{step_size}"
+        cache_file = cache_dir / f"{cache_key}.pkl"
+
+        if cache_file.exists():
+            logger.info(f"  [{s_id}] CACHE HIT: {cache_key}")
+            return cast(pd.Series, pd.read_pickle(cache_file))
+
+        logger.info(f"  [{s_id}] Simulating walk-forward returns for profile: {s_profile}")
+
+        # 1. Create Child Engine
+        child_engine = BacktestEngine()
+
+        # 2. Configure Child Engine with sleeve profile settings
+        original_profile = os.getenv("TV_PROFILE")
+        os.environ["TV_PROFILE"] = s_profile
+
+        try:
+            # We must clear the settings cache to pick up the sub-profile
+            get_settings.cache_clear()
+            child_engine.load_data()
+
+            # 3. Run child tournament in lightweight mode
+            res = child_engine.run_tournament(mode="research", train_window=train_window, test_window=test_window, step_size=step_size, lightweight=True)
+
+            stitched = res.get("stitched_returns", {})
+
+            # Find any valid series
+            sleeve_series = pd.Series()
+            for k, series in stitched.items():
+                if k.endswith("_hrp") or k.endswith("_vectorbt_hrp"):
+                    sleeve_series = series
+                    break
+
+            if sleeve_series.empty and stitched:
+                sleeve_series = next(iter(stitched.values()))
+
+            if not sleeve_series.empty:
+                sleeve_series.to_pickle(cache_file)
+                return cast(pd.Series, sleeve_series)
+
+        finally:
+            # Restore environment
+            if original_profile:
+                os.environ["TV_PROFILE"] = original_profile
+            else:
+                os.environ.pop("TV_PROFILE", None)
+            get_settings.cache_clear()
+
+        return pd.Series()
+
+    def run_tournament(
+        self,
+        mode: str = "production",
+        train_window: Optional[int] = None,
+        test_window: Optional[int] = None,
+        step_size: Optional[int] = None,
+        run_dir: Optional[Path] = None,
+        lightweight: bool = False,
+    ):
         """Run a rolling-window backtest tournament."""
         if self.returns.empty:
             self.load_data(run_dir=run_dir)
 
         config = self.settings
-        train_window = int(train_window or config.train_window)
-        test_window = int(test_window or config.test_window)
-        step_size = int(step_size or config.step_size)
 
-        profiles = config.profiles.split(",")
-        engines = config.engines.split(",")
-        sim_names = config.backtest_simulators.split(",")
+        # CR-837: Fractal Recursive Backtest (Phase 570)
+        # Establish meta-returns BEFORE window calculation
+        is_meta = self._is_meta_profile(config.profile or "")
+
+        resolved_train = int(train_window or config.train_window)
+        resolved_test = int(test_window or config.test_window)
+        resolved_step = int(step_size or config.step_size)
+
+        if is_meta:
+            logger.info(f"🚀 RECURSIVE META-BACKTEST DETECTED: {config.profile}")
+            from scripts.build_meta_returns import build_meta_returns
+
+            if not run_dir:
+                run_dir = self.settings.prepare_summaries_run_dir()
+
+            anchor_prof = "hrp"
+            temp_meta_path = run_dir / "data" / f"meta_returns_{config.profile}_{anchor_prof}.pkl"
+            build_meta_returns(meta_profile=config.profile, output_path=str(run_dir / "data" / "meta.pkl"), profiles=[anchor_prof], manifest_path=config.manifest_path, base_dir=run_dir / "data")
+
+            if temp_meta_path.exists():
+                data = pd.read_pickle(temp_meta_path)
+                if isinstance(data, pd.Series):
+                    self.returns = data.to_frame()
+                else:
+                    self.returns = cast(pd.DataFrame, data)
+
+                logger.info(f"Meta-Returns Matrix established: {self.returns.shape}")
+                self.raw_candidates = [{"symbol": sid, "id": sid} for sid in self.returns.columns]
+            else:
+                logger.error(f"Failed to build meta-returns matrix at {temp_meta_path}. Aborting.")
+                return {"results": [], "meta": {}}
+
+        # Tournament profiles to iterate through
+        if lightweight:
+            profiles = ["hrp"]
+            engines = ["custom"]
+            sim_names = ["vectorbt"]
+        else:
+            profiles = config.profiles.split(",")
+            engines = config.engines.split(",")
+            sim_names = config.backtest_simulators.split(",")
 
         results = []
         results_meta = {
             "mode": mode,
-            "train_window": train_window,
-            "test_window": test_window,
-            "step_size": step_size,
+            "train_window": resolved_train,
+            "test_window": resolved_test,
+            "step_size": resolved_step,
             "profiles": profiles,
             "engines": engines,
             "simulators": sim_names,
+            "lightweight": lightweight,
         }
 
         synthesizer = StrategySynthesizer()
@@ -204,39 +307,18 @@ class BacktestEngine:
 
         # 1. Rolling Windows
         n_obs = len(self.returns)
-        windows = list(range(train_window, n_obs - test_window, step_size))
-        logger.info(f"Tournament Started: {n_obs} rows available. Windows: count={len(windows)}, train={train_window}, test={test_window}, step={step_size}")
-
-        is_meta = self._is_meta_profile(config.profile or "")
-        if is_meta:
-            logger.info(f"🚀 RECURSIVE META-BACKTEST DETECTED: {config.profile}")
-
-            # 1. Build Meta-Returns Matrix
-            # We use the existing meta-aggregation stage logic
-            # This will recursively run/load sleeves and build a unified matrix
-            from scripts.build_meta_returns import build_meta_returns
-
-            # Define a temporary path for the meta-returns
-            temp_meta_path = run_dir / "data" / "meta_returns_tournament.pkl"
-            build_meta_returns(meta_profile=config.profile, output_path=str(temp_meta_path), manifest_path=config.manifest_path, base_dir=run_dir / "data")
-
-            if temp_meta_path.exists():
-                self.returns = pd.read_pickle(temp_meta_path)
-                logger.info(f"Meta-Returns Matrix established: {self.returns.shape}")
-                # Mock candidates as sleeves
-                self.raw_candidates = [{"symbol": sid, "id": sid} for sid in self.returns.columns]
-            else:
-                logger.error("Failed to build meta-returns matrix. Aborting.")
-                return {"results": [], "meta": results_meta}
+        windows = list(range(resolved_train, n_obs - resolved_test, resolved_step))
+        logger.info(f"Tournament Started: {n_obs} rows available. Windows: count={len(windows)}, train={resolved_train}, test={resolved_test}, step={resolved_step}")
 
         for i in windows:
             current_date = self.returns.index[i]
-            train_rets = self.returns.iloc[i - train_window : i]
-            test_rets = self.returns.iloc[i : i + test_window]
+            train_rets = self.returns.iloc[i - resolved_train : i]
+            test_rets = self.returns.iloc[i : i + resolved_test]
 
             # --- DYNAMIC UNIVERSE FILTERING (Time-Travel) ---
             # If features_matrix exists, filter candidates based on HISTORICAL rating at current_date
-            dynamic_filter_active = not self.features_matrix.empty
+            # CR-837: Skip dynamic filtering for meta-portfolios (Phase 570)
+            dynamic_filter_active = not self.features_matrix.empty and not is_meta
 
             if dynamic_filter_active:
                 # Find the row in features_matrix corresponding to current_date (or latest prior)
@@ -244,14 +326,6 @@ class BacktestEngine:
                 # Assuming index is sorted
                 idx_loc = self.features_matrix.index.searchsorted(current_date)
                 if idx_loc > 0:
-                    # Use the rating available known AT or BEFORE the rebalance time
-                    # To define "Point-in-Time", we strictly use t <= current_date.
-                    # Actually, for "At Close" rebalance, we might know Today's rating.
-                    # Safest is row at idx_loc-1 if idx_loc == len or exact match.
-                    # searchsorted returns index where it *would* be inserted to maintain order.
-                    # If current_date exists, it returns that index (left).
-
-                    # We can simply use asof/reindex logic or exact lookup if daily aligned.
                     try:
                         # Use .loc with 'ffill' semantics manually or just check existence
                         if current_date in self.features_matrix.index:
@@ -262,9 +336,6 @@ class BacktestEngine:
                             current_features = self.features_matrix.loc[prev_date]
 
                         # Extract 'recommend_all' (Composite Rating)
-                        # Structure is MultiIndex (symbol, feature) or if simple (symbol)
-                        # We implemented MultiIndex in backfill_features.py
-
                         if isinstance(self.features_matrix.columns, pd.MultiIndex):
                             # Slice the 'recommend_all' feature cross-section
                             ratings = current_features.xs("recommend_all", level="feature")
@@ -273,8 +344,6 @@ class BacktestEngine:
                             ratings = current_features
 
                         # Filter: Keep if Rating > Threshold (e.g. 0.0 or 0.1)
-                        # TV 'Buy' starts at 0.1. 'Strong Buy' at 0.5.
-                        # Let's be permissive > 0.0 (Buy territory)
                         min_rating = 0.0
                         valid_symbols = ratings[ratings > min_rating].index.tolist()
 
@@ -294,29 +363,16 @@ class BacktestEngine:
 
             # 2. Pillar 1: Universe Selection
 
-            # CR-837: Fractal Recursive Backtest (Phase 570)
-            if is_meta:
-                # 1. Aggregate Sleeve Returns for current window
-                from scripts.build_meta_returns import build_meta_returns
-
-                # We build the meta-matrix using the train_rets of each sleeve.
-                # This requires sub-backtests to be run (or cached).
-                # Implementation details for dynamic meta-rebalancing follow...
-                pass
-
             # CR-265: Dynamic Regime Detection
             regime_name = "NORMAL"
             market_env = "NORMAL"
 
             try:
                 # Need DataFrame for detection. train_rets has asset columns.
-                # Ideally use a broad market index or equal-weight of universe for regime detection
-                # But using the refinement universe (train_rets) is a good proxy for the 'tradable universe' regime
                 if not train_rets.empty and len(train_rets) > 60:
                     regime_label, regime_score, quadrant = self.detector.detect_regime(train_rets)
                     regime_name = regime_label
                     market_env = quadrant
-                    # logger.info(f"  [Window {i}] Regime: {regime_name} ({regime_score:.2f}) | Quadrant: {market_env}")
             except Exception as e:
                 logger.warning(f"  [Window {i}] Regime detection failed: {e}")
 
@@ -355,7 +411,7 @@ class BacktestEngine:
                 for w in selection.winners:
                     window_meta[w["symbol"]] = w
 
-                if ledger:
+                if ledger and not lightweight:
                     metrics_payload = {
                         "n_universe_symbols": len(self.returns.columns),
                         "n_refinement_candidates": len(train_rets.columns),
@@ -421,7 +477,7 @@ class BacktestEngine:
                             }
                             try:
                                 engine = build_engine(target_engine)
-                                if ledger:
+                                if ledger and not lightweight:
                                     ledger.record_intent("backtest_optimize", opt_ctx, input_hashes={})
 
                                 default_shrinkage = float(config.features.default_shrinkage_intensity)
@@ -454,31 +510,16 @@ class BacktestEngine:
 
                                     # CR-837: Recursive Meta-Flattening (Phase 570)
                                     if is_meta:
-                                        # opt_resp.weights contains sleeve weights
-                                        # We need to flatten them into physical asset weights.
-                                        # We can't easily get the weights of sub-sleeves AT THIS HISTORICAL DATE
-                                        # without running another simulation or having pre-cached them.
-
-                                        # Strategy: For this window, we assume each sleeve is represented
-                                        # by its own sub-backtest's weights at this point in time.
-                                        # This is complex. Let's simplify:
-                                        # For now, we report sleeve weights as the final result of a meta-backtest,
-                                        # OR we implement a 'MetaSynthesizer' that knows how to resolve sleeves.
-
-                                        # For the first iteration of Phase 570, we'll treat sleeves as the final assets.
                                         flat_weights = opt_resp.weights
                                     else:
                                         flat_weights = synthesizer.flatten_weights(opt_resp.weights)
 
                                     # CR-FIX: Diversity Enforcement (Phase 225)
-                                    # Enforce a 25% max weight per physical asset to prevent concentration
                                     if not flat_weights.empty:
                                         w_sum_abs = flat_weights["Weight"].sum()
                                         if w_sum_abs > 0:
-                                            # Clip and re-normalize while keeping relative proportions
                                             flat_weights["Weight"] = flat_weights["Weight"].clip(upper=0.25 * w_sum_abs)
                                             flat_weights["Net_Weight"] = flat_weights["Net_Weight"].clip(lower=-0.25 * w_sum_abs, upper=0.25 * w_sum_abs)
-                                            # Renormalize to original gross exposure
                                             new_sum = flat_weights["Weight"].sum()
                                             if new_sum > 0:
                                                 scale = w_sum_abs / new_sum
@@ -509,7 +550,10 @@ class BacktestEngine:
                                         if n_strat > 0:
                                             ew_weights = pd.Series(1.0 / n_strat, index=returns_for_opt.columns)
                                             dummy_weights = pd.DataFrame({"Symbol": ew_weights.index, "Weight": ew_weights.values})
-                                            final_flat_weights = synthesizer.flatten_weights(dummy_weights)
+                                            if is_meta:
+                                                final_flat_weights = dummy_weights
+                                            else:
+                                                final_flat_weights = synthesizer.flatten_weights(dummy_weights)
                                             break
 
                                     final_flat_weights = flat_weights
@@ -518,7 +562,7 @@ class BacktestEngine:
                                 if final_flat_weights.empty:
                                     continue
 
-                                if ledger:
+                                if ledger and not lightweight:
                                     weights_dict = final_flat_weights.set_index("Symbol")["Net_Weight"].to_dict()
                                     ledger.record_outcome(
                                         step="backtest_optimize",
@@ -538,7 +582,7 @@ class BacktestEngine:
                                     }
                                     try:
                                         simulator = build_simulator(sim_name)
-                                        if ledger:
+                                        if ledger and not lightweight:
                                             ledger.record_intent("backtest_simulate", sim_ctx, input_hashes={})
 
                                         state_key = f"{target_engine}_{sim_name}_{profile}"
@@ -579,13 +623,10 @@ class BacktestEngine:
                                             key = f"{target_engine}_{sim_name}_{profile}"
                                             if key not in return_series:
                                                 return_series[key] = []
-                                            # CR-691: Numerical Clipping
                                             clamped_rets = daily_rets.clip(-1.0, 1.0)
                                             return_series[key].append(clamped_rets)
-                                        else:
-                                            logger.warning(f"  [METRICS] Daily returns missing or invalid type for {target_engine}_{sim_name}_{profile}: {type(daily_rets)}")
 
-                                        if ledger:
+                                        if ledger and not lightweight:
                                             data_payload: Dict[str, Any] = {"daily_returns": []}
                                             if isinstance(daily_rets, pd.Series):
                                                 data_payload["daily_returns"] = daily_rets.values.tolist()
@@ -597,10 +638,10 @@ class BacktestEngine:
 
                                         results.append({"window": i, "engine": target_engine, "profile": profile, "simulator": sim_name, "metrics": sanitized_metrics})
                                     except Exception as e_sim:
-                                        if ledger:
+                                        if ledger and not lightweight:
                                             ledger.record_outcome(step="backtest_simulate", status="error", output_hashes={}, metrics={"error": str(e_sim)}, context=sim_ctx)
                             except Exception as e:
-                                if ledger:
+                                if ledger and not lightweight:
                                     ledger.record_outcome(step="backtest_optimize", status="error", output_hashes={}, metrics={"error": str(e)}, context=opt_ctx)
 
         # Save stitched return series
@@ -612,20 +653,12 @@ class BacktestEngine:
             try:
                 full_series_raw = pd.concat(series_list)
                 if isinstance(full_series_raw, (pd.Series, pd.DataFrame)):
-                    # Explicitly cast to satisfy static analyzer
                     full_series = cast(pd.Series, full_series_raw[~full_series_raw.index.duplicated(keep="first")])
                     if hasattr(full_series, "sort_index"):
                         full_series = full_series.sort_index()
                     out_path = returns_out / f"{key}.pkl"
                     full_series.to_pickle(str(out_path))
                     logger.info(f"Saved stitched returns to {out_path}")
-
-                    # CR-847: Also save explicit profile aliases for Meta-Builder discovery
-                    # e.g. "market_cvx_min_variance.pkl" -> "min_variance.pkl" if unambiguous, or keep namespaced.
-                    # Build Meta Returns looks for *_{prof}.pkl.
-                    # Current key format: {target_engine}_{sim_name}_{profile}
-                    # Example: custom_friction_barbell
-                    # This matches *_{prof}.pkl since it ends with _barbell.
 
                     # Force save profile-only alias if unique
                     parts = key.split("_")
