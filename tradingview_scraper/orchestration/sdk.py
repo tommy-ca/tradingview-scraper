@@ -2,6 +2,7 @@ import logging
 from typing import Any, Optional
 
 from tradingview_scraper.orchestration.registry import StageRegistry
+from tradingview_scraper.telemetry.tracing import trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,11 @@ class QuantSDK:
         """
         Executes a single pipeline stage by its ID.
         """
+        return QuantSDK._run_stage_impl(id, context, **params)
+
+    @staticmethod
+    @trace_span("sdk.run_stage")
+    def _run_stage_impl(id: str, context: Optional[Any] = None, **params) -> Any:
         logger.info(f"SDK: Executing stage {id}")
         stage_callable = StageRegistry.get_stage(id)
         spec = StageRegistry.get_spec(id)

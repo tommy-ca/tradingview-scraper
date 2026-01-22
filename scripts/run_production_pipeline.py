@@ -23,6 +23,7 @@ from rich.progress import (
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.telemetry.tracing import trace_span
 from tradingview_scraper.utils.audit import AuditLedger
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -108,6 +109,7 @@ class ProductionPipeline:
         if any(f.level == "ERROR" for f in findings):
             raise RuntimeError(f"Directional Sign Test failed ({out_path.name})")
 
+    @trace_span("pipeline.run_step")
     def run_step(
         self,
         name: str,

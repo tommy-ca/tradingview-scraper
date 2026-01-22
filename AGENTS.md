@@ -148,6 +148,13 @@ Agents must ensure every production run adheres to the following five pillars:
 5.  **Toxic Data Guard**: Assets with daily returns > 500% (5.0) are automatically dropped to prevent optimizer corruption. Synthetic shorts are capped at -100% loss.
 
 ### 9. Numerical Stability & Reporting
-1.  **Stable Sum Gate**: Mixed-direction or Short-only portfolios MUST use the Stable Sum Gate in rebalance simulations to prevent division-by-near-zero return artifacts ($W_{sum} < 1e-6$).
-2.  **SSP Minimums**: Selection pipelines MUST enforce a 15-winner floor (SSP) to ensure optimizer rank stability and prevent profile convergence.
-3.  **Reporting Purity**: Reporting scripts must be "Identity-Aware" and defensive, utilizing `.get()` for all metadata lookups and restructuring flat tournament data into nested hierarchies for stable Markdown generation.
+ 1.  **Stable Sum Gate**: Mixed-direction or Short-only portfolios MUST use the Stable Sum Gate in rebalance simulations to prevent division-by-near-zero return artifacts ($W_{sum} < 1e-6$).
+ 2.  **SSP Minimums**: Selection pipelines MUST enforce a 15-winner floor (SSP) to ensure optimizer rank stability and prevent profile convergence.
+ 3.  **Reporting Purity**: Reporting scripts must be "Identity-Aware" and defensive, utilizing `.get()` for all metadata lookups and restructuring flat tournament data into nested hierarchies for stable Markdown generation.
+ 
+ ## 10. Observability & Compute Resilience
+ 1.  **Trace Everything**: Every pipeline stage and parallel task MUST be wrapped in an OpenTelemetry span. Use the `@trace_span` decorator for automatic instrumentation.
+ 2.  **Deterministic Lifecycle**: Always use the `with RayComputeEngine() as engine` context manager pattern to ensure the Ray cluster is gracefully shut down.
+ 3.  **Structured Logging**: Prefer the `get_telemetry_logger()` factory to ensure all logs are injected with `trace_id` and `span_id` for cross-node correlation.
+ 4.  **Resource Limits**: Parallel execution must respect `TV_ORCH_CPUS` and `TV_ORCH_MEM_GB` to prevent system-wide resource contention.
+

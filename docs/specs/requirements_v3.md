@@ -384,8 +384,22 @@ Requirements:
 3. When strict schema is disabled, invalid records MAY be dropped, but the count MUST be logged.
 
 ### 8.3 Deterministic Consolidation Semantics
+ 
+ To preserve reproducibility:
+ 1. Candidate export files MUST be processed deterministically (stable ordering).
+ 2. Duplicate candidates MUST be de-duplicated by canonical `symbol`.
+ 3. Duplicate candidate metadata MUST be merged deterministically (do not lose fields).
+ 
+ ## 9. Telemetry & Compute Resilience (v3.7+)
+ 
+ ### 9.1 Observability Standard (OpenTelemetry)
+ 1. **Tracing**: Every pipeline run MUST generate a unique `trace_id`. Spans MUST be created for each stage execution (`QuantSDK.run_stage`) and sub-step (`ProductionPipeline.run_step`).
+ 2. **Context Propagation**: The `trace_id` MUST be propagated to distributed Ray workers to ensure end-to-end trace visibility.
+ 3. **Metrics**: Standard performance metrics (Duration, Success Rate) MUST be emitted for all registered stages.
+ 4. **Unified Logging**: Logs MUST be structured and MUST include `trace_id` and `span_id` when available to enable forensic correlation.
+ 
+ ### 9.2 Ray Lifecycle & Resource Management
+ 1. **Graceful Shutdown**: The `RayComputeEngine` MUST ensure `ray.shutdown()` is called upon task completion or failure to prevent resource leakage.
+ 2. **Resource Capping**: Parallel executions MUST respect environment-defined CPU and memory limits (`TV_ORCH_CPUS`, `TV_ORCH_MEM_GB`).
+ 3. **Process Isolation**: Each strategy sleeve execution MUST occur in a stateful Ray Actor with an isolated workspace and environment.
 
-To preserve reproducibility:
-1. Candidate export files MUST be processed deterministically (stable ordering).
-2. Duplicate candidates MUST be de-duplicated by canonical `symbol`.
-3. Duplicate candidate metadata MUST be merged deterministically (do not lose fields).
