@@ -367,8 +367,19 @@ class ProductionPipeline:
             self._execute_impl(start_step)
 
     def _execute_impl(self, start_step: int = 1):
+        from tradingview_scraper.orchestration.sdk import QuantSDK
+
         self.console.print("\n[bold cyan]🚀 Starting Production Pipeline[/]")
         self.console.print(f"[dim]Profile:[/] {self.profile} | [dim]Run ID:[/] {self.run_id} | [dim]Start Step:[/] {start_step}\n")
+
+        # L1 Ingestion Gate: Foundation Validation
+        if not QuantSDK.validate_foundation():
+            self.console.print("[bold red]Foundation Gate FAILED. Aborting.[/]")
+            raise RuntimeError("Foundation Gate failed")
+
+        # CR-855: Lakehouse Immutability (Snapshot)
+        if os.getenv("TV_STRICT_ISOLATION") == "1":
+            QuantSDK.create_snapshot(self.run_id)
 
         # Pillar Verification (Crypto Only)
         if self.profile == "crypto_production":

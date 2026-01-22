@@ -102,7 +102,7 @@ class ClusteredOptimizerV2:
         return self.run_profile(cast(ProfileName, "barbell"), "custom", cluster_cap)
 
 
-@StageRegistry.register(id="allocation.optimize", name="Clustered Optimization", description="Convex optimization with regime-aware constraints", category="risk")
+@StageRegistry.register(id="risk.optimize", name="Clustered Optimization", description="Convex optimization with regime-aware constraints", category="risk")
 def optimize_clustered_portfolio(run_id: Optional[str] = None, risk_profiles: Optional[List[str]] = None):
     settings = get_settings()
     if run_id:

@@ -402,4 +402,41 @@ Requirements:
  1. **Graceful Shutdown**: The `RayComputeEngine` MUST ensure `ray.shutdown()` is called upon task completion or failure to prevent resource leakage.
  2. **Resource Capping**: Parallel executions MUST respect environment-defined CPU and memory limits (`TV_ORCH_CPUS`, `TV_ORCH_MEM_GB`).
  3. **Process Isolation**: Each strategy sleeve execution MUST occur in a stateful Ray Actor with an isolated workspace and environment.
+ 
+ ## 10. The Atomic Life Cycle Standard (v3.8+)
+ 
+ The platform formalizes the "Atomic Life Cycle" for portfolio sleeves, ensuring a deterministic transition from raw data to executable weights.
+ 
+ ### 10.1 Logic Stages (L0-L4)
+ 
+ 1. **Foundation (L0)**: The immutable state of the Lakehouse.
+ 2. **Ingestion Gate (L1)**: Pre-flight data contract validation and Point-in-Time (PIT) fidelity checks.
+ 3. **Selection & Inference (L2)**: Natural selection (HTR) and alpha scoring (Log-MPS).
+ 4. **Strategy Synthesis (L3)**: Composition of Strategy Atoms (Asset + Logic + Direction) and Synthetic Long normalization.
+ 5. **Risk Allocation & Deployment (L4)**: Convex optimization and Physical Weight flattening.
+ 
+ ### 10.2 Mandatory Execution Sequence
+ 
+ Every atomic production run MUST execute the following sequence:
+ 1. **Foundation Gate**: Validate Lakehouse existence and schema.
+ 2. **Recruitment**: Settle the raw candidate pool from discovery exports.
+ 3. **Natural Selection**: Apply HTR v3.4 loops.
+ 4. **Enrichment**: Link winners to structural metadata.
+ 5. **Synthesis**: Transform asset returns into synthetic alpha streams.
+ 6. **Regime Detection**: Detect volatility quadrant using HMM classifiers.
+ 7. **Optimization**: Allocate weights via bounded convex solvers.
+ 8. **Flattening**: Collapse alpha weights into asset-level weights.
+ 9. **Forensic Report**: Generate a unified tear-sheet linked by a single `trace_id`.
+ 
+ ## 11. DataOps & MLOps Governance
+ 
+ ### 11.1 Data Contract Standard
+ 1. **Schema Validation**: Every stage MUST define its input/output schema.
+ 2. **"No Padding" Compliance**: Returns matrices MUST NOT be zero-filled for TradFi calendars.
+ 3. **Toxicity Bounds**: Assets with $|r_d| > 500\%$ MUST be automatically dropped.
+ 
+ ### 11.2 Model Lineage & Immutability
+ 1. **Snapshot Isolation**: When a run begins, the platform SHOULD create a symlink-based snapshot of the Lakehouse to ensure immutability.
+ 2. **Lineage Linkage**: Every optimized portfolio MUST link back to the exact version (timestamp/hash) of the `features_matrix.parquet` used for inference.
+ 3. **Traceability**: The `trace_id` MUST be injected into all audit ledger entries across all L0-L4 stages.
 

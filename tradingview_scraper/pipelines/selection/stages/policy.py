@@ -12,7 +12,7 @@ from tradingview_scraper.settings import get_settings
 logger = logging.getLogger("pipelines.selection.policy")
 
 
-@StageRegistry.register(id="selection.policy", name="Selection Policy", description="HTR recruitment and veto policy", category="selection")
+@StageRegistry.register(id="alpha.policy", name="Selection Policy", description="HTR recruitment and veto policy", category="alpha")
 class SelectionPolicyStage(BasePipelineStage):
     """
     Stage 5: Selection Policy.

@@ -65,7 +65,11 @@ def find_latest_run_for_profile(profile: str) -> Optional[Path]:
 
 
 @StageRegistry.register(
-    id="meta.returns", name="Meta Return Aggregation", description="Aggregates returns from multiple atomic sleeves into a meta-returns matrix.", category="meta", tags=["meta", "returns"]
+    id="meta.aggregation",
+    name="Meta Return Aggregation",
+    description="Aggregates returns from multiple atomic sleeves into a meta-returns matrix.",
+    category="meta",
+    tags=["meta", "returns"],
 )
 def build_meta_returns(meta_profile: str, output_path: str, profiles: Optional[List[str]] = None, manifest_path: Path = Path("configs/manifest.json"), base_dir: Optional[Path] = None):
     settings = get_settings()

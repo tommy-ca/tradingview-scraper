@@ -56,9 +56,33 @@ class StageRegistry:
 
     @classmethod
     def list_stages(cls, tag: Optional[str] = None, category: Optional[str] = None) -> List[StageSpec]:
+        # Ensure common stages are loaded
+        cls._ensure_loaded()
+
         results = list(cls._specs.values())
         if tag:
             results = [s for s in results if tag in s.tags]
         if category:
             results = [s for s in results if s.category == category]
         return results
+
+    @classmethod
+    def _ensure_loaded(cls):
+        """Internal helper to ensure core stage modules are imported."""
+        # This is a bit brute-force but ensures the registry is populated
+        try:
+            import tradingview_scraper.pipelines.selection.pipeline
+            import tradingview_scraper.pipelines.selection.stages.ingestion
+            import tradingview_scraper.pipelines.selection.stages.feature_engineering
+            import tradingview_scraper.pipelines.selection.stages.inference
+            import tradingview_scraper.pipelines.selection.stages.clustering
+            import tradingview_scraper.pipelines.selection.stages.policy
+            import tradingview_scraper.pipelines.selection.stages.synthesis
+            import scripts.build_meta_returns
+            import scripts.optimize_meta_portfolio
+            import scripts.flatten_meta_weights
+            import scripts.generate_meta_report
+            import scripts.optimize_clustered_v2
+            import tradingview_scraper.pipelines.discovery.pipeline
+        except ImportError as e:
+            logger.warning(f"StageRegistry: Some modules could not be loaded: {e}")

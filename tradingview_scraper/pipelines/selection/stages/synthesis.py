@@ -7,7 +7,7 @@ from tradingview_scraper.utils.synthesis import StrategyAtom
 logger = logging.getLogger("pipelines.selection.synthesis")
 
 
-@StageRegistry.register(id="selection.synthesis", name="Strategy Synthesis", description="Creates Strategy Atoms from winners", category="selection")
+@StageRegistry.register(id="alpha.synthesis", name="Strategy Synthesis", description="Creates Strategy Atoms from winners", category="alpha")
 class SynthesisStage(BasePipelineStage):
     """
     Stage 6: Strategy Synthesis.

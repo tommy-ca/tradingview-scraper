@@ -10,7 +10,7 @@ from tradingview_scraper.utils.scoring import calculate_mps_score, map_to_probab
 logger = logging.getLogger("pipelines.selection.inference")
 
 
-@StageRegistry.register(id="selection.inference", name="Inference", description="Conviction scoring using Log-MPS", category="selection")
+@StageRegistry.register(id="alpha.inference", name="Inference", description="Conviction scoring using Log-MPS", category="alpha")
 class InferenceStage(BasePipelineStage):
     """
     Stage 3: Conviction Scoring (Inference).

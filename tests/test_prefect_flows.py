@@ -30,12 +30,12 @@ class TestPrefectFlows(unittest.TestCase):
 
                 # Check call IDs
                 called_ids = [call.args[0] for call in mock_run.call_args_list]
-                self.assertIn("selection.ingestion", called_ids)
-                self.assertIn("selection.features", called_ids)
-                self.assertIn("selection.inference", called_ids)
-                self.assertIn("selection.clustering", called_ids)
-                self.assertIn("selection.policy", called_ids)
-                self.assertIn("selection.synthesis", called_ids)
+                self.assertIn("foundation.ingest", called_ids)
+                self.assertIn("foundation.features", called_ids)
+                self.assertIn("alpha.inference", called_ids)
+                self.assertIn("alpha.clustering", called_ids)
+                self.assertIn("alpha.policy", called_ids)
+                self.assertIn("alpha.synthesis", called_ids)
 
 
 if __name__ == "__main__":

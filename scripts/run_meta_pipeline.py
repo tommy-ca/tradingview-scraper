@@ -122,7 +122,7 @@ def run_meta_pipeline(
     from tradingview_scraper.orchestration.sdk import QuantSDK
 
     QuantSDK.run_stage(
-        "meta.returns",
+        "meta.aggregation",
         meta_profile=meta_profile,
         output_path=str(run_data_dir / "meta_returns.pkl"),
         profiles=target_profiles,
@@ -134,7 +134,7 @@ def run_meta_pipeline(
     logger.info(">>> STAGE 2: Meta-Optimization")
     # optimize_meta infers base_dir from input path (run_data_dir / "meta_returns.pkl")
     QuantSDK.run_stage(
-        "meta.optimize",
+        "risk.optimize_meta",
         returns_path=str(run_data_dir / "meta_returns.pkl"),
         output_path=str(run_data_dir / "meta_optimized.json"),
         meta_profile=meta_profile,
@@ -145,7 +145,7 @@ def run_meta_pipeline(
     for prof in target_profiles:
         prof = prof.strip()
         # flatten_weights needs to know where to look. We pass the output path in run_data_dir.
-        QuantSDK.run_stage("meta.flatten", meta_profile=meta_profile, output_path=str(run_data_dir / "portfolio_optimized_meta.json"), profile=prof)
+        QuantSDK.run_stage("risk.flatten_meta", meta_profile=meta_profile, output_path=str(run_data_dir / "portfolio_optimized_meta.json"), profile=prof)
 
     # 4. Reporting
     logger.info(">>> STAGE 4: Generating Forensic Report")
@@ -153,7 +153,7 @@ def run_meta_pipeline(
     report_path = run_dir / "reports" / "meta_portfolio_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    QuantSDK.run_stage("meta.report", meta_dir=run_data_dir, output_path=str(report_path), profiles=target_profiles, meta_profile=meta_profile)
+    QuantSDK.run_stage("risk.report_meta", meta_dir=run_data_dir, output_path=str(report_path), profiles=target_profiles, meta_profile=meta_profile)
 
     # Also update 'latest'
     latest_path = settings.artifacts_dir / "summaries/latest/meta_portfolio_report.md"

@@ -8,7 +8,7 @@ from tradingview_scraper.utils.clustering import get_hierarchical_clusters
 logger = logging.getLogger("pipelines.selection.clustering")
 
 
-@StageRegistry.register(id="selection.clustering", name="Clustering", description="Orthogonal factor partitioning", category="selection")
+@StageRegistry.register(id="alpha.clustering", name="Clustering", description="Orthogonal factor partitioning", category="alpha")
 class ClusteringStage(BasePipelineStage):
     """
     Stage 4: Manifold Partitioning (Clustering).

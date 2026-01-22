@@ -11,7 +11,7 @@ from tradingview_scraper.settings import get_settings
 logger = logging.getLogger("pipelines.selection.ingestion")
 
 
-@StageRegistry.register(id="selection.ingestion", name="Ingestion", description="Loads raw candidates and return data", category="selection")
+@StageRegistry.register(id="foundation.ingest", name="Ingestion", description="Loads raw candidates and return data", category="foundation")
 class IngestionStage(BasePipelineStage):
     """
     Stage 1: Multi-Sleeve Ingestion.
@@ -130,6 +130,19 @@ class IngestionStage(BasePipelineStage):
             else:
                 context.returns_df = pd.read_csv(returns_path, index_col=0, parse_dates=True)
 
-        context.log_event(self.name, "DataLoaded", {"n_candidates": len(context.raw_pool), "returns_shape": context.returns_df.shape})
+        # 3. L1 Data Contract Validation
+        from tradingview_scraper.pipelines.selection.base import IngestionValidator
+
+        strict = os.getenv("TV_STRICT_HEALTH") == "1"
+        failed_symbols = IngestionValidator.validate_returns(context.returns_df, strict=strict)
+
+        if failed_symbols:
+            logger.warning("IngestionValidator: Dropping %d symbols that failed data contracts.", len(failed_symbols))
+            context.returns_df = context.returns_df.drop(columns=failed_symbols)
+            if strict:
+                logger.error("STRICT MODE: Failing pipeline due to data contract violations: %s", failed_symbols)
+                raise RuntimeError(f"Data Contract Violation: {failed_symbols}")
+
+        context.log_event(self.name, "DataLoaded", {"n_candidates": len(context.raw_pool), "returns_shape": context.returns_df.shape, "n_dropped": len(failed_symbols)})
 
         return context

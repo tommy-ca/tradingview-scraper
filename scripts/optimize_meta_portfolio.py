@@ -104,7 +104,13 @@ def _load_meta_allocation_bounds(manifest_path: Path, meta_profile: str) -> tupl
         return None, None
 
 
-@StageRegistry.register(id="meta.optimize", name="Meta Optimization", description="Solves for optimal sleeve allocations in a meta-portfolio.", category="meta", tags=["meta", "risk"])
+@StageRegistry.register(
+    id="risk.optimize_meta",
+    name="Meta Optimization",
+    description="Solves for optimal sleeve allocations in a meta-portfolio.",
+    category="risk",
+    tags=["meta", "risk"],
+)
 def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = None, meta_profile: Optional[str] = None):
     settings = get_settings()
     run_dir = settings.prepare_summaries_run_dir()

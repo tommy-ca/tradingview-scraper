@@ -84,7 +84,13 @@ def get_forensic_anomalies(
     return anomalies
 
 
-@StageRegistry.register(id="meta.report", name="Forensic Meta Report", description="Generates a unified markdown report for meta-portfolio performance.", category="meta", tags=["meta", "reporting"])
+@StageRegistry.register(
+    id="risk.report_meta",
+    name="Forensic Meta Report",
+    description="Generates a unified markdown report for meta-portfolio performance.",
+    category="risk",
+    tags=["meta", "reporting"],
+)
 def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: List[str], meta_profile: str = "meta_production"):
     md = []
     md.append("# 🌐 Multi-Sleeve Meta-Portfolio Report")

@@ -17,7 +17,13 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("flatten_meta_weights")
 
 
-@StageRegistry.register(id="meta.flatten", name="Weight Flattening", description="Projects meta-weights (sleeve allocations) to individual asset weights.", category="meta", tags=["meta", "risk"])
+@StageRegistry.register(
+    id="risk.flatten_meta",
+    name="Weight Flattening",
+    description="Projects meta-weights (sleeve allocations) to individual asset weights.",
+    category="risk",
+    tags=["meta", "risk"],
+)
 def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] = None):
     # Resolve Meta Profile from settings if not passed
     m_prof = meta_profile or os.getenv("PROFILE") or "meta_production"

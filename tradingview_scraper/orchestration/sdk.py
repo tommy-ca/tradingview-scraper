@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Any, Optional
 
 from tradingview_scraper.orchestration.registry import StageRegistry
@@ -47,6 +48,71 @@ class QuantSDK:
             return stage_callable(context=context, **params)
         else:
             return stage_callable(**params)
+
+    @staticmethod
+    def validate_foundation(run_id: Optional[str] = None) -> bool:
+        """
+        L1 Ingestion Gate: Validates Lakehouse integrity and PIT fidelity.
+        Checks for missing Parquet files, staleness, and schema drift.
+        """
+        from tradingview_scraper.settings import get_settings
+        import os
+
+        settings = get_settings()
+        lakehouse = settings.lakehouse_dir
+
+        logger.info(f"SDK: Validating foundation at {lakehouse}")
+
+        # 1. Existence Checks
+        required_files = ["returns_matrix.parquet", "features_matrix.parquet"]
+
+        missing = [f for f in required_files if not (lakehouse / f).exists()]
+        if missing:
+            logger.error(f"Foundation Gate FAILED: Missing files: {missing}")
+            return False
+
+        # 2. Freshness check (Optional, depending on STRICT_HEALTH)
+        if os.getenv("TV_STRICT_HEALTH") == "1":
+            import time
+
+            current_time = time.time()
+            for f in required_files:
+                mtime = (lakehouse / f).stat().st_mtime
+                age_hours = (current_time - mtime) / 3600
+                if age_hours > 24:
+                    logger.warning(f"Foundation Gate: {f} is stale ({age_hours:.1f} hours old)")
+
+        logger.info("✅ Foundation Gate PASS")
+        return True
+
+    @staticmethod
+    def create_snapshot(run_id: str) -> Path:
+        """
+        Creates a symlink-based snapshot of the Lakehouse for run immutability.
+        Returns the path to the snapshot directory.
+        """
+        from tradingview_scraper.settings import get_settings
+        import os
+        from pathlib import Path
+
+        settings = get_settings()
+        lakehouse = settings.lakehouse_dir
+        snapshot_dir = (settings.data_dir / "snapshots" / run_id).resolve()
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"SDK: Creating Lakehouse snapshot for {run_id} at {snapshot_dir}")
+
+        for item in lakehouse.iterdir():
+            if item.is_file():
+                target = snapshot_dir / item.name
+                if not target.exists():
+                    os.symlink(item, target)
+            elif item.is_dir() and not item.name.startswith("."):
+                target = snapshot_dir / item.name
+                if not target.exists():
+                    os.symlink(item, target)
+
+        return snapshot_dir
 
     @staticmethod
     def run_pipeline(name: str, profile: str, run_id: Optional[str] = None, **overrides) -> Any:

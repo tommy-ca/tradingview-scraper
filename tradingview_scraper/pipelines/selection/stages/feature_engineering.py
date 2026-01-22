@@ -15,7 +15,7 @@ from tradingview_scraper.utils.scoring import calculate_liquidity_score
 logger = logging.getLogger("pipelines.selection.feature_engineering")
 
 
-@StageRegistry.register(id="selection.features", name="Feature Engineering", description="Calculates technical alpha factors", category="selection")
+@StageRegistry.register(id="foundation.features", name="Feature Engineering", description="Calculates technical alpha factors", category="foundation")
 class FeatureEngineeringStage(BasePipelineStage):
     """
     Stage 2: Feature Generation.
