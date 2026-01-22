@@ -4,12 +4,14 @@ import os
 
 import pandas as pd
 
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
 from tradingview_scraper.settings import get_settings
 
 logger = logging.getLogger("pipelines.selection.ingestion")
 
 
+@StageRegistry.register(id="selection.ingestion", name="Ingestion", description="Loads raw candidates and return data", category="selection")
 class IngestionStage(BasePipelineStage):
     """
     Stage 1: Multi-Sleeve Ingestion.

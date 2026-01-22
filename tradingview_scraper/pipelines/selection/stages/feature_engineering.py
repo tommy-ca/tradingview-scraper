@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import pandas as pd
 
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
 from tradingview_scraper.utils.predictability import (
     calculate_efficiency_ratio,
@@ -14,6 +15,7 @@ from tradingview_scraper.utils.scoring import calculate_liquidity_score
 logger = logging.getLogger("pipelines.selection.feature_engineering")
 
 
+@StageRegistry.register(id="selection.features", name="Feature Engineering", description="Calculates technical alpha factors", category="selection")
 class FeatureEngineeringStage(BasePipelineStage):
     """
     Stage 2: Feature Generation.

@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, Optional
 
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 from tradingview_scraper.pipelines.selection.stages.clustering import ClusteringStage
 from tradingview_scraper.pipelines.selection.stages.feature_engineering import FeatureEngineeringStage
@@ -13,6 +14,7 @@ from tradingview_scraper.settings import get_settings
 logger = logging.getLogger("pipelines.selection.orchestrator")
 
 
+@StageRegistry.register(id="selection.full", name="Selection Pipeline", description="HTR selection pipeline with 4-stage relaxation", category="selection")
 class SelectionPipeline:
     """
     The Orchestrator for the MLOps-Centric Selection Pipeline (v4).

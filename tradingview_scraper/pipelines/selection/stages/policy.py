@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional, Set
 
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
 from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
 from tradingview_scraper.pipelines.selection.filters.darwinian import DarwinianFilter
@@ -11,6 +12,7 @@ from tradingview_scraper.settings import get_settings
 logger = logging.getLogger("pipelines.selection.policy")
 
 
+@StageRegistry.register(id="selection.policy", name="Selection Policy", description="HTR recruitment and veto policy", category="selection")
 class SelectionPolicyStage(BasePipelineStage):
     """
     Stage 5: Selection Policy.

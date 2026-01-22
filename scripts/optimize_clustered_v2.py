@@ -1,14 +1,18 @@
 import json
 import logging
 import os
+import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 import pandas as pd
 
+sys.path.append(os.getcwd())
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.portfolio_engines import build_engine
 from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
+from tradingview_scraper.regime import MarketRegimeDetector
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 
@@ -98,10 +102,15 @@ class ClusteredOptimizerV2:
         return self.run_profile(cast(ProfileName, "barbell"), "custom", cluster_cap)
 
 
-if __name__ == "__main__":
-    from tradingview_scraper.regime import MarketRegimeDetector
-
+@StageRegistry.register(id="allocation.optimize", name="Clustered Optimization", description="Convex optimization with regime-aware constraints", category="risk")
+def optimize_clustered_portfolio(run_id: Optional[str] = None, risk_profiles: Optional[List[str]] = None):
     settings = get_settings()
+    if run_id:
+        os.environ["TV_RUN_ID"] = run_id
+        # Reload settings
+        get_settings.cache_clear()
+        settings = get_settings()
+
     run_dir = settings.prepare_summaries_run_dir()
 
     # CR-831: Workspace Isolation
@@ -163,15 +172,12 @@ if __name__ == "__main__":
         logger.info(f"Turbulent Regime detected: Tightening cluster cap to {cap} (Regime Alignment)")
 
     # Generate results for each profile
+    target_profiles = risk_profiles or ["min_variance", "hrp", "max_sharpe", "equal_weight"]
     profiles = {}
-    for p_name, method in [
-        ("min_variance", cast(ProfileName, "min_variance")),
-        ("hrp", cast(ProfileName, "hrp")),
-        ("max_sharpe", cast(ProfileName, "max_sharpe")),
-        ("equal_weight", cast(ProfileName, "equal_weight")),
-    ]:
+    for p_name in target_profiles:
+        method = cast(ProfileName, p_name)
         logger.info(f"Optimizing profile: {p_name}")
-        weights_df = optimizer.run_profile(cast(ProfileName, method), "custom", cap)
+        weights_df = optimizer.run_profile(method, "custom", cap)
 
         if weights_df.empty:
             logger.warning(f"Optimization returned empty weights for {p_name}")
@@ -206,41 +212,42 @@ if __name__ == "__main__":
         }
 
     # Add Antifragile Barbell
-    logger.info("Optimizing profile: barbell")
-    barbell_df = optimizer.run_barbell(cap, regime)
-    if not barbell_df.empty:
-        barbell_summary = []
-        for c_id in optimizer.clusters.keys():
-            sub = barbell_df[barbell_df["Cluster_ID"] == str(c_id)]
-            if sub.empty:
-                continue
-            gross = sub["Weight"].sum()
-            net = sub["Net_Weight"].sum()
+    if "barbell" in target_profiles or risk_profiles is None:
+        logger.info("Optimizing profile: barbell")
+        barbell_df = optimizer.run_barbell(cap, regime)
+        if not barbell_df.empty:
+            barbell_summary = []
+            for c_id in optimizer.clusters.keys():
+                sub = barbell_df[barbell_df["Cluster_ID"] == str(c_id)]
+                if sub.empty:
+                    continue
+                gross = sub["Weight"].sum()
+                net = sub["Net_Weight"].sum()
 
-            sectors_list = list(pd.unique(sub["Sector"])) if "Sector" in sub.columns else ["N/A"]
+                sectors_list = list(pd.unique(sub["Sector"])) if "Sector" in sub.columns else ["N/A"]
 
-            barbell_summary.append(
-                {
-                    "Cluster_Label": f"Cluster {c_id}",
-                    "Gross_Weight": float(gross),
-                    "Net_Weight": float(net),
-                    "Lead_Asset": sub.iloc[0]["Symbol"],
-                    "Asset_Count": len(sub),
-                    "Type": sub.iloc[0]["Type"],
-                    "Sectors": sectors_list,
-                }
-            )
-        profiles["barbell"] = {
-            "assets": barbell_df.to_dict(orient="records"),
-            "clusters": barbell_summary,
-        }
-    else:
-        reason = "missing antifragility stats" if optimizer.stats is None else "barbell unavailable"
-        profiles["barbell"] = {
-            "assets": [],
-            "clusters": [],
-            "meta": {"skipped": True, "reason": reason},
-        }
+                barbell_summary.append(
+                    {
+                        "Cluster_Label": f"Cluster {c_id}",
+                        "Gross_Weight": float(gross),
+                        "Net_Weight": float(net),
+                        "Lead_Asset": sub.iloc[0]["Symbol"],
+                        "Asset_Count": len(sub),
+                        "Type": sub.iloc[0]["Type"],
+                        "Sectors": sectors_list,
+                    }
+                )
+            profiles["barbell"] = {
+                "assets": barbell_df.to_dict(orient="records"),
+                "clusters": barbell_summary,
+            }
+        else:
+            reason = "missing antifragility stats" if optimizer.stats is None else "barbell unavailable"
+            profiles["barbell"] = {
+                "assets": [],
+                "clusters": [],
+                "meta": {"skipped": True, "reason": reason},
+            }
 
     # Build cluster registry
     registry = {}
@@ -266,3 +273,15 @@ if __name__ == "__main__":
         json.dump(output, f, indent=2)
 
     logger.info(f"✅ Clustered Optimization V2 Complete. Saved to: {final_output_path}")
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-id")
+    parser.add_argument("--profiles")
+    args = parser.parse_args()
+
+    risk_profs = args.profiles.split(",") if args.profiles else None
+    optimize_clustered_portfolio(run_id=args.run_id, risk_profiles=risk_profs)

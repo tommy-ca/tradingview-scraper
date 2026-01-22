@@ -1,12 +1,14 @@
 import logging
 from typing import Dict, List
 
+from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
 from tradingview_scraper.utils.clustering import get_hierarchical_clusters
 
 logger = logging.getLogger("pipelines.selection.clustering")
 
 
+@StageRegistry.register(id="selection.clustering", name="Clustering", description="Orthogonal factor partitioning", category="selection")
 class ClusteringStage(BasePipelineStage):
     """
     Stage 4: Manifold Partitioning (Clustering).
