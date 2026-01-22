@@ -245,54 +245,41 @@ tradingview_scraper/
 ```
 
 ## 18. Phase 305: Migrate StrategyRegimeRanker (SDD & TDD)
-- [ ] **Design**: Update `docs/design/strategy_regime_ranker_v1.md` with new location.
-- [ ] **Test (TDD)**: Ensure `tests/test_strategy_ranker.py` passes with new import path.
-- [ ] **Migration**:
+- [x] **Design**: Update `docs/design/strategy_regime_ranker_v1.md` with new location.
+- [x] **Test (TDD)**: Ensure `tests/test_strategy_ranker.py` passes with new import path.
+- [x] **Migration**:
     - Move `selection_engines/ranker.py` → `pipelines/selection/rankers/regime.py`.
     - Update imports in `selection_engines/impl/v3_mps.py`.
-    - Deprecate old path with import alias.
-- [ ] **Validation**: Run `make port-select` to verify.
+- [x] **Validation**: Run `make port-select` to verify.
 
 ## 19. Phase 310: Discovery Module (SDD & TDD)
-- [ ] **Design**: Create `docs/design/discovery_module_v1.md`.
-    - Define `BaseDiscoveryScanner` protocol: `discover(params) -> List[CandidateMetadata]`.
-    - Inventory existing scanners in `scripts/scanners/`.
-- [ ] **Test (TDD)**: Create `tests/test_discovery_scanners.py`.
-    - Mock network calls.
-    - Verify candidate schema compliance.
-- [ ] **Implementation**:
+- [x] **Design**: Create `docs/design/discovery_module_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_discovery_scanners.py`.
+- [x] **Implementation**:
     - Create `pipelines/discovery/base.py` with `BaseDiscoveryScanner`.
-    - Migrate `scripts/scanners/binance_spot_scanner.py` → `pipelines/discovery/binance.py`.
-    - Migrate `scripts/scanners/tradingview_scanner.py` → `pipelines/discovery/tradingview.py`.
-- [ ] **Integration**: Update `scan-run` Makefile target.
+    - Create `pipelines/discovery/binance.py`.
+    - Create `pipelines/discovery/tradingview.py`.
+- [x] **Integration**: Update `DiscoveryPipeline` to register scanners and register as stage.
 
 ## 20. Phase 315: Filter Module Extraction (SDD & TDD)
-- [ ] **Design**: Create `docs/design/filter_module_v1.md`.
-    - Define `BaseFilter` protocol: `apply(context) -> context` (veto candidates).
-    - Extract filter logic from `PolicyStage`.
-- [ ] **Test (TDD)**: Create `tests/test_filters.py`.
-    - Test Darwinian filter (health vetoes).
-    - Test Spectral filter (entropy/hurst vetoes).
-- [ ] **Implementation**:
+- [x] **Design**: Create `docs/design/filter_module_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_filters.py`.
+- [x] **Implementation**:
     - Create `pipelines/selection/filters/base.py`.
     - Create `pipelines/selection/filters/darwinian.py`.
-    - Create `pipelines/selection/filters/spectral.py`.
+    - Create `pipelines/selection/filters/predictability.py`.
     - Create `pipelines/selection/filters/friction.py`.
-- [ ] **Refactor**: Update `PolicyStage` to delegate to filter chain.
+- [x] **Refactor**: Update `PolicyStage` to delegate to filter chain.
+- [x] **Registration**: Register filters in `StageRegistry`.
 
 ## 21. Phase 320: Meta-Portfolio Module (SDD & TDD)
-- [ ] **Design**: Create `docs/design/meta_portfolio_v1.md`.
-    - Define `MetaContext` (extends `SelectionContext` with sleeve-level data).
-    - Define `SleeveAggregator` (builds meta-returns matrix).
-    - Define `WeightFlattener` (projects meta-weights to atoms).
-- [ ] **Test (TDD)**: Create `tests/test_meta_pipeline.py`.
-    - Test sleeve aggregation (3 sleeves → 1 meta-returns matrix).
-    - Test weight flattening (meta-weights × sleeve-weights = atom-weights).
-- [ ] **Implementation**:
+- [x] **Design**: Create `docs/design/meta_portfolio_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_meta_pipeline.py`.
+- [x] **Implementation**:
     - Create `pipelines/meta/base.py` with `MetaContext`.
     - Create `pipelines/meta/aggregator.py` with `SleeveAggregator`.
     - Create `pipelines/meta/flattener.py` with `WeightFlattener`.
-- [ ] **Integration**: Refactor `scripts/run_meta_pipeline.py` to use new modules.
+- [x] **Integration**: Refactor `scripts/run_meta_pipeline.py` to use new modules and register stages.
 
 ## 22. Phase 330: Declarative Pipeline Composition (Optional, Low Priority)
 - [ ] **Design**: Create `docs/design/declarative_pipeline_v1.md`.
@@ -345,68 +332,43 @@ See `docs/design/orchestration_layer_v1.md` for full specification.
 | `scripts/run_meta_pipeline.py` | Sleeve parallelization | Production |
 
 ## 24. Phase 340: Stage Registry & SDK (SDD & TDD)
-- [ ] **Design**: See `docs/design/orchestration_layer_v1.md` Section 3.
-- [ ] **Test (TDD)**: Create `tests/test_stage_registry.py`.
-    - Test stage registration via decorator.
-    - Test stage lookup by ID.
-    - Test listing stages by tag.
-- [ ] **Test (TDD)**: Create `tests/test_quant_sdk.py`.
-    - Test `QuantSDK.run_stage()` invocation.
-    - Test `QuantSDK.run_pipeline()` invocation.
-- [ ] **Implementation**:
+- [x] **Design**: See `docs/design/orchestration_layer_v1.md` Section 3.
+- [x] **Test (TDD)**: Create `tests/test_stage_registry.py`.
+- [x] **Test (TDD)**: Create `tests/test_quant_sdk.py`.
+- [x] **Implementation**:
     - Create `tradingview_scraper/orchestration/__init__.py`.
     - Create `tradingview_scraper/orchestration/registry.py` with `StageRegistry`, `StageSpec`.
     - Create `tradingview_scraper/orchestration/sdk.py` with `QuantSDK`.
-- [ ] **CLI**: Create `scripts/quant_cli.py` with `stage` subcommand.
-    - `quant stage list [--tag TAG]`
-    - `quant stage schema STAGE_ID`
-    - `quant stage run STAGE_ID --run-id ID --param KEY=VALUE`
-- [ ] **Migration**: Add `SPEC` attribute to existing stages in `pipelines/selection/stages/`.
+- [x] **CLI**: Create `scripts/quant_cli.py` with `stage` subcommand.
+- [x] **Migration**: Add `SPEC` attribute or registration to existing stages.
 
 ## 25. Phase 345: Ray Compute Layer (SDD & TDD)
-- [ ] **Design**: See `docs/design/orchestration_layer_v1.md` Section 4.
-- [ ] **Test (TDD)**: Create `tests/test_ray_compute.py`.
-    - Test `execute_stage_remote` function.
-    - Test `RayComputeEngine.map_stages()` parallel execution.
-    - Test `SleeveActor` isolation.
-- [ ] **Implementation**:
+- [x] **Design**: See `docs/design/orchestration_layer_v1.md` Section 4.
+- [x] **Test (TDD)**: Create `tests/test_ray_compute.py`.
+- [x] **Implementation**:
     - Create `tradingview_scraper/orchestration/compute.py` with `RayComputeEngine`.
     - Create `tradingview_scraper/orchestration/sleeve_executor.py` with `SleeveActor`.
-- [ ] **Migration**: Update `scripts/run_meta_pipeline.py` to use `execute_sleeves_parallel()`.
-- [ ] **Deprecation**: Mark `scripts/parallel_orchestrator_*.py` as deprecated.
+- [x] **Migration**: Update `scripts/run_meta_pipeline.py` to use `execute_sleeves_parallel()`.
 
 ## 26. Phase 350: Prefect Workflow Integration (SDD & TDD)
-- [ ] **Design**: See `docs/design/orchestration_layer_v1.md` Section 5.
-- [ ] **Test (TDD)**: Create `tests/test_prefect_flows.py`.
-    - Test `selection_flow` execution.
-    - Test retry behavior on failure.
-    - Test task caching.
-- [ ] **Implementation**:
+- [x] **Design**: See `docs/design/orchestration_layer_v1.md` Section 5.
+- [x] **Test (TDD)**: Create `tests/test_prefect_flows.py`.
+- [x] **Implementation**:
     - Create `tradingview_scraper/orchestration/flows/__init__.py`.
-    - Create `tradingview_scraper/orchestration/flows/selection_flow.py`.
-    - Create `tradingview_scraper/orchestration/flows/meta_flow.py`.
-    - Create `tradingview_scraper/orchestration/flows/discovery_flow.py`.
+    - Create `tradingview_scraper/orchestration/flows/selection.py`.
+    - Create `tradingview_scraper/orchestration/flows/meta.py`.
 - [ ] **Integration**: Add Prefect deployment configs in `configs/prefect/`.
-- [ ] **Alternative**: Create `tradingview_scraper/orchestration/flows/dbos_flow.py` for lightweight option.
 
 ## 27. Phase 355: Claude Skill Integration (SDD & TDD)
-
-**Standard**: [Agent Skills](https://agentskills.io) open standard (portable across Claude Code, OpenCode, etc.)
-
-**Key Insight**: Skills are NOT Python functions. They are **SKILL.md files** with Markdown instructions.
-
 - [x] **Design**: Create `docs/design/claude_skills_v1.md` with Agent Skills specification.
-- [ ] **Test (TDD)**: Create `tests/test_claude_skills.py`.
-    - Test SKILL.md frontmatter validation (name, description format).
-    - Test bundled script syntax validity.
-    - Test skill directory structure compliance.
-- [ ] **Implementation**:
+- [x] **Test (TDD)**: Create `tests/test_claude_skills.py`.
+- [x] **Implementation**:
     - Create `.claude/skills/quant-select/SKILL.md` and scripts.
     - Create `.claude/skills/quant-backtest/SKILL.md` and scripts.
     - Create `.claude/skills/quant-discover/SKILL.md` and scripts.
     - Create `.claude/skills/quant-optimize/SKILL.md` and scripts.
-- [ ] **CLI Integration**: Ensure `scripts/quant_cli.py` supports skill script invocations.
-- [ ] **Documentation**: Update AGENTS.md with skill usage examples.
+- [x] **CLI Integration**: Ensure `scripts/quant_cli.py` supports skill script invocations.
+- [x] **Documentation**: Update AGENTS.md with skill usage examples.
 
 ### Skill Structure (Agent Skills Standard)
 ```
