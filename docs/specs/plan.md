@@ -27,15 +27,21 @@
     - Tighten `ReturnScalingGuard` to $|r| \le 1.0$ (100% daily cap).
 
 ## 51. Phase 620: Advanced Data Contract Enforcement (SDD & TDD)
-- [ ] **Research**: Evaluate `Pandera` for formal schema validation of return matrices and feature tensors.
-- [ ] **Design**: Create `docs/design/data_contracts_v2.md`.
-    - Specify L0-L4 schema definitions using Pandera.
-    - Define validation checkpoints in `Foundation Gate` and `Synthesis`.
-- [ ] **Test (TDD)**: Create `tests/test_pandera_contracts.py`.
-    - Verify that malformed returns are rejected with descriptive errors.
-- [ ] **Implementation**:
+- [x] **Research**: Evaluate `Pandera` for formal schema validation of return matrices and feature tensors.
+- [x] **Design**: Create `docs/design/data_contracts_v2.md`.
+- [x] **Test (TDD)**: Create `tests/test_pandera_contracts.py`.
+- [x] **Implementation**:
     - Integrate `Pandera` into `IngestionValidator`.
-    - Implement formal schema decorators for `QuantSDK` stages.
+    - Implement formal schema definitions in `tradingview_scraper/pipelines/contracts.py`.
+
+## 52. Phase 630: Feature Store Consistency Audit (SDD & TDD)
+- [x] **Audit**: Conduct `docs/audit/feature_store_audit_v1.md`.
+- [x] **Design**: Create `docs/design/feature_store_resilience_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_feature_consistency.py`.
+- [x] **Implementation**:
+    - Update `backfill_features.py` with strict consistency checks and registry updates.
+    - Build `FeatureConsistencyValidator` in `tradingview_scraper/utils/features.py`.
+    - Integrate feature-audit into `QuantSDK.validate_foundation`.
 
 ## 50. Phase 610: Anomaly Remediation & Tail-Risk Hardening (SDD & TDD)
 - [x] **Audit**: Conduct `docs/audit/anomaly_collection_v1.md`.

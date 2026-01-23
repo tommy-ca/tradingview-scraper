@@ -94,6 +94,7 @@ class StageRegistry:
             "scripts.generate_meta_report",
             "scripts.optimize_clustered_v2",
             "scripts.synthesize_strategy_matrix",
+            "scripts.services.backfill_features",
         ]
         for mod in script_modules:
             try:

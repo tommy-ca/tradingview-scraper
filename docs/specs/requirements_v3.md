@@ -490,6 +490,13 @@ Requirements:
  1. **Two-Tier Optimization**: Meta-portfolio backtests MUST simulate rebalancing at both the atomic sleeve level and the meta-allocation level.
  2. **Dynamic Meta-Rebalancing**: At each rebalance window, the meta-allocation between sleeves MUST be re-calculated using the realized returns of those sleeves up to that point.
  3. **Performance Consistency**: Equity curves generated for a meta-portfolio MUST be the result of a continuous walk-forward process that accounts for sleeve-level churn and meta-level reallocation.
+
+ ## 18. Feature Store PIT Integrity (v4.5+)
+ 
+ ### 18.1 Point-in-Time Fidelity
+ 1. **Zero-Gap Backfill**: The global `features_matrix.parquet` MUST provide 100% coverage for all symbols present in the returns matrix for the active training window.
+ 2. **NaN Isolation**: Feature engineering MUST utilize a bounded forward-fill (`limit=3`) to prevent lookahead bias from stale data while ensuring numerical stability for ranking engines.
+ 3. **Consistency Veto**: If an asset's feature history contains $> 10\%$ missing values after warm-up, it MUST be vetoed from the selection pool.
  
  ## 12. The Unified DAG Orchestrator (v3.9+)
  

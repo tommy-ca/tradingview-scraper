@@ -77,6 +77,22 @@ class QuantSDK:
         registry = FoundationHealthRegistry(path=lakehouse / "foundation_health.json")
         logger.info(f"Foundation Registry: {len(registry.data)} symbols tracked")
 
+        # 2.1 Feature Consistency Audit (Phase 630)
+        from tradingview_scraper.utils.features import FeatureConsistencyValidator
+        import pandas as pd
+
+        returns_f = lakehouse / "returns_matrix.parquet"
+        features_f = lakehouse / "features_matrix.parquet"
+
+        if returns_f.exists() and features_f.exists():
+            rets = pd.read_parquet(returns_f)
+            feats = pd.read_parquet(features_f)
+            missing = FeatureConsistencyValidator.audit_coverage(feats, rets)
+            if missing:
+                logger.error(f"Foundation Gate: Feature Store is INCONSISTENT. {len(missing)} symbols missing.")
+                if os.getenv("TV_STRICT_HEALTH") == "1":
+                    return False
+
         # If run_id is provided, we report summary stats
         toxic_count = len([s for s, m in registry.data.items() if m.get("status") == "toxic"])
         if toxic_count > 0:
