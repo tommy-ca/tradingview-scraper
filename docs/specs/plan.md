@@ -43,6 +43,44 @@
     - Build `FeatureConsistencyValidator` in `tradingview_scraper/utils/features.py`.
     - Integrate feature-audit into `QuantSDK.validate_foundation`.
 
+## 53. Phase 640: Feature Logic Consolidation (SDD & TDD)
+- [x] **Audit**: Review replicated TradingView ratings logic in `backfill_features.py`.
+- [x] **Design**: Formalize `TechnicalRatings` as the single source of truth for technical features.
+- [x] **Implementation**:
+    - Refactor `tradingview_scraper/utils/technicals.py` to support vectorized (time-series) calculations.
+    - Update `backfill_features.py` to reuse `TechnicalRatings` for `recommend_all`, `recommend_ma`, and `recommend_other`.
+    - Align `recommend_all` formula with institutional standard ($0.574 \times MA + 0.3914 \times Other$).
+
+## 54. Phase 650: Feature Parity Audit (SDD & TDD)
+- [ ] **Audit**: Conduct `docs/audit/feature_parity_audit_v1.md`.
+    - Collect ground truth ratings for a sample of 10 assets from TradingView.
+    - Compare these values with the outputs of the replicated `TechnicalRatings` utility.
+- [ ] **Design**: Create `docs/design/feature_parity_standard_v1.md`.
+    - Define acceptable deviation thresholds for replicated indicators (e.g., $| \Delta | < 0.05$).
+    - Specify the "Ground Truth" data sourcing protocol (Screener API snapshot).
+- [ ] **Test (TDD)**: Create `tests/test_feature_parity.py`.
+    - Verify that replicated ratings stay within the parity envelope.
+- [ ] **Implementation**:
+    - Implement `scripts/audit/audit_feature_parity.py` for automated cross-validation.
+    - Tune `TechnicalRatings` logic (specifically Ichimoku and RSI) based on audit findings.
+
+## 52. Phase 630: Feature Store Consistency Audit (SDD & TDD)
+- [x] **Audit**: Conduct `docs/audit/feature_store_audit_v1.md`.
+- [x] **Design**: Create `docs/design/feature_store_resilience_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_feature_consistency.py`.
+- [x] **Implementation**:
+    - Update `backfill_features.py` with strict consistency checks and registry updates.
+    - Build `FeatureConsistencyValidator` in `tradingview_scraper/utils/features.py`.
+    - Integrate feature-audit into `QuantSDK.validate_foundation`.
+
+## 53. Phase 640: Feature Logic Consolidation (SDD & TDD)
+- [x] **Audit**: Review replicated TradingView ratings logic in `backfill_features.py`.
+- [x] **Design**: Formalize `TechnicalRatings` as the single source of truth for technical features.
+- [x] **Implementation**:
+    - Refactor `tradingview_scraper/utils/technicals.py` to support vectorized (time-series) calculations.
+    - Update `backfill_features.py` to reuse `TechnicalRatings` for `recommend_all`, `recommend_ma`, and `recommend_other`.
+    - Align `recommend_all` formula with institutional standard ($0.574 \times MA + 0.3914 \times Other$).
+
 ## 50. Phase 610: Anomaly Remediation & Tail-Risk Hardening (SDD & TDD)
 - [x] **Audit**: Conduct `docs/audit/anomaly_collection_v1.md`.
 - [x] **Design**: Create `docs/design/tail_risk_hardening_v1.md`.
