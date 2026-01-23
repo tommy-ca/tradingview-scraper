@@ -115,10 +115,13 @@ class TechnicalRatings:
             all_votes.append(vote.where(rsi.notna(), np.nan))
 
         # 2. Stochastic
+        # TV uses %K(14, 3) and %D(3). Smooth K is 3.
         stoch = ta.stoch(high, low, close, k=14, d=3, smooth_k=3)
         if stoch is not None:
+            # Need to reindex if not aligned, but stoch returns same index
             stoch = stoch.reindex(df.index)
-            k, d = stoch["STOCHk_14_3_3"], stoch["STOCHd_14_3_3"]
+            k = stoch["STOCHk_14_3_3"]
+            d = stoch["STOCHd_14_3_3"]
             vote = pd.Series(0.0, index=df.index)
             vote.loc[(k.values < 20) & (k.values > d.values)] = 1.0
             vote.loc[(k.values > 80) & (k.values < d.values)] = -1.0
