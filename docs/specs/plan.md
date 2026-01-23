@@ -60,14 +60,16 @@
     - Tune `TechnicalRatings` logic (specifically Ichimoku and RSI) based on audit findings.
 
 ## 55. Phase 660: Rating Logic Tuning (SDD & TDD)
-- [ ] **Research**: Reverse engineer TradingView's proprietary Rating logic (Ichimoku cloud vs price).
-- [ ] **Design**: Create `docs/design/rating_tuning_v1.md`.
+- [x] **Research**: Reverse engineer TradingView's proprietary Rating logic (Ichimoku cloud vs price).
+- [ ] **Design**: Update `docs/design/rating_tuning_v1.md`.
     - Specify tuning parameters for each indicator.
     - Define acceptable tolerance for divergence.
+    - **Update**: Switch Ichimoku logic from "Price vs Cloud" to "Price vs Base Line (Kijun-sen)".
 - [ ] **Test (TDD)**: Create `tests/test_rating_tuning.py`.
     - Verify that tuned ratings match TradingView ground truth.
 - [ ] **Implementation**:
-    - Iteratively tune `TechnicalRatings` based on `audit_feature_parity.py` results.
+    - Restore `technicals_v0.py` from git history.
+    - Tune `TechnicalRatings` logic (Ichimoku Base Line).
     - Validate with `scripts/audit/audit_feature_parity.py`.
 
 ## 56. Phase 670: Alpha Correlation & Regime Sensitivity (SDD & TDD)

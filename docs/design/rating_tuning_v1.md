@@ -5,23 +5,25 @@ To achieve numerical parity (MAE < 0.05) between the replicated technical rating
 
 ## 2. Tuning Targets
 
-### 2.1 Ichimoku Cloud Alignment
-- **Hypothesis**: The divergence in `Recommend.MA` is likely due to incorrect Ichimoku Cloud displacement handling.
-- **Current Logic**: `span_a = ichimoku_df["ISA_9"]`, `span_b = ichimoku_df["ISB_26"]` (no shift).
-- **TradingView Logic**:
-  - The Cloud (Kumo) is plotted 26 bars into the future.
-  - The "Current Cloud" value used for rating is the value of Span A/B calculated 26 bars ago.
-  - **Proposed Fix**: Revert to `shift(26)` logic but verify `pandas-ta` alignment.
+### 2.1 Ichimoku Logic Pivot
+- **Current Issue**: Divergence in `Recommend.MA` due to incorrect Ichimoku component.
+- **New Logic**: The 15th component of the Moving Averages rating is the **Ichimoku Base Line (Kijun-sen)**, not the Cloud.
+- **Formula**:
+  - `BaseLine` = (Highest High + Lowest Low) / 2 over 26 periods.
+  - `Buy` if `Close > BaseLine`.
+  - `Sell` if `Close < BaseLine`.
+  - `Neutral` otherwise.
 
-### 2.2 EMA vs SMA Weighting
-- **Hypothesis**: TradingView might weight exponential averages differently than simple averages.
-- **Current Logic**: Equal weight for all MAs.
-- **Experiment**: Check if giving higher weight to EMA reduces error.
+### 2.2 Component Alignment (The 15 Votes)
+The `Recommend.MA` rating is the average of 15 votes:
+1.  **SMA 10, 20, 30, 50, 100, 200** (6 votes)
+2.  **EMA 10, 20, 30, 50, 100, 200** (6 votes)
+3.  **Hull MA 9** (1 vote)
+4.  **VWMA 20** (1 vote)
+5.  **Ichimoku Base Line (26)** (1 vote)
 
-### 2.3 Smoothing Variations
-- **Hypothesis**: RSI and Stochastic smoothing might differ (Wilder vs EMA).
-- **Current Logic**: `ta.rsi` uses standard RMA/Wilder.
-- **Experiment**: Verify `pandas-ta` default matches TV.
+### 2.3 Reference Preservation
+- **`technicals_v0.py`**: The original scalar implementation (from commit `3b89074`) will be restored to serve as a regression baseline.
 
 ## 3. Iterative Tuning Process
 1.  **Baseline**: Run `audit_feature_parity.py` to get current MAE.
