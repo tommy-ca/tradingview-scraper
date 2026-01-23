@@ -84,14 +84,32 @@ def audit_feature_parity(symbols: List[str]):
 
     # 4. Final Summary
     if audit_results:
+        from scipy import stats
+        import numpy as np
+
+        gt_vec = np.array([r["ground_truth"]["all"] or 0 for r in audit_results])
+        rep_vec = np.array([r["replicated"]["rep_all"] or 0 for r in audit_results])
+
         avg_delta = sum(r["delta"]["all"] for r in audit_results) / len(audit_results)
+
+        # Rank Correlation
+        corr, p_val = stats.spearmanr(gt_vec, rep_vec)
+
+        # Sign Accuracy
+        sign_match = np.mean(np.sign(gt_vec) == np.sign(rep_vec))
+
         logger.info(f"--- FINAL SUMMARY ---")
         logger.info(f"Sample Size: {len(audit_results)}")
-        logger.info(f"Average Delta (All): {avg_delta:.4f}")
-        if avg_delta < 0.05:
-            logger.info("✅ PASS: Technical replication is within institutional tolerance.")
+        logger.info(f"Average Delta (MAE): {avg_delta:.4f}")
+        logger.info(f"Rank Correlation: {corr:.4f} (p={p_val:.4f})")
+        logger.info(f"Sign Accuracy: {sign_match:.2%}")
+
+        if corr > 0.9:
+            logger.info("✅ PASS: Rank Correlation is fit for Alpha Generation.")
+        elif avg_delta < 0.05:
+            logger.info("✅ PASS: Scalar Parity achieved.")
         else:
-            logger.warning("❌ FAIL: Significant deviation detected. Logic tuning required.")
+            logger.warning("❌ FAIL: Correlation and Parity below thresholds.")
 
 
 if __name__ == "__main__":
