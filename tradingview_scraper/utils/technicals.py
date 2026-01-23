@@ -10,7 +10,19 @@ class TechnicalRatings:
     """
 
     @staticmethod
+    def _safe_vote(cond_buy: pd.Series, cond_sell: pd.Series, index: pd.Index) -> pd.Series:
+        """Helper to create a vote series with proper alignment."""
+        v = pd.Series(0.0, index=index)
+        v.loc[cond_buy.reindex(index, fill_value=False).values] = 1.0
+        v.loc[cond_sell.reindex(index, fill_value=False).values] = -1.0
+        return v
+
+    @staticmethod
     def calculate_recommend_ma_series(df: pd.DataFrame) -> pd.Series:
+        """
+        Reconstructs the 'Recommend.MA' rating as a time-series.
+        Components: SMA (10-200), EMA (10-200), VWMA(20), HullMA(9), Ichimoku.
+        """
         if df.empty:
             return pd.Series(dtype=float)
 
@@ -21,57 +33,56 @@ class TechnicalRatings:
 
         all_votes = []
 
-        # 1. SMAs & EMAs (Lengths 10, 20, 30, 50, 100, 200)
+        # Tuning Experiment 1: Reduce lengths list to match TV more closely if possible
+        # Standard: 10, 20, 30, 50, 100, 200
         lengths = [10, 20, 30, 50, 100, 200]
+
+        # Tuning Experiment 2: Weighting? No, standard is equal weight.
+
         for length in lengths:
             # SMA
-            ma = ta.sma(close, length=length)
-            if ma is not None:
-                ma = ma.reindex(df.index)
-                vote = pd.Series(0.0, index=df.index)
-                vote.loc[close.values > ma.values] = 1.0
-                vote.loc[close.values < ma.values] = -1.0
-                all_votes.append(vote.where(ma.notna(), np.nan))
+            sma = ta.sma(close, length=length)
+            if sma is not None:
+                all_votes.append(TechnicalRatings._safe_vote(close > sma, close < sma, df.index))
             # EMA
             ema = ta.ema(close, length=length)
             if ema is not None:
-                ema = ema.reindex(df.index)
-                vote = pd.Series(0.0, index=df.index)
-                vote.loc[close.values > ema.values] = 1.0
-                vote.loc[close.values < ema.values] = -1.0
-                all_votes.append(vote.where(ema.notna(), np.nan))
+                all_votes.append(TechnicalRatings._safe_vote(close > ema, close < ema, df.index))
 
         # 2. Hull MA (9)
         hma = ta.hma(close, length=9)
         if hma is not None:
-            hma = hma.reindex(df.index)
-            vote = pd.Series(0.0, index=df.index)
-            vote.loc[close.values > hma.values] = 1.0
-            vote.loc[close.values < hma.values] = -1.0
-            all_votes.append(vote.where(hma.notna(), np.nan))
+            all_votes.append(TechnicalRatings._safe_vote(close > hma, close < hma, df.index))
 
         # 3. VWMA (20)
         if volume is not None:
             vwma = ta.vwma(close, volume, length=20)
             if vwma is not None:
-                vwma = vwma.reindex(df.index)
-                vote = pd.Series(0.0, index=df.index)
-                vote.loc[close.values > vwma.values] = 1.0
-                vote.loc[close.values < vwma.values] = -1.0
-                all_votes.append(vote.where(vwma.notna(), np.nan))
+                all_votes.append(TechnicalRatings._safe_vote(close > vwma, close < vwma, df.index))
 
         # 4. Ichimoku
         ichimoku_df, _ = ta.ichimoku(high, low, close, tenkan=9, kijun=26, senkou=52)
         if ichimoku_df is not None:
-            ichimoku_df = ichimoku_df.reindex(df.index)
-            span_a = ichimoku_df["ISA_9"]
-            span_b = ichimoku_df["ISB_26"]
+            # Tuning Experiment 4: No Shift is better (Delta ~0.26 vs ~0.5).
+            # TV Logic likely compares Current Price vs Current Cloud (calculated from T-26).
+            # pandas_ta aligns ISB_26 to T.
+            # So span_b[T] IS the value of the span B calculated at T.
+            # But the cloud is plotted 26 bars forward.
+            # So at time T, the "Cloud" is the value of SpanA/B from T-26.
+            # This means we DO need to shift(26) to bring T-26 value to T?
+            # Wait, shifting +26 moves values from T to T+26.
+            # To get value FROM T-26 TO T, we need shift(26).
+            # Let's retry shift(26) but verify indices.
+
+            # Hypothesis: Previous shift(26) failed due to NaNs or alignment.
+            # Let's try shift(26) again with fill_value=np.nan
+            span_a = ichimoku_df["ISA_9"].shift(26)
+            span_b = ichimoku_df["ISB_26"].shift(26)
+
             mx = np.maximum(span_a, span_b)
             mn = np.minimum(span_a, span_b)
-            vote = pd.Series(0.0, index=df.index)
-            vote.loc[close.values > mx.values] = 1.0
-            vote.loc[close.values < mn.values] = -1.0
-            all_votes.append(vote.where(span_a.notna(), np.nan))
+
+            all_votes.append(TechnicalRatings._safe_vote(close > mx, close < mn, df.index))
 
         if not all_votes:
             return pd.Series(0.0, index=df.index)

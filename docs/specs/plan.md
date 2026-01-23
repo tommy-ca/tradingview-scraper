@@ -52,17 +52,23 @@
     - Align `recommend_all` formula with institutional standard ($0.574 \times MA + 0.3914 \times Other$).
 
 ## 54. Phase 650: Feature Parity Audit (SDD & TDD)
-- [ ] **Audit**: Conduct `docs/audit/feature_parity_audit_v1.md`.
-    - Collect ground truth ratings for a sample of 10 assets from TradingView.
-    - Compare these values with the outputs of the replicated `TechnicalRatings` utility.
-- [ ] **Design**: Create `docs/design/feature_parity_standard_v1.md`.
-    - Define acceptable deviation thresholds for replicated indicators (e.g., $| \Delta | < 0.05$).
-    - Specify the "Ground Truth" data sourcing protocol (Screener API snapshot).
-- [ ] **Test (TDD)**: Create `tests/test_feature_parity.py`.
-    - Verify that replicated ratings stay within the parity envelope.
-- [ ] **Implementation**:
+- [x] **Audit**: Conduct `docs/audit/feature_parity_audit_v1.md`.
+- [x] **Design**: Create `docs/design/feature_parity_standard_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_feature_parity.py`.
+- [x] **Implementation**:
     - Implement `scripts/audit/audit_feature_parity.py` for automated cross-validation.
     - Tune `TechnicalRatings` logic (specifically Ichimoku and RSI) based on audit findings.
+
+## 55. Phase 660: Rating Logic Tuning (SDD & TDD)
+- [ ] **Research**: Reverse engineer TradingView's proprietary Rating logic (Ichimoku cloud vs price).
+- [ ] **Design**: Create `docs/design/rating_tuning_v1.md`.
+    - Specify tuning parameters for each indicator.
+    - Define acceptable tolerance for divergence.
+- [ ] **Test (TDD)**: Create `tests/test_rating_tuning.py`.
+    - Verify that tuned ratings match TradingView ground truth.
+- [ ] **Implementation**:
+    - Iteratively tune `TechnicalRatings` based on `audit_feature_parity.py` results.
+    - Validate with `scripts/audit/audit_feature_parity.py`.
 
 ## 52. Phase 630: Feature Store Consistency Audit (SDD & TDD)
 - [x] **Audit**: Conduct `docs/audit/feature_store_audit_v1.md`.
