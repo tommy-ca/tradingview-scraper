@@ -89,12 +89,21 @@
     - Validate with `scripts/audit/audit_feature_parity.py`.
 
 ## 58. Phase 690: Oscillator Constituents Alignment (SDD & TDD)
-- [ ] **Design**: Update `docs/specs/feature_composition_v3.6.5.md` with explicit constituent parameters.
-- [ ] **Test (TDD)**: Update `tests/test_vectorization_parity.py` to verify specific parameter outputs.
-- [ ] **Implementation**:
+- [x] **Design**: Update `docs/specs/feature_composition_v3.6.5.md` with explicit constituent parameters.
+- [x] **Test (TDD)**: Update `tests/test_vectorization_parity.py` to verify specific parameter outputs.
+- [x] **Implementation**:
     - Update `TechnicalRatings` to align all 11 oscillators with confirmed TradingView defaults.
     - Verify `Stoch` (%K 14, %D 3), `ADX` (14, 14), `UO` (7, 14, 28), `BullBear` (13).
     - Re-run `audit_feature_parity.py` to check for improved MAE.
+
+## 59. Phase 700: Constituent-Level Parity Audit (SDD & TDD)
+- [x] **Design**: Create `docs/design/constituent_parity_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_constituent_extraction.py`.
+- [x] **Implementation**:
+    - Enhance `audit_feature_parity.py` to request full constituent breakdown.
+    - Compare `pandas-ta` outputs vs TV values for each of the 28 sub-indicators.
+    - Pinpoint the exact source of divergence (e.g. "RSI matches, but ADX differs").
+
 
 
 ## 52. Phase 630: Feature Store Consistency Audit (SDD & TDD)
