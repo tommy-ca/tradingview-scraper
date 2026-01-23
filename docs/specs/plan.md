@@ -10,12 +10,42 @@
 - [x] **Execution**: Run recursive backtest for `meta_benchmark` profile.
 - [x] **Validation**: Verify that the tournament output includes meta-level Sharpe and Drawdown.
 - [x] **Documentation**: Update forensic reports to display recursive backtest results.
+## 48. Phase 590: Recursive Backtest Benchmarking (Validation)
+- [x] **Design**: Create `docs/design/meta_backtest_benchmarking_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_meta_backtest_benchmarking.py`.
+- [x] **Execution**: Run recursive backtest for `meta_benchmark` profile.
+- [x] **Validation**: Verify that the tournament output includes meta-level Sharpe and Drawdown.
+- [x] **Documentation**: Update forensic reports to display recursive backtest results.
+## 50. Phase 610: Anomaly Remediation & Tail-Risk Hardening (SDD & TDD)
+- [x] **Audit**: Conduct `docs/audit/anomaly_collection_v1.md`.
+- [x] **Design**: Create `docs/design/tail_risk_hardening_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_anomaly_detection.py`.
+- [x] **Implementation**:
+    - Build `NumericalDampener` utility (Integrated in aggregation/backtest).
+    - Update `BacktestEngine` with adaptive window skipping (`WindowVeto`).
+    - Refactor `flatten_meta_weights.py` to fix contributor metadata.
+    - Tighten `ReturnScalingGuard` to $|r| \le 1.0$ (100% daily cap).
 
-## 49. Phase 600: Production Deployment Ready (Final Audit)
-- [x] **Design**: Create `docs/design/production_deployment_audit_v1.md`.
-- [x] **Test (TDD)**: Create `tests/test_production_integrity.py`.
-- [x] **Execution**: Run `make flow-meta-production PROFILE=meta_production`.
-- [x] **Validation**: Final sign-off on the generated institutional reports.
+## 51. Phase 620: Advanced Data Contract Enforcement (SDD & TDD)
+- [ ] **Research**: Evaluate `Pandera` for formal schema validation of return matrices and feature tensors.
+- [ ] **Design**: Create `docs/design/data_contracts_v2.md`.
+    - Specify L0-L4 schema definitions using Pandera.
+    - Define validation checkpoints in `Foundation Gate` and `Synthesis`.
+- [ ] **Test (TDD)**: Create `tests/test_pandera_contracts.py`.
+    - Verify that malformed returns are rejected with descriptive errors.
+- [ ] **Implementation**:
+    - Integrate `Pandera` into `IngestionValidator`.
+    - Implement formal schema decorators for `QuantSDK` stages.
+
+## 50. Phase 610: Anomaly Remediation & Tail-Risk Hardening (SDD & TDD)
+- [x] **Audit**: Conduct `docs/audit/anomaly_collection_v1.md`.
+- [x] **Design**: Create `docs/design/tail_risk_hardening_v1.md`.
+- [x] **Test (TDD)**: Create `tests/test_anomaly_detection.py`.
+- [x] **Implementation**:
+    - Build `NumericalDampener` utility (Integrated in aggregation/backtest).
+    - Update `BacktestEngine` with adaptive window skipping (`WindowVeto`).
+    - Refactor `flatten_meta_weights.py` to fix contributor metadata.
+    - Tighten `ReturnScalingGuard` to $|r| \le 1.0$ (100% daily cap).
 
 ## 3. Streamlining & Optimization
 - [x] **Optimize `flow-data`**:

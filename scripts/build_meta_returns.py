@@ -244,10 +244,11 @@ def build_meta_returns(
             if target_file and target_file.exists():
                 s_rets_raw = pd.read_pickle(target_file)
 
-                # CR-Hardening: Return Scaling Guard (Phase 580)
+                # CR-Hardening: Return Scaling Guard (Phase 580/610)
                 # Clip returns to physical bounds to prevent numerical explosion
+                # Tightened to 100% daily (1.0) to prevent 10000% annualized artifacts
                 if isinstance(s_rets_raw, (pd.Series, pd.DataFrame)):
-                    s_rets_raw = s_rets_raw.clip(lower=-1.0, upper=5.0)
+                    s_rets_raw = s_rets_raw.clip(lower=-1.0, upper=1.0)
 
                 if isinstance(s_rets_raw, pd.Series):
                     s_rets = s_rets_raw.to_frame(s_id)

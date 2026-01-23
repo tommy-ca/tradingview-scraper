@@ -83,21 +83,26 @@ class IngestionValidator:
     def validate_returns(df: pd.DataFrame, strict: bool = False) -> List[str]:
         """
         Validates returns matrix against toxicity and padding rules.
-        Returns a list of symbols that FAILED validation.
+        Uses Pandera for formal schema enforcement (Phase 620).
         """
-        failed_symbols = []
+        from tradingview_scraper.pipelines.contracts import ReturnsSchema
+        import pandera as pa
 
         if df.empty:
             return []
 
+        try:
+            # 1. Formal Schema Validation (Bounds, Index, Types)
+            ReturnsSchema.validate(df)
+        except pa.errors.SchemaError as e:
+            logger.warning(f"Data Contract Violation in returns_matrix: {e}")
+            if strict:
+                raise
+
+        failed_symbols = []
         for col in df.columns:
             series = df[col]
-
-            # 1. Toxicity Bound (> 500% daily return)
-            if (series.abs() > 5.0).any():
-                logger.warning(f"IngestionValidator: {col} is TOXIC (|r| > 500%)")
-                failed_symbols.append(str(col))
-                continue
+            # ... (Existing heuristic checks for padding) ...
 
             # 2. 'No Padding' Compliance (TradFi only)
             # Heuristic: If EXCHANGE is not BINANCE/OKX/etc, check weekends

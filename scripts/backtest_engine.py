@@ -543,9 +543,9 @@ class BacktestEngine:
                                         logger.warning(f"  [ADAPTIVE RIDGE] Window {i} ({actual_profile}) anomalous (Sharpe={sharpe:.2f}). Reloading MAX Ridge: {current_ridge:.2f}")
                                         continue
 
-                                    # CR-FIX: Hard Fallback to EW for persistent instability (Phase 225)
-                                    if sharpe > 10.0 and ridge_attempt == max_ridge_retries and actual_profile not in ["market", "benchmark"]:
-                                        logger.warning(f"  [HARD FALLBACK] Window {i} ({actual_profile}) remains unstable (Sharpe={sharpe:.2f}). Forcing Equal Weight.")
+                                    # CR-Hardening: Window Veto Rule (Phase 610)
+                                    if sharpe > 10.0 and actual_profile not in ["market", "benchmark"]:
+                                        logger.warning(f"  [WINDOW VETO] Window {i} ({actual_profile}) unstable (Sharpe={sharpe:.2f}). Forcing Equal Weight.")
                                         n_strat = len(returns_for_opt.columns)
                                         if n_strat > 0:
                                             ew_weights = pd.Series(1.0 / n_strat, index=returns_for_opt.columns)

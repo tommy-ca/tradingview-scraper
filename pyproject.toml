@@ -58,6 +58,7 @@ dependencies = [
     "opentelemetry-exporter-prometheus>=0.60b1",
     "opentelemetry-exporter-otlp>=1.39.1",
     "opentelemetry-instrumentation-logging>=0.60b1",
+    "pandera>=0.28.1",
 ]
 
 [project.urls]
