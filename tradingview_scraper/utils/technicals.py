@@ -127,7 +127,7 @@ class TechnicalRatings:
             vote.loc[(k.values > 80) & (k.values < d.values)] = -1.0
             all_votes.append(vote.where(k.notna(), np.nan))
 
-        # 3. CCI
+        # 3. CCI (20)
         cci = ta.cci(high, low, close, length=20)
         if cci is not None:
             cci = cci.reindex(df.index)
@@ -136,11 +136,14 @@ class TechnicalRatings:
             vote.loc[cci.values > 100] = -1.0
             all_votes.append(vote.where(cci.notna(), np.nan))
 
-        # 4. ADX
-        adx = ta.adx(high, low, close, length=14)
+        # 4. ADX (14, 14)
+        # TV uses DI length 14, ADX smoothing 14
+        adx = ta.adx(high, low, close, length=14, lensig=14, scalar=True)
         if adx is not None:
             adx = adx.reindex(df.index)
-            adx_val, dmp, dmn = adx["ADX_14"], adx["DMP_14"], adx["DMN_14"]
+            adx_val = adx["ADX_14"]
+            dmp = adx["DMP_14"]
+            dmn = adx["DMN_14"]
             vote = pd.Series(0.0, index=df.index)
             vote.loc[(adx_val.values > 20) & (dmp.values > dmn.values)] = 1.0
             vote.loc[(adx_val.values > 20) & (dmn.values > dmp.values)] = -1.0

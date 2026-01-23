@@ -21,22 +21,22 @@ The TradingView Scanner provides high-level composite signals (`Recommend.All`, 
 
 ### 2.2 Oscillators Rating (`Recommend.Other`)
 **Purpose**: Measures Mean Reversion & Overbought/Oversold conditions.
-**Composition**: A weighted consensus of Oscillators.
+**Composition**: A weighted consensus of 11 Oscillators.
 **Components**:
-- **RSI (14)**: Relative Strength Index.
-- **Stochastic (14, 3, 3)**: %K and %D lines.
-- **CCI (20)**: Commodity Channel Index.
-- **ADX (14, 14)**: Average Directional Index.
-- **AO**: Awesome Oscillator.
-- **Momentum (10)**.
-- **MACD (12, 26, 9)**.
-- **Stochastic RSI (3, 3, 14, 14)**.
-- **Williams %R (14)**.
-- **Bulls and Bears Power**.
-- **Ultimate Oscillator (7, 14, 28)**.
+- **RSI (14)**: Relative Strength Index. Classic momentum/overbought-oversold.
+- **Stochastic (%K 14, %D 3)**: Momentum measure. Uses `smooth_k=3` implicitly in TV.
+- **CCI (20)**: Commodity Channel Index. Deviation from average price.
+- **ADX (14, 14)**: Average Directional Index. DI length 14, ADX smoothing 14. Uses +DI/-DI for bias.
+- **AO**: Awesome Oscillator. Momentum comparing recent MAs.
+- **Momentum (10)**: Rate of price change.
+- **MACD (12, 26, 9)**: Moving Average Convergence Divergence.
+- **Stochastic RSI (3, 3, 14, 14)**: Sensitive short-term oscillator of RSI.
+- **Williams %R (14)**: Position in recent High-Low range.
+- **Bull Bear Power (13)**: Buying vs Selling pressure relative to EMA.
+- **Ultimate Oscillator (7, 14, 28)**: Weighted sum of short/medium/long momentum.
 
 **Logic**:
-- Counter-trend signals (e.g., RSI > 70 = Sell) are aggregated.
+- $Score = \frac{Buy - Sell}{11}$
 - Range: [-1.0 (Strong Sell) to +1.0 (Strong Buy)].
 
 ### 2.3 Composite Rating (`Recommend.All`)

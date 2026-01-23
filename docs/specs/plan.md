@@ -82,13 +82,20 @@
     - **Result**: Rank Correlation > 0.92 achieved. Replicated ratings are fit for relative ranking.
 
 ## 57. Phase 680: Technical Ratings Refinement (SDD & TDD)
-- [ ] **Design**: Create `docs/design/ratings_refinement_v1.md`.
-    - Specify tuning targets for `Recommend.Other` (Oscillators) to improve sign accuracy.
-    - Define vectorized optimization for `stoch_rsi` and `uo`.
-- [ ] **Test (TDD)**: Update `tests/test_vectorization_parity.py` with new oscillator logic.
-- [ ] **Implementation**:
+- [x] **Design**: Create `docs/design/ratings_refinement_v1.md`.
+- [x] **Test (TDD)**: Update `tests/test_vectorization_parity.py` with new oscillator logic.
+- [x] **Implementation**:
     - Refactor `calculate_recommend_other_series` in `tradingview_scraper/utils/technicals.py`.
     - Validate with `scripts/audit/audit_feature_parity.py`.
+
+## 58. Phase 690: Oscillator Constituents Alignment (SDD & TDD)
+- [ ] **Design**: Update `docs/specs/feature_composition_v3.6.5.md` with explicit constituent parameters.
+- [ ] **Test (TDD)**: Update `tests/test_vectorization_parity.py` to verify specific parameter outputs.
+- [ ] **Implementation**:
+    - Update `TechnicalRatings` to align all 11 oscillators with confirmed TradingView defaults.
+    - Verify `Stoch` (%K 14, %D 3), `ADX` (14, 14), `UO` (7, 14, 28), `BullBear` (13).
+    - Re-run `audit_feature_parity.py` to check for improved MAE.
+
 
 ## 52. Phase 630: Feature Store Consistency Audit (SDD & TDD)
 - [x] **Audit**: Conduct `docs/audit/feature_store_audit_v1.md`.
