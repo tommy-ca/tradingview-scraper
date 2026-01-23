@@ -104,6 +104,17 @@
     - Compare `pandas-ta` outputs vs TV values for each of the 28 sub-indicators.
     - Pinpoint the exact source of divergence (e.g. "RSI matches, but ADX differs").
 
+## 60. Phase 710: Component-by-Component Regression (SDD & TDD)
+- [ ] **Analysis**: Review `feature_parity_results.json` to identify worst offenders.
+- [ ] **Design**: Create `docs/design/component_regression_v1.md`.
+    - Prioritize tuning for components with $> 10\%$ deviation.
+    - Specify "Isolation Tests" for RSI, MACD, and Stochastic.
+- [ ] **Test (TDD)**: Create `tests/test_component_isolation.py`.
+    - Verify individual indicator outputs against known TV reference values.
+- [ ] **Implementation**:
+    - Tune `TechnicalRatings` logic for the identified weak components.
+    - Validate with `audit_feature_parity.py`.
+
 
 
 ## 52. Phase 630: Feature Store Consistency Audit (SDD & TDD)
