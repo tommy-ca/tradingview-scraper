@@ -221,15 +221,6 @@ class TechnicalRatings:
         return float(series.iloc[-1]) if not series.empty else 0.0
 
     @staticmethod
-    def calculate_recommend_all_series(df: pd.DataFrame) -> pd.Series:
-        ma = TechnicalRatings.calculate_recommend_ma_series(df)
-        osc = TechnicalRatings.calculate_recommend_other_series(df)
-        # Using empirical weights or simple average if desired
-        # TV Logic: Roughly average but sometimes weighted.
-        # We'll use simple average for parity with calculate_recommend_all unless proven otherwise
-        return (ma + osc) / 2.0
-
-    @staticmethod
     def calculate_recommend_all(df: pd.DataFrame, ma_score: Optional[float] = None, osc_score: Optional[float] = None) -> float:
         if ma_score is None:
             ma_score = TechnicalRatings.calculate_recommend_ma(df)
