@@ -74,7 +74,7 @@ class BacktestEngine:
             if runs_dir.exists():
                 latest_runs = sorted([d for d in runs_dir.iterdir() if d.is_dir() and (d / "data" / "returns_matrix.parquet").exists()], key=os.path.getmtime, reverse=True)
                 if latest_runs:
-                    run_dir = latest_runs[0]
+                    run_dir = cast(Path, latest_runs[0])
 
         data_dir = run_dir / "data" if run_dir else self.settings.lakehouse_dir
         logger.info(f"Loading data from {data_dir}")
@@ -331,6 +331,11 @@ class BacktestEngine:
         return_series: Dict[str, List[pd.Series]] = {}
         current_holdings: Dict[str, Any] = {}
 
+        # CR-270: Resolve Strategy Configuration (Once per run)
+        from tradingview_scraper.orchestration.strategies import StrategyResolver
+
+        strategy = StrategyResolver.resolve_strategy(config)
+
         # 1. Rolling Windows
         n_obs = len(self.returns)
         windows = list(range(resolved_train, n_obs - resolved_test, resolved_step))
@@ -403,14 +408,6 @@ class BacktestEngine:
                     logger.warning(f"  [Window {i}] Regime detection failed: {e}")
 
                 current_mode = config.features.selection_mode
-
-                # CR-270: Infer Strategy from Global Profile
-                strategy = "trend_following"
-                global_profile = config.profile or ""
-                if "mean_rev" in global_profile.lower() or "meanrev" in global_profile.lower():
-                    strategy = "mean_reversion"
-                elif "breakout" in global_profile.lower():
-                    strategy = "breakout"
 
                 # CR-800: Prepare PIT Features Injection
                 # Extract the full feature vector for the current timestamp to ensure
@@ -788,10 +785,10 @@ if __name__ == "__main__":
     try:
         from opentelemetry import metrics, trace
 
-        tp = trace.get_tracer_provider()
+        tp = cast(Any, trace.get_tracer_provider())
         if hasattr(tp, "shutdown"):
             tp.shutdown()
-        mp = metrics.get_meter_provider()
+        mp = cast(Any, metrics.get_meter_provider())
         if hasattr(mp, "shutdown"):
             mp.shutdown()
     except Exception:

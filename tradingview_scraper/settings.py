@@ -254,6 +254,7 @@ class TradingViewScraperSettings(BaseSettings):
     min_momentum_score: float = 0.0
     cluster_lookbacks: List[int] = [60, 120, 200]
     ranking: SelectionRanking = Field(default_factory=SelectionRanking)
+    strategy_type: Optional[str] = None  # Resolved via Manifest or Profile Inference
 
     # Optimization
     cluster_cap: float = 0.25
