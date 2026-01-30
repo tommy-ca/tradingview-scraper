@@ -47,8 +47,10 @@ def _backfill_worker(symbol: str, lakehouse_dir: Path, metadata: Optional[Dict[s
         if not isinstance(df.index, pd.DatetimeIndex):
             df.index = pd.to_datetime(df.index)
 
-        if df.index.tz is not None:
-            df.index = df.index.tz_convert(None)
+        if df.index.tz is None:
+            df.index = df.index.tz_localize("UTC")
+        else:
+            df.index = df.index.tz_convert("UTC")
 
         if "close" not in df.columns:
             return None
