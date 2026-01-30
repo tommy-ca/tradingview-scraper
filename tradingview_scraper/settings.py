@@ -271,6 +271,7 @@ class TradingViewScraperSettings(BaseSettings):
     report_mode: str = "full"
     dynamic_universe: bool = False
     raw_pool_universe: str = "selected"
+    max_valid_sharpe: float = 10.0
 
     # Tournament
     engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"

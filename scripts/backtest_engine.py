@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,7 @@ from tradingview_scraper.portfolio_engines import EngineRequest, ProfileName, bu
 from tradingview_scraper.selection_engines import build_selection_engine, get_hierarchical_clusters
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import AuditLedger
+from tradingview_scraper.utils.meta_returns import build_meta_returns
 from tradingview_scraper.utils.synthesis import StrategySynthesizer
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -67,7 +68,11 @@ class BacktestEngine:
             # Try to find latest run if not provided
             runs_dir = self.settings.summaries_runs_dir
             if runs_dir.exists():
-                latest_runs = sorted([d for d in runs_dir.iterdir() if d.is_dir() and (d / "data" / "returns_matrix.parquet").exists()], key=os.path.getmtime, reverse=True)
+                latest_runs = sorted(
+                    [d for d in runs_dir.iterdir() if d.is_dir() and (d / "data" / "returns_matrix.parquet").exists()],
+                    key=os.path.getmtime,
+                    reverse=True,
+                )
                 if latest_runs:
                     run_dir = latest_runs[0]
 
@@ -226,6 +231,131 @@ class BacktestEngine:
 
         return pd.Series()
 
+    def _handle_meta_profile(self, config, run_dir):
+        logger.info(f"🚀 RECURSIVE META-BACKTEST DETECTED: {config.profile}")
+
+        if not run_dir:
+            run_dir = self.settings.prepare_summaries_run_dir()
+
+        anchor_prof = "hrp"
+        temp_meta_path = run_dir / "data" / f"meta_returns_{config.profile}_{anchor_prof}.pkl"
+        build_meta_returns(meta_profile=config.profile, output_path=str(run_dir / "data" / "meta.pkl"), profiles=[anchor_prof], manifest_path=config.manifest_path, base_dir=run_dir / "data")
+
+        if temp_meta_path.exists():
+            data = pd.read_pickle(temp_meta_path)
+            if isinstance(data, pd.Series):
+                self.returns = data.to_frame()
+            else:
+                self.returns = cast(pd.DataFrame, data)
+
+            logger.info(f"Meta-Returns Matrix established: {self.returns.shape}")
+            self.raw_candidates = [{"symbol": sid, "id": sid} for sid in self.returns.columns]
+            return True
+        else:
+            logger.error(f"Failed to build meta-returns matrix at {temp_meta_path}. Aborting.")
+            return False
+
+    def _filter_universe(self, train_rets: pd.DataFrame, current_date, is_meta: bool, window_index: int) -> pd.DataFrame:
+        dynamic_filter_active = not self.features_matrix.empty and not is_meta
+
+        if dynamic_filter_active:
+            idx_loc = self.features_matrix.index.searchsorted(current_date)
+            if idx_loc > 0:
+                try:
+                    if current_date in self.features_matrix.index:
+                        current_features = self.features_matrix.loc[current_date]
+                    else:
+                        prev_date = self.features_matrix.index[self.features_matrix.index < current_date][-1]
+                        current_features = self.features_matrix.loc[prev_date]
+
+                    if isinstance(self.features_matrix.columns, pd.MultiIndex):
+                        ratings = current_features.xs("recommend_all", level="feature")
+                    else:
+                        ratings = current_features
+
+                    min_rating = 0.0
+                    valid_symbols = ratings[ratings > min_rating].index.tolist()
+                    valid_universe = [s for s in valid_symbols if s in train_rets.columns]
+
+                    if len(valid_universe) >= 2:
+                        train_rets = train_rets[valid_universe]
+                        logger.info(f"  [Window {window_index}] Dynamic Filter: {len(valid_universe)} / {len(ratings)} valid candidates (Rating > {min_rating})")
+                    else:
+                        logger.warning(f"  [Window {window_index}] Dynamic Filter too strict (found {len(valid_universe)}). Falling back to full universe.")
+
+                except Exception as e:
+                    logger.warning(f"  [Window {window_index}] Dynamic Filter failed: {e}. Using static universe.")
+        return train_rets
+
+    def _detect_regime(self, train_rets: pd.DataFrame, window_index: int) -> Tuple[str, str]:
+        regime_name = "NORMAL"
+        market_env = "NORMAL"
+
+        try:
+            if not train_rets.empty and len(train_rets) > 60:
+                regime_label, regime_score, quadrant = self.detector.detect_regime(train_rets)
+                regime_name = regime_label
+                market_env = quadrant
+        except Exception as e:
+            logger.warning(f"  [Window {window_index}] Regime detection failed: {e}")
+
+        return regime_name, market_env
+
+    def _select_candidates(self, train_rets: pd.DataFrame, config, window_index: int, ledger: Optional[AuditLedger], lightweight: bool):
+        current_mode = config.features.selection_mode
+        strategy = "trend_following"
+        global_profile = config.profile or ""
+        if "mean_rev" in global_profile.lower() or "meanrev" in global_profile.lower():
+            strategy = "mean_reversion"
+        elif "breakout" in global_profile.lower():
+            strategy = "breakout"
+
+        selection_engine = build_selection_engine(current_mode)
+        from tradingview_scraper.selection_engines.base import SelectionRequest
+
+        req_select = SelectionRequest(
+            top_n=config.top_n,
+            threshold=config.threshold,
+            strategy=strategy,
+        )
+        selection = selection_engine.select(returns=train_rets, raw_candidates=self.raw_candidates, stats_df=self.stats, request=req_select)
+
+        if selection.winners:
+            selection_winners = [w for w in selection.winners if w["symbol"] in train_rets.columns]
+            if len(selection_winners) != len(selection.winners):
+                logger.warning(f"  [DATA GAP] Filtered {len(selection.winners) - len(selection_winners)} winners missing from returns matrix.")
+            object.__setattr__(selection, "winners", selection_winners)
+
+        if selection.winners:
+            winners_syms = [w["symbol"] for w in selection.winners]
+            if ledger and not lightweight:
+                metrics_payload = {
+                    "n_universe_symbols": len(self.returns.columns),
+                    "n_refinement_candidates": len(train_rets.columns),
+                    "n_discovery_candidates": 0,
+                    "n_winners": len(winners_syms),
+                    "winners": winners_syms,
+                    **selection.metrics,
+                }
+                pipeline_audit = metrics_payload.pop("pipeline_audit", None)
+                data_payload = {
+                    "relaxation_stage": selection.relaxation_stage,
+                    "audit_clusters": selection.audit_clusters,
+                    "winners_meta": selection.winners,
+                }
+                if pipeline_audit:
+                    data_payload["pipeline_audit"] = pipeline_audit
+
+                ledger.record_outcome(
+                    step="backtest_select",
+                    status="success",
+                    output_hashes={},
+                    metrics=metrics_payload,
+                    data=data_payload,
+                    context={"window_index": window_index, "engine": selection_engine.name},
+                )
+        return selection, current_mode
+
     def run_tournament(
         self,
         mode: str = "production",
@@ -242,36 +372,14 @@ class BacktestEngine:
         config = self.settings
 
         # CR-837: Fractal Recursive Backtest (Phase 570)
-        # Establish meta-returns BEFORE window calculation
         is_meta = self._is_meta_profile(config.profile or "")
+        if is_meta:
+            if not self._handle_meta_profile(config, run_dir):
+                return {"results": [], "meta": {}}
 
         resolved_train = int(train_window or config.train_window)
         resolved_test = int(test_window or config.test_window)
         resolved_step = int(step_size or config.step_size)
-
-        if is_meta:
-            logger.info(f"🚀 RECURSIVE META-BACKTEST DETECTED: {config.profile}")
-            from scripts.build_meta_returns import build_meta_returns
-
-            if not run_dir:
-                run_dir = self.settings.prepare_summaries_run_dir()
-
-            anchor_prof = "hrp"
-            temp_meta_path = run_dir / "data" / f"meta_returns_{config.profile}_{anchor_prof}.pkl"
-            build_meta_returns(meta_profile=config.profile, output_path=str(run_dir / "data" / "meta.pkl"), profiles=[anchor_prof], manifest_path=config.manifest_path, base_dir=run_dir / "data")
-
-            if temp_meta_path.exists():
-                data = pd.read_pickle(temp_meta_path)
-                if isinstance(data, pd.Series):
-                    self.returns = data.to_frame()
-                else:
-                    self.returns = cast(pd.DataFrame, data)
-
-                logger.info(f"Meta-Returns Matrix established: {self.returns.shape}")
-                self.raw_candidates = [{"symbol": sid, "id": sid} for sid in self.returns.columns]
-            else:
-                logger.error(f"Failed to build meta-returns matrix at {temp_meta_path}. Aborting.")
-                return {"results": [], "meta": {}}
 
         # Tournament profiles to iterate through
         if lightweight:
@@ -315,95 +423,9 @@ class BacktestEngine:
             train_rets = self.returns.iloc[i - resolved_train : i]
             test_rets = self.returns.iloc[i : i + resolved_test]
 
-            # --- DYNAMIC UNIVERSE FILTERING (Time-Travel) ---
-            # If features_matrix exists, filter candidates based on HISTORICAL rating at current_date
-            # CR-837: Skip dynamic filtering for meta-portfolios (Phase 570)
-            dynamic_filter_active = not self.features_matrix.empty and not is_meta
-
-            if dynamic_filter_active:
-                # Find the row in features_matrix corresponding to current_date (or latest prior)
-                # Using searchsorted to find insertion point, then take previous
-                # Assuming index is sorted
-                idx_loc = self.features_matrix.index.searchsorted(current_date)
-                if idx_loc > 0:
-                    try:
-                        # Use .loc with 'ffill' semantics manually or just check existence
-                        if current_date in self.features_matrix.index:
-                            current_features = self.features_matrix.loc[current_date]
-                        else:
-                            # Use most recent prior (backfill/ffill logic)
-                            prev_date = self.features_matrix.index[self.features_matrix.index < current_date][-1]
-                            current_features = self.features_matrix.loc[prev_date]
-
-                        # Extract 'recommend_all' (Composite Rating)
-                        if isinstance(self.features_matrix.columns, pd.MultiIndex):
-                            # Slice the 'recommend_all' feature cross-section
-                            ratings = current_features.xs("recommend_all", level="feature")
-                        else:
-                            # Assuming single feature matrix
-                            ratings = current_features
-
-                        # Filter: Keep if Rating > Threshold (e.g. 0.0 or 0.1)
-                        min_rating = 0.0
-                        valid_symbols = ratings[ratings > min_rating].index.tolist()
-
-                        # Intersect with train_rets
-                        valid_universe = [s for s in valid_symbols if s in train_rets.columns]
-
-                        if len(valid_universe) >= 2:  # Require at least 2 assets to form a portfolio
-                            # Apply Filter
-                            train_rets = train_rets[valid_universe]
-                            # Log filter impact
-                            logger.info(f"  [Window {i}] Dynamic Filter: {len(valid_universe)} / {len(ratings)} valid candidates (Rating > {min_rating})")
-                        else:
-                            logger.warning(f"  [Window {i}] Dynamic Filter too strict (found {len(valid_universe)}). Falling back to full universe.")
-
-                    except Exception as e:
-                        logger.warning(f"  [Window {i}] Dynamic Filter failed: {e}. Using static universe.")
-
-            # 2. Pillar 1: Universe Selection
-
-            # CR-265: Dynamic Regime Detection
-            regime_name = "NORMAL"
-            market_env = "NORMAL"
-
-            try:
-                # Need DataFrame for detection. train_rets has asset columns.
-                if not train_rets.empty and len(train_rets) > 60:
-                    regime_label, regime_score, quadrant = self.detector.detect_regime(train_rets)
-                    regime_name = regime_label
-                    market_env = quadrant
-            except Exception as e:
-                logger.warning(f"  [Window {i}] Regime detection failed: {e}")
-
-            current_mode = config.features.selection_mode
-
-            # CR-270: Infer Strategy from Global Profile
-            strategy = "trend_following"
-            global_profile = config.profile or ""
-            if "mean_rev" in global_profile.lower() or "meanrev" in global_profile.lower():
-                strategy = "mean_reversion"
-            elif "breakout" in global_profile.lower():
-                strategy = "breakout"
-
-            selection_engine = build_selection_engine(current_mode)
-            from tradingview_scraper.selection_engines.base import SelectionRequest
-
-            req_select = SelectionRequest(
-                top_n=config.top_n,
-                threshold=config.threshold,
-                strategy=strategy,  # CR-270
-            )
-            selection = selection_engine.select(returns=train_rets, raw_candidates=self.raw_candidates, stats_df=self.stats, request=req_select)
-
-            # CR-FIX: Ensure winners exist in the returns matrix (Phase 225)
-            if selection.winners:
-                selection_winners = [w for w in selection.winners if w["symbol"] in train_rets.columns]
-                if len(selection_winners) != len(selection.winners):
-                    logger.warning(f"  [DATA GAP] Filtered {len(selection.winners) - len(selection_winners)} winners missing from returns matrix.")
-
-                # Mocking the winners list in selection response
-                object.__setattr__(selection, "winners", selection_winners)
+            train_rets = self._filter_universe(train_rets, current_date, is_meta, i)
+            regime_name, market_env = self._detect_regime(train_rets, i)
+            selection, current_mode = self._select_candidates(train_rets, config, i, ledger, lightweight)
 
             if selection.winners:
                 winners_syms = [w["symbol"] for w in selection.winners]
@@ -411,36 +433,7 @@ class BacktestEngine:
                 for w in selection.winners:
                     window_meta[w["symbol"]] = w
 
-                if ledger and not lightweight:
-                    metrics_payload = {
-                        "n_universe_symbols": len(self.returns.columns),
-                        "n_refinement_candidates": len(train_rets.columns),
-                        "n_discovery_candidates": 0,
-                        "n_winners": len(winners_syms),
-                        "winners": winners_syms,
-                        **selection.metrics,
-                    }
-                    pipeline_audit = metrics_payload.pop("pipeline_audit", None)
-                    data_payload = {
-                        "relaxation_stage": selection.relaxation_stage,
-                        "audit_clusters": selection.audit_clusters,
-                        "winners_meta": selection.winners,
-                    }
-                    if pipeline_audit:
-                        data_payload["pipeline_audit"] = pipeline_audit
-
-                    ledger.record_outcome(
-                        step="backtest_select",
-                        status="success",
-                        output_hashes={},
-                        metrics=metrics_payload,
-                        data=data_payload,
-                        context={"window_index": i, "engine": selection_engine.name},
-                    )
-
                 if winners_syms:
-                    # 3. Pillar 2: Strategy Synthesis
-                    # CR-837: Skip synthesis for meta-portfolios (they are already alpha streams)
                     if is_meta:
                         train_rets_strat = train_rets[winners_syms]
                     else:
@@ -537,14 +530,15 @@ class BacktestEngine:
 
                                     metrics = sim_results.get("metrics", sim_results) if isinstance(sim_results, dict) else getattr(sim_results, "metrics", {})
                                     sharpe = float(metrics.get("sharpe", 0.0))
+                                    max_valid_sharpe = getattr(config, "max_valid_sharpe", 10.0)
 
-                                    if sharpe > 10.0 and ridge_attempt < max_ridge_retries and actual_profile not in ["market", "benchmark"]:
+                                    if sharpe > max_valid_sharpe and ridge_attempt < max_ridge_retries and actual_profile not in ["market", "benchmark"]:
                                         current_ridge = 0.50 if ridge_attempt == 1 else 0.95
                                         logger.warning(f"  [ADAPTIVE RIDGE] Window {i} ({actual_profile}) anomalous (Sharpe={sharpe:.2f}). Reloading MAX Ridge: {current_ridge:.2f}")
                                         continue
 
                                     # CR-Hardening: Window Veto Rule (Phase 610)
-                                    if sharpe > 10.0 and actual_profile not in ["market", "benchmark"]:
+                                    if sharpe > max_valid_sharpe and actual_profile not in ["market", "benchmark"]:
                                         logger.warning(f"  [WINDOW VETO] Window {i} ({actual_profile}) unstable (Sharpe={sharpe:.2f}). Forcing Equal Weight.")
                                         n_strat = len(returns_for_opt.columns)
                                         if n_strat > 0:

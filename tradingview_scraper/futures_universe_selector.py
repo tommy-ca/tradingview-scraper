@@ -35,6 +35,12 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
+DATED_FUTURES_PATTERNS = [
+    re.compile(r"[0-9]{1,2}[A-Z]{1,3}[0-9]{2,4}$"),
+    re.compile(r"[A-Z][0-9]{2,4}$"),
+]
+NUMERIC_MULTIPLIER_PATTERN = re.compile(r"^[0-9]+")
+
 STABLE_BASES = {
     "USDT",
     "USDC",
@@ -594,6 +600,12 @@ class FuturesUniverseSelector:
         exchange: str | None = None,
         max_rows: int | None = None,
     ) -> tuple[list[dict[str, Any]], list[str]]:
+        """
+        Executes a screener scan for a single market/exchange with pagination.
+
+        Returns:
+            tuple: (collected_rows, error_messages)
+        """
         collected: list[dict[str, Any]] = []
         errors: list[str] = []
         offset = 0
@@ -645,12 +657,11 @@ class FuturesUniverseSelector:
         core = symbol.split(":", 1)[-1].upper().replace(".P", "").replace(".F", "")
 
         # Strip Dated Futures suffixes (e.g. Z2025, 27MAR2026)
-        dated_patterns = [r"[0-9]{1,2}[A-Z]{1,3}[0-9]{2,4}$", r"[A-Z][0-9]{2,4}$"]
-        for pat in dated_patterns:
-            core = re.sub(pat, "", core)
+        for pat in DATED_FUTURES_PATTERNS:
+            core = pat.sub("", core)
 
         # Strip common numeric multipliers (e.g., 1000PEPE -> PEPE)
-        core = re.sub(r"^[0-9]+", "", core)
+        core = NUMERIC_MULTIPLIER_PATTERN.sub("", core)
 
         # Priority matches for institutional quotes to avoid greedy stablecoin matching (e.g. WIFUSDT)
         # We check these first because some broader stables (like FUSDT) can overlap with legitimate bases
@@ -1171,6 +1182,16 @@ class FuturesUniverseSelector:
         return rows
 
     def _aggregate_by_base(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Groups symbols by base currency and selects a single representative per base.
+
+        Selection Logic:
+        1. Quote Priority (e.g., USDT > USDC > BUSD)
+        2. Exchange Priority (Binance > Bybit > OKX)
+        3. Liquidity (Value.Traded)
+
+        Also aggregates total volume/Value.Traded for the base across all venues.
+        """
         sort_field = self.config.final_sort_by or self.config.sort_by or "Value.Traded"
         descending = (self.config.final_sort_order or "desc").lower() == "desc"
         best_by_base: dict[str, dict[str, Any]] = {}
@@ -1676,46 +1697,54 @@ class FuturesUniverseSelector:
 
 
 def _format_markdown_table(rows: list[Mapping[str, Any]], columns: list[str] | None = None) -> str:
+    """Format a list of dicts as a Markdown table."""
     if not rows:
         return "No data"
 
+    # Determine column order: explicit columns first, then others from the first row
     configured_cols = columns or []
-    ordered_cols: list[str] = []
     seen = set()
+    ordered_cols: list[str] = []
 
-    for col in ["symbol"] + [c for c in configured_cols if c != "symbol"]:
-        if col in seen:
-            continue
-        if any(col in row for row in rows):
+    # 1. Add 'symbol' first if present
+    if "symbol" in rows[0] or any("symbol" in r for r in rows):
+        ordered_cols.append("symbol")
+        seen.add("symbol")
+
+    # 2. Add configured columns
+    for col in configured_cols:
+        if col not in seen and any(col in r for r in rows):
             ordered_cols.append(col)
             seen.add(col)
 
-    if not ordered_cols:
-        for key in rows[0].keys():
-            if key not in seen:
-                ordered_cols.append(key)
-                seen.add(key)
+    # 3. Add remaining columns from the first row (heuristic)
+    for col in rows[0].keys():
+        if col not in seen:
+            ordered_cols.append(col)
+            seen.add(col)
 
+    # Build table
     header = "| " + " | ".join(ordered_cols) + " |"
     separator = "| " + " | ".join("---" for _ in ordered_cols) + " |"
-    data_lines: list[str] = []
+
+    lines = [header, separator]
 
     for row in rows:
         cells = []
         for col in ordered_cols:
-            value = row.get(col, "")
-            if isinstance(value, float):
-                cell = f"{value:.6g}"
-            elif isinstance(value, bool):
-                cell = "true" if value else "false"
-            elif value is None:
+            val = row.get(col)
+            if isinstance(val, float):
+                cell = f"{val:.6g}"
+            elif isinstance(val, bool):
+                cell = "true" if val else "false"
+            elif val is None:
                 cell = ""
             else:
-                cell = str(value)
+                cell = str(val)
             cells.append(cell)
-        data_lines.append("| " + " | ".join(cells) + " |")
+        lines.append("| " + " | ".join(cells) + " |")
 
-    return "\n".join([header, separator, *data_lines])
+    return "\n".join(lines)
 
 
 def load_config_from_env(env_var: str = "FUTURES_SELECTOR_CONFIG") -> SelectorConfig:

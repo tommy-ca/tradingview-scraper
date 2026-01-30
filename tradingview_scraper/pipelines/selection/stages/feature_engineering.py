@@ -1,7 +1,9 @@
 import logging
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
+from scipy.stats import kurtosis, skew
 
 from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
@@ -22,6 +24,14 @@ class FeatureEngineeringStage(BasePipelineStage):
     Calculates technical and statistical alpha factors for all assets in the returns matrix.
     """
 
+    # Constants
+    ANNUALIZATION_FACTOR = 252
+    VOL_FACTOR = np.sqrt(252)
+    EPSILON = 1e-9
+    DEFAULT_LOOKBACK = 120
+    CVAR_CONFIDENCE = 0.05
+    CVAR_MIN_OBSERVATIONS = 20
+
     @property
     def name(self) -> str:
         return "FeatureEngineering"
@@ -35,56 +45,120 @@ class FeatureEngineeringStage(BasePipelineStage):
         logger.info(f"Generating features for {len(df.columns)} assets...")
 
         # 1. Base Statistical Features
-        mom = df.mean() * 252
-        vol = df.std() * np.sqrt(252)
-        stability = 1.0 / (vol + 1e-9)
+        base_features = self._calculate_base_features(df)
 
         # 2. Spectral & Complexity Features
-        lookback = min(len(df), context.params.get("feature_lookback", 120))
+        lookback = min(len(df), context.params.get("feature_lookback", self.DEFAULT_LOOKBACK))
+        spectral_features = self._calculate_spectral_features(df, lookback)
 
+        # 3. Tail Risk Features
+        tail_features = self._calculate_tail_features(df)
+
+        # 4. Discovery Metadata & External Features
+        metadata_features = self._extract_metadata_features(df, context.raw_pool)
+
+        # 5. Assemble Feature Store
+        features = pd.concat([base_features, spectral_features, tail_features, metadata_features], axis=1)
+
+        # Force global numeric consistency (CR-FIX Phase 353)
+        features = features.astype(float)
+
+        context.feature_store = features
+        context.log_event(self.name, "FeaturesGenerated", {"n_features": len(features.columns), "n_assets": len(features)})
+
+        return context
+
+    def _calculate_base_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        mom = df.mean() * self.ANNUALIZATION_FACTOR
+        vol = df.std() * self.VOL_FACTOR
+        stability = 1.0 / (vol + self.EPSILON)
+
+        return pd.DataFrame({"momentum": mom, "stability": stability})
+
+    def _calculate_spectral_features(self, df: pd.DataFrame, lookback: int) -> pd.DataFrame:
         # Vectorized calculation using apply (much faster than dict comprehensions for large N)
         entropy = df.apply(lambda col: calculate_permutation_entropy(col.tail(lookback).to_numpy(), order=5))
         efficiency = df.apply(lambda col: calculate_efficiency_ratio(col.tail(lookback).to_numpy()))
         hurst = df.apply(lambda col: calculate_hurst_exponent(col.to_numpy()))
 
-        # Tail Risk Features (CR-630)
-        from scipy.stats import kurtosis, skew
+        # Process raw values
+        entropy_clean = pd.to_numeric(entropy, errors="coerce").fillna(1.0).clip(0, 1)  # Raw Permutation Entropy (Noise)
+        efficiency_clean = pd.to_numeric(efficiency, errors="coerce")
 
-        skewness = df.apply(lambda col: float(abs(skew(col.dropna().to_numpy()))) if len(col.dropna()) > 2 else 0.0)
-        kurt = df.apply(lambda col: float(kurtosis(col.dropna().to_numpy())) if len(col.dropna()) > 2 else 0.0)
+        # Hurst transformation: (1.0 - abs(hurst - 0.5) * 2.0)
+        hurst_val = pd.to_numeric(hurst, errors="coerce").fillna(0.5)
+        hurst_clean = (1.0 - (hurst_val - 0.5).abs() * 2.0).clip(0, 1)
+
+        return pd.DataFrame({"entropy": entropy_clean, "efficiency": efficiency_clean, "hurst_clean": hurst_clean})
+
+    def _calculate_tail_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Use scipy.stats vectorized operations where possible
+
+        # Skewness (Absolute)
+        skew_vals = skew(df, axis=0, nan_policy="omit")
+        skewness = pd.Series(skew_vals, index=df.columns).abs()
+
+        # Kurtosis
+        kurt_vals = kurtosis(df, axis=0, nan_policy="omit")
+        kurt = pd.Series(kurt_vals, index=df.columns)
+
         # CVaR (Expected Shortfall) at 95% confidence
-        cvar = df.apply(lambda col: col[col <= col.quantile(0.05)].mean() if len(col.dropna()) > 20 else -0.1)
+        def calculate_cvar(col):
+            valid = col.dropna()
+            if len(valid) <= self.CVAR_MIN_OBSERVATIONS:
+                return -0.1
+            cutoff = valid.quantile(self.CVAR_CONFIDENCE)
+            if pd.isna(cutoff):
+                return -0.1
+            loss_tail = valid[valid <= cutoff]
+            if loss_tail.empty:
+                return -0.1
+            return loss_tail.mean()
 
-        # 3. Discovery Metadata & External Features
-        candidate_map = {c["symbol"]: c for c in context.raw_pool}
+        cvar = df.apply(calculate_cvar)
 
-        adx = pd.Series({s: float(candidate_map.get(s, {}).get("adx") or 0) for s in df.columns})
-        rec_all = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_all") or 0) for s in df.columns})
-        rec_ma = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_ma") or 0) for s in df.columns})
-        rec_other = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_other") or 0) for s in df.columns})
-        roc = pd.Series({s: float(candidate_map.get(s, {}).get("roc") or 0) for s in df.columns})
-        vol_d = pd.Series({s: float(candidate_map.get(s, {}).get("volatility_d") or 0) for s in df.columns})
-        vol_chg = pd.Series({s: float(candidate_map.get(s, {}).get("volume_change_pct") or 0) for s in df.columns})
+        return pd.DataFrame({"skew": skewness.fillna(0.0), "kurtosis": kurt.fillna(0.0), "cvar": cvar.fillna(-0.1)})
 
-        # Use v3 standardized liquidity scoring (normalized to $500M)
+    def _extract_metadata_features(self, df: pd.DataFrame, raw_pool: List[Dict[str, Any]]) -> pd.DataFrame:
+        # Optimization: Create a DataFrame from raw_pool and reindex
+        if raw_pool:
+            pool_df = pd.DataFrame(raw_pool)
+            if "symbol" in pool_df.columns:
+                pool_df = pool_df.set_index("symbol")
+                pool_df = pool_df[~pool_df.index.duplicated(keep="first")]
+            else:
+                pool_df = pd.DataFrame()
+        else:
+            pool_df = pd.DataFrame()
+
+        aligned_pool = pool_df.reindex(df.columns)
+
+        def get_series(col_name: str, fill_value: float = 0.0) -> pd.Series:
+            if col_name in aligned_pool.columns:
+                return pd.to_numeric(aligned_pool[col_name], errors="coerce").fillna(fill_value)
+            return pd.Series(fill_value, index=df.columns)
+
+        adx = get_series("adx")
+        rec_all = get_series("recommend_all")
+        rec_ma = get_series("recommend_ma")
+        rec_other = get_series("recommend_other")
+        roc = get_series("roc")
+        vol_d = get_series("volatility_d")
+        vol_chg = get_series("volume_change_pct")
+
+        # Liquidity scoring
+        candidate_map = {c["symbol"]: c for c in raw_pool}
         liquidity = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in df.columns})
 
-        # Default defaults for Antifragility/Survival (mocking v3 stats_df behavior)
-        # In a real pipeline, these would come from an upstream Feature Store or context.external_features
-        af_all = pd.Series(0.5, index=df.columns)
+        # Antifragility & Survival
         # Apply history scaling (same as v3)
-        af_all = af_all * (df.count() / 252.0).clip(upper=1.0)
+        af_all = pd.Series(0.5, index=df.columns)
+        af_all = af_all * (df.count() / self.ANNUALIZATION_FACTOR).clip(upper=1.0)
 
         regime_all = pd.Series(1.0, index=df.columns)
 
-        # 4. Assemble Feature Store
-        features = pd.DataFrame(
+        return pd.DataFrame(
             {
-                "momentum": mom,
-                "stability": stability,
-                "entropy": pd.to_numeric(entropy, errors="coerce").fillna(1.0).clip(0, 1),  # Raw Permutation Entropy (Noise)
-                "efficiency": pd.to_numeric(efficiency, errors="coerce"),
-                "hurst_clean": (1.0 - (pd.to_numeric(hurst, errors="coerce").fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1),
                 "adx": adx,
                 "recommend_all": rec_all,
                 "recommend_ma": rec_ma,
@@ -95,13 +169,5 @@ class FeatureEngineeringStage(BasePipelineStage):
                 "liquidity": liquidity,
                 "antifragility": af_all,
                 "survival": regime_all,
-                "skew": skewness.fillna(0.0),
-                "kurtosis": kurt.fillna(0.0),
-                "cvar": cvar.fillna(-0.1),
             }
-        ).astype(float)  # Force global numeric consistency (CR-FIX Phase 353)
-
-        context.feature_store = features
-        context.log_event(self.name, "FeaturesGenerated", {"n_features": len(features.columns), "n_assets": len(features)})
-
-        return context
+        )

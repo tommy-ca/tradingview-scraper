@@ -4,7 +4,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import pandas as pd
 import ray
@@ -30,7 +30,7 @@ logger = logging.getLogger("backfill_features")
 
 
 @ray.remote
-def process_symbol_features(symbol: str, lakehouse_dir: Path) -> Optional[Dict[str, pd.Series]]:
+def process_symbol_features(symbol: str, lakehouse_dir: Path) -> Optional[pd.DataFrame]:
     """Ray worker task to compute features for a single symbol."""
     safe_sym = symbol.replace(":", "_")
     file_path = lakehouse_dir / f"{safe_sym}_1d.parquet"
@@ -54,6 +54,9 @@ def process_symbol_features(symbol: str, lakehouse_dir: Path) -> Optional[Dict[s
         if df.index.tz is not None:
             df.index = df.index.tz_convert(None)
 
+        # Data Integrity: Deduplicate index to prevent feature corruption
+        df = df[~df.index.duplicated(keep="last")]
+
         if "close" not in df.columns:
             return None
 
@@ -71,7 +74,13 @@ def process_symbol_features(symbol: str, lakehouse_dir: Path) -> Optional[Dict[s
         osc = osc.ffill(limit=3)
         rating = rating.ffill(limit=3)
 
-        return {"recommend_ma": ma, "recommend_other": osc, "recommend_all": rating}
+        # Construct DataFrame directly
+        result_df = pd.DataFrame({"recommend_ma": ma, "recommend_other": osc, "recommend_all": rating})
+
+        # Validate locally to distribute CPU load
+        FeatureStoreSchema.validate(result_df)
+
+        return result_df
 
     except Exception as e:
         # We don't want to crash the whole Ray cluster for one failed symbol
@@ -147,37 +156,27 @@ class BackfillService:
         # 2. Parallel Processing
         futures = [process_symbol_features.remote(s, self.lakehouse_dir) for s in symbols]
 
-        results = {}
+        dfs = []
+        successful_symbols = []
+
+        # Stream results
         for symbol, future in zip(symbols, tqdm(futures, desc="Computing Features")):
             res = ray.get(future)
-            if res:
-                for feat_name, series in res.items():
-                    results[(symbol, feat_name)] = series
+            if res is not None:
+                dfs.append(res)
+                successful_symbols.append(symbol)
 
-        if not results:
+        if not dfs:
             logger.error("No ratings generated.")
             return
 
-        # 3. Consolidation
+        # 3. Consolidation (Optimized: concat vs DataFrame(dict))
         logger.info("Consolidating features matrix...")
-        features_df = pd.DataFrame(results)
+        # Keys correspond to the 'symbol' level of the MultiIndex columns
+        features_df = pd.concat(dfs, axis=1, keys=successful_symbols)
         features_df.columns.names = ["symbol", "feature"]
-        features_df = features_df.dropna(how="all")
 
-        # 4. Bulk Validation (Optimized)
-        logger.info("Validating features matrix...")
-        try:
-            unique_symbols = features_df.columns.get_level_values("symbol").unique()
-            # Still looping over symbols for now as FeatureStoreSchema expects specific column names,
-            # but we could optimize further with a Regex schema if column names were flat.
-            for sym in unique_symbols:
-                sym_df = features_df.xs(sym, axis=1, level="symbol")
-                FeatureStoreSchema.validate(sym_df)
-        except SchemaError as e:
-            logger.error(f"Schema Validation Failed: {e}")
-            raise
-
-        # 5. Save Artifact (Atomic)
+        # 4. Save Artifact (Atomic)
         out_p.parent.mkdir(parents=True, exist_ok=True)
         atomic_save_parquet(features_df, out_p)
 

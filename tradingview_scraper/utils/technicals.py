@@ -14,8 +14,13 @@ class TechnicalRatings:
     def _safe_vote(cond_buy: pd.Series, cond_sell: pd.Series, index: pd.Index) -> pd.Series:
         """Helper to create a vote series with proper alignment."""
         # Align series to index (fast path if already aligned)
-        b = cond_buy.reindex(index, fill_value=False).to_numpy(dtype=bool)
-        s = cond_sell.reindex(index, fill_value=False).to_numpy(dtype=bool)
+        if not cond_buy.index.equals(index):
+            cond_buy = cond_buy.reindex(index, fill_value=False)
+        if not cond_sell.index.equals(index):
+            cond_sell = cond_sell.reindex(index, fill_value=False)
+
+        b = cond_buy.to_numpy(dtype=bool)
+        s = cond_sell.to_numpy(dtype=bool)
 
         # Vectorized subtraction: True(1) - False(0) = 1, False(0) - True(1) = -1
         return pd.Series(b.astype(float) - s.astype(float), index=index)
@@ -94,8 +99,13 @@ class TechnicalRatings:
     def _safe_select(cond_buy: pd.Series, cond_sell: pd.Series, indicator: pd.Series) -> pd.Series:
         """Helper to create a vote series using np.select for performance."""
         # Align to indicator index
-        b = cond_buy.reindex(indicator.index, fill_value=False).values
-        s = cond_sell.reindex(indicator.index, fill_value=False).values
+        if not cond_buy.index.equals(indicator.index):
+            cond_buy = cond_buy.reindex(indicator.index, fill_value=False)
+        if not cond_sell.index.equals(indicator.index):
+            cond_sell = cond_sell.reindex(indicator.index, fill_value=False)
+
+        b = cond_buy.to_numpy()
+        s = cond_sell.to_numpy()
 
         # np.select is faster for multiple conditions and handles NaNs via where
         vote = np.select([b, s], [1.0, -1.0], default=0.0)

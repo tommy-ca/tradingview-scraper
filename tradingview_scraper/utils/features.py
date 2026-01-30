@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 import logging
+
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ class FeatureConsistencyValidator:
     """
 
     @staticmethod
-    def audit_coverage(features_df: pd.DataFrame, returns_df: pd.DataFrame) -> List[str]:
+    def audit_coverage(features_df: pd.DataFrame, returns_df: pd.DataFrame) -> list[str]:
         """
         Ensures that all symbols in returns have corresponding features.
         Returns a list of missing symbols.
@@ -28,7 +29,7 @@ class FeatureConsistencyValidator:
 
         return_symbols = set(returns_df.columns)
 
-        missing = sorted(list(return_symbols - feature_symbols))
+        missing = sorted(return_symbols - feature_symbols)
         if missing:
             logger.warning(f"Feature Store Audit: {len(missing)} symbols missing from feature matrix: {missing[:5]}...")
 
@@ -47,4 +48,4 @@ class FeatureConsistencyValidator:
         production_history = series.loc[first_valid:]
         nan_pct = production_history.isna().mean()
 
-        return bool(nan_pct > max_pct)
+        return nan_pct > max_pct
