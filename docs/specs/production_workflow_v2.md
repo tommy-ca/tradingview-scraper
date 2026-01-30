@@ -31,6 +31,7 @@ The production workflow is divided into three distinct phases to ensure data int
 **Binance Ratings Baselines (Atomic LONG/SHORT)**:
 - Runbook: `docs/runbooks/binance_spot_ratings_all_long_short_runbook_v1.md`
 - One-command: `make flow-binance-spot-rating-all-ls`
+- MA sleeves (Rating.MA): `binance_spot_rating_ma_long`, `binance_spot_rating_ma_short` (use per-profile `flow-production` with explicit `TV_RUN_ID`; see `docs/runbooks/binance_spot_ratings_ma_long_short_runbook_v1.md`).
 
 **Goal**: Generate a single-sleeve portfolio (e.g., "Crypto Trend Following" or "US Equities").
 **Orchestrator**: `scripts/run_production_pipeline.py`
@@ -84,6 +85,14 @@ The production workflow is divided into three distinct phases to ensure data int
 2.  **Directional Correction Gate (Sign Test)**:
     - When enabled via `feat_directional_sign_test_gate`, the meta orchestrator runs the Directional Correction Sign Test before aggregation.
     - Fails fast if any pinned sleeve violates SHORT inversion semantics at the sleeve boundary.
+
+2.5 **Sleeve Completeness Gate**:
+    - Meta MUST fail if any configured sleeve is missing a `run_id`, required artifacts, or produces an empty return stream. Single-sleeve metas are only allowed when explicitly designed as one-sleeve profiles and must be documented.
+    - Meta reports must include sleeve completeness + forensic trace references.
+
+2.6 **Reporting Integrity**:
+    - `meta_portfolio_report.md` MUST render sleeve completeness and sign-test sections and emit explicit FAIL status when these are missing/empty or when sleeve count <2 for multi-sleeve profiles.
+    - `INDEX.md` files MUST display the resolved profile name and run_id for the run directory.
 
 3.  **Recursive Aggregation**:
     - Builds a "Meta-Returns" matrix (Sleeves become Assets).
