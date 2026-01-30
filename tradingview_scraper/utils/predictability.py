@@ -4,12 +4,122 @@ from typing import Dict, Optional
 
 import numpy as np
 import pywt
-from scipy.stats import entropy
+from numba import jit
 from sklearn.linear_model import LinearRegression
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.stattools import adfuller
 
 logger = logging.getLogger(__name__)
+
+
+@jit(nopython=True, cache=True)
+def _jit_calculate_hurst_exponent(x: np.ndarray) -> float:
+    """
+    JIT-compiled core for Hurst Exponent calculation using Rescaled Range (R/S) analysis.
+    """
+    n_total = len(x)
+
+    # Lags: powers of 2 (8, 16, ..., 512)
+    lags = []
+    # Powers of 2 from 8 (2^3) to 512 (2^9)
+    current_lag = 8
+    while current_lag <= 512:
+        if current_lag <= n_total // 2:
+            lags.append(current_lag)
+        current_lag *= 2
+
+    if len(lags) < 2:
+        # Fallback to linear lags if series is short
+        lags = []
+        for val in [10, 15, 20, 25]:
+            if val <= n_total // 2:
+                lags.append(val)
+
+    if len(lags) < 2:
+        return 0.5
+
+    valid_lags_log = []
+    valid_rs_log = []
+
+    for l in lags:
+        n_segments = n_total // l
+        if n_segments < 1:
+            continue
+
+        sum_rs = 0.0
+        count_rs = 0
+
+        for i in range(n_segments):
+            # Segment: x[i*l : (i+1)*l]
+            start = i * l
+            end = start + l
+
+            # Calculate mean
+            s_sum = 0.0
+            for k in range(start, end):
+                s_sum += x[k]
+            mean = s_sum / l
+
+            # Calculate range and std
+            current_z = 0.0
+            min_z = 0.0
+            max_z = 0.0
+            sum_sq_diff = 0.0
+
+            for k in range(start, end):
+                diff = x[k] - mean
+                current_z += diff
+                if current_z > max_z:
+                    max_z = current_z
+                if current_z < min_z:
+                    min_z = current_z
+
+                sum_sq_diff += diff * diff
+
+            r_val = max_z - min_z
+            # Population std (ddof=0)
+            std_val = np.sqrt(sum_sq_diff / l)
+
+            if std_val > 1e-12:
+                rs = r_val / std_val
+                if rs > 0:
+                    sum_rs += rs
+                    count_rs += 1
+
+        if count_rs > 0:
+            avg_rs = sum_rs / count_rs
+            valid_lags_log.append(np.log(float(l)))
+            valid_rs_log.append(np.log(avg_rs))
+
+    n_valid = len(valid_lags_log)
+    if n_valid < 2:
+        return 0.5
+
+    # Linear regression: slope of log(R/S) vs log(n)
+    sum_x = 0.0
+    sum_y = 0.0
+    sum_xy = 0.0
+    sum_xx = 0.0
+
+    for i in range(n_valid):
+        vx = valid_lags_log[i]
+        vy = valid_rs_log[i]
+        sum_x += vx
+        sum_y += vy
+        sum_xy += vx * vy
+        sum_xx += vx * vx
+
+    denom = n_valid * sum_xx - sum_x * sum_x
+    if abs(denom) < 1e-12:
+        return 0.5
+
+    slope = (n_valid * sum_xy - sum_x * sum_y) / denom
+
+    if slope < 0.0:
+        return 0.0
+    if slope > 1.0:
+        return 1.0
+    return slope
 
 
 def calculate_hurst_exponent(x: np.ndarray) -> Optional[float]:
@@ -21,57 +131,74 @@ def calculate_hurst_exponent(x: np.ndarray) -> Optional[float]:
     - H = 0.5: Random Walk (Brownian Motion)
     Returns None if history < 32 sessions.
     """
+    # Clean NaNs
+    x = x[~np.isnan(x)]
     if len(x) < 32:
         return None
 
     try:
-
-        def get_rs(series):
-            # Range / Standard Deviation
-            if len(series) < 2:
-                return 0.0
-            m = np.mean(series)
-            z = np.cumsum(series - m)
-            r = np.max(z) - np.min(z)
-            s = np.std(series)
-            return r / s if s > 1e-12 else 0.0
-
-        # Divide into segments
-        n_total = len(x)
-        # Use logarithmic scales for lags
-        lags = [2**i for i in range(3, 10)]  # 8, 16, 32, 64, 128, 256, 512
-        lags = [l for l in lags if l <= n_total // 2]
-
-        if len(lags) < 2:
-            # Fallback to linear lags if series is short
-            lags = [10, 15, 20, 25]
-            lags = [l for l in lags if l <= n_total // 2]
-
-        rs_values = []
-        valid_lags = []
-
-        for l in lags:
-            n_segments = max(1, n_total // l)
-            rs_avg = []
-            for i in range(n_segments):
-                segment = x[i * l : (i + 1) * l]
-                if len(segment) > 0:
-                    rs = get_rs(segment)
-                    if rs > 0:
-                        rs_avg.append(rs)
-            if rs_avg:
-                rs_values.append(np.mean(rs_avg))
-                valid_lags.append(l)
-
-        if len(rs_values) < 2:
-            return 0.5
-
-        # Hurst exponent is the slope of log(R/S) vs log(n)
-        poly = np.polyfit(np.log(valid_lags), np.log(rs_values), 1)
-        return float(np.clip(poly[0], 0.0, 1.0))
+        return _jit_calculate_hurst_exponent(x)
     except Exception as e:
         logger.debug(f"Hurst calculation failed: {e}")
         return 0.5
+
+
+@jit(nopython=True, cache=True)
+def _jit_calculate_perm_entropy_raw(x: np.ndarray, order: int, delay: int) -> float:
+    n_samples = len(x)
+    n = n_samples - (order - 1) * delay
+
+    if n <= 0:
+        return 0.0
+
+    # Encode permutations
+    # Since we can't use complex hash maps, and order is small,
+    # we'll map rank tuples to integers.
+    encoded = np.empty(n, dtype=np.int64)
+
+    # Pre-allocate arrays for loop
+    segment = np.empty(order, dtype=x.dtype)
+
+    for i in range(n):
+        # Extract segment
+        for k in range(order):
+            segment[k] = x[i + k * delay]
+
+        # Argsort to get ranks
+        p = np.argsort(segment)
+
+        # Encode rank tuple to integer
+        # treated as base-order digits
+        code = 0
+        factor = 1
+        for k in range(order):
+            code += p[k] * factor
+            factor *= order
+
+        encoded[i] = code
+
+    # Count unique elements
+    encoded.sort()
+
+    shannon_entropy = 0.0
+
+    current_code = encoded[0]
+    count = 1
+
+    for i in range(1, n):
+        if encoded[i] == current_code:
+            count += 1
+        else:
+            prob = count / n
+            shannon_entropy -= prob * np.log(prob)
+            current_code = encoded[i]
+            count = 1
+
+    # Process last group
+    prob = count / n
+    shannon_entropy -= prob * np.log(prob)
+
+    return shannon_entropy
 
 
 def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1) -> Optional[float]:
@@ -84,19 +211,12 @@ def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1)
     if len(x) < order:
         return None
 
-    n = len(x) - (order - 1) * delay
-    permutations = []
-    for i in range(n):
-        segment = x[i : i + order * delay : delay]
-        perm = tuple(np.argsort(segment))
-        permutations.append(perm)
-
-    _, counts = np.unique(permutations, axis=0, return_counts=True)
-    probs = counts / len(permutations)
-    pe_val = float(entropy(probs))
-
-    # Normalize by log(n!) which is the maximum possible entropy for order n
-    return float(pe_val / math.log(math.factorial(order)))
+    try:
+        pe_val = _jit_calculate_perm_entropy_raw(x, order, delay)
+        # Normalize by log(n!) which is the maximum possible entropy for order n
+        return float(pe_val / math.log(math.factorial(order)))
+    except Exception:
+        return 0.0
 
 
 def calculate_efficiency_ratio(returns: np.ndarray) -> Optional[float]:
