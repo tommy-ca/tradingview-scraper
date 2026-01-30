@@ -1,5 +1,5 @@
 import logging
-import json
+
 from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
 
 # Enable debug logging

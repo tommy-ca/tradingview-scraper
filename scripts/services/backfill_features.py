@@ -12,13 +12,12 @@ from tqdm import tqdm
 
 from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.settings import get_settings
-from tradingview_scraper.utils.audit import get_df_hash
-from tradingview_scraper.utils.technicals import TechnicalRatings
 from tradingview_scraper.utils.predictability import (
     calculate_efficiency_ratio,
     calculate_hurst_exponent,
     calculate_permutation_entropy,
 )
+from tradingview_scraper.utils.technicals import TechnicalRatings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("backfill_features")
@@ -280,8 +279,8 @@ class BackfillService:
             logger.error("Final matrix empty.")
             return
 
-        from tradingview_scraper.utils.features import FeatureConsistencyValidator
         from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
+        from tradingview_scraper.utils.features import FeatureConsistencyValidator
 
         registry = FoundationHealthRegistry(path=self.lakehouse_dir / "foundation_health.json")
         report = FeatureConsistencyValidator.validate_history(final_df, strict=(os.getenv("TV_STRICT_HEALTH") == "1"))

@@ -243,8 +243,9 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
             pass
 
     # L4 Data Contract Validation
-    from tradingview_scraper.pipelines.contracts import WeightsSchema
     import pandera as pa
+
+    from tradingview_scraper.pipelines.contracts import WeightsSchema
 
     try:
         df_weights = pd.DataFrame(output_weights)

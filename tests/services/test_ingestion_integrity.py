@@ -1,7 +1,7 @@
 import os
 import sys
 import time
-from unittest.mock import ANY, patch
+from unittest.mock import patch
 
 import pandas as pd
 import pytest

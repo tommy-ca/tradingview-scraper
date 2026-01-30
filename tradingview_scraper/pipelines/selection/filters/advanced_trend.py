@@ -1,11 +1,9 @@
-from typing import List, Tuple, Set, Any
 import logging
-import pandas as pd
-import numpy as np
+from typing import List, Tuple
 
 from tradingview_scraper.orchestration.registry import StageRegistry
-from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
 from tradingview_scraper.pipelines.selection.base import SelectionContext
+from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
 
 logger = logging.getLogger("pipelines.selection.filters.advanced_trend")
 

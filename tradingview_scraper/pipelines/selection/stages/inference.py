@@ -99,8 +99,9 @@ class InferenceStage(BasePipelineStage):
             outputs[f"{f_str}_prob"] = map_to_probability(s_val, method=self.methods.get(f_str, "rank")).fillna(0.5)
 
         # 4. L2 Data Contract Validation
-        from tradingview_scraper.pipelines.contracts import InferenceSchema
         import pandera as pa
+
+        from tradingview_scraper.pipelines.contracts import InferenceSchema
 
         try:
             InferenceSchema.validate(outputs)

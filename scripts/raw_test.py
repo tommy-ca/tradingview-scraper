@@ -1,5 +1,4 @@
 import requests
-import json
 
 url = "https://scanner.tradingview.com/crypto/scan"
 payload = {

@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Sequence
+from typing import Sequence
 
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult

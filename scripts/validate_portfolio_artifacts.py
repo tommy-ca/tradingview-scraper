@@ -528,8 +528,8 @@ if __name__ == "__main__":
             print("\n" + "-" * 50)
             print("L0 DATA CONTRACT VALIDATION")
             print("-" * 50)
+
             from tradingview_scraper.pipelines.contracts import ReturnsSchema
-            import pandera as pa
 
             try:
                 # RETURNS_FILE is already resolved in run_health_check but let's re-load for safety

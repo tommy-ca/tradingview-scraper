@@ -1,11 +1,12 @@
-import unittest
-import pandas as pd
-import numpy as np
 import json
-from pathlib import Path
-import tempfile
 import shutil
-from unittest.mock import MagicMock, patch
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
 
 from scripts.services.backfill_features import BackfillService
 

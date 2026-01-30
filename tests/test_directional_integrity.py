@@ -1,4 +1,3 @@
-import pytest
 from tradingview_scraper.utils.candidates import normalize_candidate_record
 
 

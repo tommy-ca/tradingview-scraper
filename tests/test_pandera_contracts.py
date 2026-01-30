@@ -1,12 +1,13 @@
 import unittest
+
 import pandas as pd
-import numpy as np
 import pandera as pa
+
 from tradingview_scraper.pipelines.contracts import (
-    ReturnsSchema,
-    WeightsSchema,
     InferenceSchema,
+    ReturnsSchema,
     SyntheticReturnsSchema,
+    WeightsSchema,
 )
 
 

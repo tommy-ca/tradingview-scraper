@@ -1,6 +1,4 @@
 import pytest
-from dataclasses import dataclass
-from typing import Any, Dict
 
 
 # Mock BasePipelineStage for testing purposes
@@ -27,8 +25,9 @@ def test_stage_registration():
 
 
 def test_stage_list_by_tag():
-    from tradingview_scraper.orchestration.registry import StageRegistry, StageSpec
     from unittest.mock import patch
+
+    from tradingview_scraper.orchestration.registry import StageRegistry, StageSpec
 
     # Reset registry state
     StageRegistry._stages = {}

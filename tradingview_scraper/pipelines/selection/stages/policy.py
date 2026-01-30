@@ -3,11 +3,11 @@ from typing import Any, Dict, List, Optional, Set
 
 from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
+from tradingview_scraper.pipelines.selection.filters.advanced_trend import AdvancedTrendFilter
 from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
 from tradingview_scraper.pipelines.selection.filters.darwinian import DarwinianFilter
 from tradingview_scraper.pipelines.selection.filters.friction import FrictionFilter
 from tradingview_scraper.pipelines.selection.filters.predictability import PredictabilityFilter
-from tradingview_scraper.pipelines.selection.filters.advanced_trend import AdvancedTrendFilter
 from tradingview_scraper.settings import get_settings
 
 logger = logging.getLogger("pipelines.selection.policy")

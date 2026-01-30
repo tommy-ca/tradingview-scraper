@@ -1,7 +1,8 @@
+from typing import Optional, Tuple, cast
+
 import numpy as np
 import pandas as pd
 import pandas_ta_classic as ta
-from typing import Optional, List, Dict, Tuple, Union, cast
 
 
 class TechnicalRatings:

@@ -19,7 +19,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Union
+from typing import Any, Iterable, Mapping
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 

@@ -1,9 +1,10 @@
-import unittest
-from unittest.mock import MagicMock, patch
-import pandas as pd
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pandas as pd
 
 from scripts.backtest_engine import BacktestEngine
 

@@ -3,7 +3,7 @@
 from typing import Dict, List, Optional
 
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, retry_if_result
+from tenacity import retry, retry_if_exception_type, retry_if_result, stop_after_attempt, wait_exponential
 
 from tradingview_scraper.symbols.utils import (
     generate_user_agent,

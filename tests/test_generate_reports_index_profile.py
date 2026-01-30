@@ -1,6 +1,5 @@
 import json
 from types import SimpleNamespace
-from pathlib import Path
 
 from scripts.generate_reports import ReportGenerator
 

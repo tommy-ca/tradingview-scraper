@@ -1,5 +1,7 @@
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch
+
 from tradingview_scraper.orchestration.registry import StageRegistry, StageSpec
 
 
@@ -54,8 +56,6 @@ def test_sdk_run_stage(mock_registry):
 
 
 def test_sdk_run_pipeline(mock_registry):
-    from tradingview_scraper.orchestration.sdk import QuantSDK
-
     # Mocking run_pipeline logic which orchestrates multiple stages
     # For now assuming it runs stages sequentially.
     # We'll just test a single stage pipeline for simplicity or mock the implementation

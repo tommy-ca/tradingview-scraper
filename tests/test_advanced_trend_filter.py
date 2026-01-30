@@ -1,6 +1,8 @@
+from unittest.mock import MagicMock
+
 import pandas as pd
 import pytest
-from unittest.mock import MagicMock
+
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 from tradingview_scraper.pipelines.selection.filters.advanced_trend import AdvancedTrendFilter
 

@@ -1,5 +1,5 @@
-import json
 import logging
+
 from tradingview_scraper.symbols.screener import Screener
 
 logging.basicConfig(level=logging.INFO)

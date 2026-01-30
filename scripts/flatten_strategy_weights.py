@@ -140,8 +140,9 @@ def flatten_strategy_weights():
             )
 
         # 3.5 L4 Data Contract Validation
-        from tradingview_scraper.pipelines.contracts import WeightsSchema
         import pandera as pa
+
+        from tradingview_scraper.pipelines.contracts import WeightsSchema
 
         df_flat = pd.DataFrame(flat_assets)
         if not df_flat.empty:

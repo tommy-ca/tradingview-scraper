@@ -138,8 +138,8 @@ class FeatureEngineeringStage(BasePipelineStage):
         logger.info(f"Feature Engineering Stage: Source={source_label}")
 
         # 9. L1 Data Contract Validation
+
         from tradingview_scraper.pipelines.contracts import FeatureStoreSchema
-        import pandera as pa
 
         try:
             FeatureStoreSchema.validate(features)

@@ -1,5 +1,5 @@
-import json
 import logging
+
 from tradingview_scraper.futures_universe_selector import FuturesUniverseSelector, load_config
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
