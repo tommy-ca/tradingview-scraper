@@ -27,47 +27,7 @@ class FeatureEngineeringStage(BasePipelineStage):
             logger.warning("FeatureEngineeringStage: Returns matrix is empty. Skipping.")
             return context
 
-        # 1. Resolve PIT Features (Phase 810)
-        # Passed from BacktestEngine for rebalance-time fidelity
-        pit_features = context.params.get("pit_features")
-
-        # 2. Resolve Discovery Metadata (Live Discovery)
-        candidate_map = {c["symbol"]: c for c in context.raw_pool}
-
-        # 3. Resolve Offline Store (Lakehouse)
-        settings = get_settings()
-        master_path = settings.lakehouse_dir / "features_matrix.parquet"
-
-        # 4. Helper: Extract feature value from available sources
-        def get_feature_value(sym: str, feature: str) -> float:
-            # Source 1: PIT Injection (Backtest rebalance date)
-            if pit_features is not None:
-                try:
-                    val = pit_features.get((sym, feature))
-                    if val is not None and not pd.isna(val):
-                        return float(val)
-                except Exception:
-                    pass
-
-            # Source 2: Discovery Metadata (Fresh TV Rating)
-            # Map common technicals
-            tv_map = {
-                "recommend_all": "Recommend.All",
-                "recommend_ma": "Recommend.MA",
-                "recommend_other": "Recommend.Other",
-                "adx": "ADX",
-                "rsi": "RSI",
-                "macd": "MACD.macd",
-                "ichimoku_kijun": "Ichimoku.BLine",
-            }
-            meta = candidate_map.get(sym, {})
-            val = meta.get(tv_map.get(feature, feature)) or meta.get(feature)
-            if val is not None and not pd.isna(val):
-                return float(val)
-
-            return np.nan
-
-        # 5. Build Feature Matrix for current universe
+        # 1. Setup Feature Definitions
         all_feature_names = [
             "momentum",
             "stability",
@@ -96,31 +56,73 @@ class FeatureEngineeringStage(BasePipelineStage):
             "ichimoku_kijun",
         ]
 
-        logger.info(f"Loading features for {len(df.columns)} assets (Offline-Only Standard)...")
+        # 2. Vectorized Construction: Metadata Source (Live Discovery)
+        # Start with Metadata as base
+        meta_features = pd.DataFrame(np.nan, index=df.columns, columns=pd.Index(all_feature_names))
 
-        # We attempt to populate from sources
-        feature_data = {}
-        for feat in all_feature_names:
-            feature_data[feat] = pd.Series({s: get_feature_value(s, feat) for s in df.columns})
+        if context.raw_pool:
+            pool_df = pd.DataFrame(context.raw_pool)
+            if not pool_df.empty and "symbol" in pool_df.columns:
+                pool_df = pool_df.set_index("symbol")
+                # Filter to current universe
+                pool_df = pool_df.reindex(df.columns)
 
-        features = pd.DataFrame(feature_data)
+                tv_map = {
+                    "recommend_all": "Recommend.All",
+                    "recommend_ma": "Recommend.MA",
+                    "recommend_other": "Recommend.Other",
+                    "adx": "ADX",
+                    "rsi": "RSI",
+                    "macd": "MACD.macd",
+                    "ichimoku_kijun": "Ichimoku.BLine",
+                }
 
-        # 6. Critical Fallback: Load from Master Matrix if still missing important features
-        # (Only if we are not in a strict backtest where PIT injection is mandatory)
+                # Batch assignment
+                for feat in all_feature_names:
+                    source_col = tv_map.get(feat, feat)
+                    if source_col in pool_df.columns:
+                        meta_features[feat] = pd.to_numeric(pool_df[source_col], errors="coerce")
+
+        features = meta_features
+
+        # 3. Vectorized Construction: PIT Source (Point-in-Time Injection)
+        # PIT takes precedence over Metadata
+        pit_features = context.params.get("pit_features")
+        if pit_features:
+            try:
+                # pit_features is {(sym, feat): val}
+                idx = pd.MultiIndex.from_tuples(pit_features.keys(), names=["symbol", "feature"])
+                pit_s = pd.Series(list(pit_features.values()), index=idx)
+                # Unstack to (symbol, feature)
+                pit_df = pit_s.unstack(level="feature")
+                # Align to current universe
+                pit_df = pit_df.reindex(index=df.columns, columns=all_feature_names)
+                # Combine: values in pit_df overwrite anything else, but combine_first fills nulls in self with other
+                # So we use pit_df.combine_first(features) to prioritize PIT
+                features = pit_df.combine_first(features)
+            except Exception as e:
+                logger.warning(f"Vectorized PIT injection failed: {e}")
+
+        logger.info(f"Loading features for {len(df.columns)} assets (Vectorized Standard)...")
+
+        # 4. Critical Fallback: Master Matrix (Lakehouse)
+        # Only if we are fully empty (meaning no live metadata and no PIT)
         if features.isna().all().all() and pit_features is None:
+            settings = get_settings()
+            master_path = settings.lakehouse_dir / "features_matrix.parquet"
             if master_path.exists():
                 try:
                     master_df = pd.read_parquet(master_path)
-                    # Extract last available values for current universe
-                    for s in df.columns:
-                        if s in master_df.columns.get_level_values(0):
-                            for f in all_feature_names:
-                                if pd.isna(features.loc[s, f]):
-                                    try:
-                                        features.loc[s, f] = float(master_df[(s, f)].iloc[-1])
-                                    except Exception:
-                                        pass
-                    logger.info("Enriched features from Master Lakehouse Matrix.")
+                    # Master DF has MultiIndex columns (Symbol, Feature)
+                    # We want the last row
+                    if not master_df.empty:
+                        last_vals = master_df.iloc[-1]
+                        # Unstack to get Symbol x Feature
+                        master_latest = last_vals.unstack(level=1)
+                        # Align and merge
+                        master_latest = master_latest.reindex(index=df.columns, columns=all_feature_names)
+                        features = features.combine_first(master_latest)
+                        logger.info("Enriched features from Master Lakehouse Matrix.")
                 except Exception as e:
                     logger.warning(f"Failed to load master features: {e}")
 
