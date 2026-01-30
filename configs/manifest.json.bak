@@ -174,17 +174,17 @@
       }
     },
     "meta_benchmark": {
-      "description": "Meta-Portfolio Benchmark (Long + Short Rating All) - Volume First Corrected",
+      "description": "Meta-Portfolio Benchmark (Long + Short Rating All) - Promoted v9",
       "sleeves": [
         {
           "id": "long_all",
           "profile": "binance_spot_rating_all_long",
-          "run_id": "binance_spot_rating_all_long_20260128-192250"
+          "run_id": "20260124-212334"
         },
         {
           "id": "short_all",
           "profile": "binance_spot_rating_all_short",
-          "run_id": "binance_spot_rating_all_short_20260128-195055"
+          "run_id": "20260124-200353"
         }
       ],
       "meta_allocation": {
@@ -192,21 +192,20 @@
         "profile": "hrp",
         "min_weight": 0.05,
         "max_weight": 0.95
-      },
-      "features": { "feat_directional_sign_test_gate": true }
+      }
     },
     "meta_ma_benchmark": {
-      "description": "Meta-Portfolio MA Benchmark (Long + Short Rating MA) - Volume First Corrected",
+      "description": "Meta-Portfolio MA Benchmark (Long + Short Rating MA) - Promoted v9",
       "sleeves": [
         {
           "id": "long_ma",
           "profile": "binance_spot_rating_ma_long",
-          "run_id": "binance_spot_rating_ma_long_20260128-201351"
+          "run_id": "20260124-212546"
         },
         {
           "id": "short_ma",
           "profile": "binance_spot_rating_ma_short",
-          "run_id": "binance_spot_rating_ma_short_20260128-210800"
+          "run_id": "20260124-201019"
         }
       ],
       "meta_allocation": {
@@ -214,8 +213,7 @@
         "profile": "hrp",
         "min_weight": 0.05,
         "max_weight": 0.95
-      },
-      "features": { "feat_directional_sign_test_gate": true }
+      }
     },
     "meta_benchmark_ray": {
       "description": "Ray-Driven Meta-Portfolio Benchmark (Long + Short Rating All)",
@@ -260,12 +258,12 @@
       }
     },
     "meta_crypto_only": {
-      "description": "Fractal Branch: Crypto-Only Matrix (Golden Runs 2026-01-29)",
+      "description": "Fractal Branch: Crypto-Only Matrix",
       "sleeves": [
-        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "20260129-183206" },
-        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "binance_spot_rating_all_short_20260128-195055" },
-        { "id": "ma_long", "profile": "binance_spot_rating_ma_long", "run_id": "binance_spot_rating_ma_long_20260128-201351" },
-        { "id": "ma_short", "profile": "binance_spot_rating_ma_short", "run_id": "binance_spot_rating_ma_short_20260128-210800" }
+        { "id": "long_all", "profile": "binance_spot_rating_all_long", "run_id": "rerun_v3_long_all" },
+        { "id": "short_all", "profile": "binance_spot_rating_all_short", "run_id": "rerun_v3_short_all" },
+        { "id": "ma_long", "profile": "binance_spot_rating_ma_long", "run_id": "rerun_v3_ma_long" },
+        { "id": "ma_short", "profile": "binance_spot_rating_ma_short", "run_id": "rerun_v3_ma_short" }
       ],
       "features": { "feat_directional_sign_test_gate": true },
       "meta_allocation": { "engine": "custom", "profile": "hrp", "min_weight": 0.05, "max_weight": 0.5 }
@@ -590,43 +588,6 @@
         }
       }
     },
-    "binance_spot_adx_long": {
-      "description": "Binance Spot LONG Trend - ADX Regime",
-      "selection": {
-        "top_n": 20,
-        "threshold": 0.45,
-        "selection_mode": "v4",
-        "filters": ["darwinian", "advanced_trend", "friction"],
-        "advanced_trend_mode": "adx_regime",
-        "adx_threshold": 25.0
-      },
-      "data": { "lookback_days": 500, "min_days_floor": 252 },
-      "backtest": {
-        "engines": "custom,skfolio,riskfolio",
-        "profiles": "hrp,min_variance,max_sharpe,market,benchmark",
-        "backtest_simulators": "vectorbt,cvxportfolio,custom",
-        "benchmark_symbols": ["BINANCE:BTCUSDT"],
-        "train_window": 252,
-        "test_window": 10,
-        "step_size": 10
-      },
-      "features": {
-        "selection_mode": "v4",
-        "feat_short_direction": false,
-        "entropy_max_threshold": 0.999,
-        "dominant_signal": "recommend_all",
-        "feat_directional_sign_test_gate_atomic": true
-      },
-      "discovery": {
-        "enabled_markets": ["crypto"],
-        "strategies": {
-          "liquidity": {
-            "scanners": ["scanners/crypto/binance_spot_liquidity"],
-            "interval": "1d"
-          }
-        }
-      }
-    },
     "binance_spot_trend_long": {
       "description": "Binance Spot LONG Trend - MTF Regime & Signal",
       "selection": {
@@ -679,6 +640,71 @@
         "trend_lookback": 5,
         "trend_regime_source": "vwma",
         "trend_threshold": 0.005
+      },
+      "data": { "lookback_days": 500, "min_days_floor": 252 },
+      "backtest": {
+        "engines": "custom,skfolio,riskfolio",
+        "profiles": "hrp,min_variance,max_sharpe,market,benchmark",
+        "backtest_simulators": "vectorbt,cvxportfolio,custom",
+        "benchmark_symbols": ["BINANCE:BTCUSDT"],
+        "train_window": 252,
+        "test_window": 10,
+        "step_size": 10
+      },
+      "features": {
+        "selection_mode": "v4",
+        "feat_short_direction": true,
+        "entropy_max_threshold": 0.999,
+        "dominant_signal": "recommend_all",
+        "feat_directional_sign_test_gate_atomic": true
+      },
+      "discovery": {
+        "enabled_markets": ["crypto"],
+        "strategies": {
+          "liquidity": {
+            "scanners": ["scanners/crypto/binance_spot_liquidity_short"],
+            "interval": "1d"
+          }
+        }
+      }
+    },
+      "data": { "lookback_days": 500, "min_days_floor": 252 },
+      "backtest": {
+        "engines": "custom,skfolio,riskfolio",
+        "profiles": "hrp,min_variance,max_sharpe,market,benchmark",
+        "backtest_simulators": "vectorbt,cvxportfolio,custom",
+        "benchmark_symbols": ["BINANCE:BTCUSDT"],
+        "train_window": 252,
+        "test_window": 10,
+        "step_size": 10
+      },
+      "features": {
+        "selection_mode": "v4",
+        "feat_short_direction": false,
+        "entropy_max_threshold": 0.999,
+        "dominant_signal": "recommend_all",
+        "feat_directional_sign_test_gate_atomic": true
+      },
+      "discovery": {
+        "enabled_markets": ["crypto"],
+        "strategies": {
+          "liquidity": {
+            "scanners": ["scanners/crypto/binance_spot_liquidity"],
+            "interval": "1d"
+          }
+        }
+      }
+    },
+    "binance_spot_trend_short": {
+      "description": "Binance Spot SHORT Trend - MTF Regime & Signal",
+      "selection": {
+        "top_n": 15,
+        "threshold": 0.45,
+        "selection_mode": "v4",
+        "filters": ["darwinian", "trend_regime", "friction"],
+        "trend_strict_regime": true,
+        "trend_strict_signal": true,
+        "trend_lookback": 5
       },
       "data": { "lookback_days": 500, "min_days_floor": 252 },
       "backtest": {
@@ -862,8 +888,7 @@
         "feat_short_direction": true,
         "entropy_max_threshold": 0.999,
         "dominant_signal": "recommend_ma",
-        "dominant_signal_weight": 3.0,
-        "feat_directional_sign_test_gate_atomic": true
+        "dominant_signal_weight": 3.0
       },
       "discovery": {
         "enabled_markets": [

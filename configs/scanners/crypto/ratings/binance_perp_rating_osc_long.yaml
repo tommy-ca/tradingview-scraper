@@ -1,12 +1,10 @@
-# Binance Perp - Oscillator Rating - LONG
+# Binance Perp - binance_perp_rating_osc_long
 base_preset: ../../../base/universes/binance_perp_base.yaml
-trend:
-  direction: "long"
-  logic: "AND"
-  adx: { enabled: false }
+metadata:
+  intent: "LONG"
 filters:
   - { left: "Recommend.Other", operation: "greater", right: 0 }
-sort_by: Recommend.Other
+sort_by: Recommend.All|240
 sort_order: desc
 limit: 100
 export_metadata:

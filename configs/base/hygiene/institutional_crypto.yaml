@@ -2,9 +2,10 @@
 # Extends base institutional hygiene with crypto-specific thresholds
 base_preset: institutional.yaml
 
-# Override volume floor for crypto markets ($10M vs $500M TradFi)
+# Override volume floor for crypto markets ($500k vs $500M TradFi)
+# Using a lower floor for the current bar to account for early-day discovery
 volume:
-  value_traded_min: 10000000  # $10M USD min daily turnover
+  value_traded_min: 500000  # $500k USD min current bar volume (Aggressive)
 
 # Relaxed trend gates for crypto volatility
 trend:
@@ -32,6 +33,7 @@ columns:
   - "ADX"
   - "ATR"
   - "Recommend.All"
+  - "Recommend.All|240"
   - "Recommend.MA"
   - "Recommend.Other"
   - "Perf.W"
