@@ -30,9 +30,9 @@ def get_run_artifacts():
     run_dir = settings.prepare_summaries_run_dir()
 
     # CR-831: Workspace Isolation
-    c_raw = os.getenv("CANDIDATES_RAW", str(run_dir / "data" / "portfolio_candidates_raw.json"))
-    c_sel = os.getenv("CANDIDATES_SELECTED", str(run_dir / "data" / "portfolio_candidates.json"))
-    r_mat = os.getenv("RETURNS_MATRIX", str(run_dir / "data" / "returns_matrix.parquet"))
+    c_raw = os.getenv("CANDIDATES_RAW") or str(run_dir / "data" / "portfolio_candidates_raw.json")
+    c_sel = os.getenv("CANDIDATES_SELECTED") or str(run_dir / "data" / "portfolio_candidates.json")
+    r_mat = os.getenv("RETURNS_MATRIX") or str(run_dir / "data" / "returns_matrix.parquet")
 
     # Fallback for raw returns if they exist separately
     r_raw = os.getenv("RETURNS_RAW", r_mat)
@@ -503,7 +503,7 @@ class PortfolioAuditor:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--type", choices=["crypto", "trad", "all"], default="all")
-    parser.add_argument("--mode", choices=["selected", "raw"], default="selected")
+    parser.add_argument("--mode", choices=["selected", "raw", "foundation"], default="selected")
     parser.add_argument("--only-health", action="store_true")
     parser.add_argument("--only-logic", action="store_true")
     parser.add_argument("--strict", action="store_true", help="Fail if any gaps are detected")
@@ -523,4 +523,26 @@ if __name__ == "__main__":
     if not health_ok or not logic_ok:
         sys.exit(1)
     else:
+        # L0 Data Contract Validation (Foundation Gate)
+        if args.mode == "foundation":
+            print("\n" + "-" * 50)
+            print("L0 DATA CONTRACT VALIDATION")
+            print("-" * 50)
+            from tradingview_scraper.pipelines.contracts import ReturnsSchema
+            import pandera as pa
+
+            try:
+                # RETURNS_FILE is already resolved in run_health_check but let's re-load for safety
+                c_raw, c_sel, r_mat, r_raw = get_run_artifacts()
+                if os.path.exists(r_mat):
+                    df = pd.read_parquet(r_mat)
+                    ReturnsSchema.validate(df)
+                    print(f"✅ Foundation Matrix Validated: {df.shape}")
+                else:
+                    print(f"❌ Foundation Matrix MISSING: {r_mat}")
+                    sys.exit(1)
+            except Exception as e:
+                print(f"❌ L0 Contract Violation: {e}")
+                sys.exit(1)
+
         sys.exit(0)

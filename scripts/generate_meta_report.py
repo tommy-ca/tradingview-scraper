@@ -93,6 +93,9 @@ def get_forensic_anomalies(
     tags=["meta", "reporting"],
 )
 def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: List[str], meta_profile: str = "meta_production"):
+    errors = []
+    warnings = []
+
     md = []
     md.append("# 🌐 Multi-Sleeve Meta-Portfolio Report")
     md.append(f"**Root Profile:** `{meta_profile}`")
@@ -144,6 +147,29 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
 
             md.append("\n*Note: Metrics represent the average performance across rolling walk-forward windows.*")
 
+    # Directional Sign Test (expected when gate enabled)
+    sign_path = meta_dir / "directional_sign_test.json"
+    md.append("\n## 🧭 Directional Sign Test")
+    if sign_path.exists():
+        try:
+            sign_data = json.loads(sign_path.read_text(encoding="utf-8"))
+            md.append(f"- File: `{sign_path.name}`")
+            if isinstance(sign_data, dict):
+                errors_count = sign_data.get("errors")
+                warnings_count = sign_data.get("warnings")
+                findings = sign_data.get("findings", [])
+                md.append(f"- Errors: `{errors_count}` | Warnings: `{warnings_count}` | Findings: `{len(findings)}`")
+                if errors_count not in (0, "0", None):
+                    errors.append("Directional sign test reports errors")
+            else:
+                warnings.append("Directional sign test file parsed but not a dict")
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"Failed to parse directional_sign_test.json: {e}")
+            md.append(f"- ❌ Failed to parse: {e}")
+    else:
+        errors.append("directional_sign_test.json missing")
+        md.append("- ❌ directional_sign_test.json missing")
+
     for prof in profiles:
         prof = prof.strip()
         opt_path = meta_dir / f"meta_optimized_{meta_profile}_{prof}.json"
@@ -159,6 +185,7 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
             flat_path = meta_dir / f"portfolio_optimized_meta_{prof}.json"
 
         if not opt_path.exists():
+            errors.append(f"meta_optimized missing for profile {prof}")
             continue
 
         with open(opt_path, "r") as f:
@@ -166,6 +193,28 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
 
         md.append(f"## 🏆 Risk Profile: {prof.upper()}")
         md.append(f"**Meta Run ID:** {meta_data.get('metadata', {}).get('run_id', 'N/A')}")
+
+        # Completeness gate per profile
+        missing = []
+        required = {
+            "meta_returns": rets_path,
+            "meta_optimized": opt_path,
+            "portfolio_optimized_meta": flat_path,
+            "meta_cluster_tree": meta_dir / f"meta_cluster_tree_{meta_profile}_{prof}.json",
+        }
+        md.append("\n### ✅/❌ Completeness")
+        md.append("| Artifact | Path | Status |")
+        md.append("| :--- | :--- | :--- |")
+        for key, path in required.items():
+            if path.exists():
+                md.append(f"| {key} | `{path}` | ✅ |")
+            else:
+                md.append(f"| {key} | `{path}` | ❌ MISSING |")
+                missing.append(key)
+        if missing:
+            errors.append(f"Missing artifacts for profile {prof}: {', '.join(missing)}")
+            md.append("\n---\n")
+            continue
 
         # 0. META PERFORMANCE (Phase 159)
         if rets_path.exists():
@@ -215,6 +264,8 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
         md.append("| :--- | :--- | :--- |")
 
         weights = sorted(meta_data.get("weights", []), key=lambda x: x["Weight"], reverse=True)
+        if len(weights) < 2:
+            errors.append(f"Fewer than 2 sleeves in meta_optimized for profile {prof}")
         w_values = [w["Weight"] for w in weights]
         n_eff = 1.0 / sum(w**2 for w in w_values) if w_values else 0
 
@@ -229,6 +280,8 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
         if rets_path.exists():
             returns_df = cast(pd.DataFrame, pd.read_pickle(rets_path))
             md.append("\n### 📊 Sleeve Correlations")
+            if returns_df.shape[1] < 2:
+                errors.append(f"Correlation matrix has fewer than 2 sleeves for profile {prof}")
             corr = returns_df.corr()
             cols = list(corr.columns)
             md.append("| Sleeve | " + " | ".join(cols) + " |")
@@ -314,6 +367,9 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
         pass
     with open(output_path, "w") as f:
         f.write("\n".join(md))
+
+    if errors:
+        raise RuntimeError(f"Meta report generation failed: {errors}")
 
     print(f"✅ Meta-Portfolio report generated at: {output_path}")
 

@@ -163,6 +163,10 @@ def natural_selection(
         if len(final_winners) < len(winners):
             logger.info(f"Isolated {len(winners) - len(final_winners)} benchmark symbols from selected candidates.")
 
+        if not final_winners:
+            logger.error(f"❌ Natural Selection yielded 0 winners for mode '{current_mode}'. Failing.")
+            exit(1)
+
         # Atomic write for winners
         with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(output_path), delete=False) as tf:
             json.dump(final_winners, tf, indent=2)

@@ -7,7 +7,10 @@ import pandas as pd
 
 
 def audit_ledger_anomalies(run_id: str):
-    run_dir = Path(f"artifacts/summaries/runs/{run_id}")
+    from tradingview_scraper.settings import get_settings
+
+    settings = get_settings()
+    run_dir = settings.summaries_runs_dir / run_id
     audit_path = run_dir / "audit.jsonl"
 
     if not audit_path.exists():

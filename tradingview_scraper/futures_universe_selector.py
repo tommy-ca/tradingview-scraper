@@ -19,7 +19,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
+from typing import Any, Iterable, Mapping, Union
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -80,10 +80,23 @@ DEFAULT_COLUMNS = [
     "volume",
     "change",
     "Recommend.All",
+    "Recommend.All|240",
     "Recommend.MA",
     "Recommend.Other",
     "Value.Traded",
     "ADX",
+    "RSI",
+    "Mom",
+    "AO",
+    "CCI20",
+    "MACD.macd",
+    "MACD.signal",
+    "Stoch.K",
+    "Stoch.D",
+    "W.R",
+    "BBPower",
+    "UO",
+    "Ichimoku.BLine",
     "Volatility.D",
     "Perf.W",
     "Perf.1M",
@@ -124,13 +137,13 @@ class ExportConfig(BaseModel):
 class VolumeConfig(BaseModel):
     min: float = 0.0
     value_traded_min: float = 0.0
-    per_exchange: Dict[str, float] = Field(default_factory=dict)
+    per_exchange: dict[str, float] = Field(default_factory=dict)
 
 
 class VolatilityConfig(BaseModel):
-    min: Optional[float] = None
-    max: Optional[float] = None
-    atr_pct_max: Optional[float] = None
+    min: float | None = None
+    max: float | None = None
+    atr_pct_max: float | None = None
     fallback_use_atr_pct: bool = True
     use_value_traded_floor: bool = False
 
@@ -143,9 +156,9 @@ class VolatilityConfig(BaseModel):
 
 class RecentPerfConfig(BaseModel):
     enabled: bool = False
-    required_fields: List[str] = Field(default_factory=list)
-    abs_min: Dict[str, float] = Field(default_factory=dict)
-    abs_max: Dict[str, float] = Field(default_factory=dict)
+    required_fields: list[str] = Field(default_factory=list)
+    abs_min: dict[str, float] = Field(default_factory=dict)
+    abs_max: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_bounds(self) -> "RecentPerfConfig":
@@ -164,8 +177,8 @@ class RecentPerfConfig(BaseModel):
 
 class TrendRuleConfig(BaseModel):
     enabled: bool = True
-    min: Optional[float] = None
-    horizons: Dict[str, float] = Field(default_factory=dict)
+    min: float | None = None
+    horizons: dict[str, float] = Field(default_factory=dict)
 
 
 class TrendConfig(BaseModel):
@@ -245,13 +258,13 @@ class ExportMetadata(BaseModel):
 
 
 class SelectorConfig(BaseModel):
-    config_source: Optional[str] = None
-    markets: List[str] = Field(default_factory=lambda: ["futures"])
-    exchanges: List[str] = Field(default_factory=list)
-    filters: List[Dict[str, Any]] = Field(default_factory=list)
-    include_symbols: List[str] = Field(default_factory=list)
-    include_symbol_files: List[str] = Field(default_factory=list)
-    exclude_symbols: List[str] = Field(default_factory=list)
+    config_source: str | None = None
+    markets: list[str] = Field(default_factory=lambda: ["futures"])
+    exchanges: list[str] = Field(default_factory=list)
+    filters: list[dict[str, Any]] = Field(default_factory=list)
+    include_symbols: list[str] = Field(default_factory=list)
+    include_symbol_files: list[str] = Field(default_factory=list)
+    exclude_symbols: list[str] = Field(default_factory=list)
     # Static universe support: allows configs to emit a deterministic basket even
     # when TradingView screener endpoints are unavailable or intentionally skipped.
     #
@@ -260,8 +273,8 @@ class SelectorConfig(BaseModel):
     # - If static_mode is false but static_symbols is provided, the selector may
     #   fall back to static_symbols when the screener returns no rows.
     static_mode: bool = False
-    static_symbols: List[str] = Field(default_factory=list)
-    columns: List[str] = Field(
+    static_symbols: list[str] = Field(default_factory=list)
+    columns: list[str] = Field(
         default_factory=lambda: [
             "name",
             "description",
@@ -270,6 +283,7 @@ class SelectorConfig(BaseModel):
             "volume",
             "change",
             "Recommend.All",
+            "Recommend.All|240",
             "Recommend.MA",
             "Recommend.Other",
             "Value.Traded",
@@ -285,37 +299,38 @@ class SelectorConfig(BaseModel):
     volatility: VolatilityConfig = Field(default_factory=VolatilityConfig)
     recent_perf: RecentPerfConfig = Field(default_factory=RecentPerfConfig)
     trend: TrendConfig = Field(default_factory=TrendConfig)
-    trend_screen: Optional[ScreenConfig] = None
-    confirm_screen: Optional[ScreenConfig] = None
-    execute_screen: Optional[ScreenConfig] = None  # optional; downstream execution can be handled separately
+    trend_screen: ScreenConfig | None = None
+    confirm_screen: ScreenConfig | None = None
+    execute_screen: ScreenConfig | None = None  # optional; downstream execution can be handled separately
     sort_by: str = "volume"
     sort_order: str = "desc"
-    final_sort_by: Optional[str] = None
+    final_sort_by: str | None = None
     final_sort_order: str = "desc"
-    momentum_composite_fields: List[str] = Field(default_factory=list)
+    momentum_composite_fields: list[str] = Field(default_factory=list)
     momentum_composite_field_name: str = "momentum_zscore"
     limit: int = 50
     pagination_size: int = 1000
     retries: int = 3
     timeout: int = 30
-    prefilter_limit: Optional[int] = None
+    prefilter_limit: int | None = None
     dedupe_by_symbol: bool = True
     group_duplicates: bool = False
     attach_perp_counterparts: bool = False
-    quote_priority: List[str] = Field(default_factory=lambda: ["USDT", "USDC", "FDUSD", "BUSD", "DAI", "USD"])
+    quote_priority: list[str] = Field(default_factory=lambda: ["USDT", "USDC", "FDUSD", "BUSD", "DAI", "USD"])
     include_stable_bases: bool = False
-    ensure_symbols: List[str] = Field(default_factory=list)
+    ensure_symbols: list[str] = Field(default_factory=list)
     exclude_stable_bases: bool = False
-    perp_exchange_priority: List[str] = Field(default_factory=list)
-    market_cap_file: Optional[str] = None
-    market_cap_limit: Optional[int] = None
-    market_cap_rank_limit: Optional[int] = None
-    market_cap_floor: Optional[float] = None
+    perp_exchange_priority: list[str] = Field(default_factory=list)
+    market_cap_file: str | None = None
+    market_cap_limit: int | None = None
+    market_cap_rank_limit: int | None = None
+    market_cap_floor: float | None = None
     market_cap_require_hit: bool = False
-    base_universe_limit: Optional[int] = None
+    base_universe_limit: int | None = None
     base_universe_sort_by: str = "Value.Traded"
     export: ExportConfig = Field(default_factory=ExportConfig)
     export_metadata: ExportMetadata = Field(default_factory=ExportMetadata)
+    metadata: dict[str, Any] = Field(default_factory=dict)  # Metadata to inject into candidates
 
     @field_validator("sort_order", "final_sort_order")
     @classmethod
@@ -327,7 +342,7 @@ class SelectorConfig(BaseModel):
 
     @field_validator("limit", "pagination_size", "retries", "timeout", "prefilter_limit")
     @classmethod
-    def validate_positive(cls, value: Optional[int], info: Any) -> Optional[int]:
+    def validate_positive(cls, value: int | None, info: Any) -> int | None:
         if value is None:
             return value
         if value <= 0:
@@ -341,7 +356,7 @@ class SelectorConfig(BaseModel):
         return self
 
 
-def _merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:
+def _merge(base: dict[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
     result = dict(base)
     for key, value in override.items():
         if isinstance(value, Mapping) and isinstance(result.get(key), Mapping):
@@ -360,7 +375,7 @@ def _merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def _load_config_file(path: str) -> Dict[str, Any]:
+def _load_config_file(path: str) -> dict[str, Any]:
     path_obj = Path(path)
     if not path_obj.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
@@ -385,7 +400,7 @@ def _load_config_file(path: str) -> Dict[str, Any]:
     return raw
 
 
-def _load_symbol_file(path: Path) -> List[str]:
+def _load_symbol_file(path: Path) -> list[str]:
     if not path.exists():
         logger.warning("symbol list file not found: %s", path)
         return []
@@ -415,14 +430,14 @@ def _load_symbol_file(path: Path) -> List[str]:
 
 
 def load_config(
-    source: Optional[Union[str, Mapping[str, Any]]] = None,
-    overrides: Optional[Mapping[str, Any]] = None,
-    profile: Optional[str] = None,
+    source: str | Mapping[str, Any] | None = None,
+    overrides: Mapping[str, Any] | None = None,
+    profile: str | None = None,
     scanner_type: str = "futures",
 ) -> SelectorConfig:
     """Load selector config from a file, mapping, or manifest profile with recursive inheritance."""
-    raw: Dict[str, Any] = {}
-    base_dir: Optional[Path] = None
+    raw: dict[str, Any] = {}
+    base_dir: Path | None = None
 
     # 1. Load primary source (file or mapping)
     if isinstance(source, Mapping):
@@ -447,7 +462,7 @@ def load_config(
         raw = {}
 
     # 3. Recursive Inheritance Resolution
-    def resolve_inheritance(current_raw: Dict[str, Any], current_base_dir: Path) -> Dict[str, Any]:
+    def resolve_inheritance(current_raw: dict[str, Any], current_base_dir: Path) -> dict[str, Any]:
         if "base_preset" in current_raw:
             preset_path_str = current_raw.pop("base_preset")
             preset_path = Path(preset_path_str)
@@ -472,7 +487,7 @@ def load_config(
         config.config_source = str(Path(source).resolve())
 
     if config.include_symbol_files:
-        extra: List[str] = []
+        extra: list[str] = []
         for symfile in config.include_symbol_files:
             sym_path = Path(symfile)
             if not sym_path.is_absolute() and base_dir:
@@ -504,9 +519,9 @@ class FuturesUniverseSelector:
 
     def __init__(
         self,
-        config: Optional[Union[str, Mapping[str, Any], SelectorConfig]] = None,
-        screener: Optional[Screener] = None,
-        overview: Optional[Overview] = None,
+        config: str | Mapping[str, Any] | SelectorConfig | None = None,
+        screener: Screener | None = None,
+        overview: Overview | None = None,
     ) -> None:
         self.config = config if isinstance(config, SelectorConfig) else load_config(config)
 
@@ -518,10 +533,10 @@ class FuturesUniverseSelector:
 
         self.screener = screener or Screener(export_result=False)
         self.overview = overview or Overview(export_result=False)
-        self._market_cap_map: Optional[Dict[str, float]] = None
+        self._market_cap_map: dict[str, float] | None = None
 
-    def _build_columns(self) -> List[str]:
-        columns: List[str] = []
+    def _build_columns(self) -> list[str]:
+        columns: list[str] = []
         for col in self.REQUIRED_COLUMNS + self.config.columns:
             if col not in columns:
                 columns.append(col)
@@ -551,8 +566,8 @@ class FuturesUniverseSelector:
             columns.append("Perf.W")
         return columns
 
-    def _build_filters(self, market: str) -> List[Dict[str, Any]]:
-        filters: List[Dict[str, Any]] = []
+    def _build_filters(self, market: str) -> list[dict[str, Any]]:
+        filters: list[dict[str, Any]] = []
         type_value = None
         if market == "futures":
             type_value = "futures"
@@ -588,13 +603,13 @@ class FuturesUniverseSelector:
     def _screen_market(
         self,
         market: str,
-        filters: List[Dict[str, Any]],
-        columns: List[str],
-        exchange: Optional[str] = None,
-        max_rows: Optional[int] = None,
-    ) -> Tuple[List[Dict[str, Any]], List[str]]:
-        collected: List[Dict[str, Any]] = []
-        errors: List[str] = []
+        filters: list[dict[str, Any]],
+        columns: list[str],
+        exchange: str | None = None,
+        max_rows: int | None = None,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        collected: list[dict[str, Any]] = []
+        errors: list[str] = []
         offset = 0
         page_size = self.config.pagination_size
         target = max_rows or self.config.limit
@@ -631,13 +646,13 @@ class FuturesUniverseSelector:
         return collected, errors
 
     @staticmethod
-    def _extract_exchange(symbol: str) -> Optional[str]:
+    def _extract_exchange(symbol: str) -> str | None:
         if not symbol or ":" not in symbol:
             return None
         return symbol.split(":", 1)[0]
 
     @staticmethod
-    def _extract_base_quote(symbol: str) -> Tuple[str, str]:
+    def _extract_base_quote(symbol: str) -> tuple[str, str]:
         if not symbol:
             return "", ""
         # Strip exchange prefix and perp suffix
@@ -707,7 +722,7 @@ class FuturesUniverseSelector:
         patterns = [r"[0-9]{1,2}[A-Z][0-9]{2,4}$", r"[A-Z]{1,3}[0-9]{2,4}$"]
         return any(re.search(pat, core) for pat in patterns)
 
-    def _evaluate_liquidity(self, row: Dict[str, Any]) -> bool:
+    def _evaluate_liquidity(self, row: dict[str, Any]) -> bool:
         volume_value = row.get("volume")
         value_traded = row.get("Value.Traded")
         vt_floor = self.config.volume.value_traded_min or 0
@@ -727,10 +742,10 @@ class FuturesUniverseSelector:
             threshold = self.config.volume.min
         return volume_value >= threshold
 
-    def _evaluate_volatility(self, row: Dict[str, Any]) -> Tuple[bool, Optional[float]]:
+    def _evaluate_volatility(self, row: dict[str, Any]) -> tuple[bool, float | None]:
         vol_cfg = self.config.volatility
         volatility_value = row.get("Volatility.D")
-        atr_pct: Optional[float] = None
+        atr_pct: float | None = None
 
         if vol_cfg.fallback_use_atr_pct:
             atr = row.get("ATR")
@@ -755,7 +770,7 @@ class FuturesUniverseSelector:
 
         return False, atr_pct
 
-    def _apply_recent_perf_filter(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _apply_recent_perf_filter(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         cfg = self.config.recent_perf
         if not cfg.enabled:
             return rows
@@ -764,7 +779,7 @@ class FuturesUniverseSelector:
         abs_min = cfg.abs_min or {}
         abs_max = cfg.abs_max or {}
 
-        def _coerce(value: Any) -> Optional[float]:
+        def _coerce(value: Any) -> float | None:
             try:
                 num = float(value)
             except (TypeError, ValueError):
@@ -773,7 +788,7 @@ class FuturesUniverseSelector:
                 return None
             return num
 
-        filtered: List[Dict[str, Any]] = []
+        filtered: list[dict[str, Any]] = []
         for row in rows:
             ok = True
 
@@ -803,9 +818,9 @@ class FuturesUniverseSelector:
 
         return filtered
 
-    def _evaluate_trend(self, row: Dict[str, Any]) -> Dict[str, bool]:
+    def _evaluate_trend(self, row: dict[str, Any]) -> dict[str, bool]:
         trend_cfg = self.config.trend
-        checks: Dict[str, bool] = {}
+        checks: dict[str, bool] = {}
         is_long = trend_cfg.direction == "long"
 
         if trend_cfg.recommendation.enabled:
@@ -883,8 +898,8 @@ class FuturesUniverseSelector:
         checks["combined"] = combined
         return checks
 
-    def _evaluate_screen(self, row: Dict[str, Any], screen: ScreenConfig) -> Dict[str, bool]:
-        checks: Dict[str, bool] = {}
+    def _evaluate_screen(self, row: dict[str, Any], screen: ScreenConfig) -> dict[str, bool]:
+        checks: dict[str, bool] = {}
         is_long = screen.direction == "long"
 
         suffix = ""
@@ -986,12 +1001,12 @@ class FuturesUniverseSelector:
         checks["combined"] = combined
         return checks
 
-    def _apply_basic_filters(self, rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _apply_basic_filters(self, rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         include_set = set(s.upper() for s in self.config.include_symbols)
         exclude_set = set(s.upper() for s in self.config.exclude_symbols)
         exchange_set = set(self.config.exchanges)
 
-        filtered: List[Dict[str, Any]] = []
+        filtered: list[dict[str, Any]] = []
         for row in rows:
             symbol = row.get("symbol", "").upper()
 
@@ -1013,8 +1028,40 @@ class FuturesUniverseSelector:
             filtered.append(row)
         return filtered
 
-    def _apply_strategy_filters(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        filtered: List[Dict[str, Any]] = []
+    def _apply_strategy_filters(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        # Phase 1350 Correction:
+        # We MUST bypass legacy trend logic (_evaluate_trend) if intent is present,
+        # BUT we MUST NOT bypass standard `filters` defined in the YAML.
+        # Previously, we returned early if metadata['intent'] existed, skipping standard filters too.
+
+        # 1. Evaluate Legacy Trend Logic (only if no intent override)
+        # If intent is present, we consider the scanner "Dumb" regarding trend logic (it's handled downstream).
+        skip_trend_logic = self.config.metadata and "intent" in self.config.metadata
+
+        if skip_trend_logic:
+            # Just pass through rows to the next step (which is _apply_filters in execute())
+            # Wait, execute() calls _apply_strategy_filters AFTER _apply_filters?
+            # Let's check call order in execute().
+            # If execute() calls filters separately, then we are fine returning here.
+            # But the YAML `filters` block is usually processed in _screen_market or _apply_basic_filters?
+            # Let's check _build_filters.
+            return rows
+
+        # Legacy Support: Only apply if trend config has explicit direction/logic set
+        has_legacy_filters = (
+            self.config.trend_screen
+            or self.config.confirm_screen
+            or self.config.execute_screen
+            or self.config.trend.adx.enabled
+            or self.config.trend.recommendation.enabled
+            or self.config.trend.momentum.enabled
+        )
+
+        if not has_legacy_filters:
+            return rows
+
+        filtered: list[dict[str, Any]] = []
+
         for row in rows:
             passes = row.get("passes", {}) if "passes" in row else {}
             trend_checks = self._evaluate_trend(row)
@@ -1041,7 +1088,7 @@ class FuturesUniverseSelector:
                 filtered.append(row)
         return filtered
 
-    def _apply_momentum_composite(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _apply_momentum_composite(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         fields = [f for f in self.config.momentum_composite_fields if f]
         if not fields:
             return rows
@@ -1073,7 +1120,7 @@ class FuturesUniverseSelector:
 
         return rows
 
-    def _load_market_cap_map(self) -> Dict[str, float]:
+    def _load_market_cap_map(self) -> dict[str, float]:
         if self._market_cap_map is not None:
             return self._market_cap_map
         path = self.config.market_cap_file
@@ -1082,10 +1129,10 @@ class FuturesUniverseSelector:
             return self._market_cap_map
         path_obj = Path(path)
         if not path_obj.exists():
-            logging.warning("Market cap file not found: %s", path)
+            logger.warning("Market cap file not found: %s", path)
             self._market_cap_map = {}
             return self._market_cap_map
-        caps: Dict[str, float] = {}
+        caps: dict[str, float] = {}
         try:
             if path_obj.suffix.lower() == ".json":
                 with path_obj.open("r", encoding="utf-8") as handle:
@@ -1120,23 +1167,23 @@ class FuturesUniverseSelector:
                         cap_val = row.get("market_cap") or row.get("cap")
                         if sym and cap_val is not None:
                             try:
-                                core = str(sym).upper().replace(".P", "")
-                                if ":" in core:
-                                    core = core.split(":", 1)[-1]
+                                score = str(sym).upper().replace(".P", "")
+                                if ":" in score:
+                                    score = score.split(":", 1)[-1]
                                 for stable in sorted(STABLE_BASES, key=len, reverse=True):
-                                    if core.endswith(stable) and len(core) > len(stable):
-                                        core = core[: -len(stable)]
+                                    if score.endswith(stable) and len(score) > len(stable):
+                                        score = score[: -len(stable)]
                                         break
-                                caps[core] = float(cap_val)
+                                caps[score] = float(cap_val)
                             except (TypeError, ValueError):
                                 continue
         except Exception as exc:  # pragma: no cover - defensive
-            logging.warning("Failed to load market cap file %s: %s", path, exc)
+            logger.warning("Failed to load market cap file %s: %s", path, exc)
             caps = {}
         self._market_cap_map = caps
         return self._market_cap_map
 
-    def _apply_market_cap_filter(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _apply_market_cap_filter(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         initial_count = len(rows)
         cap_map = self._load_market_cap_map()
 
@@ -1169,13 +1216,13 @@ class FuturesUniverseSelector:
 
         return rows
 
-    def _aggregate_by_base(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _aggregate_by_base(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         sort_field = self.config.final_sort_by or self.config.sort_by or "Value.Traded"
         descending = (self.config.final_sort_order or "desc").lower() == "desc"
-        best_by_base: Dict[str, Dict[str, Any]] = {}
-        all_members: Dict[str, List[str]] = {}
-        agg_vt: Dict[str, float] = {}
-        agg_vol: Dict[str, float] = {}
+        best_by_base: dict[str, dict[str, Any]] = {}
+        all_members: dict[str, list[str]] = {}
+        agg_vt: dict[str, float] = {}
+        agg_vol: dict[str, float] = {}
         priority = [p.upper() for p in self.config.perp_exchange_priority]
 
         # Use config.quote_priority if available
@@ -1291,11 +1338,11 @@ class FuturesUniverseSelector:
 
         return results
 
-    def _dedupe_by_base(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _dedupe_by_base(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Return one representative row per base symbol."""
         return self._aggregate_by_base(rows)
 
-    def _sort_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _sort_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # Use final_sort_by if set, otherwise fallback to sort_by
         sort_field = self.config.final_sort_by or self.config.sort_by
         if not sort_field:
@@ -1305,7 +1352,7 @@ class FuturesUniverseSelector:
         order = self.config.final_sort_order if self.config.final_sort_by else self.config.sort_order
         reverse = (order or "desc").lower() == "desc"
 
-        def sort_key(row: Dict[str, Any]):
+        def sort_key(row: dict[str, Any]):
             val = row.get(sort_field)
             if isinstance(val, (int, float)):
                 return val
@@ -1317,7 +1364,7 @@ class FuturesUniverseSelector:
 
         return sorted(rows, key=sort_key, reverse=reverse)
 
-    def _select_perp_candidate(self, base: str, perps: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _select_perp_candidate(self, base: str, perps: list[dict[str, Any]]) -> dict[str, Any] | None:
         candidates = [p for p in perps if self._base_symbol(p.get("symbol", "")) == base]
         if not candidates:
             return None
@@ -1332,7 +1379,7 @@ class FuturesUniverseSelector:
                 return priority.index(exchange.upper())
             return len(priority)
 
-        def candidate_key(row: Dict[str, Any]):
+        def candidate_key(row: dict[str, Any]):
             exchange_score = exchange_rank(row.get("symbol", ""))
             val = row.get(field)
             if isinstance(val, (int, float)):
@@ -1343,8 +1390,8 @@ class FuturesUniverseSelector:
 
         return sorted(candidates, key=candidate_key)[0]
 
-    def _attach_perp_counterparts(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        spot_rows: List[Dict[str, Any]] = [r for r in rows if not self._is_perp(r.get("symbol", ""))]
+    def _attach_perp_counterparts(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        spot_rows: list[dict[str, Any]] = [r for r in rows if not self._is_perp(r.get("symbol", ""))]
         perp_rows = [r for r in rows if self._is_perp(r.get("symbol", ""))]
 
         spot_unique = self._dedupe_by_base(spot_rows)
@@ -1362,7 +1409,7 @@ class FuturesUniverseSelector:
                     existing.add(row.get("symbol"))
 
         seen_symbols = {row.get("symbol") for row in base_trimmed}
-        extras: List[Dict[str, Any]] = []
+        extras: list[dict[str, Any]] = []
         for row in base_trimmed:
             base = self._base_symbol(row.get("symbol", ""))
             perp_candidate = self._select_perp_candidate(base, perp_rows)
@@ -1372,7 +1419,7 @@ class FuturesUniverseSelector:
 
         return base_trimmed + extras
 
-    def _export_results(self, data: List[Dict[str, Any]]) -> None:
+    def _export_results(self, data: list[dict[str, Any]]) -> None:
         if not self.config.export.enabled:
             return
 
@@ -1428,7 +1475,7 @@ class FuturesUniverseSelector:
                 data_category=self.config.export_metadata.data_category,
             )
 
-    def process_data(self, raw_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def process_data(self, raw_data: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Processes raw screened data through the selector's post-filtering and aggregation pipeline.
         """
@@ -1522,8 +1569,8 @@ class FuturesUniverseSelector:
                 logger.info(f"AUDIT: Step 9 (Final Limit) dropped {len(final_sorted) - len(trimmed)} items.")
 
         # Final Uniqueness Guard: Ensure no duplicate symbols in final output
-        seen_final: Set[str] = set()
-        unique_final: List[Dict[str, Any]] = []
+        seen_final: set[str] = set()
+        unique_final: list[dict[str, Any]] = []
         for r in trimmed:
             sym = r.get("symbol")
             if sym and sym not in seen_final:
@@ -1541,14 +1588,14 @@ class FuturesUniverseSelector:
             "total_selected": len(trimmed),
         }
 
-    def build_payloads(self, columns: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def build_payloads(self, columns: list[str] | None = None) -> list[dict[str, Any]]:
         """Build screener payloads for dry-run and execution.
 
         This must match the actual `run()` execution path (including exchange loops)
         to keep dry-run output faithful.
         """
         resolved_columns = columns or self._build_columns()
-        payloads: List[Dict[str, Any]] = []
+        payloads: list[dict[str, Any]] = []
 
         for market in self.config.markets:
             filters = self._build_filters(market)
@@ -1584,7 +1631,7 @@ class FuturesUniverseSelector:
 
         return payloads
 
-    def run(self, dry_run: bool = False) -> Dict[str, Any]:
+    def run(self, dry_run: bool = False) -> dict[str, Any]:
         """Execute the selector pipeline."""
         settings = get_settings()
         run_dir = settings.prepare_summaries_run_dir()
@@ -1610,8 +1657,8 @@ class FuturesUniverseSelector:
                 input_hashes={"scanner_config": config_hash},
             )
 
-        aggregated: List[Dict[str, Any]] = []
-        errors: List[str] = []
+        aggregated: list[dict[str, Any]] = []
+        errors: list[str] = []
 
         if self.config.static_mode:
             static_list = [str(s) for s in (self.config.static_symbols or []) if str(s).strip()]
@@ -1674,12 +1721,12 @@ class FuturesUniverseSelector:
         return result
 
 
-def _format_markdown_table(rows: List[Mapping[str, Any]], columns: Optional[List[str]] = None) -> str:
+def _format_markdown_table(rows: list[Mapping[str, Any]], columns: list[str] | None = None) -> str:
     if not rows:
         return "No data"
 
     configured_cols = columns or []
-    ordered_cols: List[str] = []
+    ordered_cols: list[str] = []
     seen = set()
 
     for col in ["symbol"] + [c for c in configured_cols if c != "symbol"]:
@@ -1697,7 +1744,7 @@ def _format_markdown_table(rows: List[Mapping[str, Any]], columns: Optional[List
 
     header = "| " + " | ".join(ordered_cols) + " |"
     separator = "| " + " | ".join("---" for _ in ordered_cols) + " |"
-    data_lines: List[str] = []
+    data_lines: list[str] = []
 
     for row in rows:
         cells = []
@@ -1725,7 +1772,7 @@ def load_config_from_env(env_var: str = "FUTURES_SELECTOR_CONFIG") -> SelectorCo
     return load_config(json.loads(payload))
 
 
-def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Futures trend-following universe selector")
     parser.add_argument("--config", help="Path to YAML/JSON config file")
     parser.add_argument("--profile", help="Manifest profile name to load config from")
@@ -1752,11 +1799,11 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
 
-    overrides: Dict[str, Any] = {}
+    overrides: dict[str, Any] = {}
     if args.limit is not None:
         overrides["limit"] = args.limit
     if args.export is not None:

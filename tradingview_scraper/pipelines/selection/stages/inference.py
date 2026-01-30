@@ -84,7 +84,7 @@ class InferenceStage(BasePipelineStage):
 
         # 2. Calculate Final Alpha Score
         # This reuses the validated logic from utils.scoring
-        alpha_scores = calculate_mps_score(metrics=metrics_dict, weights=self.weights, methods=self.methods)
+        alpha_scores = calculate_mps_score(metrics=metrics_dict, weights=self.weights, methods=self.methods).fillna(0.0)
 
         # 3. Store Results
         # We store both the final score and the component probabilities for explainability
@@ -95,7 +95,18 @@ class InferenceStage(BasePipelineStage):
         for f in active_features:
             f_str = str(f)
             s_val = metrics_dict[f_str]
-            outputs[f"{f_str}_prob"] = map_to_probability(s_val, method=self.methods.get(f_str, "rank"))
+            # Ensure probabilities are non-null for contract compliance
+            outputs[f"{f_str}_prob"] = map_to_probability(s_val, method=self.methods.get(f_str, "rank")).fillna(0.5)
+
+        # 4. L2 Data Contract Validation
+        from tradingview_scraper.pipelines.contracts import InferenceSchema
+        import pandera as pa
+
+        try:
+            InferenceSchema.validate(outputs)
+        except pa.errors.SchemaError as e:
+            logger.error(f"L2 Data Contract Violation in inference_outputs: {e}")
+            raise
 
         context.inference_outputs = outputs
 

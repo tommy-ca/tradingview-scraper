@@ -34,16 +34,13 @@ class RepairService:
             logger.error("PersistentDataLoader not available.")
 
     def load_candidates(self, candidates_path: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Load candidates from file or return empty."""
+        """Load candidates from file. Fail if not provided (Phase 890 Strict Scope)."""
         if not candidates_path:
-            # Default to lakehouse candidates
-            candidates_path = str(self.lakehouse_dir / "portfolio_candidates.json")
+            # CR-890: Disable global repair. Require explicit scope.
+            logger.warning("No candidates file provided. Strict scope enabled: Skipping global repair.")
+            return []
 
         path = Path(candidates_path)
-        if not path.exists():
-            # Fallback to raw
-            path = self.lakehouse_dir / "portfolio_candidates_raw.json"
-
         if not path.exists():
             logger.error(f"Candidates file not found: {candidates_path}")
             return []

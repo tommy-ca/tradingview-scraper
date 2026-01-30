@@ -38,7 +38,7 @@ class PersistentDataLoader:
         self.catalog = MetadataCatalog(base_path=path_str)
         self.ex_catalog = ExchangeCatalog(base_path=path_str)
         self.overview = Overview()
-        self.streamer = Streamer(export_result=False, websocket_jwt_token=websocket_jwt_token)
+        self.streamer = Streamer(export_result=True, websocket_jwt_token=websocket_jwt_token, idle_timeout_seconds=30.0, max_retries=10)
 
     def _ensure_metadata(self, symbol: str):
         """Checks if metadata exists, otherwise attempts to fetch it."""
@@ -261,9 +261,9 @@ class PersistentDataLoader:
 
         return total_filled
 
-    def load(self, symbol: str, start: Union[datetime, str], end: Union[datetime, str], interval: str = "1h", force_api: bool = False) -> pd.DataFrame:
+    def load(self, symbol: str, start: Union[datetime, str], end: Union[datetime, str], interval: str = "1h", force_api: bool = False, allow_remote: bool = True) -> pd.DataFrame:
         """
-        Loads data from local storage, falling back to API if range is missing.
+        Loads data from local storage, falling back to API if range is missing and allow_remote is True.
         """
         if isinstance(start, str):
             start = datetime.fromisoformat(start)
@@ -275,11 +275,13 @@ class PersistentDataLoader:
 
         df = self.storage.load_candles(symbol, interval, start_ts, end_ts)
 
-        if df.empty or force_api:
+        if (df.empty or force_api) and allow_remote:
             logger.info(f"Data for {symbol} range not found in local storage. Fetching from API...")
             api_candles = self.loader.load(symbol, start, end, interval)
             if api_candles:
                 self.storage.save_candles(symbol, interval, api_candles)
                 df = self.storage.load_candles(symbol, interval, start_ts, end_ts)
+        elif df.empty and not allow_remote:
+            logger.warning(f"Data for {symbol} missing in local storage and remote fetch disabled.")
 
         return df

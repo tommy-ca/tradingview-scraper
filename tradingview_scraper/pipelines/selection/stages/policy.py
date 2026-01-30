@@ -7,6 +7,7 @@ from tradingview_scraper.pipelines.selection.filters.base import BaseFilter
 from tradingview_scraper.pipelines.selection.filters.darwinian import DarwinianFilter
 from tradingview_scraper.pipelines.selection.filters.friction import FrictionFilter
 from tradingview_scraper.pipelines.selection.filters.predictability import PredictabilityFilter
+from tradingview_scraper.pipelines.selection.filters.advanced_trend import AdvancedTrendFilter
 from tradingview_scraper.settings import get_settings
 
 logger = logging.getLogger("pipelines.selection.policy")
@@ -20,15 +21,58 @@ class SelectionPolicyStage(BasePipelineStage):
     """
 
     def __init__(self, filters: Optional[List[BaseFilter]] = None):
-        self.filters = filters or [DarwinianFilter(), PredictabilityFilter(), FrictionFilter()]
+        # Default filters if not overridden
+        self.default_filters = [DarwinianFilter(), PredictabilityFilter(), FrictionFilter()]
+        self.filters = filters or self.default_filters
 
     @property
     def name(self) -> str:
         return "SelectionPolicy"
 
+    def _resolve_filters(self, params: Dict[str, Any]) -> List[BaseFilter]:
+        """
+        Resolves filters based on manifest params.
+        """
+        filter_names = params.get("filters")
+        if not filter_names:
+            return self.filters
+
+        resolved = []
+        # Always include Darwinian (Safety)
+        if "darwinian" not in filter_names:
+            resolved.append(DarwinianFilter())
+
+        for name in filter_names:
+            if name == "darwinian":
+                resolved.append(DarwinianFilter())
+            elif name == "predictability":
+                resolved.append(PredictabilityFilter())
+            elif name == "friction":
+                resolved.append(FrictionFilter())
+            elif name == "trend_regime":
+                # Configurable Trend Filter
+                strict_regime = params.get("trend_strict_regime", True)
+                strict_signal = params.get("trend_strict_signal", True)
+                lookback = params.get("trend_lookback", 5)
+                regime_source = params.get("trend_regime_source", "close")
+                threshold = params.get("trend_threshold", 0.0)
+                resolved.append(TrendRegimeFilter(strict_regime=strict_regime, strict_signal=strict_signal, lookback=lookback, regime_source=regime_source, threshold=threshold))
+            elif name == "advanced_trend":
+                # New Phase 1210 Filter
+                mode = params.get("advanced_trend_mode", "adx_regime")
+                adx_threshold = params.get("adx_threshold", 20.0)
+                resolved.append(AdvancedTrendFilter(mode=mode, adx_threshold=adx_threshold))
+            else:
+                logger.warning(f"Unknown filter requested: {name}")
+
+        return resolved
+
     def execute(self, context: SelectionContext) -> SelectionContext:
         settings = get_settings()
         params = context.params
+
+        # 0. Resolve Filters Dynamic
+        active_filters = self._resolve_filters(params)
 
         # 1. Gather Inputs
         if context.inference_outputs.empty or "alpha_score" not in context.inference_outputs.columns:
@@ -48,7 +92,7 @@ class SelectionPolicyStage(BasePipelineStage):
 
         # 2. Apply Vetoes (Modular Filter Chain)
         disqualified: Set[str] = set()
-        for f in self.filters:
+        for f in active_filters:
             _, vetoed = f.apply(context)
             disqualified.update(vetoed)
 

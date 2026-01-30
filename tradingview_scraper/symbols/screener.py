@@ -189,8 +189,8 @@ class Screener:
         return payload
 
     @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential_jitter(initial=1, max=30),
+        stop=stop_after_attempt(10),
+        wait=wait_exponential_jitter(initial=2, max=60),
         retry=(retry_if_exception_type(requests.RequestException) | retry_if_result(lambda res: res.get("status") == "failed" and "HTTP 429" in res.get("error", ""))),
         reraise=True,
     )

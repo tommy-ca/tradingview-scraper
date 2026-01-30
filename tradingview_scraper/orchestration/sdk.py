@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Any, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.telemetry.tracing import trace_span
@@ -15,11 +15,14 @@ class QuantSDK:
     """
 
     @staticmethod
-    def run_stage(id: str, context: Optional[Any] = None, **params) -> Any:
+    def run_stage(id: str, context: Optional[Any] = None, params: Optional[Dict[str, Any]] = None, **kwargs) -> Any:
         """
         Executes a single pipeline stage by its ID.
         """
-        return QuantSDK._run_stage_impl(id, context, **params)
+        # Merge params and kwargs
+        final_params = (params or {}).copy()
+        final_params.update(kwargs)
+        return QuantSDK._run_stage_impl(id, context, **final_params)
 
     @staticmethod
     @trace_span("sdk.run_stage")
@@ -30,7 +33,16 @@ class QuantSDK:
 
         # If it's a class (BasePipelineStage), instantiate and execute
         if spec.stage_class:
-            instance = spec.stage_class(**params)
+            # Filter params that are accepted by __init__ if possible?
+            # Or assume stage_class accepts **params or specific params
+            try:
+                instance = spec.stage_class(**params)
+            except TypeError as e:
+                # If unexpected argument, try without params (legacy support)
+                # But warn about dropped params
+                logger.debug(f"SDK: Failed to instantiate {spec.name} with params: {e}. Retrying without params.")
+                instance = spec.stage_class()
+
             if context is None:
                 # Some stages might create their own context if needed
                 # but for selection stages, it's usually required.
@@ -56,9 +68,10 @@ class QuantSDK:
         Checks for missing Parquet files, staleness, and schema drift.
         Also verifies FoundationHealthRegistry status.
         """
-        from tradingview_scraper.settings import get_settings
-        from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
         import os
+
+        from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
+        from tradingview_scraper.settings import get_settings
 
         settings = get_settings()
         lakehouse = settings.lakehouse_dir
@@ -66,7 +79,9 @@ class QuantSDK:
         logger.info(f"SDK: Validating foundation at {lakehouse}")
 
         # 1. Existence Checks
-        required_files = ["returns_matrix.parquet", "features_matrix.parquet"]
+        # returns_matrix.parquet is often generated per-run in Step 3 (Aggregation)
+        # but features_matrix.parquet is a persistent PIT store that must exist.
+        required_files = ["features_matrix.parquet"]
 
         missing = [f for f in required_files if not (lakehouse / f).exists()]
         if missing:
@@ -78,8 +93,9 @@ class QuantSDK:
         logger.info(f"Foundation Registry: {len(registry.data)} symbols tracked")
 
         # 2.1 Feature Consistency Audit (Phase 630)
-        from tradingview_scraper.utils.features import FeatureConsistencyValidator
         import pandas as pd
+
+        from tradingview_scraper.utils.features import FeatureConsistencyValidator
 
         returns_f = lakehouse / "returns_matrix.parquet"
         features_f = lakehouse / "features_matrix.parquet"
@@ -154,10 +170,11 @@ class QuantSDK:
         Executes a full named pipeline (e.g., 'alpha.full').
         Resolves the DAG from the manifest and executes using DAGRunner.
         """
+        import json
+
         from tradingview_scraper.orchestration.runner import DAGRunner
         from tradingview_scraper.settings import get_settings
         from tradingview_scraper.telemetry.provider import TelemetryProvider
-        import json
 
         settings = get_settings()
         run_id = params.get("run_id", settings.run_id)

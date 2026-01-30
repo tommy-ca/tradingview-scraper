@@ -5,12 +5,7 @@ import pandas as pd
 
 from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
-from tradingview_scraper.utils.predictability import (
-    calculate_efficiency_ratio,
-    calculate_hurst_exponent,
-    calculate_permutation_entropy,
-)
-from tradingview_scraper.utils.scoring import calculate_liquidity_score
+from tradingview_scraper.settings import get_settings
 
 logger = logging.getLogger("pipelines.selection.feature_engineering")
 
@@ -18,8 +13,8 @@ logger = logging.getLogger("pipelines.selection.feature_engineering")
 @StageRegistry.register(id="foundation.features", name="Feature Engineering", description="Calculates technical alpha factors", category="foundation")
 class FeatureEngineeringStage(BasePipelineStage):
     """
-    Stage 2: Feature Generation.
-    Calculates technical and statistical alpha factors for all assets in the returns matrix.
+    Stage 2: Feature Generation (Offline Standard).
+    Loads technical and statistical alpha factors from the PIT Feature Store or Discovery Metadata.
     """
 
     @property
@@ -32,76 +27,127 @@ class FeatureEngineeringStage(BasePipelineStage):
             logger.warning("FeatureEngineeringStage: Returns matrix is empty. Skipping.")
             return context
 
-        logger.info(f"Generating features for {len(df.columns)} assets...")
+        # 1. Resolve PIT Features (Phase 810)
+        # Passed from BacktestEngine for rebalance-time fidelity
+        pit_features = context.params.get("pit_features")
 
-        # 1. Base Statistical Features
-        mom = df.mean() * 252
-        vol = df.std() * np.sqrt(252)
-        stability = 1.0 / (vol + 1e-9)
-
-        # 2. Spectral & Complexity Features
-        lookback = min(len(df), context.params.get("feature_lookback", 120))
-
-        # Vectorized calculation using apply (much faster than dict comprehensions for large N)
-        entropy = df.apply(lambda col: calculate_permutation_entropy(col.tail(lookback).to_numpy(), order=5))
-        efficiency = df.apply(lambda col: calculate_efficiency_ratio(col.tail(lookback).to_numpy()))
-        hurst = df.apply(lambda col: calculate_hurst_exponent(col.to_numpy()))
-
-        # Tail Risk Features (CR-630)
-        from scipy.stats import kurtosis, skew
-
-        skewness = df.apply(lambda col: float(abs(skew(col.dropna().to_numpy()))) if len(col.dropna()) > 2 else 0.0)
-        kurt = df.apply(lambda col: float(kurtosis(col.dropna().to_numpy())) if len(col.dropna()) > 2 else 0.0)
-        # CVaR (Expected Shortfall) at 95% confidence
-        cvar = df.apply(lambda col: col[col <= col.quantile(0.05)].mean() if len(col.dropna()) > 20 else -0.1)
-
-        # 3. Discovery Metadata & External Features
+        # 2. Resolve Discovery Metadata (Live Discovery)
         candidate_map = {c["symbol"]: c for c in context.raw_pool}
 
-        adx = pd.Series({s: float(candidate_map.get(s, {}).get("adx") or 0) for s in df.columns})
-        rec_all = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_all") or 0) for s in df.columns})
-        rec_ma = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_ma") or 0) for s in df.columns})
-        rec_other = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_other") or 0) for s in df.columns})
-        roc = pd.Series({s: float(candidate_map.get(s, {}).get("roc") or 0) for s in df.columns})
-        vol_d = pd.Series({s: float(candidate_map.get(s, {}).get("volatility_d") or 0) for s in df.columns})
-        vol_chg = pd.Series({s: float(candidate_map.get(s, {}).get("volume_change_pct") or 0) for s in df.columns})
+        # 3. Resolve Offline Store (Lakehouse)
+        settings = get_settings()
+        master_path = settings.lakehouse_dir / "features_matrix.parquet"
 
-        # Use v3 standardized liquidity scoring (normalized to $500M)
-        liquidity = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in df.columns})
+        # 4. Helper: Extract feature value from available sources
+        def get_feature_value(sym: str, feature: str) -> float:
+            # Source 1: PIT Injection (Backtest rebalance date)
+            if pit_features is not None:
+                try:
+                    val = pit_features.get((sym, feature))
+                    if val is not None and not pd.isna(val):
+                        return float(val)
+                except Exception:
+                    pass
 
-        # Default defaults for Antifragility/Survival (mocking v3 stats_df behavior)
-        # In a real pipeline, these would come from an upstream Feature Store or context.external_features
-        af_all = pd.Series(0.5, index=df.columns)
-        # Apply history scaling (same as v3)
-        af_all = af_all * (df.count() / 252.0).clip(upper=1.0)
-
-        regime_all = pd.Series(1.0, index=df.columns)
-
-        # 4. Assemble Feature Store
-        features = pd.DataFrame(
-            {
-                "momentum": mom,
-                "stability": stability,
-                "entropy": pd.to_numeric(entropy, errors="coerce").fillna(1.0).clip(0, 1),  # Raw Permutation Entropy (Noise)
-                "efficiency": pd.to_numeric(efficiency, errors="coerce"),
-                "hurst_clean": (1.0 - (pd.to_numeric(hurst, errors="coerce").fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1),
-                "adx": adx,
-                "recommend_all": rec_all,
-                "recommend_ma": rec_ma,
-                "recommend_other": rec_other,
-                "roc": roc,
-                "volatility_d": vol_d,
-                "volume_change_pct": vol_chg,
-                "liquidity": liquidity,
-                "antifragility": af_all,
-                "survival": regime_all,
-                "skew": skewness.fillna(0.0),
-                "kurtosis": kurt.fillna(0.0),
-                "cvar": cvar.fillna(-0.1),
+            # Source 2: Discovery Metadata (Fresh TV Rating)
+            # Map common technicals
+            tv_map = {
+                "recommend_all": "Recommend.All",
+                "recommend_ma": "Recommend.MA",
+                "recommend_other": "Recommend.Other",
+                "adx": "ADX",
+                "rsi": "RSI",
+                "macd": "MACD.macd",
+                "ichimoku_kijun": "Ichimoku.BLine",
             }
-        ).astype(float)  # Force global numeric consistency (CR-FIX Phase 353)
+            meta = candidate_map.get(sym, {})
+            val = meta.get(tv_map.get(feature, feature)) or meta.get(feature)
+            if val is not None and not pd.isna(val):
+                return float(val)
+
+            return np.nan
+
+        # 5. Build Feature Matrix for current universe
+        all_feature_names = [
+            "momentum",
+            "stability",
+            "entropy",
+            "efficiency",
+            "hurst_clean",
+            "skew",
+            "kurtosis",
+            "cvar",
+            "adx",
+            "rsi",
+            "recommend_all",
+            "recommend_ma",
+            "recommend_other",
+            "roc",
+            "macd",
+            "macd_signal",
+            "mom",
+            "ao",
+            "stoch_k",
+            "stoch_d",
+            "cci",
+            "willr",
+            "uo",
+            "bb_power",
+            "ichimoku_kijun",
+        ]
+
+        logger.info(f"Loading features for {len(df.columns)} assets (Offline-Only Standard)...")
+
+        # We attempt to populate from sources
+        feature_data = {}
+        for feat in all_feature_names:
+            feature_data[feat] = pd.Series({s: get_feature_value(s, feat) for s in df.columns})
+
+        features = pd.DataFrame(feature_data)
+
+        # 6. Critical Fallback: Load from Master Matrix if still missing important features
+        # (Only if we are not in a strict backtest where PIT injection is mandatory)
+        if features.isna().all().all() and pit_features is None:
+            if master_path.exists():
+                try:
+                    master_df = pd.read_parquet(master_path)
+                    # Extract last available values for current universe
+                    for s in df.columns:
+                        if s in master_df.columns.get_level_values(0):
+                            for f in all_feature_names:
+                                if pd.isna(features.loc[s, f]):
+                                    try:
+                                        features.loc[s, f] = float(master_df[(s, f)].iloc[-1])
+                                    except Exception:
+                                        pass
+                    logger.info("Enriched features from Master Lakehouse Matrix.")
+                except Exception as e:
+                    logger.warning(f"Failed to load master features: {e}")
+
+        # 7. Final Sanity / Defaulting
+        # We fill NaNs with safe defaults to prevent solver crashes
+        if "entropy" in features.columns:
+            features["entropy"] = features["entropy"].fillna(1.0)
+        if "hurst_clean" in features.columns:
+            features["hurst_clean"] = features["hurst_clean"].fillna(0.5)
+
+        features = features.fillna(0.0).astype(float)
+
+        # 8. Data Source Attribution
+        source_label = "PIT_INJECTION" if pit_features is not None else "METADATA_OR_STORE"
+        logger.info(f"Feature Engineering Stage: Source={source_label}")
+
+        # 9. L1 Data Contract Validation
+        from tradingview_scraper.pipelines.contracts import FeatureStoreSchema
+        import pandera as pa
+
+        try:
+            FeatureStoreSchema.validate(features)
+        except Exception as e:
+            logger.error(f"L1 Data Contract Violation in feature_store: {e}")
+            raise
 
         context.feature_store = features
-        context.log_event(self.name, "FeaturesGenerated", {"n_features": len(features.columns), "n_assets": len(features)})
+        context.log_event(self.name, "FeaturesLoaded", {"n_features": len(features.columns), "n_assets": len(features)})
 
         return context

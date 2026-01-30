@@ -53,6 +53,17 @@ class ForensicSpanExporter(SpanExporter):
             logger.error(f"Failed to save forensic trace: {e}")
 
 
+def export_forensic_trace(run_dir: Path):
+    """
+    Legacy entry point to export forensic trace.
+    Note: This requires the ForensicSpanExporter to have been registered early in the process.
+    If using run_meta_pipeline.py without SDK, traces might not be captured effectively.
+    """
+    # In a full implementation, we would need a registry of active exporters.
+    # For now, we log a warning as this pattern is deprecated in favor of QuantSDK.run_pipeline
+    logger.warning(f"export_forensic_trace called for {run_dir}, but direct export is deprecated. Use TelemetryProvider.register_forensic_exporter() pattern.")
+
+
 def get_forensic_summary_md(trace_file: Path) -> str:
     """Generates a markdown summary of the pipeline health from a forensic trace file."""
     if not trace_file.exists():

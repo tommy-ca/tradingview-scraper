@@ -191,6 +191,15 @@ def validate_atomic_run(
         try:
             flat = _load_json(flat_path)
             weights = flat.get("weights") or flat.get("assets") or []
+
+            # Handle atomic sleeve format with multiple profiles
+            if not weights and "profiles" in flat:
+                profiles = flat["profiles"]
+                for p_name, p_data in profiles.items():
+                    p_assets = p_data.get("assets") or []
+                    if p_assets:
+                        weights.extend(p_assets)
+
             if not weights:
                 checks.append(CheckResult(False, "ATOMIC_EMPTY_FLATTENED", f"[{profile}] portfolio_flattened.json has no weights"))
             else:

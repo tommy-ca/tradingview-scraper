@@ -105,6 +105,18 @@ class ReportGenerator:
         self._restructure_results_if_needed()
         self.benchmark = self._load_spy_benchmark()
 
+    def _resolved_profile_name(self) -> str:
+        resolved_path = self.config_dir / "resolved_manifest.json"
+        if resolved_path.exists():
+            try:
+                data = json.loads(resolved_path.read_text(encoding="utf-8"))
+                prof = data.get("profile")
+                if prof:
+                    return str(prof)
+            except Exception:
+                logger.warning("Failed to parse resolved_manifest.json for profile override")
+        return self.settings.profile
+
     def _restructure_results_if_needed(self):
         """Restructures flat window results into a nested dictionary if needed."""
         if isinstance(self.all_results, list):
@@ -710,9 +722,10 @@ class ReportGenerator:
 
     def _generate_master_index(self):
         """Generates the INDEX.md master navigation file."""
+        profile_display = self._resolved_profile_name()
         md = [
             f"# Quantitative Run: {self.settings.run_id}",
-            f"Profile: **{self.settings.profile}**",
+            f"Profile: **{profile_display}**",
             f"Generated: {pd.Timestamp.now()}",
             "",
             "## 🚀 Executive Summary",

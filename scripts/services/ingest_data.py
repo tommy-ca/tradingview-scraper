@@ -2,8 +2,9 @@ import json
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import pandas as pd
 
@@ -12,6 +13,11 @@ from tradingview_scraper.pipelines.selection.base import (
     FoundationHealthRegistry,
 )
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.symbols.stream.fetching import (
+    _validate_symbol_record_for_upsert,
+    fetch_tv_metadata,
+)
+from tradingview_scraper.symbols.stream.metadata import MetadataCatalog
 
 # Assume PersistentDataLoader is available via PYTHONPATH or install
 try:
@@ -34,6 +40,7 @@ class IngestionService:
         # Ensure lakehouse exists
         self.lakehouse_dir.mkdir(parents=True, exist_ok=True)
         self.registry = FoundationHealthRegistry(path=self.lakehouse_dir / "foundation_health.json")
+        self.metadata_catalog = MetadataCatalog(base_path=self.lakehouse_dir)
 
     def is_fresh(self, symbol: str) -> bool:
         """Check if symbol data exists and is fresh."""
@@ -53,13 +60,35 @@ class IngestionService:
         logger.info(f"{symbol} is stale ({age_hours:.1f}h). Queueing for fetch.")
         return False
 
-    def ingest(self, candidates: List[Dict[str, Any]], lookback_days: int = 500):
+    def _ensure_metadata(self, candidates: List[Dict], workers: int):
+        """Ensures that all candidates have entries in the metadata catalog."""
+        symbols = [c["symbol"] for c in candidates]
+        if not symbols:
+            return
+
+        missing_symbols = []
+        for sym in symbols:
+            # Check if symbol exists in catalog
+            if not self.metadata_catalog.get_instrument(sym):
+                missing_symbols.append(sym)
+
+        if missing_symbols:
+            logger.info(f"Hydrating metadata for {len(missing_symbols)} new symbols...")
+            new_meta = fetch_tv_metadata(missing_symbols, max_workers=workers)
+
+            validated_data = [r for r in new_meta if _validate_symbol_record_for_upsert(r)]
+            if validated_data:
+                self.metadata_catalog.upsert_symbols(validated_data)
+                logger.info(f"Upserted {len(validated_data)} new symbols to metadata catalog.")
+
+    def ingest(self, candidates: List[Dict[str, Any]], lookback_days: int = 500, workers: int = 10):
         """
         Main ingestion logic:
         1. Filter candidates for freshness (Idempotency).
-        2. Fetch missing/stale data.
-        3. Validate toxicity.
-        4. Commit to Lakehouse (PersistentLoader does this, but we validate before).
+        2. Ensure metadata exists for all candidates.
+        3. Fetch missing/stale data.
+        4. Validate toxicity.
+        5. Commit to Lakehouse (PersistentLoader does this, but we validate before).
         """
         if not self.loader:
             raise RuntimeError("PersistentDataLoader not initialized.")
@@ -73,50 +102,47 @@ class IngestionService:
             else:
                 logger.warning(f"Skipping invalid candidate format: {c}")
 
+        # 2. Metadata Hydration (Integrated from build_metadata_catalog)
+        self._ensure_metadata(validated_candidates, workers)
+
         to_fetch = [c for c in validated_candidates if not self.is_fresh(c["symbol"])]
 
         if not to_fetch:
             logger.info("All candidates are fresh. No ingestion needed.")
             return
 
-        logger.info(f"Ingesting {len(to_fetch)} symbols...")
+        logger.info(f"Ingesting {len(to_fetch)} symbols with {workers} workers...")
 
-        # 2. Fetch Loop (Sequential for safety, or threaded in real prod)
-        for item in to_fetch:
+        def _ingest_single(item: Dict[str, Any]):
             symbol = item["symbol"]
             try:
-                # Use sync to fetch data. The loader handles writing to parquet usually,
-                # but we want to intercept for toxic check if possible.
-                # However, PersistentLoader writes directly.
-                # To implement "Toxic Filter AT SOURCE", we rely on the fact that
-                # loader.load() reads what was just synced.
-
                 # Fetch
-                # Depth should cover lookback + buffer
                 depth = lookback_days + 100
-                self.loader.sync(symbol, interval="1d", depth=depth, total_timeout=300)
+                if self.loader is None:
+                    raise RuntimeError("Loader lost.")
+                added = self.loader.sync(symbol, interval="1d", depth=depth, total_timeout=300)
+                time.sleep(0.5)  # Throttling to avoid 429
 
-                # 3. Post-Fetch Validation (Toxic Check)
-                # We load what was just written to check integrity
-                # Note: PersistentLoader writes to 'data/lakehouse' by default in the project config.
-                # If we injected a custom lakehouse_dir, we hope PersistentLoader respects it or we verify the real path.
-                # For this implementation, we assume PersistentLoader writes to self.lakehouse_dir or standard location.
+                # Verify Added Records
+                if added == 0:
+                    logger.warning(f"Sync returned 0 new records for {symbol}. Marking as stale.")
+                    self.registry.update_status(symbol, status="stale", reason="zero_records_added")
+                    self.registry.save()
+                    return
 
                 # Verify Toxic
-                # We use the loader to load back the dataframe
-                # Note: 'load' might return cached data if we don't force reload?
-                # Usually it reads from disk.
-
-                # Let's assume standard path for validation
                 safe_sym = symbol.replace(":", "_")
                 p_path = self.lakehouse_dir / f"{safe_sym}_1d.parquet"
 
                 if p_path.exists():
                     df = pd.read_parquet(p_path)
 
+                    vol = cast(pd.Series, df["volume"]) if "volume" in df.columns else pd.Series()
+                    close = cast(pd.Series, df["close"]) if "close" in df.columns else pd.Series()
+
                     is_toxic_ret = self.is_toxic(df)
-                    is_toxic_vol = AdvancedToxicityValidator.is_volume_toxic(df["volume"]) if "volume" in df.columns else False
-                    is_stalled = AdvancedToxicityValidator.is_price_stalled(df["close"]) if "close" in df.columns else False
+                    is_toxic_vol = AdvancedToxicityValidator.is_volume_toxic(vol) if not vol.empty else False
+                    is_stalled = AdvancedToxicityValidator.is_price_stalled(close) if not close.empty else False
 
                     if is_toxic_ret or is_toxic_vol or is_stalled:
                         reason = "return_spike" if is_toxic_ret else ("volume_spike" if is_toxic_vol else "price_stall")
@@ -131,6 +157,9 @@ class IngestionService:
 
             except Exception as e:
                 logger.error(f"Failed to ingest {symbol}: {e}")
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            executor.map(_ingest_single, to_fetch)
 
     def is_toxic(self, df: pd.DataFrame) -> bool:
         """Check for >500% daily returns."""
@@ -154,8 +183,8 @@ class IngestionService:
 
         return False
 
-    def process_candidate_file(self, file_path: Path):
-        """Load candidates from JSON and ingest."""
+    def process_candidate_file(self, file_path: Path, workers: int = 10):
+        """Load symbols from JSON and ingest."""
         if not file_path.exists():
             logger.error(f"Candidate file not found: {file_path}")
             return
@@ -177,7 +206,7 @@ class IngestionService:
             logger.error(f"Unknown JSON format in {file_path}")
             return
 
-        self.ingest(candidates)
+        self.ingest(candidates, workers=workers)
 
 
 if __name__ == "__main__":
@@ -186,8 +215,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--candidates", help="Path to candidates.json", required=True)
     parser.add_argument("--lakehouse", help="Path to lakehouse dir", default=None)
+    parser.add_argument("--workers", type=int, default=3, help="Concurrency level")
     args = parser.parse_args()
 
     lakehouse_arg = Path(args.lakehouse) if args.lakehouse else None
     service = IngestionService(lakehouse_dir=lakehouse_arg)
-    service.process_candidate_file(Path(args.candidates))
+    service.process_candidate_file(Path(args.candidates), workers=args.workers)

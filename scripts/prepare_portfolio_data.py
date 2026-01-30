@@ -105,7 +105,8 @@ def prepare_portfolio_universe():
             # But step 3 already did ingest_universe which handles batching.
             # So here we just LOAD.
 
-            df = local_loader.load(phys_sym, start_date, end_date, interval="1d")
+            allow_remote = source_mode != "lakehouse_only"
+            df = local_loader.load(phys_sym, start_date, end_date, interval="1d", allow_remote=allow_remote)
 
             if df.empty:
                 if source_mode == "lakehouse_only":
@@ -171,7 +172,7 @@ def prepare_portfolio_universe():
     # 5. Matrix Creation
     if not price_data:
         logger.error("No price data loaded. Aborting matrix creation.")
-        return
+        exit(1)
 
     all_dates_raw = sorted(set().union(*(rets.index for rets in price_data.values())))
     all_dates = pd.to_datetime(all_dates_raw, utc=True)
@@ -221,7 +222,30 @@ def prepare_portfolio_universe():
             returns_df = returns_df.drop(columns=zero_vars)
             logger.info("Dropped zero-variance symbols: %s", ", ".join(zero_vars))
 
-    # 7. Deduplication
+    # 7. Forensic Constitution: Ensure Dense Matrix (No NaNs)
+    # Strategy: Drop assets that have > 10% missing data relative to the union index.
+    # Then drop any remaining rows with NaNs to ensure a perfectly dense matrix.
+    if not returns_df.empty:
+        n_rows = len(returns_df)
+        missing_counts = returns_df.isna().sum()
+        missing_frac = missing_counts / n_rows
+
+        # Tolerance: 10% missing allowed (will be trimmed), otherwise drop asset
+        GAP_TOLERANCE = 0.10
+        gappy_assets = missing_frac[missing_frac > GAP_TOLERANCE].index.tolist()
+
+        if gappy_assets:
+            returns_df = returns_df.drop(columns=gappy_assets)
+            logger.info(f"Dropped {len(gappy_assets)} sparse assets (>10% gaps): {', '.join(gappy_assets)}")
+
+        # Final Polish: Drop rows with any remaining NaNs (Intersection of survivors)
+        prev_len = len(returns_df)
+        returns_df = returns_df.dropna()
+        new_len = len(returns_df)
+        if new_len < prev_len:
+            logger.info(f"Trimmed matrix history from {prev_len} to {new_len} days to enforce density.")
+
+    # 8. Deduplication
     dedupe_env = os.getenv("PORTFOLIO_DEDUPE_BASE")
     do_dedupe = dedupe_env == "1" if dedupe_env is not None else bool(active_settings.portfolio_dedupe_base)
     if do_dedupe:

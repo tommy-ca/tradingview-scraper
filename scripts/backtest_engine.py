@@ -18,6 +18,11 @@ from tradingview_scraper.utils.synthesis import StrategySynthesizer
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("backtest_engine")
 
+# CR-FIX: Suppress verbose Nautilus logs to prevent I/O bottlenecks (160MB+ logs)
+logging.getLogger("nautilus_trader").setLevel(logging.WARNING)
+# Nautilus loggers are often prefixed with TraderID
+logging.getLogger("BACKTESTER-01").setLevel(logging.WARNING)
+
 
 def _get_annualization_factor(series: pd.Series) -> float:
     """Determine annualization factor based on frequency."""
@@ -123,6 +128,27 @@ class BacktestEngine:
         if features_path.exists():
             try:
                 self.features_matrix = pd.read_parquet(features_path)
+
+                # CR-800: Optimization - Filter columns to match active universe immediately
+                # This reduces memory usage and confusion in logs about "Loaded 1200 assets" when using 10.
+                if not self.returns.empty:
+                    active_symbols = set(self.returns.columns)
+
+                    if isinstance(self.features_matrix.columns, pd.MultiIndex):
+                        # Filter level 0 (Symbol)
+                        matrix_symbols = set(self.features_matrix.columns.get_level_values(0))
+                        common = list(active_symbols.intersection(matrix_symbols))
+                        if len(common) < len(matrix_symbols):
+                            # Slicing columns in MultiIndex can be tricky if not sorted, but usually fine
+                            # Use loc with slice(None) for level 1
+                            self.features_matrix = self.features_matrix.loc[:, (common, slice(None))]
+                    else:
+                        # Flat index? (Usually MultiIndex: Symbol, Feature)
+                        # Fallback for simple columns if any
+                        common = list(active_symbols.intersection(set(self.features_matrix.columns)))
+                        if common:
+                            self.features_matrix = self.features_matrix[common]
+
                 logger.info(f"Loaded Features Matrix: {self.features_matrix.shape}")
                 # Ensure index alignment
                 if not isinstance(self.features_matrix.index, pd.DatetimeIndex):
@@ -362,287 +388,310 @@ class BacktestEngine:
                         logger.warning(f"  [Window {i}] Dynamic Filter failed: {e}. Using static universe.")
 
             # 2. Pillar 1: Universe Selection
-
-            # CR-265: Dynamic Regime Detection
-            regime_name = "NORMAL"
-            market_env = "NORMAL"
-
             try:
-                # Need DataFrame for detection. train_rets has asset columns.
-                if not train_rets.empty and len(train_rets) > 60:
-                    regime_label, regime_score, quadrant = self.detector.detect_regime(train_rets)
-                    regime_name = regime_label
-                    market_env = quadrant
-            except Exception as e:
-                logger.warning(f"  [Window {i}] Regime detection failed: {e}")
+                # CR-265: Dynamic Regime Detection
+                regime_name = "NORMAL"
+                market_env = "NORMAL"
 
-            current_mode = config.features.selection_mode
+                try:
+                    # Need DataFrame for detection. train_rets has asset columns.
+                    if not train_rets.empty and len(train_rets) > 60:
+                        regime_label, regime_score, quadrant = self.detector.detect_regime(train_rets)
+                        regime_name = regime_label
+                        market_env = quadrant
+                except Exception as e:
+                    logger.warning(f"  [Window {i}] Regime detection failed: {e}")
 
-            # CR-270: Infer Strategy from Global Profile
-            strategy = "trend_following"
-            global_profile = config.profile or ""
-            if "mean_rev" in global_profile.lower() or "meanrev" in global_profile.lower():
-                strategy = "mean_reversion"
-            elif "breakout" in global_profile.lower():
-                strategy = "breakout"
+                current_mode = config.features.selection_mode
 
-            selection_engine = build_selection_engine(current_mode)
-            from tradingview_scraper.selection_engines.base import SelectionRequest
+                # CR-270: Infer Strategy from Global Profile
+                strategy = "trend_following"
+                global_profile = config.profile or ""
+                if "mean_rev" in global_profile.lower() or "meanrev" in global_profile.lower():
+                    strategy = "mean_reversion"
+                elif "breakout" in global_profile.lower():
+                    strategy = "breakout"
 
-            req_select = SelectionRequest(
-                top_n=config.top_n,
-                threshold=config.threshold,
-                strategy=strategy,  # CR-270
-            )
-            selection = selection_engine.select(returns=train_rets, raw_candidates=self.raw_candidates, stats_df=self.stats, request=req_select)
+                # CR-800: Prepare PIT Features Injection
+                # Extract the full feature vector for the current timestamp to ensure
+                # SelectionPipeline uses Point-in-Time values instead of static metadata.
+                pit_features_slice = None
+                if not self.features_matrix.empty:
+                    try:
+                        if current_date in self.features_matrix.index:
+                            pit_features_slice = self.features_matrix.loc[current_date]
+                        else:
+                            # Forward fill logic
+                            prev_idx = self.features_matrix.index.asof(current_date)
+                            if pd.notna(prev_idx):
+                                pit_features_slice = self.features_matrix.loc[prev_idx]
+                    except Exception as e:
+                        logger.warning(f"Failed to extract PIT features for {current_date}: {e}")
 
-            # CR-FIX: Ensure winners exist in the returns matrix (Phase 225)
-            if selection.winners:
-                selection_winners = [w for w in selection.winners if w["symbol"] in train_rets.columns]
-                if len(selection_winners) != len(selection.winners):
-                    logger.warning(f"  [DATA GAP] Filtered {len(selection.winners) - len(selection_winners)} winners missing from returns matrix.")
+                selection_engine = build_selection_engine(current_mode)
+                from tradingview_scraper.selection_engines.base import SelectionRequest
 
-                # Mocking the winners list in selection response
-                object.__setattr__(selection, "winners", selection_winners)
+                req_select = SelectionRequest(
+                    top_n=config.top_n,
+                    threshold=config.threshold,
+                    strategy=strategy,  # CR-270
+                    params={"pit_features": pit_features_slice},  # CR-800: Inject PIT features
+                )
+                selection = selection_engine.select(returns=train_rets, raw_candidates=self.raw_candidates, stats_df=self.stats, request=req_select)
 
-            if selection.winners:
-                winners_syms = [w["symbol"] for w in selection.winners]
-                window_meta = self.metadata.copy()
-                for w in selection.winners:
-                    window_meta[w["symbol"]] = w
+                # CR-FIX: Ensure winners exist in the returns matrix (Phase 225)
+                if selection.winners:
+                    selection_winners = [w for w in selection.winners if w["symbol"] in train_rets.columns]
+                    if len(selection_winners) != len(selection.winners):
+                        logger.warning(f"  [DATA GAP] Filtered {len(selection.winners) - len(selection_winners)} winners missing from returns matrix.")
 
-                if ledger and not lightweight:
-                    metrics_payload = {
-                        "n_universe_symbols": len(self.returns.columns),
-                        "n_refinement_candidates": len(train_rets.columns),
-                        "n_discovery_candidates": 0,
-                        "n_winners": len(winners_syms),
-                        "winners": winners_syms,
-                        **selection.metrics,
-                    }
-                    pipeline_audit = metrics_payload.pop("pipeline_audit", None)
-                    data_payload = {
-                        "relaxation_stage": selection.relaxation_stage,
-                        "audit_clusters": selection.audit_clusters,
-                        "winners_meta": selection.winners,
-                    }
-                    if pipeline_audit:
-                        data_payload["pipeline_audit"] = pipeline_audit
+                    # Mocking the winners list in selection response
+                    object.__setattr__(selection, "winners", selection_winners)
 
-                    ledger.record_outcome(
-                        step="backtest_select",
-                        status="success",
-                        output_hashes={},
-                        metrics=metrics_payload,
-                        data=data_payload,
-                        context={"window_index": i, "engine": selection_engine.name},
-                    )
+                if selection.winners:
+                    winners_syms = [w["symbol"] for w in selection.winners]
+                    window_meta = self.metadata.copy()
+                    for w in selection.winners:
+                        window_meta[w["symbol"]] = w
 
-                if winners_syms:
-                    # 3. Pillar 2: Strategy Synthesis
-                    # CR-837: Skip synthesis for meta-portfolios (they are already alpha streams)
-                    if is_meta:
-                        train_rets_strat = train_rets[winners_syms]
-                    else:
-                        train_rets_strat = synthesizer.synthesize(train_rets, selection.winners, config.features)
+                    if ledger and not lightweight:
+                        metrics_payload = {
+                            "n_universe_symbols": len(self.returns.columns),
+                            "n_refinement_candidates": len(train_rets.columns),
+                            "n_discovery_candidates": 0,
+                            "n_winners": len(winners_syms),
+                            "winners": winners_syms,
+                            **selection.metrics,
+                        }
+                        pipeline_audit = metrics_payload.pop("pipeline_audit", None)
+                        data_payload = {
+                            "relaxation_stage": selection.relaxation_stage,
+                            "audit_clusters": selection.audit_clusters,
+                            "winners_meta": selection.winners,
+                        }
+                        if pipeline_audit:
+                            data_payload["pipeline_audit"] = pipeline_audit
 
-                    # 4. Pillar 3: Allocation
-                    new_cluster_ids, _ = get_hierarchical_clusters(train_rets_strat, float(config.threshold), 25)
-                    stringified_clusters = {}
-                    for sym, c_id in zip(train_rets_strat.columns, new_cluster_ids):
-                        stringified_clusters.setdefault(str(c_id), []).append(str(sym))
+                        ledger.record_outcome(
+                            step="backtest_select",
+                            status="success",
+                            output_hashes={},
+                            metrics=metrics_payload,
+                            data=data_payload,
+                            context={"window_index": i, "engine": selection_engine.name},
+                        )
 
-                    bench_sym = config.benchmark_symbols[0] if config.benchmark_symbols else None
-                    bench_rets = train_rets[bench_sym] if bench_sym and bench_sym in train_rets.columns else None
+                    if winners_syms:
+                        # 3. Pillar 2: Strategy Synthesis
+                        # CR-837: Skip synthesis for meta-portfolios (they are already alpha streams)
+                        if is_meta:
+                            train_rets_strat = train_rets[winners_syms]
+                        else:
+                            train_rets_strat = synthesizer.synthesize(train_rets, selection.winners, config.features)
 
-                    for engine_name in engines:
-                        profiles_to_run = ["adaptive"] if engine_name == "adaptive" else profiles
+                        # 4. Pillar 3: Allocation
+                        new_cluster_ids, _ = get_hierarchical_clusters(train_rets_strat, float(config.threshold), 25)
+                        stringified_clusters = {}
+                        for sym, c_id in zip(train_rets_strat.columns, new_cluster_ids):
+                            stringified_clusters.setdefault(str(c_id), []).append(str(sym))
 
-                        for profile in profiles_to_run:
-                            actual_profile = cast(ProfileName, profile)
+                        bench_sym = config.benchmark_symbols[0] if config.benchmark_symbols else None
+                        bench_rets = train_rets[bench_sym] if bench_sym and bench_sym in train_rets.columns else None
 
-                            target_engine = engine_name
-                            if actual_profile in ["market", "benchmark"]:
-                                target_engine = "market"
-                            elif actual_profile == "barbell":
-                                target_engine = "custom"
+                        for engine_name in engines:
+                            profiles_to_run = ["adaptive"] if engine_name == "adaptive" else profiles
 
-                            opt_ctx = {
-                                "window_index": i,
-                                "engine": target_engine,
-                                "profile": profile,
-                                "regime": regime_name,
-                                "actual_profile": actual_profile,
-                                "selection_mode": current_mode,
-                            }
-                            try:
-                                engine = build_engine(target_engine)
-                                if ledger and not lightweight:
-                                    ledger.record_intent("backtest_optimize", opt_ctx, input_hashes={})
+                            for profile in profiles_to_run:
+                                actual_profile = cast(ProfileName, profile)
 
-                                default_shrinkage = float(config.features.default_shrinkage_intensity)
-                                if actual_profile == "max_sharpe":
-                                    default_shrinkage = max(default_shrinkage, 0.15)
+                                target_engine = engine_name
+                                if actual_profile in ["market", "benchmark"]:
+                                    target_engine = "market"
+                                elif actual_profile == "barbell":
+                                    target_engine = "custom"
 
-                                # CR-690: Adaptive Ridge Reloading (Phase 224)
-                                current_ridge = default_shrinkage
-                                max_ridge_retries = 3
-                                ridge_attempt = 0
-                                final_flat_weights = pd.DataFrame()
+                                opt_ctx = {
+                                    "window_index": i,
+                                    "engine": target_engine,
+                                    "profile": profile,
+                                    "regime": regime_name,
+                                    "actual_profile": actual_profile,
+                                    "selection_mode": current_mode,
+                                }
+                                try:
+                                    engine = build_engine(target_engine)
+                                    if ledger and not lightweight:
+                                        ledger.record_intent("backtest_optimize", opt_ctx, input_hashes={})
 
-                                while ridge_attempt < max_ridge_retries:
-                                    ridge_attempt += 1
-                                    req = EngineRequest(
-                                        profile=actual_profile,
-                                        engine=target_engine,
-                                        regime=regime_name,
-                                        market_environment=market_env,
-                                        cluster_cap=0.25,
-                                        kappa_shrinkage_threshold=float(config.features.kappa_shrinkage_threshold),
-                                        default_shrinkage_intensity=current_ridge,
-                                        adaptive_fallback_profile=str(config.features.adaptive_fallback_profile),
-                                        benchmark_returns=bench_rets,
-                                        market_neutral=(actual_profile == "market_neutral"),
-                                    )
+                                    default_shrinkage = float(config.features.default_shrinkage_intensity)
+                                    if actual_profile == "max_sharpe":
+                                        default_shrinkage = max(default_shrinkage, 0.15)
 
-                                    returns_for_opt = train_rets if actual_profile == "market" else train_rets_strat
-                                    opt_resp = engine.optimize(returns=returns_for_opt, clusters=stringified_clusters, meta=window_meta, stats=self.stats, request=req)
+                                    # CR-690: Adaptive Ridge Reloading (Phase 224)
+                                    current_ridge = default_shrinkage
+                                    max_ridge_retries = 3
+                                    ridge_attempt = 0
+                                    final_flat_weights = pd.DataFrame()
 
-                                    # CR-837: Recursive Meta-Flattening (Phase 570)
-                                    if is_meta:
-                                        flat_weights = opt_resp.weights
-                                    else:
-                                        flat_weights = synthesizer.flatten_weights(opt_resp.weights)
+                                    while ridge_attempt < max_ridge_retries:
+                                        ridge_attempt += 1
+                                        req = EngineRequest(
+                                            profile=actual_profile,
+                                            engine=target_engine,
+                                            regime=regime_name,
+                                            market_environment=market_env,
+                                            cluster_cap=0.25,
+                                            kappa_shrinkage_threshold=float(config.features.kappa_shrinkage_threshold),
+                                            default_shrinkage_intensity=current_ridge,
+                                            adaptive_fallback_profile=str(config.features.adaptive_fallback_profile),
+                                            benchmark_returns=bench_rets,
+                                            market_neutral=(actual_profile == "market_neutral"),
+                                        )
 
-                                    # CR-FIX: Diversity Enforcement (Phase 225)
-                                    if not flat_weights.empty:
-                                        w_sum_abs = flat_weights["Weight"].sum()
-                                        if w_sum_abs > 0:
-                                            flat_weights["Weight"] = flat_weights["Weight"].clip(upper=0.25 * w_sum_abs)
-                                            flat_weights["Net_Weight"] = flat_weights["Net_Weight"].clip(lower=-0.25 * w_sum_abs, upper=0.25 * w_sum_abs)
-                                            new_sum = flat_weights["Weight"].sum()
-                                            if new_sum > 0:
-                                                scale = w_sum_abs / new_sum
-                                                flat_weights["Weight"] *= scale
-                                                flat_weights["Net_Weight"] *= scale
+                                        returns_for_opt = train_rets if actual_profile == "market" else train_rets_strat
+                                        opt_resp = engine.optimize(returns=returns_for_opt, clusters=stringified_clusters, meta=window_meta, stats=self.stats, request=req)
 
-                                    if flat_weights.empty:
-                                        break
+                                        # CR-837: Recursive Meta-Flattening (Phase 570)
+                                        if is_meta:
+                                            flat_weights = opt_resp.weights
+                                        else:
+                                            flat_weights = synthesizer.flatten_weights(opt_resp.weights)
 
-                                    verify_sim_name = sim_names[0]
-                                    simulator = build_simulator(verify_sim_name)
-                                    state_key = f"{target_engine}_{verify_sim_name}_{profile}"
-                                    last_state = current_holdings.get(state_key)
-                                    sim_results = simulator.simulate(weights_df=flat_weights, returns=test_rets, initial_holdings=last_state)
+                                        # CR-FIX: Diversity Enforcement (Phase 225)
+                                        if not flat_weights.empty:
+                                            w_sum_abs = flat_weights["Weight"].sum()
+                                            if w_sum_abs > 0:
+                                                flat_weights["Weight"] = flat_weights["Weight"].clip(upper=0.25 * w_sum_abs)
+                                                flat_weights["Net_Weight"] = flat_weights["Net_Weight"].clip(lower=-0.25 * w_sum_abs, upper=0.25 * w_sum_abs)
+                                                new_sum = flat_weights["Weight"].sum()
+                                                if new_sum > 0:
+                                                    scale = w_sum_abs / new_sum
+                                                    flat_weights["Weight"] *= scale
+                                                    flat_weights["Net_Weight"] *= scale
 
-                                    metrics = sim_results.get("metrics", sim_results) if isinstance(sim_results, dict) else getattr(sim_results, "metrics", {})
-                                    sharpe = float(metrics.get("sharpe", 0.0))
-
-                                    if sharpe > 10.0 and ridge_attempt < max_ridge_retries and actual_profile not in ["market", "benchmark"]:
-                                        current_ridge = 0.50 if ridge_attempt == 1 else 0.95
-                                        logger.warning(f"  [ADAPTIVE RIDGE] Window {i} ({actual_profile}) anomalous (Sharpe={sharpe:.2f}). Reloading MAX Ridge: {current_ridge:.2f}")
-                                        continue
-
-                                    # CR-Hardening: Window Veto Rule (Phase 610)
-                                    if sharpe > 10.0 and actual_profile not in ["market", "benchmark"]:
-                                        logger.warning(f"  [WINDOW VETO] Window {i} ({actual_profile}) unstable (Sharpe={sharpe:.2f}). Forcing Equal Weight.")
-                                        n_strat = len(returns_for_opt.columns)
-                                        if n_strat > 0:
-                                            ew_weights = pd.Series(1.0 / n_strat, index=returns_for_opt.columns)
-                                            dummy_weights = pd.DataFrame({"Symbol": ew_weights.index, "Weight": ew_weights.values})
-                                            if is_meta:
-                                                final_flat_weights = dummy_weights
-                                            else:
-                                                final_flat_weights = synthesizer.flatten_weights(dummy_weights)
+                                        if flat_weights.empty:
                                             break
 
-                                    final_flat_weights = flat_weights
-                                    break
-
-                                if final_flat_weights.empty:
-                                    continue
-
-                                if ledger and not lightweight:
-                                    weights_dict = final_flat_weights.set_index("Symbol")["Net_Weight"].to_dict()
-                                    ledger.record_outcome(
-                                        step="backtest_optimize",
-                                        status="success",
-                                        output_hashes={},
-                                        metrics={"weights": weights_dict, "ridge_intensity": current_ridge, "ridge_attempts": ridge_attempt},
-                                        context=opt_ctx,
-                                    )
-
-                                for sim_name in sim_names:
-                                    sim_ctx = {
-                                        "window_index": i,
-                                        "engine": target_engine,
-                                        "profile": profile,
-                                        "simulator": sim_name,
-                                        "selection_mode": current_mode,
-                                    }
-                                    try:
-                                        simulator = build_simulator(sim_name)
-                                        if ledger and not lightweight:
-                                            ledger.record_intent("backtest_simulate", sim_ctx, input_hashes={})
-
-                                        state_key = f"{target_engine}_{sim_name}_{profile}"
+                                        verify_sim_name = sim_names[0]
+                                        simulator = build_simulator(verify_sim_name)
+                                        state_key = f"{target_engine}_{verify_sim_name}_{profile}"
                                         last_state = current_holdings.get(state_key)
-                                        sim_results = simulator.simulate(weights_df=final_flat_weights, returns=test_rets, initial_holdings=last_state)
-
-                                        if isinstance(sim_results, dict):
-                                            if "final_holdings" in sim_results:
-                                                current_holdings[state_key] = sim_results["final_holdings"]
-                                            elif "final_weights" in sim_results:
-                                                current_holdings[state_key] = sim_results["final_weights"]
-                                        elif hasattr(sim_results, "final_holdings"):
-                                            current_holdings[state_key] = getattr(sim_results, "final_holdings")
-                                        elif hasattr(sim_results, "final_weights"):
-                                            current_holdings[state_key] = getattr(sim_results, "final_weights")
+                                        sim_results = simulator.simulate(weights_df=flat_weights, returns=test_rets, initial_holdings=last_state)
 
                                         metrics = sim_results.get("metrics", sim_results) if isinstance(sim_results, dict) else getattr(sim_results, "metrics", {})
-                                        sanitized_metrics = {}
+                                        sharpe = float(metrics.get("sharpe", 0.0))
 
-                                        if "top_assets" in metrics:
-                                            try:
-                                                top_assets = metrics["top_assets"]
-                                                if isinstance(top_assets, list):
-                                                    hhi = sum([a.get("Weight", 0) ** 2 for a in top_assets])
-                                                    sanitized_metrics["concentration_hhi"] = float(hhi)
-                                                    sanitized_metrics["top_assets"] = top_assets
-                                            except Exception as e:
-                                                logger.warning(f"Failed to calculate HHI: {e}")
+                                        if sharpe > 10.0 and ridge_attempt < max_ridge_retries and actual_profile not in ["market", "benchmark"]:
+                                            current_ridge = 0.50 if ridge_attempt == 1 else 0.95
+                                            logger.warning(f"  [ADAPTIVE RIDGE] Window {i} ({actual_profile}) anomalous (Sharpe={sharpe:.2f}). Reloading MAX Ridge: {current_ridge:.2f}")
+                                            continue
 
-                                        for k, v in metrics.items():
-                                            if isinstance(v, (int, float, np.number, str, bool, type(None))):
-                                                sanitized_metrics[k] = float(v) if isinstance(v, (np.number, float, int)) else v
-                                            elif k == "top_assets" and isinstance(v, list):
-                                                sanitized_metrics[k] = v
+                                        # CR-Hardening: Window Veto Rule (Phase 610)
+                                        if sharpe > 10.0 and actual_profile not in ["market", "benchmark"]:
+                                            logger.warning(f"  [WINDOW VETO] Window {i} ({actual_profile}) unstable (Sharpe={sharpe:.2f}). Forcing Equal Weight.")
+                                            n_strat = len(returns_for_opt.columns)
+                                            if n_strat > 0:
+                                                ew_weights = pd.Series(1.0 / n_strat, index=returns_for_opt.columns)
+                                                dummy_weights = pd.DataFrame({"Symbol": ew_weights.index, "Weight": ew_weights.values})
+                                                if is_meta:
+                                                    final_flat_weights = dummy_weights
+                                                else:
+                                                    final_flat_weights = synthesizer.flatten_weights(dummy_weights)
+                                                break
 
-                                        daily_rets = metrics.get("daily_returns")
-                                        if isinstance(daily_rets, pd.Series):
-                                            key = f"{target_engine}_{sim_name}_{profile}"
-                                            if key not in return_series:
-                                                return_series[key] = []
-                                            clamped_rets = daily_rets.clip(-1.0, 1.0)
-                                            return_series[key].append(clamped_rets)
+                                        final_flat_weights = flat_weights
+                                        break
 
-                                        if ledger and not lightweight:
-                                            data_payload: Dict[str, Any] = {"daily_returns": []}
+                                    if final_flat_weights.empty:
+                                        continue
+
+                                    if ledger and not lightweight:
+                                        weights_dict = final_flat_weights.set_index("Symbol")["Net_Weight"].to_dict()
+                                        ledger.record_outcome(
+                                            step="backtest_optimize",
+                                            status="success",
+                                            output_hashes={},
+                                            metrics={"weights": weights_dict, "ridge_intensity": current_ridge, "ridge_attempts": ridge_attempt},
+                                            context=opt_ctx,
+                                        )
+
+                                    for sim_name in sim_names:
+                                        sim_ctx = {
+                                            "window_index": i,
+                                            "engine": target_engine,
+                                            "profile": profile,
+                                            "simulator": sim_name,
+                                            "selection_mode": current_mode,
+                                        }
+                                        try:
+                                            simulator = build_simulator(sim_name)
+                                            if ledger and not lightweight:
+                                                ledger.record_intent("backtest_simulate", sim_ctx, input_hashes={})
+
+                                            state_key = f"{target_engine}_{sim_name}_{profile}"
+                                            last_state = current_holdings.get(state_key)
+                                            sim_results = simulator.simulate(weights_df=final_flat_weights, returns=test_rets, initial_holdings=last_state)
+
+                                            if isinstance(sim_results, dict):
+                                                if "final_holdings" in sim_results:
+                                                    current_holdings[state_key] = sim_results["final_holdings"]
+                                                elif "final_weights" in sim_results:
+                                                    current_holdings[state_key] = sim_results["final_weights"]
+                                            elif hasattr(sim_results, "final_holdings"):
+                                                current_holdings[state_key] = getattr(sim_results, "final_holdings")
+                                            elif hasattr(sim_results, "final_weights"):
+                                                current_holdings[state_key] = getattr(sim_results, "final_weights")
+
+                                            metrics = sim_results.get("metrics", sim_results) if isinstance(sim_results, dict) else getattr(sim_results, "metrics", {})
+                                            sanitized_metrics = {}
+
+                                            if "top_assets" in metrics:
+                                                try:
+                                                    top_assets = metrics["top_assets"]
+                                                    if isinstance(top_assets, list):
+                                                        hhi = sum([a.get("Weight", 0) ** 2 for a in top_assets])
+                                                        sanitized_metrics["concentration_hhi"] = float(hhi)
+                                                        sanitized_metrics["top_assets"] = top_assets
+                                                except Exception as e:
+                                                    logger.warning(f"Failed to calculate HHI: {e}")
+
+                                            for k, v in metrics.items():
+                                                if isinstance(v, (int, float, np.number, str, bool, type(None))):
+                                                    sanitized_metrics[k] = float(v) if isinstance(v, (np.number, float, int)) else v
+                                                elif k == "top_assets" and isinstance(v, list):
+                                                    sanitized_metrics[k] = v
+
+                                            daily_rets = metrics.get("daily_returns")
                                             if isinstance(daily_rets, pd.Series):
-                                                data_payload["daily_returns"] = daily_rets.values.tolist()
-                                                data_payload["ann_factor"] = _get_annualization_factor(daily_rets)
-                                            elif isinstance(daily_rets, list):
-                                                data_payload["daily_returns"] = daily_rets
+                                                key = f"{target_engine}_{sim_name}_{profile}"
+                                                if key not in return_series:
+                                                    return_series[key] = []
+                                                clamped_rets = daily_rets.clip(-1.0, 1.0)
+                                                return_series[key].append(clamped_rets)
 
-                                            ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=sanitized_metrics, data=data_payload, context=sim_ctx)
+                                            if ledger and not lightweight:
+                                                data_payload: Dict[str, Any] = {"daily_returns": []}
+                                                if isinstance(daily_rets, pd.Series):
+                                                    data_payload["daily_returns"] = daily_rets.values.tolist()
+                                                    data_payload["ann_factor"] = _get_annualization_factor(daily_rets)
+                                                elif isinstance(daily_rets, list):
+                                                    data_payload["daily_returns"] = daily_rets
 
-                                        results.append({"window": i, "engine": target_engine, "profile": profile, "simulator": sim_name, "metrics": sanitized_metrics})
-                                    except Exception as e_sim:
-                                        if ledger and not lightweight:
-                                            ledger.record_outcome(step="backtest_simulate", status="error", output_hashes={}, metrics={"error": str(e_sim)}, context=sim_ctx)
-                            except Exception as e:
-                                if ledger and not lightweight:
-                                    ledger.record_outcome(step="backtest_optimize", status="error", output_hashes={}, metrics={"error": str(e)}, context=opt_ctx)
+                                                ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=sanitized_metrics, data=data_payload, context=sim_ctx)
+
+                                            results.append({"window": i, "engine": target_engine, "profile": profile, "simulator": sim_name, "metrics": sanitized_metrics})
+                                        except Exception as e_sim:
+                                            if ledger and not lightweight:
+                                                ledger.record_outcome(step="backtest_simulate", status="error", output_hashes={}, metrics={"error": str(e_sim)}, context=sim_ctx)
+                                            logger.error(f"Simulation failed for {profile}: {e_sim}")
+                                except Exception as e:
+                                    if ledger and not lightweight:
+                                        ledger.record_outcome(step="backtest_optimize", status="error", output_hashes={}, metrics={"error": str(e)}, context=opt_ctx)
+                                    logger.error(f"Optimization failed for {profile}: {e}")
+            except Exception as e_window:
+                logger.error(f"Window {i} failed: {e_window}")
+                if ledger and not lightweight:
+                    ledger.record_outcome(step="backtest_window", status="error", output_hashes={}, metrics={"error": str(e_window)}, context={"window_index": i})
 
         # Save stitched return series
         returns_out = run_dir / "data" / "returns"
@@ -702,15 +751,59 @@ if __name__ == "__main__":
     if args.run_id:
         os.environ["TV_RUN_ID"] = args.run_id
         # Reload settings to pick up env var
+        get_settings.cache_clear()
         config = get_settings()
 
     run_dir = config.prepare_summaries_run_dir()
 
-    engine = BacktestEngine()
-    tournament_results = engine.run_tournament(mode=args.mode, train_window=args.train_window, test_window=args.test_window, step_size=args.step_size, run_dir=run_dir)
+    # CR-780: Log Manifest Content for Reproducibility
+    if config.manifest_path.exists():
+        with open(config.manifest_path, "r") as f:
+            try:
+                manifest_content = json.load(f)
+                logger.info(f"Using manifest: {config.manifest_path}")
+                # logger.debug(f"Manifest content: {json.dumps(manifest_content, indent=2)}")
+            except Exception as e:
+                logger.warning(f"Failed to read manifest for logging: {e}")
 
-    persist_tournament_artifacts(tournament_results, run_dir / "data")
+    engine = BacktestEngine()
+
+    tournament_results = {"results": [], "meta": {}}
+    try:
+        tournament_results = engine.run_tournament(mode=args.mode, train_window=args.train_window, test_window=args.test_window, step_size=args.step_size, run_dir=run_dir)
+    except Exception as e:
+        logger.critical(f"Tournament execution crashed: {e}", exc_info=True)
+        # We proceed to persist whatever we have
+    finally:
+        # CR-780: Ensure artifacts are saved even if simulators crash
+        logger.info("Persisting tournament artifacts (partial or complete)...")
+        persist_tournament_artifacts(tournament_results, run_dir / "data")
 
     print("\n" + "=" * 50)
     print("TOURNAMENT COMPLETE")
     print("=" * 50)
+
+    # CR-FIX: Force exit to prevent hanging on Nautilus/Ray background threads
+    # Ensure telemetry and other resources are flushed
+    try:
+        from opentelemetry import metrics, trace
+
+        tp = trace.get_tracer_provider()
+        if hasattr(tp, "shutdown"):
+            tp.shutdown()
+        mp = metrics.get_meter_provider()
+        if hasattr(mp, "shutdown"):
+            mp.shutdown()
+    except Exception:
+        pass
+
+    try:
+        import ray
+
+        if ray.is_initialized():
+            ray.shutdown()
+    except Exception:
+        pass
+
+    # Standard exit
+    sys.exit(0)

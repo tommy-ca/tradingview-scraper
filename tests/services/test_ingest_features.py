@@ -68,6 +68,14 @@ def test_ingest_batch_writes_parquet(temp_lakehouse):
         assert "timestamp" in df.columns
 
 
+def test_ingest_batch_fails_when_no_results(temp_lakehouse):
+    service = FeatureIngestionService(lakehouse_dir=temp_lakehouse)
+
+    with patch.object(service, "fetch_technicals_single", return_value=None):
+        with pytest.raises(RuntimeError):
+            service.ingest_batch(["BINANCE:ETHUSDT"])
+
+
 def test_process_candidate_file(temp_lakehouse):
     """Test loading candidates from file."""
     c_path = temp_lakehouse / "candidates.json"

@@ -6,12 +6,15 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+import pandas as pd
+
 sys.path.append(os.getcwd())
 from scripts.audit_directional_sign_test import run_sign_test_for_meta_profile, write_findings_json
 from tradingview_scraper.orchestration.compute import RayComputeEngine
 from tradingview_scraper.pipelines.meta.base import MetaContext
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.telemetry.logging import setup_logging
+from tradingview_scraper.telemetry.provider import TelemetryProvider
 from tradingview_scraper.telemetry.tracing import trace_span
 
 setup_logging()
@@ -20,6 +23,39 @@ logger = logging.getLogger("run_meta_pipeline")
 
 def _load_manifest(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _assert_meta_returns(run_data_dir: Path, meta_profile: str) -> None:
+    returns_files = sorted(run_data_dir.glob(f"meta_returns_{meta_profile}_*.pkl"))
+    if not returns_files:
+        raise RuntimeError(f"No meta_returns files found for profile {meta_profile} in {run_data_dir}")
+
+    for path in returns_files:
+        df = pd.read_pickle(path)
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df)
+        if df.empty or df.shape[1] < 2:
+            raise RuntimeError(f"Meta returns file {path.name} has fewer than 2 sleeves or is empty")
+
+
+def _assert_meta_weights(run_data_dir: Path, meta_profile: str) -> None:
+    weights_files = sorted(run_data_dir.glob(f"meta_optimized_{meta_profile}_*.json"))
+    if not weights_files:
+        raise RuntimeError(f"No meta_optimized files found for profile {meta_profile} in {run_data_dir}")
+
+    for path in weights_files:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        weights = data.get("weights", [])
+        if len(weights) < 2:
+            raise RuntimeError(f"Meta optimized file {path.name} contains fewer than 2 sleeves")
+
+
+def _assert_meta_report(report_path: Path) -> None:
+    if not report_path.exists() or report_path.stat().st_size == 0:
+        raise RuntimeError(f"Meta report missing or empty: {report_path}")
+    content = report_path.read_text(encoding="utf-8")
+    if "Sleeve" not in content or "Allocation" not in content:
+        raise RuntimeError(f"Meta report missing sleeve allocation section: {report_path}")
 
 
 @trace_span("run_meta_pipeline")
@@ -58,6 +94,18 @@ def run_meta_pipeline(
 
     run_data_dir = run_dir / "data"
     run_data_dir.mkdir(parents=True, exist_ok=True)
+
+    # CR-845: Register Forensic Exporter (Phase 1380)
+    # Must be registered before stages run to capture spans.
+    forensic_exporter = None
+    try:
+        provider = TelemetryProvider()
+        if not provider.is_initialized:
+            provider.initialize()
+        forensic_exporter = provider.register_forensic_exporter(run_data_dir / "forensic_trace.json")
+        logger.info(f"Forensic tracing enabled -> {run_data_dir}/forensic_trace.json")
+    except Exception as e:
+        logger.warning(f"Failed to register forensic exporter: {e}")
 
     # Initialize MetaContext
     context = MetaContext(run_id=run_id, meta_profile=meta_profile, sleeve_profiles=target_profiles)
@@ -111,6 +159,16 @@ def run_meta_pipeline(
 
                 logger.info("Parallel execution phase complete.")
 
+    else:
+        # Meta runs with pinned sleeves must declare run_ids up front.
+        manifest_data = _load_manifest(settings.manifest_path)
+        meta_cfg = manifest_data.get("profiles", {}).get(meta_profile)
+        if meta_cfg:
+            missing = [s for s in meta_cfg.get("sleeves", []) if not str(s.get("run_id", "")).strip()]
+            if missing:
+                names = ", ".join(str(s.get("profile", "<unknown>")) for s in missing)
+                raise RuntimeError(f"Missing run_id for sleeves in meta profile {meta_profile}: {names}")
+
     # Stage 0.5: Directional Correction Audit Gate (Sign Test)
     if settings.features.feat_directional_sign_test_gate:
         logger.info(">>> STAGE 0.5: Directional Correction Gate (Sign Test)")
@@ -134,15 +192,19 @@ def run_meta_pipeline(
         base_dir=run_data_dir,
     )
 
-    # 2. Optimize
-    logger.info(">>> STAGE 2: Meta-Optimization")
-    # optimize_meta infers base_dir from input path (run_data_dir / "meta_returns.pkl")
+    # Post-aggregation sanity: ensure multi-sleeve content before optimization
+    _assert_meta_returns(run_data_dir, meta_profile)
+
+    logger.info(">>> STAGE 2: Optimizing Meta-Portfolio Weights")
     QuantSDK.run_stage(
         "risk.optimize_meta",
         returns_path=str(run_data_dir / "meta_returns.pkl"),
         output_path=str(run_data_dir / "meta_optimized.json"),
         meta_profile=meta_profile,
     )
+
+    # Post-optimization sanity
+    _assert_meta_weights(run_data_dir, meta_profile)
 
     # 3. Flatten
     logger.info(">>> STAGE 3: Recursive Weight Flattening")
@@ -151,6 +213,14 @@ def run_meta_pipeline(
         # flatten_weights needs to know where to look. We pass the output path in run_data_dir.
         QuantSDK.run_stage("risk.flatten_meta", meta_profile=meta_profile, output_path=str(run_data_dir / "portfolio_optimized_meta.json"), profile=prof)
 
+    # CR-845: Save Forensic Trace
+    if forensic_exporter:
+        try:
+            forensic_exporter.save()
+            logger.info("Forensic trace saved.")
+        except Exception as e:
+            logger.warning(f"Failed to save forensic trace: {e}")
+
     # 4. Reporting
     logger.info(">>> STAGE 4: Generating Forensic Report")
     # Generate report inside the run directory AND latest summary
@@ -158,6 +228,8 @@ def run_meta_pipeline(
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     QuantSDK.run_stage("risk.report_meta", meta_dir=run_data_dir, output_path=str(report_path), profiles=target_profiles, meta_profile=meta_profile)
+
+    _assert_meta_report(report_path)
 
     # Also update 'latest'
     latest_path = settings.artifacts_dir / "summaries/latest/meta_portfolio_report.md"
