@@ -2,12 +2,14 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, cast
+from typing import List, Optional, cast
 
 import pandas as pd
+import pandera as pa
 from tqdm import tqdm
 
 from tradingview_scraper.orchestration.registry import StageRegistry
+from tradingview_scraper.pipelines.contracts import FeatureStoreSchema
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import get_df_hash
 from tradingview_scraper.utils.technicals import TechnicalRatings
@@ -108,7 +110,9 @@ class BackfillService:
                 # Calculate Technicals using shared logic (Phase 630/640)
                 ma = TechnicalRatings.calculate_recommend_ma_series(df)
                 osc = TechnicalRatings.calculate_recommend_other_series(df)
-                rating = TechnicalRatings.calculate_recommend_all_series(df)
+
+                # Optimized: Vectorized mean to avoid re-calculation
+                rating = (ma + osc) / 2.0
 
                 # CR-Hardening: NaN Sanitization (Phase 630)
                 # Apply ffill with limit to preserve gap information
@@ -135,6 +139,18 @@ class BackfillService:
 
         # Drop rows that are all NaN (before any meaningful history started)
         features_df = features_df.dropna(how="all")
+
+        # Validation Step
+        logger.info("Validating features against FeatureStoreSchema...")
+        try:
+            # Validate each symbol's slice since FeatureStoreSchema expects flat columns
+            unique_symbols = features_df.columns.get_level_values("symbol").unique()
+            for sym in unique_symbols:
+                sym_df = features_df.xs(sym, axis=1, level="symbol")
+                FeatureStoreSchema.validate(sym_df)
+        except pa.errors.SchemaError as e:
+            logger.error(f"Schema Validation Failed: {e}")
+            raise
 
         # 3. PIT Consistency Audit (Phase 630)
         from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
