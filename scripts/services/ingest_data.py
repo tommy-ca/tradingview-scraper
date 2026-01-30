@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -42,9 +43,31 @@ class IngestionService:
         self.registry = FoundationHealthRegistry(path=self.lakehouse_dir / "foundation_health.json")
         self.metadata_catalog = MetadataCatalog(base_path=self.lakehouse_dir)
 
+    def _sanitize_symbol(self, symbol: str) -> str:
+        """
+        Sanitize symbol to prevent path traversal and ensure safe filenames.
+        Allowlist: alphanumeric, underscore, hyphen, dot, colon.
+        """
+        if not re.match(r"^[a-zA-Z0-9_\-.:]+$", symbol):
+            raise ValueError(f"Invalid symbol format: {symbol}")
+
+        # Convert to safe filename component
+        safe_sym = symbol.replace(":", "_")
+
+        # Double check against traversal artifacts
+        if safe_sym in (".", "..", ""):
+            raise ValueError(f"Invalid symbol format: {symbol}")
+
+        return safe_sym
+
     def is_fresh(self, symbol: str) -> bool:
         """Check if symbol data exists and is fresh."""
-        safe_sym = symbol.replace(":", "_")
+        try:
+            safe_sym = self._sanitize_symbol(symbol)
+        except ValueError as e:
+            logger.error(f"Security check failed for {symbol}: {e}")
+            return False  # Treat as missing/invalid
+
         p_path = self.lakehouse_dir / f"{safe_sym}_1d.parquet"
 
         if not p_path.exists():
@@ -131,7 +154,7 @@ class IngestionService:
                     return
 
                 # Verify Toxic
-                safe_sym = symbol.replace(":", "_")
+                safe_sym = self._sanitize_symbol(symbol)
                 p_path = self.lakehouse_dir / f"{safe_sym}_1d.parquet"
 
                 if p_path.exists():
