@@ -343,8 +343,7 @@ feature-backfill: ## [DataOps] Backfill historical technical ratings for dynamic
 	$(PY) scripts/services/backfill_features.py \
 		--candidates $$CAND_PATH \
 		--output data/lakehouse/features_matrix.parquet \
-		--lakehouse data/lakehouse \
-		--strict-scope
+		--lakehouse data/lakehouse
 
 # --- FLOW Namespace ---
 flow-production: ## Full institutional production lifecycle (Alpha Cycle Only - Requires flow-data)

@@ -190,7 +190,19 @@ def validate_atomic_run(
     if flat_path.exists():
         try:
             flat = _load_json(flat_path)
-            weights = flat.get("weights") or flat.get("assets") or []
+            # CR-FIX: Handle both legacy format (root dict) and profile-keyed format
+            weights = []
+            if "profiles" in flat and isinstance(flat["profiles"], dict):
+                # Check for any valid profile with assets
+                for pname, pdata in flat["profiles"].items():
+                    p_assets = pdata.get("assets") or []
+                    if p_assets:
+                        weights = p_assets
+                        break
+            else:
+                # Legacy format
+                weights = flat.get("weights") or flat.get("assets") or []
+
             if not weights:
                 checks.append(CheckResult(False, "ATOMIC_EMPTY_FLATTENED", f"[{profile}] portfolio_flattened.json has no weights"))
             else:

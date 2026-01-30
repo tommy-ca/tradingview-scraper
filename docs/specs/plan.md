@@ -120,11 +120,16 @@
     - Refactor `calculate_recommend_other_series` to use tuned Stochastic logic.
     - Re-run `audit_feature_parity.py` to check MAE improvement.
 
-## 62. Phase 730: Final Production Validation (End-to-End)
-- [x] **Execution**: Run `make flow-meta-production PROFILE=meta_production` (Clean Slate).
-- [x] **Validation**: Verify that the final report reflects the tuned technical ratings.
-- [x] **Audit**: Ensure no regression in `forensic_trace.json` or `audit.jsonl`.
-- [x] **Sign-off**: Mark the system as v4.5.0 Release Candidate.
+## 63. Phase 740: Remediation Validation & Production Rerun (v4.6)
+- [x] **Technical Hardening**: Refactor `BackfillService` to use Ray Actors for parallel symbol processing.
+- [x] **Technical Hardening**: Implement `atomic_save_parquet` using `shutil.move` and process isolation (PID).
+- [x] **Technical Hardening**: Optimize `TechnicalRatings` with vectorized Numpy operations (`np.select`).
+- [x] **Technical Hardening**: Implement bulk Pandera validation for feature store persistence.
+- [x] **Documentation**: Renormalize `requirements_v3.md` headers and formalize "Institutional Integrity Standards".
+- [ ] **Certification**: Execute `make flow-production PROFILE=binance_spot_rating_all_long RUN_ID=cert_v4_long`.
+- [ ] **Certification**: Execute `make flow-production PROFILE=binance_spot_rating_all_short RUN_ID=cert_v4_short`.
+- [ ] **Validation**: Verify Jaccard Similarity > 0.95 and zero `SchemaError`/`WindowVeto` events.
+- [ ] **Validation**: Create `docs/reports/remediation_certification_v1.md` with final sign-off.
 
 ## 60. Phase 710: Component-by-Component Regression (SDD & TDD)
 - [x] **Analysis**: Review `feature_parity_results.json` to identify worst offenders.

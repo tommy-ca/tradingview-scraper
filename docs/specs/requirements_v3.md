@@ -390,7 +390,7 @@ Requirements:
  2. Duplicate candidates MUST be de-duplicated by canonical `symbol`.
  3. Duplicate candidate metadata MUST be merged deterministically (do not lose fields).
  
- ## 9. Telemetry & Compute Resilience (v3.7+)
+## 9. Telemetry & Compute Resilience (v3.7+)
  
  ### 9.1 Observability Standard (OpenTelemetry)
  1. **Signal Unification**: The platform MUST utilize the standard OpenTelemetry APIs for all observability signals: Tracing, Metrics, and Logging.
@@ -409,7 +409,7 @@ Requirements:
  2. **Resource Capping**: Parallel executions MUST respect environment-defined CPU and memory limits (`TV_ORCH_CPUS`, `TV_ORCH_MEM_GB`).
  3. **Process Isolation**: Each strategy sleeve execution MUST occur in a stateful Ray Actor with an isolated workspace and environment.
  
- ## 10. The Atomic Life Cycle Standard (v3.8+)
+## 10. The Atomic Life Cycle Standard (v3.8+)
  
  The platform formalizes the "Atomic Life Cycle" for portfolio sleeves, ensuring a deterministic transition from raw data to executable weights.
  
@@ -434,7 +434,7 @@ Requirements:
  8. **Flattening**: Collapse alpha weights into asset-level weights.
  9. **Forensic Report**: Generate a unified tear-sheet linked by a single `trace_id`.
  
- ## 11. DataOps & MLOps Governance
+## 11. DataOps & MLOps Governance
  
  ### 11.1 Data Contract Standard
  1. **Schema Validation**: Every stage MUST define its input/output schema.
@@ -448,7 +448,21 @@ Requirements:
  4. **Forensic Telemetry**: Every production run MUST persist its full OTel trace (spans and durations) to a `forensic_trace.json` file in the run directory for performance auditing.
  5. **Distributed Trace Unification**: Traces generated on parallel Ray worker nodes MUST be collected and unified into the master `forensic_trace.json` to provide a complete view of distributed executions.
  
- ## 13. Advanced DataOps Hardening (v4.0+)
+## 12. The Unified DAG Orchestrator (v3.9+)
+
+The platform transitions from imperative script-based execution to a declarative Directed Acyclic Graph (DAG) model managed by the SDK.
+
+### 12.1 Execution Model
+1. **Declarative Definition**: Pipelines MUST be defined as a sequence of addressable stage IDs (e.g., `["foundation.ingest", "alpha.inference", ...]`).
+2. **Context Persistence**: The `QuantSDK` MUST manage the lifecycle of the execution context, ensuring it is passed between stages and persisted to the run directory upon completion.
+3. **Atomic Rollback**: If any stage in the DAG fails, the orchestrator MUST mark the run as `FAILED` in the audit ledger and skip subsequent dependent stages.
+
+### 12.2 Integration Standards
+1. **SDK-First**: All high-level workflows (`flow-production`, `flow-meta`) MUST be thin wrappers around `QuantSDK.run_pipeline()`.
+2. **Telemetry Coverage**: The DAG runner MUST create a root span for the entire pipeline and child spans for each stage, preserving the parent `trace_id`.
+3. **Resource Provisioning**: For parallel branches in the DAG, the orchestrator MUST automatically provision Ray actors or tasks based on the stage category.
+
+## 13. Advanced DataOps Hardening (v4.0+)
  
  ### 13.1 Microstructure Toxicity Standards
  1. **Price Stalls**: Assets with $> 3$ consecutive bars of zero price change (zero variance) MUST be vetoed if they are in a normally liquid asset class.
@@ -460,21 +474,21 @@ Requirements:
  2. **Health Registry**: The Lakehouse MUST maintain a `foundation_health.json` registry tracking the audit hash and repair status of every symbol.
  3. **Fail-Fast Foundation Gate**: The Alpha pipeline MUST abort if any required symbol in the run manifest lacks a "Healthy" status in the foundation registry.
 
- ## 14. Multi-Engine Selection Policy (v4.1+)
+## 14. Multi-Engine Selection Policy (v4.1+)
  
  ### 14.1 Ensemble Scoring
  1. **Weight of Evidence (WoE)**: Selection decisions MUST be backed by multiple independent ranking engines (e.g., Log-MPS + Signal Quality + Regime Fit).
  2. **Dynamic Weighting**: Ranker weights MUST be adjustable via the pipeline manifest to allow tuning for specific market environments.
  3. **Consensus Requirement**: Candidates MUST meet a minimum ensemble score threshold to be recruited into the winning pool, ensuring high-conviction selection.
 
- ## 15. Real-time Pipeline Monitoring (v4.2+)
+## 15. Real-time Pipeline Monitoring (v4.2+)
  
  ### 15.1 Metrics Exposure
  1. **Prometheus Standard**: The platform MUST expose execution metrics (durations, success/failure counts, resource usage) via a Prometheus-compatible scrape endpoint or Pushgateway.
  2. **Stage-Level Granularity**: Metrics MUST be emitted at the individual stage level, allowing for bottleneck identification in real-time.
  3. **Live Dashboards**: The platform SHOULD provide Grafana dashboard templates for visualizing pipeline health, execution throughput, and alpha quality drift.
 
- ## 16. Numerical Stability & Fractal Safety (v4.3+)
+## 16. Numerical Stability & Fractal Safety (v4.3+)
 
  ### 16.1 Stable Sum Gate
  1. **Weight Conservation**: The weight flattening stage MUST verify that the sum of projected physical weights matches the original meta-allocation (tolerance: $1 \times 10^{-4}$).
@@ -484,31 +498,37 @@ Requirements:
  1. **Depth Limit**: Recursive pipeline stages (Aggregation, Flattening) MUST enforce a maximum fractal depth (default = 3) to prevent infinite loops.
  2. **Cycle Detection**: The orchestrator MUST track the profile call stack and abort if a circular dependency is detected in the manifest.
 
- ## 17. Fractal Backtesting Protocol (v4.4+)
+## 17. Fractal Backtesting Protocol (v4.4+)
  
  ### 17.1 Recursive Walk-Forward
  1. **Two-Tier Optimization**: Meta-portfolio backtests MUST simulate rebalancing at both the atomic sleeve level and the meta-allocation level.
  2. **Dynamic Meta-Rebalancing**: At each rebalance window, the meta-allocation between sleeves MUST be re-calculated using the realized returns of those sleeves up to that point.
  3. **Performance Consistency**: Equity curves generated for a meta-portfolio MUST be the result of a continuous walk-forward process that accounts for sleeve-level churn and meta-level reallocation.
 
- ## 18. Feature Store PIT Integrity (v4.5+)
+## 18. Feature Store PIT Integrity (v4.5+)
  
  ### 18.1 Point-in-Time Fidelity
  1. **Zero-Gap Backfill**: The global `features_matrix.parquet` MUST provide 100% coverage for all symbols present in the returns matrix for the active training window.
  2. **NaN Isolation**: Feature engineering MUST utilize a bounded forward-fill (`limit=3`) to prevent lookahead bias from stale data while ensuring numerical stability for ranking engines.
  3. **Consistency Veto**: If an asset's feature history contains $> 10\%$ missing values after warm-up, it MUST be vetoed from the selection pool.
- 
- ## 12. The Unified DAG Orchestrator (v3.9+)
- 
- The platform transitions from imperative script-based execution to a declarative Directed Acyclic Graph (DAG) model managed by the SDK.
- 
- ### 12.1 Execution Model
- 1. **Declarative Definition**: Pipelines MUST be defined as a sequence of addressable stage IDs (e.g., `["foundation.ingest", "alpha.inference", ...]`).
- 2. **Context Persistence**: The `QuantSDK` MUST manage the lifecycle of the execution context, ensuring it is passed between stages and persisted to the run directory upon completion.
- 3. **Atomic Rollback**: If any stage in the DAG fails, the orchestrator MUST mark the run as `FAILED` in the audit ledger and skip subsequent dependent stages.
- 
- ### 12.2 Integration Standards
- 1. **SDK-First**: All high-level workflows (`flow-production`, `flow-meta`) MUST be thin wrappers around `QuantSDK.run_pipeline()`.
- 2. **Telemetry Coverage**: The DAG runner MUST create a root span for the entire pipeline and child spans for each stage, preserving the parent `trace_id`.
- 3. **Resource Provisioning**: For parallel branches in the DAG, the orchestrator MUST automatically provision Ray actors or tasks based on the stage category.
 
+## 19. Institutional Integrity Standards (v4.6+)
+
+### 19.1 Persistence Boundary Validation
+1. **Mandatory Contract Enforcement**: Any stage writing to the Lakehouse (Parquet/JSON) MUST call `Schema.validate(df)` immediately before disk persistence.
+2. **Fail-Fast Persistence**: If validation fails, the system MUST abort the write and log a `CRITICAL` audit event to prevent data corruption.
+
+### 19.2 Zero-Redundancy Compute
+1. **Indicator Reuse**: High-level aggregators (e.g., `recommend_all`) MUST NOT re-trigger sub-indicator calculations if sub-indicators are already present in the execution context or feature store.
+2. **Computational Efficiency**: Shared technical indicators MUST be computed once per symbol per training window and cached in memory or symlinked in the feature store.
+
+### 19.3 Modern Type Hygiene
+1. **Python 3.10+ Standard**: All new and refactored files MUST utilize Python 3.10+ native type hints (e.g., `list[str]`, `dict[str, Any]`, `float | None`).
+2. **Static Analysis Compliance**: Code MUST maintain zero errors in strict static analysis (e.g., `pyright`, `mypy`) to ensure AI agent readability and codebase maintainability.
+
+### 19.4 Guaranteed Atomic Writes
+1. **AtomicWriteGuard Pattern**: All Lakehouse writers MUST utilize the `AtomicWriteGuard` pattern:
+   - Write to a unique temporary file (`.tmp.<PID>`).
+   - Call `os.fsync` or equivalent to ensure data is on disk.
+   - Perform an atomic `os.replace` (POSIX) or `shutil.move` (Cross-FS) to the final location.
+2. **Process Isolation**: Writers MUST include the Process ID (PID) or a UUID in temporary filenames to prevent collisions during parallel (Ray) execution.
