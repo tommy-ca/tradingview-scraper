@@ -311,12 +311,13 @@ meta-ingest: ## [DataOps] Refresh global metadata catalogs (Structural + Executi
 	@echo ">>> Ingesting Metadata (TradingView + CCXT)..."
 	@if [ -n "$(CANDIDATES_FILE)" ] && [ -f "$(CANDIDATES_FILE)" ]; then \
 		echo ">>> Scoped Metadata Refresh: $(CANDIDATES_FILE)"; \
-		$(PY) scripts/build_metadata_catalog.py --candidates-file $(CANDIDATES_FILE); \
+		$(PY) scripts/build_metadata_catalog.py --candidates-file $(CANDIDATES_FILE) --workers $(or $(WORKERS),3); \
+		$(PY) scripts/fetch_execution_metadata.py --candidates $(CANDIDATES_FILE); \
 	else \
 		echo ">>> Global Metadata Refresh (Full Catalog)"; \
-		$(PY) scripts/build_metadata_catalog.py --from-catalog; \
+		$(PY) scripts/build_metadata_catalog.py --from-catalog --workers $(or $(WORKERS),3); \
+		$(PY) scripts/fetch_execution_metadata.py --candidates $(CANDIDATES_SELECTED); \
 	fi
-	$(PY) scripts/fetch_execution_metadata.py --candidates $(CANDIDATES_SELECTED)
 
 feature-ingest: ## [DataOps] Ingest TradingView Technicals for current candidates
 	@echo ">>> Ingesting Technical Features..."
