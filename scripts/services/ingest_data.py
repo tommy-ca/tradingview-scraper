@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -35,10 +36,38 @@ class IngestionService:
         self.lakehouse_dir.mkdir(parents=True, exist_ok=True)
         self.registry = FoundationHealthRegistry(path=self.lakehouse_dir / "foundation_health.json")
 
+    def _sanitize_symbol(self, symbol: str) -> str:
+        """Sanitize symbol to prevent path traversal and enforce strict format."""
+        if not re.match(r"^[a-zA-Z0-9_\-.:]+$", symbol):
+            raise ValueError(f"Invalid symbol format: {symbol}")
+
+        # Replace : with _ for file safety
+        safe_sym = symbol.replace(":", "_")
+
+        # Additional path traversal check
+        if ".." in safe_sym or safe_sym.startswith("/") or safe_sym.startswith("\\"):
+            raise ValueError(f"Potentially malicious symbol detected: {symbol}")
+
+        return safe_sym
+
+    def _get_parquet_path(self, symbol: str) -> Path:
+        """Get safe absolute path to parquet file."""
+        safe_sym = self._sanitize_symbol(symbol)
+        p_path = (self.lakehouse_dir / f"{safe_sym}_1d.parquet").resolve()
+
+        # Ensure the resolved path is still under lakehouse_dir
+        if not str(p_path).startswith(str(self.lakehouse_dir.resolve())):
+            raise ValueError(f"Path traversal attempt detected: {symbol}")
+
+        return p_path
+
     def is_fresh(self, symbol: str) -> bool:
         """Check if symbol data exists and is fresh."""
-        safe_sym = symbol.replace(":", "_")
-        p_path = self.lakehouse_dir / f"{safe_sym}_1d.parquet"
+        try:
+            p_path = self._get_parquet_path(symbol)
+        except ValueError as e:
+            logger.error(f"Security/Validation error for {symbol}: {e}")
+            return False
 
         if not p_path.exists():
             return False
@@ -108,8 +137,7 @@ class IngestionService:
                 # Usually it reads from disk.
 
                 # Let's assume standard path for validation
-                safe_sym = symbol.replace(":", "_")
-                p_path = self.lakehouse_dir / f"{safe_sym}_1d.parquet"
+                p_path = self._get_parquet_path(symbol)
 
                 if p_path.exists():
                     df = pd.read_parquet(p_path)
