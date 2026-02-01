@@ -10,7 +10,7 @@ from tradingview_scraper.utils.predictability import (
     calculate_hurst_exponent,
     calculate_permutation_entropy,
 )
-from tradingview_scraper.utils.scoring import calculate_liquidity_score
+from tradingview_scraper.utils.scoring import calculate_liquidity_score_vectorized
 
 logger = logging.getLogger("pipelines.selection.feature_engineering")
 
@@ -56,18 +56,28 @@ class FeatureEngineeringStage(BasePipelineStage):
         cvar = df.apply(lambda col: col[col <= col.quantile(0.05)].mean() if len(col.dropna()) > 20 else -0.1)
 
         # 3. Discovery Metadata & External Features
-        candidate_map = {c["symbol"]: c for c in context.raw_pool}
+        pool_df = pd.DataFrame(context.raw_pool)
+        if not pool_df.empty:
+            pool_df = pool_df.set_index("symbol")
+            pool_df = pool_df.reindex(df.columns)
+        else:
+            pool_df = pd.DataFrame(index=df.columns)
 
-        adx = pd.Series({s: float(candidate_map.get(s, {}).get("adx") or 0) for s in df.columns})
-        rec_all = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_all") or 0) for s in df.columns})
-        rec_ma = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_ma") or 0) for s in df.columns})
-        rec_other = pd.Series({s: float(candidate_map.get(s, {}).get("recommend_other") or 0) for s in df.columns})
-        roc = pd.Series({s: float(candidate_map.get(s, {}).get("roc") or 0) for s in df.columns})
-        vol_d = pd.Series({s: float(candidate_map.get(s, {}).get("volatility_d") or 0) for s in df.columns})
-        vol_chg = pd.Series({s: float(candidate_map.get(s, {}).get("volume_change_pct") or 0) for s in df.columns})
+        def get_col(col_name, default=0.0):
+            if col_name in pool_df.columns:
+                return pd.to_numeric(pool_df[col_name], errors="coerce").fillna(default)
+            return pd.Series(default, index=df.columns)
 
-        # Use v3 standardized liquidity scoring (normalized to $500M)
-        liquidity = pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in df.columns})
+        adx = get_col("adx")
+        rec_all = get_col("recommend_all")
+        rec_ma = get_col("recommend_ma")
+        rec_other = get_col("recommend_other")
+        roc = get_col("roc")
+        vol_d = get_col("volatility_d")
+        vol_chg = get_col("volume_change_pct")
+
+        # Vectorized liquidity
+        liquidity = calculate_liquidity_score_vectorized(pool_df)
 
         # Default defaults for Antifragility/Survival (mocking v3 stats_df behavior)
         # In a real pipeline, these would come from an upstream Feature Store or context.external_features

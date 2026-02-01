@@ -17,7 +17,7 @@ from tradingview_scraper.utils.predictability import (
     calculate_hurst_exponent,
     calculate_permutation_entropy,
 )
-from tradingview_scraper.utils.scoring import calculate_liquidity_score, normalize_series
+from tradingview_scraper.utils.scoring import calculate_liquidity_score_vectorized, normalize_series
 
 logger = logging.getLogger("selection_engines")
 
@@ -65,21 +65,33 @@ class SelectionEngineV2(BaseSelectionEngine):
         for sym, c_id in zip(returns.columns, cluster_ids):
             clusters.setdefault(int(c_id), []).append(str(sym))
         mom_all = cast(pd.Series, returns.mean() * 252)
-        vol_all = pd.Series({s: float(returns[s].dropna().std() * np.sqrt(252)) if len(returns[s].dropna()) > 1 else 0.0 for s in returns.columns})
-        stab_all, liq_all = 1.0 / (vol_all + 1e-9), pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
+        vol_all = returns.std() * np.sqrt(252)
+        stab_all = 1.0 / (vol_all + 1e-9)
+
+        # Vectorized Metadata Extraction
+        pool_df = pd.DataFrame(raw_candidates)
+        if not pool_df.empty:
+            pool_df = pool_df.set_index("symbol")
+            pool_df = pool_df.reindex(returns.columns)
+        else:
+            pool_df = pd.DataFrame(index=returns.columns)
+
+        liq_all = calculate_liquidity_score_vectorized(pool_df)
         af_all, frag_all, regime_all = pd.Series(0.5, index=returns.columns), pd.Series(0.0, index=returns.columns), pd.Series(1.0, index=returns.columns)
+
         lookback = min(len(returns), 120)
-        pe_all = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy(), order=5) for s in returns.columns})
-        er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
-        hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
+        pe_all = returns.apply(lambda col: calculate_permutation_entropy(col.tail(lookback).to_numpy(), order=5))
+        er_all = returns.apply(lambda col: calculate_efficiency_ratio(col.tail(lookback).to_numpy()))
+        hurst_all = returns.apply(lambda col: calculate_hurst_exponent(col.to_numpy()))
+
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
-            for s in common:
-                af_all.loc[s] = stats_df.loc[s, "Antifragility_Score"]
+            if common:
+                af_all.update(stats_df.loc[common, "Antifragility_Score"])
                 if "Fragility_Score" in stats_df.columns:
-                    frag_all.loc[s] = stats_df.loc[s, "Fragility_Score"]
+                    frag_all.update(stats_df.loc[common, "Fragility_Score"])
                 if "Regime_Survival_Score" in stats_df.columns:
-                    regime_all.loc[s] = stats_df.loc[s, "Regime_Survival_Score"]
+                    regime_all.update(stats_df.loc[common, "Regime_Survival_Score"])
         from tradingview_scraper.utils.scoring import map_to_probability
 
         metrics_raw = {
@@ -152,12 +164,21 @@ class SelectionEngineV2_0(SelectionEngineV2):
         return "v2.0"
 
     def select(self, returns, raw_candidates, stats_df, request):
-        candidate_map = {c["symbol"]: c for c in raw_candidates}
         s, alpha_scores = get_settings(), pd.Series(0.0, index=returns.columns)
         cluster_ids, _ = get_hierarchical_clusters(returns, request.threshold, request.max_clusters)
         clusters = {}
         for sym, c_id in zip(returns.columns, cluster_ids):
             clusters.setdefault(int(c_id), []).append(str(sym))
+
+        # Vectorized Metadata Extraction
+        pool_df = pd.DataFrame(raw_candidates)
+        if not pool_df.empty:
+            pool_df = pool_df.set_index("symbol")
+            pool_df = pool_df.reindex(returns.columns)
+        else:
+            pool_df = pd.DataFrame(index=returns.columns)
+
+        candidate_map = {c["symbol"]: c for c in raw_candidates}
         selected_symbols_dict, audit_clusters = {}, {}
         m_win_all = (1 + returns.tail(60).fillna(0.0)).prod() - 1
         for c_id, symbols in clusters.items():
@@ -166,18 +187,18 @@ class SelectionEngineV2_0(SelectionEngineV2):
             if s.features.feat_dynamic_selection and len(symbols) > 1:
                 mean_c = float(get_robust_correlation(sub_rets, shrinkage=s.features.default_shrinkage_intensity).values[np.triu_indices(len(symbols), k=1)].mean())
                 actual_top_n = max(1, int(round(request.top_n * (1.0 - mean_c) + 0.5)))
-            vol_l = pd.Series({sym: float(sub_rets[sym].dropna().std() * np.sqrt(252)) if len(sub_rets[sym].dropna()) > 1 else 0.0 for sym in symbols})
+            vol_l = sub_rets.std() * np.sqrt(252)
             conv_l = pd.Series(0.0, index=symbols)
             if stats_df is not None:
                 common = [sym for sym in symbols if sym in stats_df.index]
-                for sym in common:
-                    conv_l.loc[sym] = stats_df.loc[sym, "Antifragility_Score"]
-            alpha_scores.loc[symbols] = (
-                0.3 * normalize_series(sub_rets.mean() * 252)
-                + 0.2 * normalize_series(1.0 / (vol_l + 1e-9))
-                + 0.2 * normalize_series(conv_l)
-                + 0.3 * normalize_series(pd.Series({sym: calculate_liquidity_score(str(sym), candidate_map) for sym in symbols}))
-            )
+                if common:
+                    conv_l.update(stats_df.loc[common, "Antifragility_Score"])
+
+            # Vectorized Metadata for this cluster
+            sub_pool = pool_df.loc[symbols]
+            liq_l = calculate_liquidity_score_vectorized(sub_pool)
+
+            alpha_scores.loc[symbols] = 0.3 * normalize_series(sub_rets.mean() * 252) + 0.2 * normalize_series(1.0 / (vol_l + 1e-9)) + 0.2 * normalize_series(conv_l) + 0.3 * normalize_series(liq_l)
             id_to_best = {}
             for sym in symbols:
                 ident = candidate_map.get(sym, {}).get("identity", sym)

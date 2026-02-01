@@ -34,6 +34,32 @@ def calculate_liquidity_score(symbol: str, candidate_map: Dict[str, Any]) -> flo
     return min(1.0, vt / baseline)
 
 
+def calculate_liquidity_score_vectorized(pool_df: pd.DataFrame) -> pd.Series:
+    """
+    Vectorized version of liquidity scoring.
+    Expects DataFrame with symbols as index and metadata as columns.
+    """
+    if pool_df.empty:
+        return pd.Series(dtype=float)
+
+    # Try multiple common keys for Value Traded
+    vt_col = "value_traded" if "value_traded" in pool_df.columns else ("Value.Traded" if "Value.Traded" in pool_df.columns else None)
+    if vt_col:
+        vt = pd.to_numeric(pool_df[vt_col], errors="coerce").fillna(0.0)
+    else:
+        vt = pd.Series(0.0, index=pool_df.index)
+
+    # Determine market/exchange
+    market = pool_df["market"].astype(str).str.upper() if "market" in pool_df.columns else pd.Series("UNKNOWN", index=pool_df.index)
+    symbols = pool_df.index.astype(str).str.upper()
+
+    is_crypto = (market == "CRYPTO") | symbols.str.contains("BINANCE") | symbols.str.contains("OKX") | symbols.str.contains("BYBIT") | symbols.str.contains("BITGET")
+
+    baseline = np.where(is_crypto, 1e7, 5e8)
+
+    return (vt / baseline).clip(upper=1.0)
+
+
 def calculate_mps_score(metrics: Dict[str, pd.Series], weights: Optional[Dict[str, float]] = None, methods: Optional[Dict[str, str]] = None) -> pd.Series:
     """
     Calculates the Multiplicative Probability Score (MPS).

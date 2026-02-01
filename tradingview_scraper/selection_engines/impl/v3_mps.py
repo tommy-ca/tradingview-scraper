@@ -17,7 +17,10 @@ from tradingview_scraper.utils.predictability import (
     calculate_hurst_exponent,
     calculate_permutation_entropy,
 )
-from tradingview_scraper.utils.scoring import calculate_liquidity_score, calculate_mps_score
+from tradingview_scraper.utils.scoring import (
+    calculate_liquidity_score_vectorized,
+    calculate_mps_score,
+)
 
 logger = logging.getLogger("selection_engines")
 
@@ -72,28 +75,43 @@ class SelectionEngineV3(BaseSelectionEngine):
             clusters.setdefault(int(c_id), []).append(str(sym))
 
         mom_all = cast(pd.Series, returns.mean() * 252)
-        vol_all = pd.Series({s: float(returns[s].dropna().std() * np.sqrt(252)) if len(returns[s].dropna()) > 1 else 0.0 for s in returns.columns})
-        stab_all, liq_all = 1.0 / (vol_all + 1e-9), pd.Series({s: calculate_liquidity_score(str(s), candidate_map) for s in returns.columns})
+        vol_all = returns.std() * np.sqrt(252)
+        stab_all = 1.0 / (vol_all + 1e-9)
+
+        # Vectorized Metadata Extraction
+        pool_df = pd.DataFrame(raw_candidates)
+        if not pool_df.empty:
+            pool_df = pool_df.set_index("symbol")
+            pool_df = pool_df.reindex(returns.columns)
+        else:
+            pool_df = pd.DataFrame(index=returns.columns)
+
+        liq_all = calculate_liquidity_score_vectorized(pool_df)
         af_all, frag_all, regime_all = pd.Series(0.5, index=returns.columns), pd.Series(0.0, index=returns.columns), pd.Series(1.0, index=returns.columns)
 
         lookback = min(len(returns), 120)
-        pe_all = pd.Series({s: calculate_permutation_entropy(returns[s].tail(lookback).to_numpy(), order=5) for s in returns.columns})
-        er_all = pd.Series({s: calculate_efficiency_ratio(returns[s].tail(lookback).to_numpy()) for s in returns.columns})
-        hurst_all = pd.Series({s: calculate_hurst_exponent(returns[s].to_numpy()) for s in returns.columns})
+        pe_all = returns.apply(lambda col: calculate_permutation_entropy(col.tail(lookback).to_numpy(), order=5))
+        er_all = returns.apply(lambda col: calculate_efficiency_ratio(col.tail(lookback).to_numpy()))
+        hurst_all = returns.apply(lambda col: calculate_hurst_exponent(col.to_numpy()))
 
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
-            for s in common:
-                af_all.loc[s] = stats_df.loc[s, "Antifragility_Score"]
+            if common:
+                af_all.update(stats_df.loc[common, "Antifragility_Score"])
                 if "Fragility_Score" in stats_df.columns:
-                    frag_all.loc[s] = stats_df.loc[s, "Fragility_Score"]
+                    frag_all.update(stats_df.loc[common, "Fragility_Score"])
                 if "Regime_Survival_Score" in stats_df.columns:
-                    regime_all.loc[s] = stats_df.loc[s, "Regime_Survival_Score"]
+                    regime_all.update(stats_df.loc[common, "Regime_Survival_Score"])
 
         af_all = af_all * (returns.count() / 252.0).clip(upper=1.0)
 
         # Pillar 1: Discovery Metadata Preservation
-        adx_all = pd.Series({s: float(candidate_map.get(s, {}).get("adx") or 0) for s in returns.columns})
+        def get_col(col_name, default=0.0):
+            if col_name in pool_df.columns:
+                return pd.to_numeric(pool_df[col_name], errors="coerce").fillna(default)
+            return pd.Series(default, index=returns.columns)
+
+        adx_all = get_col("adx")
 
         mps_metrics = {
             "momentum": mom_all,
@@ -130,7 +148,7 @@ class SelectionEngineV3(BaseSelectionEngine):
         ranker = StrategyRegimeRanker(enable_audit_log=False)
         # Apply ranking to the whole active universe to adjust alpha scores
         active_candidates = [{"symbol": s} for s in returns.columns]
-        ranked_cands = ranker.rank(active_candidates, returns, strategy=request.strategy)
+        ranked_cands = ranker.rank_metadata(active_candidates, returns, strategy=request.strategy)
 
         # Create adjustment series
         # Map rank_score from [-1, 1] to a multiplier like [0.5, 1.5]
