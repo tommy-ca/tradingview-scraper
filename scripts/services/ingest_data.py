@@ -98,7 +98,12 @@ class IngestionService:
         validated_candidates = []
         for c in candidates:
             if isinstance(c, dict) and "symbol" in c:
-                validated_candidates.append(c)
+                try:
+                    # Validate symbol before adding to fetch list
+                    self._get_parquet_path(c["symbol"])
+                    validated_candidates.append(c)
+                except ValueError as e:
+                    logger.error(f"Validation failed for {c['symbol']}: {e}")
             else:
                 logger.warning(f"Skipping invalid candidate format: {c}")
 

@@ -1,11 +1,8 @@
 import json
 import os
-
-# Placeholder import - we will create this module next
-# from scripts.services.ingest_data import IngestionService, IngestionRequest
-# Mocking the module structure for TDD before implementation
 import sys
 import time
+from pathlib import Path
 from unittest.mock import ANY, patch
 
 import pandas as pd
@@ -135,3 +132,53 @@ def test_input_candidates_json(temp_lakehouse):
         service.process_candidate_file(c_path)
 
         assert MockLoaderClass.return_value.sync.call_count == 2
+
+
+def test_sanitize_symbol_valid():
+    """Test that valid symbols are sanitized correctly."""
+    from scripts.services.ingest_data import IngestionService
+
+    service = IngestionService(lakehouse_dir=Path("/tmp"))
+    assert service._sanitize_symbol("BINANCE:BTCUSDT") == "BINANCE_BTCUSDT"
+    assert service._sanitize_symbol("BINANCE-BTCUSDT") == "BINANCE-BTCUSDT"
+    assert service._sanitize_symbol("BTCUSDT") == "BTCUSDT"
+
+
+def test_sanitize_symbol_invalid():
+    """Test that invalid symbols raise ValueError."""
+    from scripts.services.ingest_data import IngestionService
+
+    service = IngestionService(lakehouse_dir=Path("/tmp"))
+    with pytest.raises(ValueError, match="Invalid symbol format"):
+        service._sanitize_symbol("BINANCE:BTCUSDT; rm -rf /")
+    with pytest.raises(ValueError, match="Invalid symbol format"):
+        service._sanitize_symbol("BTC$USDT")
+
+
+def test_path_traversal_protection(temp_lakehouse):
+    """Test that path traversal attempts are caught."""
+    from scripts.services.ingest_data import IngestionService
+
+    service = IngestionService(lakehouse_dir=temp_lakehouse)
+
+    # Note: _sanitize_symbol will catch '..' via the regex first
+    with pytest.raises(ValueError, match="Invalid symbol format"):
+        service._get_parquet_path("../../../etc/passwd")
+
+    with pytest.raises(ValueError, match="Invalid symbol format"):
+        service._get_parquet_path("/etc/passwd")
+
+
+def test_ingest_malicious_symbol(temp_lakehouse):
+    """Test that ingest skips malicious symbols."""
+    with patch("scripts.services.ingest_data.PersistentDataLoader") as MockLoaderClass:
+        loader_instance = MockLoaderClass.return_value
+        from scripts.services.ingest_data import IngestionService
+
+        service = IngestionService(lakehouse_dir=temp_lakehouse)
+
+        # Ingest a list with one valid and one malicious symbol
+        service.ingest([{"symbol": "BINANCE:BTCUSDT"}, {"symbol": "../../../evil"}])
+
+        # Should only sync the valid one
+        loader_instance.sync.assert_called_once_with("BINANCE:BTCUSDT", interval="1d", depth=ANY, total_timeout=ANY)

@@ -67,18 +67,19 @@ def test_permutation_entropy(trending_series, noisy_series, sine_wave):
 
 def test_efficiency_ratio():
     # Perfect trend
-    perfect_trend = np.array([1, 2, 3, 4, 5])
-    # Returns are [1, 1, 1, 1]
-    # ER = |1+1+1+1| / (|1|+|1|+|1|+|1|) = 4/4 = 1.0
+    # Need at least 10 returns, so 11 points
+    perfect_trend = np.linspace(100, 200, 11)
+    # Returns are [10, 10, ...]
+    # ER = |Total Change| / Sum of Absolute Changes = 100 / 100 = 1.0
     er_perfect = calculate_efficiency_ratio(np.diff(perfect_trend))
     assert er_perfect == 1.0
 
     # Pure noise (choppy)
-    choppy = np.array([1, -1, 1, -1, 1])
-    # Returns are [-2, 2, -2, 2]
-    # ER = |-2+2-2+2| / (2+2+2+2) = 0/8 = 0.0
+    choppy = np.array([1, -1] * 6)  # 12 points -> 11 returns
+    # Returns are [-2, 2, -2, 2, -2, 2, -2, 2, -2, 2, -2]
+    # ER = |-2+2-2+2...-2| / sum(abs) = |-2| / (2*11) = 2/22 = 1/11
     er_choppy = calculate_efficiency_ratio(np.diff(choppy))
-    assert er_choppy == 0.0
+    assert er_choppy < 0.1
 
 
 def test_dwt_turbulence(trending_series, noisy_series):
