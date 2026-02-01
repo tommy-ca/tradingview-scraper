@@ -69,7 +69,7 @@ class BacktestEngine:
             if runs_dir.exists():
                 latest_runs = sorted([d for d in runs_dir.iterdir() if d.is_dir() and (d / "data" / "returns_matrix.parquet").exists()], key=os.path.getmtime, reverse=True)
                 if latest_runs:
-                    run_dir = latest_runs[0]
+                    run_dir = cast(Path, latest_runs[0])
 
         data_dir = run_dir / "data" if run_dir else self.settings.lakehouse_dir
         logger.info(f"Loading data from {data_dir}")
@@ -379,12 +379,9 @@ class BacktestEngine:
             current_mode = config.features.selection_mode
 
             # CR-270: Infer Strategy from Global Profile
-            strategy = "trend_following"
-            global_profile = config.profile or ""
-            if "mean_rev" in global_profile.lower() or "meanrev" in global_profile.lower():
-                strategy = "mean_reversion"
-            elif "breakout" in global_profile.lower():
-                strategy = "breakout"
+            from tradingview_scraper.orchestration.strategies import StrategyFactory
+
+            strategy = StrategyFactory.infer_strategy(config.profile or "", config.strategy)
 
             selection_engine = build_selection_engine(current_mode)
             from tradingview_scraper.selection_engines.base import SelectionRequest

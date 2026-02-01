@@ -251,6 +251,7 @@ class TradingViewScraperSettings(BaseSettings):
     top_n: int = 3
     threshold: float = 0.4
     min_momentum_score: float = 0.0
+    strategy: str = "trend_following"
     cluster_lookbacks: List[int] = [60, 120, 200]
     ranking: SelectionRanking = Field(default_factory=SelectionRanking)
 
