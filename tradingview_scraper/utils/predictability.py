@@ -4,12 +4,48 @@ from typing import Dict, Optional
 
 import numpy as np
 import pywt
-from scipy.stats import entropy
+from numba import njit
 from sklearn.linear_model import LinearRegression
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.stattools import adfuller
 
 logger = logging.getLogger(__name__)
+
+
+@njit
+def _get_rs_jit(series):
+    """JIT optimized R/S calculation."""
+    n = len(series)
+    if n < 2:
+        return 0.0
+
+    m = 0.0
+    for i in range(n):
+        m += series[i]
+    m /= n
+
+    # Cumsum of deviations
+    z = np.zeros(n)
+    curr = 0.0
+    mx = -1e15
+    mn = 1e15
+    for i in range(n):
+        curr += series[i] - m
+        z[i] = curr
+        if curr > mx:
+            mx = curr
+        if curr < mn:
+            mn = curr
+
+    r = mx - mn
+
+    # Standard deviation
+    var = 0.0
+    for i in range(n):
+        var += (series[i] - m) ** 2
+    s = np.sqrt(var / n)
+
+    return r / s if s > 1e-12 else 0.0
 
 
 def calculate_hurst_exponent(x: np.ndarray) -> Optional[float]:
@@ -25,17 +61,6 @@ def calculate_hurst_exponent(x: np.ndarray) -> Optional[float]:
         return None
 
     try:
-
-        def get_rs(series):
-            # Range / Standard Deviation
-            if len(series) < 2:
-                return 0.0
-            m = np.mean(series)
-            z = np.cumsum(series - m)
-            r = np.max(z) - np.min(z)
-            s = np.std(series)
-            return r / s if s > 1e-12 else 0.0
-
         # Divide into segments
         n_total = len(x)
         # Use logarithmic scales for lags
@@ -56,7 +81,7 @@ def calculate_hurst_exponent(x: np.ndarray) -> Optional[float]:
             for i in range(n_segments):
                 segment = x[i * l : (i + 1) * l]
                 if len(segment) > 0:
-                    rs = get_rs(segment)
+                    rs = _get_rs_jit(segment)
                     if rs > 0:
                         rs_avg.append(rs)
             if rs_avg:
@@ -74,6 +99,61 @@ def calculate_hurst_exponent(x: np.ndarray) -> Optional[float]:
         return 0.5
 
 
+@njit
+def _calculate_permutation_entropy_jit(x: np.ndarray, order: int = 3, delay: int = 1) -> float:
+    """JIT optimized Permutation Entropy core logic."""
+    n = len(x) - (order - 1) * delay
+
+    # Map permutations to unique integers
+    # For order 3, there are 6 permutations
+    # We can use a simple ranking mechanism
+
+    # We'll use a dictionary-like approach or just a list to count
+    # Since order is small, we can encode the permutation tuple as a single integer
+    # e.g. for order 3: ranks of [x1, x2, x3]
+
+    # A simple way to encode permutation of size 'order' is to use factorial number system
+    # or just a base-order encoding if order is very small.
+
+    # Let's use a simpler approach: count occurrences of each possible permutation
+    # Maximum possible permutations is order!
+    # For order 5, it's 120. We can use a flat array of size 120 if we map correctly.
+
+    # To map a permutation to an index 0..order!-1:
+    # Use the Lehman code / Lehmer code.
+
+    num_permutations = n
+    perm_counts = {}  # Numba supports dicts in njit but they can be slow
+
+    # Actually, for small order, let's just do it simply
+    for i in range(n):
+        segment = np.zeros(order)
+        for j in range(order):
+            segment[j] = x[i + j * delay]
+
+        # Get permutation (ranks)
+        # Using a simple argsort in Numba
+        perm_idx = np.argsort(segment)
+
+        # Encode perm_idx (array of ints) to a tuple-like key (integer)
+        key = 0
+        for val in perm_idx:
+            key = key * order + val
+
+        if key in perm_counts:
+            perm_counts[key] += 1
+        else:
+            perm_counts[key] = 1
+
+    # Calculate entropy
+    ent = 0.0
+    for count in perm_counts.values():
+        p = count / num_permutations
+        ent -= p * np.log(p)
+
+    return ent
+
+
 def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1) -> Optional[float]:
     """
     Calculates Permutation Entropy as a measure of structural randomness.
@@ -84,19 +164,12 @@ def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1)
     if len(x) < order:
         return None
 
-    n = len(x) - (order - 1) * delay
-    permutations = []
-    for i in range(n):
-        segment = x[i : i + order * delay : delay]
-        perm = tuple(np.argsort(segment))
-        permutations.append(perm)
-
-    _, counts = np.unique(permutations, axis=0, return_counts=True)
-    probs = counts / len(permutations)
-    pe_val = float(entropy(probs))
-
-    # Normalize by log(n!) which is the maximum possible entropy for order n
-    return float(pe_val / math.log(math.factorial(order)))
+    try:
+        pe_val = _calculate_permutation_entropy_jit(x, order, delay)
+        # Normalize by log(n!) which is the maximum possible entropy for order n
+        return float(pe_val / math.log(math.factorial(order)))
+    except Exception:
+        return None
 
 
 def calculate_efficiency_ratio(returns: np.ndarray) -> Optional[float]:
