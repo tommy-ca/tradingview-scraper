@@ -2,7 +2,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, cast
+from typing import List, Optional, cast
 
 import pandas as pd
 from tqdm import tqdm
@@ -97,8 +97,10 @@ class BackfillService:
                 if not isinstance(df.index, pd.DatetimeIndex):
                     df.index = pd.to_datetime(df.index)
 
-                if df.index.tz is not None:
-                    df.index = df.index.tz_convert(None)
+                if df.index.tz is None:
+                    df.index = df.index.tz_localize("UTC")
+                else:
+                    df.index = df.index.tz_convert("UTC")
 
                 if "close" not in df.columns:
                     continue
