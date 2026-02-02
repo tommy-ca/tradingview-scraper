@@ -1,12 +1,13 @@
 import logging
 import os
+import re
 from datetime import timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import pandas as pd
 
 from tradingview_scraper.symbols.stream.metadata import DataProfile, get_exchange_calendar
+from tradingview_scraper.utils.security import SecurityUtils
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,17 @@ class LakehouseStorage:
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     def _get_path(self, symbol: str, interval: str) -> str:
-        safe_symbol = symbol.replace(":", "_")
-        return os.path.join(self.base_path, f"{safe_symbol}_{interval}.parquet")
+        """
+        Constructs a safe absolute path for a symbol/interval file.
+        """
+        # Ensure interval is also safe (alphanumeric + dots)
+        if not re.match(r"^[a-zA-Z0-9.]+$", interval):
+            raise ValueError(f"Invalid interval format: {interval}")
 
-    def save_candles(self, symbol: str, interval: str, candles: List[Dict]):
+        path = SecurityUtils.get_safe_path(self.base_path, symbol, suffix=f"_{interval}.parquet")
+        return str(path)
+
+    def save_candles(self, symbol: str, interval: str, candles: list[dict]):
         """
         Saves candles to a Parquet file, merging with existing data.
         Duplicates are resolved by keeping the most recent record.
@@ -53,8 +61,8 @@ class LakehouseStorage:
         self,
         symbol: str,
         interval: str,
-        start_ts: Optional[float] = None,
-        end_ts: Optional[float] = None,
+        start_ts: float | None = None,
+        end_ts: float | None = None,
     ) -> pd.DataFrame:
         """
         Loads candles from a Parquet file for a given range.
@@ -77,7 +85,7 @@ class LakehouseStorage:
 
         return df_filtered.sort_values("timestamp")
 
-    def get_last_timestamp(self, symbol: str, interval: str) -> Optional[float]:
+    def get_last_timestamp(self, symbol: str, interval: str) -> float | None:
         """
         Returns the timestamp of the last available candle.
         """
@@ -105,7 +113,7 @@ class LakehouseStorage:
             return False
         return timestamp in df["timestamp"].values
 
-    def detect_gaps(self, symbol: str, interval: str, profile: DataProfile = DataProfile.UNKNOWN, start_ts: Optional[float] = None) -> List[tuple]:
+    def detect_gaps(self, symbol: str, interval: str, profile: DataProfile = DataProfile.UNKNOWN, start_ts: float | None = None) -> list[tuple]:
         """
         Identifies missing data points in the historical time-series.
 
@@ -113,10 +121,10 @@ class LakehouseStorage:
             symbol (str): Symbol name.
             interval (str): Timeframe interval.
             profile (DataProfile): Asset class profile for market-aware filtering.
-            start_ts (Optional[float]): Only check for gaps after this timestamp.
+            start_ts (float | None): Only check for gaps after this timestamp.
 
         Returns:
-            List[tuple]: List of (start_missing_ts, end_missing_ts) gaps.
+            list[tuple]: List of (start_missing_ts, end_missing_ts) gaps.
         """
         df = self.load_candles(symbol, interval, start_ts=start_ts)
         if df.empty or len(df) < 2:

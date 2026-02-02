@@ -2,7 +2,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional, cast
+from typing import cast
 
 import pandas as pd
 from tqdm import tqdm
@@ -10,6 +10,7 @@ from tqdm import tqdm
 from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import get_df_hash
+from tradingview_scraper.utils.security import SecurityUtils
 from tradingview_scraper.utils.technicals import TechnicalRatings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -22,7 +23,7 @@ logger = logging.getLogger("backfill_features")
     description="Generates a PIT features matrix from OHLCV data.",
     category="foundation",
 )
-def backfill_features_stage(candidates_path: Optional[str] = None, output_path: Optional[str] = None, lakehouse_dir: Optional[str] = None):
+def backfill_features_stage(candidates_path: str | None = None, output_path: str | None = None, lakehouse_dir: str | None = None):
     cand_p = Path(candidates_path) if candidates_path else None
     out_p = Path(output_path) if output_path else None
     lh_p = Path(lakehouse_dir) if lakehouse_dir else None
@@ -33,11 +34,11 @@ def backfill_features_stage(candidates_path: Optional[str] = None, output_path: 
 
 
 class BackfillService:
-    def __init__(self, lakehouse_dir: Optional[Path] = None):
+    def __init__(self, lakehouse_dir: Path | None = None):
         settings = get_settings()
         self.lakehouse_dir = lakehouse_dir or settings.lakehouse_dir
 
-    def _get_lakehouse_symbols(self) -> List[str]:
+    def _get_lakehouse_symbols(self) -> list[str]:
         """Returns all symbols currently present in the Lakehouse."""
         symbols = []
         for p in self.lakehouse_dir.glob("*_1d.parquet"):
@@ -48,7 +49,7 @@ class BackfillService:
                 symbols.append(f"{parts[0]}:{parts[1]}")
         return sorted(symbols)
 
-    def run(self, candidates_path: Optional[Path] = None, output_path: Optional[Path] = None):
+    def run(self, candidates_path: Path | None = None, output_path: Path | None = None):
         """
         Main execution flow.
         """
@@ -78,8 +79,11 @@ class BackfillService:
         all_features = {}
 
         for symbol in tqdm(symbols, desc="Processing Symbols"):
-            safe_sym = symbol.replace(":", "_")
-            file_path = self.lakehouse_dir / f"{safe_sym}_1d.parquet"
+            try:
+                file_path = SecurityUtils.get_safe_path(self.lakehouse_dir, symbol)
+            except ValueError as e:
+                logger.error(f"Security error for {symbol}: {e}")
+                continue
 
             if not file_path.exists():
                 continue

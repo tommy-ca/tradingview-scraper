@@ -2,7 +2,6 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
 from unittest.mock import ANY, patch
 
 import pandas as pd
@@ -136,37 +135,33 @@ def test_input_candidates_json(temp_lakehouse):
 
 def test_sanitize_symbol_valid():
     """Test that valid symbols are sanitized correctly."""
-    from scripts.services.ingest_data import IngestionService
+    from tradingview_scraper.utils.security import SecurityUtils
 
-    service = IngestionService(lakehouse_dir=Path("/tmp"))
-    assert service._sanitize_symbol("BINANCE:BTCUSDT") == "BINANCE_BTCUSDT"
-    assert service._sanitize_symbol("BINANCE-BTCUSDT") == "BINANCE-BTCUSDT"
-    assert service._sanitize_symbol("BTCUSDT") == "BTCUSDT"
+    assert SecurityUtils.sanitize_symbol("BINANCE:BTCUSDT") == "BINANCE_BTCUSDT"
+    assert SecurityUtils.sanitize_symbol("BINANCE-BTCUSDT") == "BINANCE-BTCUSDT"
+    assert SecurityUtils.sanitize_symbol("BTCUSDT") == "BTCUSDT"
 
 
 def test_sanitize_symbol_invalid():
     """Test that invalid symbols raise ValueError."""
-    from scripts.services.ingest_data import IngestionService
+    from tradingview_scraper.utils.security import SecurityUtils
 
-    service = IngestionService(lakehouse_dir=Path("/tmp"))
     with pytest.raises(ValueError, match="Invalid symbol format"):
-        service._sanitize_symbol("BINANCE:BTCUSDT; rm -rf /")
+        SecurityUtils.sanitize_symbol("BINANCE:BTCUSDT; rm -rf /")
     with pytest.raises(ValueError, match="Invalid symbol format"):
-        service._sanitize_symbol("BTC$USDT")
+        SecurityUtils.sanitize_symbol("BTC$USDT")
 
 
 def test_path_traversal_protection(temp_lakehouse):
     """Test that path traversal attempts are caught."""
-    from scripts.services.ingest_data import IngestionService
+    from tradingview_scraper.utils.security import SecurityUtils
 
-    service = IngestionService(lakehouse_dir=temp_lakehouse)
-
-    # Note: _sanitize_symbol will catch '..' via the regex first
+    # Note: sanitize_symbol will catch '..' via the regex first
     with pytest.raises(ValueError, match="Invalid symbol format"):
-        service._get_parquet_path("../../../etc/passwd")
+        SecurityUtils.get_safe_path(temp_lakehouse, "../../../etc/passwd")
 
     with pytest.raises(ValueError, match="Invalid symbol format"):
-        service._get_parquet_path("/etc/passwd")
+        SecurityUtils.get_safe_path(temp_lakehouse, "/etc/passwd")
 
 
 def test_ingest_malicious_symbol(temp_lakehouse):

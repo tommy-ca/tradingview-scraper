@@ -1,10 +1,9 @@
 import json
 import logging
 import os
-import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import pandas as pd
 
@@ -13,6 +12,7 @@ from tradingview_scraper.pipelines.selection.base import (
     FoundationHealthRegistry,
 )
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.utils.security import SecurityUtils
 
 # Assume PersistentDataLoader is available via PYTHONPATH or install
 try:
@@ -36,35 +36,10 @@ class IngestionService:
         self.lakehouse_dir.mkdir(parents=True, exist_ok=True)
         self.registry = FoundationHealthRegistry(path=self.lakehouse_dir / "foundation_health.json")
 
-    def _sanitize_symbol(self, symbol: str) -> str:
-        """Sanitize symbol to prevent path traversal and enforce strict format."""
-        if not re.match(r"^[a-zA-Z0-9_\-.:]+$", symbol):
-            raise ValueError(f"Invalid symbol format: {symbol}")
-
-        # Replace : with _ for file safety
-        safe_sym = symbol.replace(":", "_")
-
-        # Additional path traversal check
-        if ".." in safe_sym or safe_sym.startswith("/") or safe_sym.startswith("\\"):
-            raise ValueError(f"Potentially malicious symbol detected: {symbol}")
-
-        return safe_sym
-
-    def _get_parquet_path(self, symbol: str) -> Path:
-        """Get safe absolute path to parquet file."""
-        safe_sym = self._sanitize_symbol(symbol)
-        p_path = (self.lakehouse_dir / f"{safe_sym}_1d.parquet").resolve()
-
-        # Ensure the resolved path is still under lakehouse_dir
-        if not str(p_path).startswith(str(self.lakehouse_dir.resolve())):
-            raise ValueError(f"Path traversal attempt detected: {symbol}")
-
-        return p_path
-
     def is_fresh(self, symbol: str) -> bool:
         """Check if symbol data exists and is fresh."""
         try:
-            p_path = self._get_parquet_path(symbol)
+            p_path = SecurityUtils.get_safe_path(self.lakehouse_dir, symbol)
         except ValueError as e:
             logger.error(f"Security/Validation error for {symbol}: {e}")
             return False
@@ -82,7 +57,7 @@ class IngestionService:
         logger.info(f"{symbol} is stale ({age_hours:.1f}h). Queueing for fetch.")
         return False
 
-    def ingest(self, candidates: List[Dict[str, Any]], lookback_days: int = 500):
+    def ingest(self, candidates: list[dict[str, Any]], lookback_days: int = 500):
         """
         Main ingestion logic:
         1. Filter candidates for freshness (Idempotency).
@@ -100,7 +75,7 @@ class IngestionService:
             if isinstance(c, dict) and "symbol" in c:
                 try:
                     # Validate symbol before adding to fetch list
-                    self._get_parquet_path(c["symbol"])
+                    SecurityUtils.get_safe_path(self.lakehouse_dir, c["symbol"])
                     validated_candidates.append(c)
                 except ValueError as e:
                     logger.error(f"Validation failed for {c['symbol']}: {e}")
@@ -142,7 +117,7 @@ class IngestionService:
                 # Usually it reads from disk.
 
                 # Let's assume standard path for validation
-                p_path = self._get_parquet_path(symbol)
+                p_path = SecurityUtils.get_safe_path(self.lakehouse_dir, symbol)
 
                 if p_path.exists():
                     df = pd.read_parquet(p_path)

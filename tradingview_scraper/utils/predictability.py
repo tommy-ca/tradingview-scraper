@@ -1,6 +1,5 @@
 import logging
 import math
-from typing import Dict, Optional
 
 import numpy as np
 import pywt
@@ -48,7 +47,7 @@ def _get_rs_jit(series):
     return r / s if s > 1e-12 else 0.0
 
 
-def calculate_hurst_exponent(x: np.ndarray) -> Optional[float]:
+def calculate_hurst_exponent(x: np.ndarray) -> float | None:
     """
     Calculates the Hurst Exponent using Rescaled Range (R/S) analysis.
     Values:
@@ -103,58 +102,40 @@ def calculate_hurst_exponent(x: np.ndarray) -> Optional[float]:
 def _calculate_permutation_entropy_jit(x: np.ndarray, order: int = 3, delay: int = 1) -> float:
     """JIT optimized Permutation Entropy core logic."""
     n = len(x) - (order - 1) * delay
-
-    # Map permutations to unique integers
-    # For order 3, there are 6 permutations
-    # We can use a simple ranking mechanism
-
-    # We'll use a dictionary-like approach or just a list to count
-    # Since order is small, we can encode the permutation tuple as a single integer
-    # e.g. for order 3: ranks of [x1, x2, x3]
-
-    # A simple way to encode permutation of size 'order' is to use factorial number system
-    # or just a base-order encoding if order is very small.
-
-    # Let's use a simpler approach: count occurrences of each possible permutation
-    # Maximum possible permutations is order!
-    # For order 5, it's 120. We can use a flat array of size 120 if we map correctly.
-
-    # To map a permutation to an index 0..order!-1:
-    # Use the Lehman code / Lehmer code.
-
     num_permutations = n
-    perm_counts = {}  # Numba supports dicts in njit but they can be slow
 
-    # Actually, for small order, let's just do it simply
+    # To map a permutation to an index:
+    # We use a simple base-order encoding. Max index for order 5 is 3125.
+    # We use a fixed-size array to avoid dynamic allocation issues in Numba.
+    perm_counts = np.zeros(4000, dtype=np.int32)
+
     for i in range(n):
+        # We must use a fixed size or slice for Numba in some versions
+        # but let's try this first
         segment = np.zeros(order)
         for j in range(order):
             segment[j] = x[i + j * delay]
 
-        # Get permutation (ranks)
-        # Using a simple argsort in Numba
         perm_idx = np.argsort(segment)
 
-        # Encode perm_idx (array of ints) to a tuple-like key (integer)
         key = 0
         for val in perm_idx:
             key = key * order + val
 
-        if key in perm_counts:
-            perm_counts[key] += 1
-        else:
-            perm_counts[key] = 1
+        perm_counts[key] += 1
 
     # Calculate entropy
     ent = 0.0
-    for count in perm_counts.values():
-        p = count / num_permutations
-        ent -= p * np.log(p)
+    for i in range(4000):
+        count = perm_counts[i]
+        if count > 0:
+            p = count / num_permutations
+            ent -= p * np.log(p)
 
     return ent
 
 
-def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1) -> Optional[float]:
+def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1) -> float | None:
     """
     Calculates Permutation Entropy as a measure of structural randomness.
     Low values = ordered/trending, High values = noisy/random.
@@ -172,7 +153,7 @@ def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1)
         return None
 
 
-def calculate_efficiency_ratio(returns: np.ndarray) -> Optional[float]:
+def calculate_efficiency_ratio(returns: np.ndarray) -> float | None:
     """
     Calculates Kaufman's Efficiency Ratio (ER).
     ER = |Total Change| / Sum of Absolute Changes
@@ -198,7 +179,7 @@ def calculate_efficiency_ratio(returns: np.ndarray) -> Optional[float]:
     return float(net_change / path_length)
 
 
-def calculate_dwt_turbulence(returns: np.ndarray) -> Optional[float]:
+def calculate_dwt_turbulence(returns: np.ndarray) -> float | None:
     """
     Uses Discrete Wavelet Transform to measure high-frequency 'turbulence'.
     Returns a value in [0, 1] representing the fraction of energy in noise.
@@ -226,7 +207,7 @@ def calculate_dwt_turbulence(returns: np.ndarray) -> Optional[float]:
         return 0.5
 
 
-def calculate_stationarity_score(returns: np.ndarray) -> Optional[float]:
+def calculate_stationarity_score(returns: np.ndarray) -> float | None:
     """
     Uses Augmented Dickey-Fuller (ADF) test to measure stationarity.
     Returns a score in [0, 1] where 1.0 is highly non-stationary/trending.
@@ -265,7 +246,7 @@ def calculate_autocorrelation(x: np.ndarray, lag: int = 1) -> float:
         return 0.0
 
 
-def calculate_correlation_structure(x: np.ndarray, max_lags: int = 5) -> Dict[int, float]:
+def calculate_correlation_structure(x: np.ndarray, max_lags: int = 5) -> dict[int, float]:
     """
     Returns a dictionary of autocorrelation values for multiple lags.
     """
@@ -348,7 +329,7 @@ def calculate_trend_duration(series: np.ndarray, window: int = 50) -> int:
         return 0
 
 
-def calculate_ljungbox_pvalue(x: np.ndarray, lags: int = 5) -> Optional[float]:
+def calculate_ljungbox_pvalue(x: np.ndarray, lags: int = 5) -> float | None:
     """
     Performs Ljung-Box Q-test for serial correlation.
     Returns the minimum p-value across specified lags.
