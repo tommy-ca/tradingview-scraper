@@ -28,11 +28,11 @@ A whitelist-based regex (`^[a-zA-Z0-9_\-.:]+$`) ensures symbols only contain alp
 Explicit checks for `..` and leading slashes provide a secondary defense layer even if the regex were modified.
 
 ### 3. Absolute Path Anchoring
-The `SecurityUtils.get_safe_path()` method uses `Path.resolve()` to normalize both the base directory and the final path. It explicitly verifies that the resolved target path is a child of the resolved base directory.
+The `SecurityUtils.get_safe_path()` method uses `Path.resolve()` to normalize both the base directory and the final path. It explicitly verifies that the resolved target path is a child of the resolved base directory using `is_relative_to()` (or prefix matching as a fallback).
 
 ```python
 # target_path is anchored to base_path
-if not str(target_path).startswith(str(base_path)):
+if not target_path.is_relative_to(base_path):
     raise ValueError(f"Path traversal attempt detected: {symbol}")
 ```
 

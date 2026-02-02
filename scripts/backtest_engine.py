@@ -6,15 +6,18 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 
 sys.path.append(os.getcwd())
-from tradingview_scraper.backtest.orchestration import WalkForwardOrchestrator
+from dataclasses import dataclass
+
+from tradingview_scraper.backtest.orchestration import WalkForwardOrchestrator, WalkForwardWindow
 from tradingview_scraper.orchestration.strategies import StrategyFactory
 from tradingview_scraper.portfolio_engines import EngineRequest, ProfileName, build_engine, build_simulator
+from tradingview_scraper.portfolio_engines.utils import harden_solve
 from tradingview_scraper.regime import MarketRegimeDetector
 from tradingview_scraper.selection_engines import build_selection_engine, get_hierarchical_clusters
 from tradingview_scraper.selection_engines.base import SelectionRequest
@@ -22,6 +25,23 @@ from tradingview_scraper.settings import TradingViewScraperSettings, get_setting
 from tradingview_scraper.utils.audit import AuditLedger
 from tradingview_scraper.utils.data_utils import ensure_utc_index
 from tradingview_scraper.utils.synthesis import StrategySynthesizer
+
+
+@dataclass(frozen=True)
+class SimulationContext:
+    engine_name: str
+    profile: str
+    window: WalkForwardWindow
+    regime_name: str
+    market_env: str
+    train_rets: pd.DataFrame
+    train_rets_strat: pd.DataFrame
+    clusters: dict[str, list[str]]
+    window_meta: dict[str, Any]
+    bench_rets: pd.Series | None
+    is_meta: bool
+    test_rets: pd.DataFrame
+
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("backtest_engine")
@@ -35,19 +55,28 @@ def _get_annualization_factor(series: pd.Series) -> float:
         return 252.0
 
     idx = series.index
-    if not hasattr(idx, "__getitem__"):
+    if not isinstance(idx, (pd.DatetimeIndex, pd.Index)):
         return 252.0
 
-    diff = cast(Any, idx[1]) - cast(Any, idx[0])
-    if diff <= pd.Timedelta(hours=1):
-        return 252.0 * 24.0
-    elif diff <= pd.Timedelta(days=1):
-        return 252.0
+    try:
+        diff = cast(Any, idx[1]) - cast(Any, idx[0])
+        if diff <= pd.Timedelta(hours=1):
+            return 252.0 * 24.0
+        elif diff <= pd.Timedelta(days=1):
+            return 252.0
+    except (IndexError, TypeError):
+        pass
     return 252.0
 
 
 def persist_tournament_artifacts(results: dict[str, Any], output_dir: Path):
-    """Save tournament results to structured files."""
+    """
+    Saves tournament results and high-level metadata to structured CSV and JSON files.
+
+    Args:
+        results: Dictionary containing results list and metadata.
+        output_dir: Root directory for artifact storage.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(results["results"]).to_csv(output_dir / "tournament_results.csv", index=False)
     with open(output_dir / "tournament_meta.json", "w") as f:
@@ -57,7 +86,7 @@ def persist_tournament_artifacts(results: dict[str, Any], output_dir: Path):
 
 
 class BacktestEngine:
-    def __init__(self, settings: Optional[TradingViewScraperSettings] = None):
+    def __init__(self, settings: TradingViewScraperSettings | None = None):
         self.settings = settings or get_settings()
         self.returns = pd.DataFrame()
         self.features_matrix = pd.DataFrame()  # Dynamic Feature Matrix
@@ -68,24 +97,36 @@ class BacktestEngine:
         self.results: list[dict[str, Any]] = []
         self.return_series: dict[str, list[pd.Series]] = {}
         self.current_holdings: dict[str, Any] = {}
-        self.ledger: Optional[AuditLedger] = None
+        self.ledger: AuditLedger | None = None
         self.synthesizer = StrategySynthesizer()
 
         # CR-265: Initialize Regime Detector
-
         self.detector = MarketRegimeDetector(enable_audit_log=False)
 
     def load_data(self, run_dir: Path | None = None):
-        """Load returns and metadata from lakehouse or run directory."""
+        """
+        Loads returns and metadata from lakehouse or specific run directory.
+
+        Args:
+            run_dir: Optional path to a specific run directory. If None, finds latest.
+
+        Audit:
+            - Security: Validates pickle paths against allowed directories.
+            - Integrity: Enforces UTC DatetimeIndex on loaded data.
+        """
         if not run_dir:
             # Try to find latest run if not provided
             runs_dir = self.settings.summaries_runs_dir
             if runs_dir.exists():
-                latest_runs = sorted([d for d in runs_dir.iterdir() if d.is_dir() and (d / "data" / "returns_matrix.parquet").exists()], key=os.path.getmtime, reverse=True)
+                latest_runs = sorted(
+                    [d for d in runs_dir.iterdir() if d.is_dir() and (d / "data" / "returns_matrix.parquet").exists()],
+                    key=os.path.getmtime,
+                    reverse=True,
+                )
                 if latest_runs:
                     run_dir = cast(Path, latest_runs[0])
 
-        data_dir = run_dir / "data" if run_dir else self.settings.lakehouse_dir
+        data_dir = (run_dir / "data") if run_dir else self.settings.lakehouse_dir
         logger.info(f"Loading data from {data_dir}")
 
         # 1. Load Candidates (Deterministic Path)
@@ -97,7 +138,7 @@ class BacktestEngine:
                     self.raw_candidates = json.load(f)
                 break
 
-        # 2. Load Returns Matrix (Deterministic Priority)
+        # 2. Load Returns Matrix (Deterministic Priority + Security Guard)
         returns_priority = [
             data_dir / "returns_matrix.parquet",
             data_dir / "portfolio_returns.pkl",
@@ -106,6 +147,13 @@ class BacktestEngine:
         returns_path = next((p for p in returns_priority if p.exists()), None)
         if not returns_path:
             raise FileNotFoundError(f"Returns matrix not found in {data_dir} or lakehouse")
+
+        # Security: Verify returns_path is under allowed directories if it's a pickle
+        if returns_path.suffix == ".pkl":
+            allowed = [self.settings.summaries_runs_dir.resolve(), self.settings.lakehouse_dir.resolve()]
+            resolved_p = returns_path.resolve()
+            if not any(resolved_p.is_relative_to(a) for a in allowed):
+                raise ValueError(f"Secure Pickle Loading violation: {returns_path} is outside allowed directories.")
 
         if returns_path.suffix == ".parquet":
             self.returns = pd.read_parquet(returns_path)
@@ -147,7 +195,15 @@ class BacktestEngine:
                     self.stats = pd.DataFrame()
 
     def _is_meta_profile(self, profile_name: str) -> bool:
-        """Checks if profile defines recursive sleeves."""
+        """
+        Checks if the specified profile defines recursive sleeves in the manifest.
+
+        Args:
+            profile_name: Name of the profile to check.
+
+        Returns:
+            bool: True if it's a meta-profile.
+        """
         manifest_path = self.settings.manifest_path
         if not manifest_path.exists():
             return False
@@ -157,7 +213,16 @@ class BacktestEngine:
         return "sleeves" in prof_cfg
 
     def _prepare_meta_returns(self, config: TradingViewScraperSettings, run_dir: Path | None) -> bool:
-        """Establishes meta-returns for fractal backtesting."""
+        """
+        Establishes meta-returns matrix for fractal backtesting recursive simulation.
+
+        Args:
+            config: Active platform settings.
+            run_dir: Directory for storing intermediate meta-artifacts.
+
+        Returns:
+            bool: True if establishment succeeded.
+        """
         logger.info(f"🚀 RECURSIVE META-BACKTEST DETECTED: {config.profile}")
 
         if not run_dir:
@@ -191,8 +256,20 @@ class BacktestEngine:
             logger.error(f"Failed to build meta-returns matrix at {temp_meta_path}. Aborting.")
             return False
 
-    def _apply_dynamic_filter(self, current_date, train_rets: pd.DataFrame) -> pd.DataFrame:
-        """Filters candidates based on historical ratings at current_date."""
+    def _apply_dynamic_filter(self, current_date: pd.Timestamp, train_rets: pd.DataFrame) -> pd.DataFrame:
+        """
+        Filters candidates based on historical ratings at the current point-in-time.
+
+        Args:
+            current_date: Current timestamp for point-in-time lookup.
+            train_rets: Candidate return matrix.
+
+        Returns:
+            pd.DataFrame: Filtered return matrix.
+
+        Audit:
+            - Numerical: Ensures at least 2 assets remain after filtering.
+        """
         if self.features_matrix.empty:
             return train_rets
 
@@ -226,38 +303,16 @@ class BacktestEngine:
 
         return train_rets
 
-        idx_loc = self.features_matrix.index.searchsorted(current_date)
-        if idx_loc <= 0:
-            return train_rets
-
-        try:
-            if current_date in self.features_matrix.index:
-                current_features = self.features_matrix.loc[current_date]
-            else:
-                prev_date = self.features_matrix.index[self.features_matrix.index < current_date][-1]
-                current_features = self.features_matrix.loc[prev_date]
-
-            if isinstance(self.features_matrix.columns, pd.MultiIndex):
-                ratings = current_features.xs("recommend_all", level="feature")
-            else:
-                ratings = current_features
-
-            min_rating = 0.0
-            valid_symbols = ratings[ratings > min_rating].index.tolist()
-            valid_universe = [s for s in valid_symbols if s in train_rets.columns]
-
-            if len(valid_universe) >= 2:
-                logger.info(f"  Dynamic Filter: {len(valid_universe)} / {len(ratings)} valid candidates (Rating > {min_rating})")
-                return cast(pd.DataFrame, train_rets[valid_universe])
-            else:
-                logger.warning(f"  Dynamic Filter too strict (found {len(valid_universe)}). Falling back to full universe.")
-        except Exception as e:
-            logger.warning(f"  Dynamic Filter failed: {e}. Using static universe.")
-
-        return train_rets
-
     def _detect_market_regime(self, train_rets: pd.DataFrame) -> tuple[str, str]:
-        """Detects market regime and environment."""
+        """
+        Detects current market regime and environment quadrant.
+
+        Args:
+            train_rets: Training return matrix.
+
+        Returns:
+            tuple[str, str]: (regime_name, environment_quadrant)
+        """
         regime_name = "NORMAL"
         market_env = "NORMAL"
         try:
@@ -278,7 +333,24 @@ class BacktestEngine:
         run_dir: Path | None = None,
         lightweight: bool = False,
     ):
-        """Run a rolling-window backtest tournament."""
+        """
+        Runs a rolling-window backtest tournament across multiple engines/profiles.
+
+        Args:
+            mode: Run mode ('production' or 'research').
+            train_window: Size of training period.
+            test_window: Size of test period.
+            step_size: Number of bars to advance per window.
+            run_dir: Directory for storing outputs.
+            lightweight: If True, only runs HRP for fast verification.
+
+        Returns:
+            dict[str, Any]: Tournament results and stitched return streams.
+
+        Audit:
+            - Compliance: Adheres to 3-Pillar Architecture.
+            - Traceability: Records all intents and outcomes in AuditLedger.
+        """
         if self.returns.empty:
             self.load_data(run_dir=run_dir)
 
@@ -335,81 +407,7 @@ class BacktestEngine:
         logger.info(f"Tournament Started: {len(self.returns)} rows available. Windows: count={len(windows)}, train={resolved_train}, test={resolved_test}, step={resolved_step}")
 
         for window in windows:
-            current_date_raw = window.test_dates[0]
-            current_date = cast(pd.Timestamp, current_date_raw)
-            train_rets_raw, test_rets_raw = orchestrator.slice_data(self.returns, window)
-            train_rets = cast(pd.DataFrame, train_rets_raw)
-            test_rets = cast(pd.DataFrame, test_rets_raw)
-            i = window.step_index
-
-            # 1. Dynamic Filtering
-            if not is_meta:
-                train_rets = self._apply_dynamic_filter(current_date, train_rets)
-
-            # 2. Regime Detection
-            regime_name, market_env = self._detect_market_regime(train_rets)
-
-            # 3. Pillar 1: Universe Selection
-            strategy = StrategyFactory.infer_strategy(self.config.profile or "", self.config.strategy)
-            selection_engine = build_selection_engine(self.config.features.selection_mode)
-
-            req_select = SelectionRequest(
-                top_n=self.config.top_n,
-                threshold=self.config.threshold,
-                strategy=strategy,
-            )
-            selection = selection_engine.select(returns=train_rets, raw_candidates=self.raw_candidates, stats_df=self.stats, request=req_select)
-
-            # Filter winners missing from returns matrix
-            if selection.winners:
-                selection_winners = [w for w in selection.winners if w["symbol"] in train_rets.columns]
-                object.__setattr__(selection, "winners", selection_winners)
-
-            if not selection.winners:
-                continue
-
-            winners_syms = [w["symbol"] for w in selection.winners]
-            window_meta = self.metadata.copy()
-            for w in selection.winners:
-                window_meta[w["symbol"]] = w
-
-            if self.ledger and not lightweight:
-                self._record_selection_audit(selection, winners_syms, train_rets, selection_engine.name, i)
-
-            # 4. Pillar 2: Strategy Synthesis
-            if is_meta:
-                train_rets_strat_raw = train_rets[winners_syms]
-            else:
-                train_rets_strat_raw = self.synthesizer.synthesize(train_rets, selection.winners, self.config.features)
-
-            train_rets_strat = cast(pd.DataFrame, train_rets_strat_raw)
-
-            # 5. Pillar 3: Allocation & Simulation
-            new_cluster_ids, _ = get_hierarchical_clusters(train_rets_strat, float(self.config.threshold), 25)
-            stringified_clusters = {}
-            for sym, c_id in zip(train_rets_strat.columns, new_cluster_ids):
-                stringified_clusters.setdefault(str(c_id), []).append(str(sym))
-
-            bench_sym = self.config.benchmark_symbols[0] if self.config.benchmark_symbols else None
-            bench_rets = train_rets[bench_sym] if bench_sym and bench_sym in train_rets.columns else None
-
-            for engine_name in self.engines:
-                profiles_to_run = ["adaptive"] if engine_name == "adaptive" else self.profiles
-                for profile in profiles_to_run:
-                    self._process_optimization_window(
-                        engine_name=engine_name,
-                        profile=profile,
-                        window=window,
-                        regime_name=regime_name,
-                        market_env=market_env,
-                        train_rets=train_rets,
-                        train_rets_strat=cast(pd.DataFrame, train_rets_strat),
-                        clusters=stringified_clusters,
-                        window_meta=window_meta,
-                        bench_rets=cast(pd.Series, bench_rets) if bench_rets is not None else None,
-                        is_meta=is_meta,
-                        test_rets=test_rets,
-                    )
+            self._run_window_step(window, orchestrator, is_meta)
 
         # Save artifacts
         self._save_tournament_artifacts(run_dir)
@@ -417,7 +415,104 @@ class BacktestEngine:
         final_series_map = {key: pd.concat(series_list).sort_index() for key, series_list in self.return_series.items() if series_list}
         return {"results": self.results, "meta": results_meta, "stitched_returns": final_series_map}
 
+    def _run_window_step(self, window: WalkForwardWindow, orchestrator: WalkForwardOrchestrator, is_meta: bool):
+        """
+        Executes selection, synthesis, and optimization for a single time window.
+
+        Args:
+            window: Current window definition.
+            orchestrator: Active time-stepping orchestrator.
+            is_meta: Whether this is a meta-portfolio run.
+
+        Audit:
+            - Performance: Uses vectorized synthesis and hierarchical clustering.
+        """
+        current_date = cast(pd.Timestamp, window.test_dates[0])
+        train_rets_raw, test_rets_raw = orchestrator.slice_data(cast(pd.DataFrame, self.returns), window)
+        train_rets = cast(pd.DataFrame, train_rets_raw)
+        test_rets = cast(pd.DataFrame, test_rets_raw)
+
+        # 1. Dynamic Filtering
+        if not is_meta:
+            train_rets = self._apply_dynamic_filter(current_date, train_rets)
+
+        # 2. Regime Detection
+        regime_name, market_env = self._detect_market_regime(train_rets)
+
+        # 3. Pillar 1: Universe Selection
+        strategy = StrategyFactory.infer_strategy(self.config.profile or "", self.config.strategy)
+        selection_engine = build_selection_engine(self.config.features.selection_mode)
+
+        req_select = SelectionRequest(
+            top_n=self.config.top_n,
+            threshold=self.config.threshold,
+            strategy=strategy,
+        )
+        selection = selection_engine.select(returns=train_rets, raw_candidates=self.raw_candidates, stats_df=self.stats, request=req_select)
+
+        # Filter winners missing from returns matrix
+        if selection.winners:
+            selection_winners = [w for w in selection.winners if w["symbol"] in train_rets.columns]
+            object.__setattr__(selection, "winners", selection_winners)
+
+        if not selection.winners:
+            return
+
+        winners_syms = [w["symbol"] for w in selection.winners]
+        window_meta = self.metadata.copy()
+        for w in selection.winners:
+            window_meta[w["symbol"]] = w
+
+        if self.ledger and not self.lightweight:
+            self._record_selection_audit(selection, winners_syms, train_rets, selection_engine.name, window.step_index)
+
+        # 4. Pillar 2: Strategy Synthesis
+        if is_meta:
+            train_rets_strat_raw = train_rets[winners_syms]
+        else:
+            train_rets_strat_raw = self.synthesizer.synthesize(train_rets, selection.winners, self.config.features)
+
+        train_rets_strat = cast(pd.DataFrame, train_rets_strat_raw)
+
+        # 5. Pillar 3: Allocation & Simulation
+        new_cluster_ids, _ = get_hierarchical_clusters(train_rets_strat, float(self.config.threshold), 25)
+        stringified_clusters = {}
+        for sym, c_id in zip(train_rets_strat.columns, new_cluster_ids):
+            stringified_clusters.setdefault(str(c_id), []).append(str(sym))
+
+        bench_sym = self.config.benchmark_symbols[0] if self.config.benchmark_symbols else None
+        bench_rets = train_rets[bench_sym] if bench_sym and bench_sym in train_rets.columns else None
+
+        for engine_name in self.engines:
+            profiles_to_run = ["adaptive"] if engine_name == "adaptive" else self.profiles
+            for profile in profiles_to_run:
+                sim_ctx = SimulationContext(
+                    engine_name=engine_name,
+                    profile=profile,
+                    window=window,
+                    regime_name=regime_name,
+                    market_env=market_env,
+                    train_rets=train_rets,
+                    train_rets_strat=train_rets_strat,
+                    clusters=stringified_clusters,
+                    window_meta=window_meta,
+                    bench_rets=cast(pd.Series, bench_rets) if bench_rets is not None else None,
+                    is_meta=is_meta,
+                    test_rets=test_rets,
+                )
+                self._process_optimization_window(sim_ctx)
+
     def _record_selection_audit(self, selection, winners_syms: list[str], train_rets: pd.DataFrame, engine_name: str, window_index: int):
+        """
+        Records the outcome of the Pillar 1 Universe Selection stage.
+
+        Args:
+            selection: Selection result object.
+            winners_syms: List of winning symbol IDs.
+            train_rets: Training return matrix.
+            engine_name: Name of the selection engine.
+            window_index: Current walk-forward step index.
+        """
         metrics_payload = {
             "n_universe_symbols": len(self.returns.columns),
             "n_refinement_candidates": len(train_rets.columns),
@@ -445,100 +540,69 @@ class BacktestEngine:
                 context={"window_index": window_index, "engine": engine_name},
             )
 
-    def _process_optimization_window(
-        self,
-        engine_name: str,
-        profile: str,
-        window: Any,
-        regime_name: str,
-        market_env: str,
-        train_rets: pd.DataFrame,
-        train_rets_strat: pd.DataFrame,
-        clusters: dict[str, list[str]],
-        window_meta: dict[str, Any],
-        bench_rets: pd.Series | None,
-        is_meta: bool,
-        test_rets: pd.DataFrame,
-    ):
-        actual_profile = cast(ProfileName, profile)
-        target_engine = engine_name
+    def _process_optimization_window(self, ctx: SimulationContext):
+        """
+        Processes a single optimization window with hardening and simulation.
+
+        Args:
+            ctx: Simulation context containing all necessary data and state.
+
+        Audit:
+            - Stability: Delegates to harden_solve utility for Ridge retries.
+            - Integrity: Applies diversity constraints and simulation verification.
+        """
+        actual_profile = cast(ProfileName, ctx.profile)
+        target_engine = ctx.engine_name
         if actual_profile in ["market", "benchmark"]:
             target_engine = "market"
         elif actual_profile == "barbell":
             target_engine = "custom"
 
         opt_ctx = {
-            "window_index": window.step_index,
+            "window_index": ctx.window.step_index,
             "engine": target_engine,
-            "profile": profile,
-            "regime": regime_name,
+            "profile": ctx.profile,
+            "regime": ctx.regime_name,
             "actual_profile": actual_profile,
         }
 
         try:
-            engine = build_engine(target_engine)
+            solver = build_engine(target_engine)
             if self.ledger and not self.lightweight:
                 self.ledger.record_intent("backtest_optimize", opt_ctx, input_hashes={})
 
-            default_shrinkage = float(self.config.features.default_shrinkage_intensity)
-            if actual_profile == "max_sharpe":
-                default_shrinkage = max(default_shrinkage, 0.15)
+            req = EngineRequest(
+                profile=actual_profile,
+                engine=target_engine,
+                regime=ctx.regime_name,
+                market_environment=ctx.market_env,
+                cluster_cap=0.25,
+                kappa_shrinkage_threshold=float(self.config.features.kappa_shrinkage_threshold),
+                default_shrinkage_intensity=float(self.config.features.default_shrinkage_intensity),
+                adaptive_fallback_profile=str(self.config.features.adaptive_fallback_profile),
+                benchmark_returns=ctx.bench_rets,
+                market_neutral=(actual_profile == "market_neutral"),
+            )
 
-            # CR-690: Adaptive Ridge Reloading
-            current_ridge = default_shrinkage
-            max_ridge_retries = 3
-            ridge_attempt = 0
-            final_flat_weights = pd.DataFrame()
+            returns_for_opt = ctx.train_rets if actual_profile == "market" else ctx.train_rets_strat
 
-            while ridge_attempt < max_ridge_retries:
-                ridge_attempt += 1
-                req = EngineRequest(
-                    profile=actual_profile,
-                    engine=target_engine,
-                    regime=regime_name,
-                    market_environment=market_env,
-                    cluster_cap=0.25,
-                    kappa_shrinkage_threshold=float(self.config.features.kappa_shrinkage_threshold),
-                    default_shrinkage_intensity=current_ridge,
-                    adaptive_fallback_profile=str(self.config.features.adaptive_fallback_profile),
-                    benchmark_returns=bench_rets,
-                    market_neutral=(actual_profile == "market_neutral"),
-                )
-
-                returns_for_opt = train_rets if actual_profile == "market" else train_rets_strat
-                opt_resp = engine.optimize(returns=returns_for_opt, clusters=clusters, meta=window_meta, stats=self.stats, request=req)
-
-                if is_meta:
-                    flat_weights = opt_resp.weights
-                else:
-                    flat_weights = self.synthesizer.flatten_weights(opt_resp.weights)
-
-                if not flat_weights.empty:
-                    self._apply_diversity_constraints(flat_weights)
-
-                if flat_weights.empty:
-                    break
-
-                # Verify with first simulator
-                simulator = build_simulator(self.sim_names[0])
-                state_key = f"{target_engine}_{self.sim_names[0]}_{profile}"
-                last_state = self.current_holdings.get(state_key)
-                sim_results = simulator.simulate(weights_df=flat_weights, returns=test_rets, initial_holdings=last_state)
-
-                metrics = sim_results.get("metrics", sim_results) if isinstance(sim_results, dict) else getattr(sim_results, "metrics", {})
-                sharpe = float(metrics.get("sharpe", 0.0))
-
-                if sharpe > 10.0 and ridge_attempt < max_ridge_retries and actual_profile not in ["market", "benchmark"]:
-                    current_ridge = 0.50 if ridge_attempt == 1 else 0.95
-                    logger.warning(f"  [ADAPTIVE RIDGE] Window {window.step_index} ({actual_profile}) anomalous (Sharpe={sharpe:.2f}). Reloading Ridge: {current_ridge:.2f}")
-                    continue
-
-                if sharpe > 10.0 and actual_profile not in ["market", "benchmark"]:
-                    logger.warning(f"  [WINDOW VETO] Window {window.step_index} ({actual_profile}) unstable. Forcing Equal Weight.")
-                    flat_weights = self._get_equal_weight_flat(returns_for_opt, is_meta)
-
-                final_flat_weights = flat_weights
-                break
+            # Use hardening utility
+            final_flat_weights = harden_solve(
+                solver=solver,
+                returns=returns_for_opt,
+                clusters=ctx.clusters,
+                window_meta=ctx.window_meta,
+                stats=self.stats,
+                request=req,
+                test_rets=ctx.test_rets,
+                sim_name=self.sim_names[0],
+                current_holdings=self.current_holdings,
+                synthesizer=self.synthesizer,
+                is_meta=ctx.is_meta,
+                apply_constraints_fn=self._apply_diversity_constraints,
+                get_ew_fn=lambda: self._get_equal_weight_flat(returns_for_opt, ctx.is_meta),
+                ledger=self.ledger,
+            )
 
             if final_flat_weights.empty:
                 return
@@ -549,7 +613,7 @@ class BacktestEngine:
                     step="backtest_optimize",
                     status="success",
                     output_hashes={},
-                    metrics={"weights": weights_dict, "ridge_intensity": current_ridge, "ridge_attempts": ridge_attempt},
+                    metrics={"weights": weights_dict},
                     context=opt_ctx,
                 )
 
@@ -557,10 +621,10 @@ class BacktestEngine:
                 self._run_simulation(
                     sim_name=sim_name,
                     target_engine=target_engine,
-                    profile=profile,
-                    window=window,
+                    profile=ctx.profile,
+                    window=ctx.window,
                     final_flat_weights=final_flat_weights,
-                    test_rets=test_rets,
+                    test_rets=ctx.test_rets,
                 )
 
         except Exception as e:
@@ -576,6 +640,17 @@ class BacktestEngine:
         final_flat_weights: pd.DataFrame,
         test_rets: pd.DataFrame,
     ):
+        """
+        Runs a simulation for the provided weights and captures metrics.
+
+        Args:
+            sim_name: Name of the simulator engine.
+            target_engine: Name of the optimization engine.
+            profile: Optimization profile.
+            window: Current window.
+            final_flat_weights: Optimized asset weights.
+            test_rets: Out-of-sample returns.
+        """
         sim_ctx = {
             "window_index": window.step_index,
             "engine": target_engine,
@@ -627,6 +702,12 @@ class BacktestEngine:
                 self.ledger.record_outcome(step="backtest_simulate", status="error", output_hashes={}, metrics={"error": str(e)}, context=sim_ctx)
 
     def _save_tournament_artifacts(self, run_dir: Path):
+        """
+        Persists stitched return series and profile aliases to disk.
+
+        Args:
+            run_dir: Directory where artifacts should be saved.
+        """
         returns_out = run_dir / "data" / "returns"
         returns_out.mkdir(parents=True, exist_ok=True)
         for key, series_list in self.return_series.items():
@@ -650,7 +731,12 @@ class BacktestEngine:
                 logger.error(f"Failed to save returns for {key}: {e}")
 
     def _apply_diversity_constraints(self, flat_weights: pd.DataFrame):
-        """Standardizes weight clipping and normalization."""
+        """
+        Standardizes weight clipping and normalization to ensure portfolio diversity.
+
+        Args:
+            flat_weights: Asset weights to be constrained.
+        """
         w_sum_abs = flat_weights["Weight"].sum()
         if w_sum_abs > 0:
             flat_weights["Weight"] = flat_weights["Weight"].clip(upper=0.25 * w_sum_abs)
@@ -662,7 +748,16 @@ class BacktestEngine:
                 flat_weights["Net_Weight"] *= scale
 
     def _get_equal_weight_flat(self, returns_for_opt: pd.DataFrame, is_meta: bool) -> pd.DataFrame:
-        """Returns equal-weighted portfolio for failed windows."""
+        """
+        Returns an equal-weighted portfolio for failed or unstable windows.
+
+        Args:
+            returns_for_opt: Return streams available for allocation.
+            is_meta: Whether this is a meta-portfolio run.
+
+        Returns:
+            pd.DataFrame: Equal-weighted portfolio weights.
+        """
         n_strat = len(returns_for_opt.columns)
         if n_strat > 0:
             ew_weights = pd.Series(1.0 / n_strat, index=returns_for_opt.columns)

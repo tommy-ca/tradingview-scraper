@@ -8,14 +8,16 @@ from contextvars import ContextVar
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
+
+from tradingview_scraper.utils.security import SecurityUtils
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +60,10 @@ class FeatureFlags(BaseModel):
 
     # Custom MPS Weight Overrides (Map[str, float])
     # Allows profiles to boost specific signals (e.g. recommend_ma) over generic momentum
-    mps_weights_override: Dict[str, float] = {}
+    mps_weights_override: dict[str, float] = {}
 
     # Signal Dominance (New)
-    dominant_signal: Optional[str] = None
+    dominant_signal: str | None = None
     dominant_signal_weight: float = 3.0
 
     # Predictability Thresholds
@@ -82,7 +84,7 @@ class FeatureFlags(BaseModel):
 
     # HPO Optimized Weights (Log-MPS 3.2)
     # Global Robust: Optimized across all 2025 regimes (Mean Alpha / Std Alpha)
-    weights_global: Dict[str, float] = {
+    weights_global: dict[str, float] = {
         "momentum": 1.7469,
         "stability": 0.0458,
         "liquidity": 0.2946,
@@ -102,7 +104,7 @@ class FeatureFlags(BaseModel):
 
     # HPO Optimized Weights (Selection v2.1 - Additive Rank-Sum)
     # Refined via Normalization Sensitivity Audit (2026-01-02)
-    weights_v2_1_global: Dict[str, float] = {
+    weights_v2_1_global: dict[str, float] = {
         "momentum": 0.2055,
         "stability": 0.0882,
         "liquidity": 0.1697,
@@ -113,7 +115,7 @@ class FeatureFlags(BaseModel):
         "hurst_clean": 0.1018,
     }
     # Winner: Multi-Method Normalization Protocol
-    normalization_methods_v2_1: Dict[str, str] = {
+    normalization_methods_v2_1: dict[str, str] = {
         "momentum": "logistic",
         "stability": "logistic",
         "liquidity": "zscore",
@@ -130,16 +132,16 @@ class FeatureFlags(BaseModel):
 class ManifestSettingsSource(PydanticBaseSettingsSource):
     """Custom settings source to load from a multi-profile JSON manifest."""
 
-    def __init__(self, settings_cls: Type[BaseSettings], manifest_path: Path, profile_name: str):
+    def __init__(self, settings_cls: type[BaseSettings], manifest_path: Path, profile_name: str):
         super().__init__(settings_cls)
         self.manifest_path = manifest_path
         self.profile_name = profile_name
 
-    def get_field_value(self, field: Any, field_name: str) -> Tuple[Any, str, bool]:
+    def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
         # Not used for this combined source
         return None, field_name, False
 
-    def __call__(self) -> Dict[str, Any]:
+    def __call__(self) -> dict[str, Any]:
         if not self.manifest_path.exists():
             return {}
 
@@ -150,7 +152,7 @@ class ManifestSettingsSource(PydanticBaseSettingsSource):
             logger.error(f"Error loading manifest {self.manifest_path}: {e}")
             return {}
 
-        def _merge_blocks(target: Dict, source: Dict):
+        def _merge_blocks(target: dict, source: dict):
             """Deep merge specific manifest blocks into flattened settings."""
             for section in ["data", "selection", "risk", "backtest", "tournament", "discovery", "features"]:
                 if section in source:
@@ -241,7 +243,7 @@ class TradingViewScraperSettings(BaseSettings):
     min_days_floor: int = 0
 
     # Portfolio Data Prep Overrides
-    portfolio_lookback_days: Optional[int] = None
+    portfolio_lookback_days: int | None = None
     portfolio_batch_size: int = 1
     portfolio_backfill: bool = False
     portfolio_gapfill: bool = False
@@ -253,7 +255,7 @@ class TradingViewScraperSettings(BaseSettings):
     threshold: float = 0.4
     min_momentum_score: float = 0.0
     strategy: str = "trend_following"
-    cluster_lookbacks: List[int] = [60, 120, 200]
+    cluster_lookbacks: list[int] = [60, 120, 200]
     ranking: SelectionRanking = Field(default_factory=SelectionRanking)
 
     # Optimization
@@ -269,7 +271,7 @@ class TradingViewScraperSettings(BaseSettings):
     backtest_slippage: float = 0.0005  # 5 bps
     backtest_commission: float = 0.0001  # 1 bp
     backtest_cash_asset: str = "USDT"
-    benchmark_symbols: List[str] = Field(default_factory=lambda: ["AMEX:SPY"])
+    benchmark_symbols: list[str] = Field(default_factory=lambda: ["AMEX:SPY"])
     report_mode: str = "full"
     dynamic_universe: bool = False
     raw_pool_universe: str = "selected"
@@ -279,7 +281,7 @@ class TradingViewScraperSettings(BaseSettings):
     profiles: str = "min_variance,hrp,max_sharpe,barbell,benchmark,market"
 
     # Discovery (Structured)
-    discovery: Dict[str, Any] = Field(default_factory=dict)
+    discovery: dict[str, Any] = Field(default_factory=dict)
 
     # Feature Flags
     features: FeatureFlags = Field(default_factory=FeatureFlags)
@@ -288,21 +290,40 @@ class TradingViewScraperSettings(BaseSettings):
     gist_id: str = "e888e1eab0b86447c90c26e92ec4dc36"
 
     # Execution Env (New)
-    mandatory_vars: List[str] = Field(default_factory=list)
-    optional_vars: List[str] = Field(default_factory=list)
+    mandatory_vars: list[str] = Field(default_factory=list)
+    optional_vars: list[str] = Field(default_factory=list)
 
     # Runtime run_id logic
     run_id: str = Field(default_factory=lambda: os.getenv("TV_RUN_ID") or os.getenv("RUN_ID") or os.getenv("TV_EXPORT_RUN_ID") or datetime.now().strftime("%Y%m%d-%H%M%S"))
 
+    @field_validator("run_id")
+    @classmethod
+    def validate_run_id(cls, v: str) -> str:
+        """Ensures run_id is a valid filename and prevents path traversal."""
+        if not v:
+            return v
+        # Use SecurityUtils pattern for validation
+        if not SecurityUtils.SYMBOL_PATTERN.match(v):
+            raise ValueError(f"Invalid run_id format: {v}")
+        if ".." in v or "/" in v or "\\" in v:
+            raise ValueError(f"Potentially malicious run_id detected: {v}")
+        return v
+
+    def clone(self, **overrides: Any) -> TradingViewScraperSettings:
+        """Returns a new settings object with specified overrides."""
+        data = self.model_dump()
+        data.update(overrides)
+        return TradingViewScraperSettings(**data)
+
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls: Type[BaseSettings],
+        settings_cls: type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
-    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         # Determine manifest path and profile before creating the source
         # We look in env vars first since Pydantic hasn't finished loading yet
         m_path = Path(os.getenv("TV_MANIFEST_PATH") or "configs/manifest.json")
@@ -316,7 +337,7 @@ class TradingViewScraperSettings(BaseSettings):
             file_secret_settings,
         )
 
-    def get_discovery_config(self, scanner_type: str) -> Dict[str, Any]:
+    def get_discovery_config(self, scanner_type: str) -> dict[str, Any]:
         """Extracts the discovery configuration for a specific scanner type."""
         return self.discovery.get(scanner_type, {})
 
@@ -370,7 +391,14 @@ class TradingViewScraperSettings(BaseSettings):
         run_dir.mkdir(parents=True, exist_ok=True)
 
         # Pre-create standard subdirectories
-        for d in [self.run_config_dir, self.run_reports_dir, self.run_plots_dir, self.run_data_dir, self.run_logs_dir, self.run_tearsheets_dir]:
+        for d in [
+            self.run_config_dir,
+            self.run_reports_dir,
+            self.run_plots_dir,
+            self.run_data_dir,
+            self.run_logs_dir,
+            self.run_tearsheets_dir,
+        ]:
             d.mkdir(parents=True, exist_ok=True)
 
         return run_dir
@@ -434,7 +462,7 @@ class TradingViewScraperSettings(BaseSettings):
 TradingViewScraperSettings.model_rebuild()
 
 
-_SETTINGS_CTX: ContextVar[Optional[TradingViewScraperSettings]] = ContextVar("settings_ctx", default=None)
+_SETTINGS_CTX: ContextVar[TradingViewScraperSettings | None] = ContextVar("settings_ctx", default=None)
 
 
 @lru_cache
@@ -443,10 +471,20 @@ def _get_cached_base_settings() -> TradingViewScraperSettings:
     return TradingViewScraperSettings()
 
 
+def clear_settings_cache():
+    """
+    Clears the global settings cache, forcing a reload from environment and manifest.
+    """
+    _get_cached_base_settings.cache_clear()
+
+
 def get_settings() -> TradingViewScraperSettings:
     """
-    Thread-safe settings retrieval.
-    Returns the active context settings if set, otherwise falls back to cached global settings.
+    Thread-safe settings retrieval following context isolation principles.
+
+    Returns:
+        TradingViewScraperSettings: The active context settings if set,
+                                    falling back to cached global settings.
     """
     if (ctx_settings := _SETTINGS_CTX.get()) is not None:
         return ctx_settings
@@ -454,8 +492,28 @@ def get_settings() -> TradingViewScraperSettings:
 
 
 def set_active_settings(settings: TradingViewScraperSettings):
-    """Sets the active settings for the current context (thread/task)."""
+    """
+    Sets the active settings for the current context (thread/task).
+
+    Args:
+        settings: The settings instance to activate.
+    """
     return _SETTINGS_CTX.set(settings)
+
+
+def inspect_active_settings() -> dict[str, Any]:
+    """
+    Returns the active configuration as a dictionary for discoverability and auditing.
+
+    Returns:
+        dict[str, Any]: Flat dictionary of current configuration parameters.
+    """
+    return get_settings().model_dump()
+
+
+def debug_settings():
+    """Prints the current active settings for debugging purposes."""
+    print(json.dumps(inspect_active_settings(), indent=2, default=str))
 
 
 if __name__ == "__main__":

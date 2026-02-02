@@ -3,7 +3,7 @@ import math
 
 import numpy as np
 import pywt
-from numba import njit
+from numba import float64, int32, int64, njit
 from sklearn.linear_model import LinearRegression
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.stattools import adfuller
@@ -11,9 +11,21 @@ from statsmodels.tsa.stattools import adfuller
 logger = logging.getLogger(__name__)
 
 
-@njit
-def _get_rs_jit(series, z_buffer):
-    """JIT optimized R/S calculation using pre-allocated buffer."""
+@njit(float64(float64[::1]), cache=True, fastmath=True)
+def _get_rs_jit(series):
+    """
+    JIT optimized R/S calculation using scalar tracking (Zero-Allocation).
+
+    Args:
+        series: Array of returns or price changes.
+
+    Returns:
+        float: The calculated R/S value.
+
+    Audit:
+        - Memory: O(1) workspace.
+        - Performance: Linear O(n) scan.
+    """
     n = len(series)
     if n < 2:
         return 0.0
@@ -23,14 +35,11 @@ def _get_rs_jit(series, z_buffer):
         m += series[i]
     m /= n
 
-    # Reset buffer
-    z_buffer[:n] = 0.0
     curr = 0.0
     mx = -1e15
     mn = 1e15
     for i in range(n):
         curr += series[i] - m
-        z_buffer[i] = curr
         if curr > mx:
             mx = curr
         if curr < mn:
@@ -54,8 +63,18 @@ def calculate_hurst_exponent(x: np.ndarray) -> float | None:
     - H > 0.5: Trending (Persistent)
     - H < 0.5: Mean-reverting (Anti-persistent)
     - H = 0.5: Random Walk (Brownian Motion)
-    Returns None if history < 32 sessions.
+
+    Args:
+        x: Input time-series data.
+
+    Returns:
+        float | None: Hurst exponent value or None if insufficient history.
+
+    Audit:
+        - Memory: Zero-allocation core.
+        - Performance: Logarithmic lags traversal.
     """
+    x = np.ascontiguousarray(x[~np.isnan(x)], dtype=np.float64)
     if len(x) < 32:
         return None
 
@@ -74,16 +93,13 @@ def calculate_hurst_exponent(x: np.ndarray) -> float | None:
         rs_values = []
         valid_lags = []
 
-        # Pre-allocate buffer for JIT
-        z_buffer = np.zeros(n_total)
-
         for l in lags:
             n_segments = max(1, n_total // l)
             rs_avg = []
             for i in range(n_segments):
                 segment = x[i * l : (i + 1) * l]
                 if len(segment) > 0:
-                    rs = _get_rs_jit(segment, z_buffer)
+                    rs = _get_rs_jit(segment)
                     if rs > 0:
                         rs_avg.append(rs)
             if rs_avg:
@@ -101,9 +117,25 @@ def calculate_hurst_exponent(x: np.ndarray) -> float | None:
         return 0.5
 
 
-@njit
-def _calculate_permutation_entropy_jit(x: np.ndarray, perm_counts: np.ndarray, segment_buffer: np.ndarray, order: int = 3, delay: int = 1) -> float:
-    """JIT optimized Permutation Entropy core logic using pre-allocated buffers."""
+@njit(float64(float64[::1], int32[::1], float64[::1], int64, int64), cache=True, fastmath=True)
+def _calculate_permutation_entropy_jit(x, perm_counts, segment_buffer, order=3, delay=1):
+    """
+    JIT optimized Permutation Entropy core logic using pre-allocated buffers.
+
+    Args:
+        x: Input contiguous float64 array.
+        perm_counts: Workspace buffer for permutation frequencies.
+        segment_buffer: Workspace buffer for current window segment.
+        order: Permutation order (embedding dimension).
+        delay: Time delay factor.
+
+    Returns:
+        float: Raw entropy value.
+
+    Audit:
+        - Memory: Reuses provided buffers.
+        - Numerical: Linear O(n) pass.
+    """
     n = len(x) - (order - 1) * delay
     num_permutations = n
 
@@ -140,21 +172,32 @@ def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1)
     """
     Calculates Permutation Entropy as a measure of structural randomness.
     Low values = ordered/trending, High values = noisy/random.
-    Returns None if history < order.
+
+    Args:
+        x: Input time-series data.
+        order: Embedding dimension (default=3).
+        delay: Time delay factor (default=1).
+
+    Returns:
+        float | None: Normalized entropy in [0, 1] or None if insufficient history.
+
+    Audit:
+        - Memory: Single allocation per call for workspace.
+        - Performance: JIT-hardened inner loop.
     """
-    x = x[~np.isnan(x)]
+    x = np.ascontiguousarray(x[~np.isnan(x)], dtype=np.float64)
     if len(x) < order:
         return None
 
     try:
         # Pre-allocate buffers for JIT
-        max_key = order**order
+        max_key = int(order**order)
         # Adjust 4000 to be dynamic or at least safe for order 5
         buf_size = max(4000, max_key + 1)
         perm_counts = np.zeros(buf_size, dtype=np.int32)
-        segment_buffer = np.zeros(order)
+        segment_buffer = np.zeros(order, dtype=np.float64)
 
-        pe_val = _calculate_permutation_entropy_jit(x, perm_counts, segment_buffer, order, delay)
+        pe_val = _calculate_permutation_entropy_jit(x, perm_counts, segment_buffer, int(order), int(delay))
         # Normalize by log(n!) which is the maximum possible entropy for order n
         return float(pe_val / math.log(math.factorial(order)))
     except Exception:
@@ -168,7 +211,15 @@ def calculate_efficiency_ratio(returns: np.ndarray) -> float | None:
 
     Higher ER (approaching 1.0) indicates a more efficient trend.
     Lower ER (approaching 0.0) indicates high noise/chop.
-    Returns None if history < 10 sessions.
+
+    Args:
+        returns: Input return series.
+
+    Returns:
+        float | None: Efficiency ratio or None if insufficient history.
+
+    Audit:
+        - Memory: NumPy vectorized pass.
     """
     # Clean NaNs
     returns = returns[~np.isnan(returns)]
@@ -191,7 +242,15 @@ def calculate_dwt_turbulence(returns: np.ndarray) -> float | None:
     """
     Uses Discrete Wavelet Transform to measure high-frequency 'turbulence'.
     Returns a value in [0, 1] representing the fraction of energy in noise.
-    Returns None if history < 8 sessions.
+
+    Args:
+        returns: Input return series.
+
+    Returns:
+        float | None: Turbulence score or None if insufficient history.
+
+    Audit:
+        - Technology: PyWavelets Haar decomposition.
     """
     returns = returns[~np.isnan(returns)]
     if len(returns) < 8:
@@ -219,7 +278,15 @@ def calculate_stationarity_score(returns: np.ndarray) -> float | None:
     """
     Uses Augmented Dickey-Fuller (ADF) test to measure stationarity.
     Returns a score in [0, 1] where 1.0 is highly non-stationary/trending.
-    Returns None if history < 20 sessions.
+
+    Args:
+        returns: Input return series.
+
+    Returns:
+        float | None: Stationarity p-value or None if insufficient history.
+
+    Audit:
+        - Stability: Suppresses divide-by-zero warnings in degenerate cases.
     """
     if len(returns) < 20:
         return None
@@ -243,6 +310,13 @@ def calculate_autocorrelation(x: np.ndarray, lag: int = 1) -> float:
     """
     Calculates serial correlation at a specific lag.
     High absolute values indicate self-predictability (trend or mean-reversion).
+
+    Args:
+        x: Input array.
+        lag: Correlation lag.
+
+    Returns:
+        float: Correlation coefficient.
     """
     x = x[~np.isnan(x)]
     if len(x) <= lag:
@@ -282,8 +356,14 @@ def calculate_half_life(series: np.ndarray) -> float:
     Models Δp = alpha + beta * p_{t-1} + epsilon.
     Half-life = -ln(2) / beta.
 
+    Args:
+        series: Input price/return series.
+
     Returns:
         float: Expected bars to revert half-way. np.inf if not reverting.
+
+    Audit:
+        - Technology: Scikit-learn LinearRegression.
     """
     series = series[~np.isnan(series)]
     if len(series) < 30:
@@ -310,6 +390,13 @@ def calculate_trend_duration(series: np.ndarray, window: int = 50) -> int:
     """
     Calculates the current trend duration (age) based on price position vs EMA.
     Returns the number of consecutive bars the current state has held.
+
+    Args:
+        series: Input price/return series.
+        window: EMA window size.
+
+    Returns:
+        int: Duration count.
     """
     series = series[~np.isnan(series)]
     if len(series) < window + 10:
@@ -342,7 +429,16 @@ def calculate_ljungbox_pvalue(x: np.ndarray, lags: int = 5) -> float | None:
     Performs Ljung-Box Q-test for serial correlation.
     Returns the minimum p-value across specified lags.
     Small p-values (< 0.05) indicate significant self-predictability (not white noise).
-    Returns None if history < lags + 1.
+
+    Args:
+        x: Input array.
+        lags: Number of lags to test.
+
+    Returns:
+        float | None: Minimum p-value or None if insufficient history.
+
+    Audit:
+        - Technology: Statsmodels LB-Q test.
     """
     x = x[~np.isnan(x)]
     if len(x) < lags + 1:

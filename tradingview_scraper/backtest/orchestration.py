@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Generator, List, Optional, Tuple, Union
+from typing import Any, Generator, cast
 
 import pandas as pd
 
@@ -29,8 +29,8 @@ class WalkForwardWindow:
     train_end: int
     test_start: int
     test_end: int
-    train_dates: Tuple[pd.Timestamp, pd.Timestamp]
-    test_dates: Tuple[pd.Timestamp, pd.Timestamp]
+    train_dates: tuple[pd.Timestamp, pd.Timestamp]
+    test_dates: tuple[pd.Timestamp, pd.Timestamp]
 
 
 class WalkForwardOrchestrator:
@@ -53,7 +53,7 @@ class WalkForwardOrchestrator:
         test_window: int,
         step_size: int,
         anchored: bool = False,
-        min_train_window: Optional[int] = None,
+        min_train_window: int | None = None,
     ):
         """
         Initialize the orchestrator.
@@ -74,7 +74,7 @@ class WalkForwardOrchestrator:
         self.anchored = anchored
         self.min_train_window = min_train_window or train_window
 
-    def generate_windows(self, data: Union[pd.DataFrame, pd.Series, pd.Index]) -> Generator[WalkForwardWindow, None, None]:
+    def generate_windows(self, data: pd.DataFrame | pd.Series | pd.Index) -> Generator[WalkForwardWindow, None, None]:
         """
         Generates walk-forward window definitions for the provided data.
 
@@ -101,11 +101,11 @@ class WalkForwardOrchestrator:
                 train_end=train_end,
                 test_start=test_start,
                 test_end=test_end,
-                train_dates=(index[train_start], index[train_end - 1]),
-                test_dates=(index[test_start], index[test_end - 1]),
+                train_dates=(cast(pd.Timestamp, index[train_start]), cast(pd.Timestamp, index[train_end - 1])),
+                test_dates=(cast(pd.Timestamp, index[test_start]), cast(pd.Timestamp, index[test_end - 1])),
             )
 
-    def slice_data(self, data: pd.DataFrame, window: WalkForwardWindow) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def slice_data(self, data: pd.DataFrame, window: WalkForwardWindow) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Slices a DataFrame into train and test sets based on a window definition.
         """
@@ -127,9 +127,9 @@ class RecursiveMetaOrchestrator:
 
     def __init__(self, orchestrator: WalkForwardOrchestrator):
         self.orchestrator = orchestrator
-        self.sleeve_results: Dict[str, pd.Series] = {}
+        self.sleeve_results: dict[str, pd.Series] = {}
 
-    def aggregate_oos_returns(self, sleeve_returns: Dict[str, pd.Series]) -> pd.DataFrame:
+    def aggregate_oos_returns(self, sleeve_returns: dict[str, pd.Series]) -> pd.DataFrame:
         """
         Aggregates multiple sleeve return series into a single matrix.
         Uses inner join to ensure temporal alignment for the meta-optimizer.
@@ -142,7 +142,7 @@ class RecursiveMetaOrchestrator:
         # Pillar 9.1: Mixed-direction portfolios MUST use Stable Sum Gate in rebalance simulations.
         return meta_matrix.dropna()
 
-    def get_fractal_depth_info(self) -> Dict[str, Any]:
+    def get_fractal_depth_info(self) -> dict[str, Any]:
         """Returns metadata about the recursive depth (Fractal Meta Architecture)."""
         return {
             "depth": 1,  # Placeholder for actual depth tracking
@@ -150,7 +150,7 @@ class RecursiveMetaOrchestrator:
             "pillars_compliant": True,
         }
 
-    def stitch_oos_returns(self, step_results: List[pd.Series]) -> pd.Series:
+    def stitch_oos_returns(self, step_results: list[pd.Series]) -> pd.Series:
         """
         Stitches individual Out-of-Sample (OOS) return series into a single continuous series.
         This represents the 'Purified OOS Curve' (vectorbt pattern).
@@ -158,6 +158,7 @@ class RecursiveMetaOrchestrator:
         if not step_results:
             return pd.Series(dtype=float)
 
-        full_series = pd.concat(step_results)
+        full_series_raw = pd.concat(step_results)
+        full_series = cast(pd.Series, full_series_raw)
         # Pillar 7.1: Ensure the returns matrix preserves real trading calendars; never zero-fill weekends.
         return full_series[~full_series.index.duplicated(keep="first")].sort_index()

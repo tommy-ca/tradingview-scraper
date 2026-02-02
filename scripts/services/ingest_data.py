@@ -3,7 +3,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -123,8 +123,8 @@ class IngestionService:
                     df = pd.read_parquet(p_path)
 
                     is_toxic_ret = self.is_toxic(df)
-                    is_toxic_vol = AdvancedToxicityValidator.is_volume_toxic(df["volume"]) if "volume" in df.columns else False
-                    is_stalled = AdvancedToxicityValidator.is_price_stalled(df["close"]) if "close" in df.columns else False
+                    is_toxic_vol = AdvancedToxicityValidator.is_volume_toxic(cast(pd.Series, df["volume"])) if "volume" in df.columns else False
+                    is_stalled = AdvancedToxicityValidator.is_price_stalled(cast(pd.Series, df["close"])) if "close" in df.columns else False
 
                     if is_toxic_ret or is_toxic_vol or is_stalled:
                         reason = "return_spike" if is_toxic_ret else ("volume_spike" if is_toxic_vol else "price_stall")
