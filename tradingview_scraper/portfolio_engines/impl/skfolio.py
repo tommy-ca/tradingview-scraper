@@ -10,7 +10,14 @@ from typing import Any, Dict, List, Optional, cast
 import numpy as np
 import pandas as pd
 
-from tradingview_scraper.portfolio_engines.base import EngineRequest, EngineResponse, _effective_cap, _enforce_cap_series
+from tradingview_scraper.portfolio_engines.base import (
+    EngineRequest,
+    EngineResponse,
+    _effective_cap,
+    _enforce_cap_series,
+    ridge_hardening,
+    sanity_veto,
+)
 from tradingview_scraper.portfolio_engines.impl.custom import CustomClusteredEngine
 
 logger = logging.getLogger("skfolio")
@@ -25,6 +32,8 @@ class SkfolioEngine(CustomClusteredEngine):
     def is_available(cls) -> bool:
         return bool(importlib.util.find_spec("skfolio"))
 
+    @ridge_hardening
+    @sanity_veto
     def optimize(self, *, returns: pd.DataFrame, clusters: Dict[str, List[str]], meta: Optional[Dict[str, Any]] = None, stats: Optional[pd.DataFrame] = None, request: EngineRequest) -> EngineResponse:
         return super().optimize(returns=returns, clusters=clusters, meta=meta, stats=stats, request=request)
 

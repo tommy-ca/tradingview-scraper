@@ -10,7 +10,15 @@ import scipy.cluster.hierarchy as sch
 from scipy.spatial.distance import squareform
 from sklearn.covariance import ledoit_wolf
 
-from tradingview_scraper.portfolio_engines.base import BaseRiskEngine, EngineResponse, _effective_cap, _enforce_cap_series, _safe_series
+from tradingview_scraper.portfolio_engines.base import (
+    BaseRiskEngine,
+    EngineResponse,
+    _effective_cap,
+    _enforce_cap_series,
+    _safe_series,
+    ridge_hardening,
+    sanity_veto,
+)
 from tradingview_scraper.portfolio_engines.cluster_adapter import ClusteredUniverse, build_clustered_universe
 from tradingview_scraper.settings import get_settings
 
@@ -241,6 +249,8 @@ class CustomClusteredEngine(BaseRiskEngine):
     def is_available(cls) -> bool:
         return True
 
+    @ridge_hardening
+    @sanity_veto
     def optimize(self, *, returns, clusters, meta=None, stats=None, request):
         if request.profile == "equal_weight":
             targets = list(returns.columns)

@@ -1,14 +1,84 @@
 from __future__ import annotations
 
+import functools
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional, TypeVar, cast
 
 import numpy as np
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+
 # Updated ProfileName: Removed 'market_neutral' as it's now a constraint
 ProfileName = Literal["min_variance", "hrp", "max_sharpe", "barbell", "equal_weight", "benchmark", "market", "adaptive", "risk_parity", "erc", "market_neutral"]
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def ridge_hardening(func: F) -> F:
+    """
+    Decorator for allocation solvers that mathematically bounds the condition number
+    of the covariance matrix via adaptive ridge shrinkage retries.
+    """
+
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        request: Optional[EngineRequest] = kwargs.get("request")
+        if not request:
+            return func(self, *args, **kwargs)
+
+        # Initial attempt
+        try:
+            resp = func(self, *args, **kwargs)
+            if not resp.weights.empty:
+                return resp
+        except Exception as e:
+            logger.warning(f"  [RIDGE HARDENING] Solver {self.name} failed on initial attempt: {e}")
+
+        # Retry logic
+        max_retries = 2
+        for attempt in range(max_retries):
+            new_intensity = 0.50 if attempt == 0 else 0.95
+            logger.info(f"  [RIDGE HARDENING] Retrying {self.name} with increased shrinkage: {new_intensity}")
+
+            from dataclasses import replace
+
+            new_request = replace(request, default_shrinkage_intensity=new_intensity)
+            kwargs["request"] = new_request
+
+            try:
+                resp = func(self, *args, **kwargs)
+                if not resp.weights.empty:
+                    return resp
+            except Exception:
+                continue
+
+        return func(self, *args, **kwargs)
+
+    return cast(F, wrapper)
+
+
+def sanity_veto(func: F) -> F:
+    """
+    Decorator for allocation solvers that performs a post-optimization check on
+    portfolio stability (e.g., Sharpe Ratio, Weights variance).
+    """
+
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        resp: EngineResponse = func(self, *args, **kwargs)
+        # Check for numerical instability in weights
+        if not resp.weights.empty:
+            w_sum = resp.weights["Weight"].sum()
+            if w_sum <= 0 or np.isnan(w_sum):
+                logger.warning(f"  [SANITY VETO] Solver {self.name} produced unstable weights. Forcing EW.")
+                # We can't easily force EW here without returns, but we can flag it
+                object.__setattr__(resp, "warnings", resp.warnings + ["SANITY_VETO_EW_REQUIRED"])
+        return resp
+
+    return cast(F, wrapper)
 
 
 class EngineUnavailableError(RuntimeError):

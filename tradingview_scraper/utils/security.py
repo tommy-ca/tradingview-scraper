@@ -49,7 +49,13 @@ class SecurityUtils:
         target_path = (base_path / filename).resolve()
 
         # Security check: Ensure the resolved path is still under base_path
-        if not str(target_path).startswith(str(base_path)):
-            raise ValueError(f"Path traversal attempt detected: {symbol}")
+        # Using is_relative_to for robust path anchoring
+        try:
+            if not target_path.is_relative_to(base_path):
+                raise ValueError(f"Path traversal attempt detected: {symbol}")
+        except AttributeError:
+            # Fallback for Python < 3.9 (unlikely given the environment)
+            if not str(target_path).startswith(str(base_path)):
+                raise ValueError(f"Path traversal attempt detected: {symbol}")
 
         return target_path

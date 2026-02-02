@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 @njit
-def _get_rs_jit(series):
-    """JIT optimized R/S calculation."""
+def _get_rs_jit(series, z_buffer):
+    """JIT optimized R/S calculation using pre-allocated buffer."""
     n = len(series)
     if n < 2:
         return 0.0
@@ -23,14 +23,14 @@ def _get_rs_jit(series):
         m += series[i]
     m /= n
 
-    # Cumsum of deviations
-    z = np.zeros(n)
+    # Reset buffer
+    z_buffer[:n] = 0.0
     curr = 0.0
     mx = -1e15
     mn = 1e15
     for i in range(n):
         curr += series[i] - m
-        z[i] = curr
+        z_buffer[i] = curr
         if curr > mx:
             mx = curr
         if curr < mn:
@@ -74,13 +74,16 @@ def calculate_hurst_exponent(x: np.ndarray) -> float | None:
         rs_values = []
         valid_lags = []
 
+        # Pre-allocate buffer for JIT
+        z_buffer = np.zeros(n_total)
+
         for l in lags:
             n_segments = max(1, n_total // l)
             rs_avg = []
             for i in range(n_segments):
                 segment = x[i * l : (i + 1) * l]
                 if len(segment) > 0:
-                    rs = _get_rs_jit(segment)
+                    rs = _get_rs_jit(segment, z_buffer)
                     if rs > 0:
                         rs_avg.append(rs)
             if rs_avg:
@@ -99,34 +102,32 @@ def calculate_hurst_exponent(x: np.ndarray) -> float | None:
 
 
 @njit
-def _calculate_permutation_entropy_jit(x: np.ndarray, order: int = 3, delay: int = 1) -> float:
-    """JIT optimized Permutation Entropy core logic."""
+def _calculate_permutation_entropy_jit(x: np.ndarray, perm_counts: np.ndarray, segment_buffer: np.ndarray, order: int = 3, delay: int = 1) -> float:
+    """JIT optimized Permutation Entropy core logic using pre-allocated buffers."""
     n = len(x) - (order - 1) * delay
     num_permutations = n
 
-    # To map a permutation to an index:
-    # We use a simple base-order encoding. Max index for order 5 is 3125.
-    # We use a fixed-size array to avoid dynamic allocation issues in Numba.
-    perm_counts = np.zeros(4000, dtype=np.int32)
+    # Reset counts buffer
+    perm_counts.fill(0)
 
     for i in range(n):
-        # We must use a fixed size or slice for Numba in some versions
-        # but let's try this first
-        segment = np.zeros(order)
+        # Fill segment from pre-allocated buffer
         for j in range(order):
-            segment[j] = x[i + j * delay]
+            segment_buffer[j] = x[i + j * delay]
 
-        perm_idx = np.argsort(segment)
+        perm_idx = np.argsort(segment_buffer)
 
         key = 0
         for val in perm_idx:
             key = key * order + val
 
-        perm_counts[key] += 1
+        # Simple safety check for key bounds if needed
+        if key < len(perm_counts):
+            perm_counts[key] += 1
 
     # Calculate entropy
     ent = 0.0
-    for i in range(4000):
+    for i in range(len(perm_counts)):
         count = perm_counts[i]
         if count > 0:
             p = count / num_permutations
@@ -146,7 +147,14 @@ def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1)
         return None
 
     try:
-        pe_val = _calculate_permutation_entropy_jit(x, order, delay)
+        # Pre-allocate buffers for JIT
+        max_key = order**order
+        # Adjust 4000 to be dynamic or at least safe for order 5
+        buf_size = max(4000, max_key + 1)
+        perm_counts = np.zeros(buf_size, dtype=np.int32)
+        segment_buffer = np.zeros(order)
+
+        pe_val = _calculate_permutation_entropy_jit(x, perm_counts, segment_buffer, order, delay)
         # Normalize by log(n!) which is the maximum possible entropy for order n
         return float(pe_val / math.log(math.factorial(order)))
     except Exception:

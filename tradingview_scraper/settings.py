@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sys
+from contextvars import ContextVar
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -433,9 +434,28 @@ class TradingViewScraperSettings(BaseSettings):
 TradingViewScraperSettings.model_rebuild()
 
 
+_SETTINGS_CTX: ContextVar[Optional[TradingViewScraperSettings]] = ContextVar("settings_ctx", default=None)
+
+
 @lru_cache
-def get_settings() -> TradingViewScraperSettings:
+def _get_cached_base_settings() -> TradingViewScraperSettings:
+    """Loads default settings once and caches them."""
     return TradingViewScraperSettings()
+
+
+def get_settings() -> TradingViewScraperSettings:
+    """
+    Thread-safe settings retrieval.
+    Returns the active context settings if set, otherwise falls back to cached global settings.
+    """
+    if (ctx_settings := _SETTINGS_CTX.get()) is not None:
+        return ctx_settings
+    return _get_cached_base_settings()
+
+
+def set_active_settings(settings: TradingViewScraperSettings):
+    """Sets the active settings for the current context (thread/task)."""
+    return _SETTINGS_CTX.set(settings)
 
 
 if __name__ == "__main__":
