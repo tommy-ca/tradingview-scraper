@@ -190,7 +190,15 @@ def validate_atomic_run(
     if flat_path.exists():
         try:
             flat = _load_json(flat_path)
+            # FIX: Handle profile-based structure matching optimized portfolio
+            profs = flat.get("profiles") or {}
             weights = flat.get("weights") or flat.get("assets") or []
+
+            if not weights and profs:
+                # If structure is profiles, extract assets from HRP or the first available profile
+                target_prof = profs.get("hrp") or next(iter(profs.values()), {})
+                weights = target_prof.get("assets") or []
+
             if not weights:
                 checks.append(CheckResult(False, "ATOMIC_EMPTY_FLATTENED", f"[{profile}] portfolio_flattened.json has no weights"))
             else:

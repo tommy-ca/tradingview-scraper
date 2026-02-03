@@ -13,7 +13,7 @@ from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.portfolio_engines import build_engine
 from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
 from tradingview_scraper.regime import MarketRegimeDetector
-from tradingview_scraper.settings import get_settings
+from tradingview_scraper.settings import get_settings, clear_settings_cache
 from tradingview_scraper.utils.audit import AuditLedger, get_df_hash
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -108,7 +108,7 @@ def optimize_clustered_portfolio(run_id: Optional[str] = None, risk_profiles: Op
     if run_id:
         os.environ["TV_RUN_ID"] = run_id
         # Reload settings
-        get_settings.cache_clear()
+        clear_settings_cache()
         settings = get_settings()
 
     run_dir = settings.prepare_summaries_run_dir()

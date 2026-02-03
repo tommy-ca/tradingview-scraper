@@ -22,7 +22,7 @@ from rich.progress import (
 # Add the project root to the path so we can import internal modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tradingview_scraper.settings import get_settings
+from tradingview_scraper.settings import get_settings, clear_settings_cache
 from tradingview_scraper.telemetry.logging import setup_logging
 from tradingview_scraper.telemetry.tracing import trace_span
 from tradingview_scraper.utils.audit import AuditLedger
@@ -51,7 +51,7 @@ class ProductionPipeline:
 
         # CR-FIX: Ensure settings are reloaded with the new environment variables
         # This is critical for Ray/Worker reuse scenarios.
-        get_settings.cache_clear()
+        clear_settings_cache()
         self.settings = get_settings()
 
         # Override specific settings instance fields if needed (though env vars should drive this)

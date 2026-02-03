@@ -10,7 +10,7 @@ sys.path.append(os.getcwd())
 from scripts.audit_directional_sign_test import run_sign_test_for_meta_profile, write_findings_json
 from tradingview_scraper.orchestration.compute import RayComputeEngine
 from tradingview_scraper.pipelines.meta.base import MetaContext
-from tradingview_scraper.settings import get_settings
+from tradingview_scraper.settings import get_settings, clear_settings_cache
 from tradingview_scraper.telemetry.logging import setup_logging
 from tradingview_scraper.telemetry.tracing import trace_span
 
@@ -49,7 +49,7 @@ def run_meta_pipeline(
 
     # CR-FIX: Ensure global context for internal modules (AuditLedger, Settings)
     os.environ["TV_RUN_ID"] = run_id
-    get_settings.cache_clear()
+    clear_settings_cache()
     settings = get_settings()
     target_profiles = profiles or settings.profiles.split(",")
 
