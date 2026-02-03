@@ -158,7 +158,13 @@ Agents must ensure every production run adheres to the following five pillars:
  3.  **Structured Logging**: Prefer the `get_telemetry_logger()` factory to ensure all logs are injected with `trace_id` and `span_id` for cross-node correlation.
  4.  **Resource Limits**: Parallel execution must respect `TV_ORCH_CPUS` and `TV_ORCH_MEM_GB` to prevent system-wide resource contention.
 
-## 11. Claude Skills
+### 11. Data Ingestion & Loading
+ 1.  **DataLoader Standard**: All data loading MUST utilize the `tradingview_scraper.data.loader.DataLoader` library module. NEVER implement inline loading in scripts.
+ 2.  **Deterministic Priority**: The loader enforces a strict priority: Parquet -> Pickle -> Lakehouse Default.
+ 3.  **Security Anchoring**: All filesystem entry points must be anchored via `ensure_safe_path` to prevent path traversal.
+ 4.  **UTC Integrity**: All time-series data MUST be localized to UTC upon loading using the `ensure_utc_index` utility.
+
+## 12. Claude Skills
 The platform provides a set of Claude Code skills for high-level interaction.
 
 | Skill | Purpose | Example |

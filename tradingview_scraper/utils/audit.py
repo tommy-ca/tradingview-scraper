@@ -6,7 +6,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -106,7 +106,7 @@ class AuditLedger:
 
     def __init__(self, run_dir: Path):
         self.path = run_dir / "audit.jsonl"
-        self.last_hash: Optional[str] = None
+        self.last_hash: str | None = None
         self._initialize_chain()
 
     def _initialize_chain(self):
@@ -123,7 +123,7 @@ class AuditLedger:
         except Exception as e:
             logger.error(f"Failed to recover audit chain: {e}")
 
-    def _append(self, record: Dict[str, Any]):
+    def _append(self, record: dict[str, Any]):
         """Calculates hash, chains to previous, and appends to disk."""
         # Refresh last_hash from disk to support nested/concurrent processes
         self._initialize_chain()
@@ -143,7 +143,7 @@ class AuditLedger:
 
         self.last_hash = current_hash
 
-    def record_genesis(self, run_id: str, profile: str, manifest_hash: str, config: Optional[Dict[str, Any]] = None):
+    def record_genesis(self, run_id: str, profile: str, manifest_hash: str, config: dict[str, Any] | None = None):
         """Creates the Genesis Block for a new run."""
         git_hash = "unknown"
         try:
@@ -171,10 +171,10 @@ class AuditLedger:
     def record_intent(
         self,
         step: str,
-        params: Dict[str, Any],
-        input_hashes: Dict[str, str],
-        data: Optional[Dict[str, Any]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any],
+        input_hashes: dict[str, str],
+        data: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
     ):
         """Logs an intent to perform a pipeline action."""
         record = {
@@ -196,10 +196,10 @@ class AuditLedger:
         self,
         step: str,
         status: str,
-        output_hashes: Dict[str, str],
-        metrics: Dict[str, Any],
-        data: Optional[Dict[str, Any]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        output_hashes: dict[str, str],
+        metrics: dict[str, Any],
+        data: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
     ):
         """Logs the outcome of a pipeline action."""
         record = {

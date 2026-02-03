@@ -5,7 +5,7 @@ import importlib.util
 import inspect
 import logging
 import warnings
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, cast
 
 import numpy as np
 import pandas as pd
@@ -15,8 +15,6 @@ from tradingview_scraper.portfolio_engines.base import (
     EngineResponse,
     _effective_cap,
     _enforce_cap_series,
-    ridge_hardening,
-    sanity_veto,
 )
 from tradingview_scraper.portfolio_engines.impl.custom import CustomClusteredEngine
 
@@ -32,9 +30,18 @@ class SkfolioEngine(CustomClusteredEngine):
     def is_available(cls) -> bool:
         return bool(importlib.util.find_spec("skfolio"))
 
-    @ridge_hardening
-    @sanity_veto
-    def optimize(self, *, returns: pd.DataFrame, clusters: Dict[str, List[str]], meta: Optional[Dict[str, Any]] = None, stats: Optional[pd.DataFrame] = None, request: EngineRequest) -> EngineResponse:
+    def optimize(
+        self,
+        *,
+        returns: pd.DataFrame,
+        clusters: dict[str, list[str]],
+        meta: dict[str, Any] | None = None,
+        stats: pd.DataFrame | None = None,
+        request: EngineRequest,
+    ) -> EngineResponse:
+        """
+        Delegates to base class which already handles @ridge_hardening and @sanity_veto.
+        """
         return super().optimize(returns=returns, clusters=clusters, meta=meta, stats=stats, request=request)
 
     def _optimize_cluster_weights(self, *, universe, request) -> pd.Series:

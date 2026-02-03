@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -23,37 +23,42 @@ def _apply_jitter(rets: pd.Series) -> pd.Series:
     return rets + np.linspace(0, EPSILON_JITTER, len(rets))
 
 
-def _get_annualization_factor(rets: pd.Series) -> int:
+def _get_annualization_factor(rets: pd.Series) -> float:
     """
-    Detects frequency and returns 252 for 5-day week or 365 for 7-day week.
-    Standardizes on 365 for Crypto sleeves.
+    Detects frequency and returns institutional annualization factor.
+    Standardizes on:
+    - 365 for Crypto/24-7 markets.
+    - 252 for TradFi 5-day markets.
+    - 252 * 24 for Hourly intraday.
     """
-    from tradingview_scraper.settings import get_settings
+    if rets.empty or len(rets) < 2:
+        return 252.0
 
-    settings = get_settings()
-
-    # If explicitly set in environment or manifest (Future)
-    # For now, we detect 24/7 markets
     try:
         idx = rets.index
         if not isinstance(idx, pd.DatetimeIndex):
             idx = pd.to_datetime(idx)
 
+        # 1. Detect Intraday (Hourly)
+        diff = idx[1] - idx[0]
+        if diff <= pd.Timedelta(hours=1):
+            return 252.0 * 24.0
+
+        # 2. Detect 24/7 Markets (Crypto)
         # Check for weekends in the data
         days = getattr(idx, "dayofweek")
         if any(d in [5, 6] for d in days):
-            return 365
+            return 365.0
 
         # Check if the asset is crypto based on naming convention
         name_str = str(getattr(rets, "name", "") or "").upper()
         if "USDT" in name_str or "USDC" in name_str:
-            return 365
+            return 365.0
 
     except Exception:
         pass
 
-    # Global default from settings if available (e.g. backtest_annualization_factor)
-    return 252
+    return 252.0
 
 
 def calculate_max_drawdown(series: pd.Series | np.ndarray) -> float:
@@ -67,7 +72,7 @@ def calculate_max_drawdown(series: pd.Series | np.ndarray) -> float:
     return float(drawdown.min())
 
 
-def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[int] = None) -> Dict[str, Any]:
+def calculate_performance_metrics(daily_returns: pd.Series, periods: int | None = None) -> dict[str, Any]:
     """
     Computes a standardized suite of performance metrics using QuantStats.
     Adds robustness against anomalous data, extreme volatility, and bankruptcy.
@@ -216,7 +221,7 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: Optional[in
         }
 
 
-def get_metrics_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Series] = None) -> str:
+def get_metrics_markdown(daily_returns: pd.Series, benchmark: pd.Series | None = None) -> str:
     try:
         import quantstats as qs
 
@@ -228,7 +233,7 @@ def get_metrics_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Series
         return f"Error: {e}"
 
 
-def get_full_report_markdown(daily_returns: pd.Series, benchmark: Optional[pd.Series] = None, title: str = "Strategy", mode: str = "full") -> str:
+def get_full_report_markdown(daily_returns: pd.Series, benchmark: pd.Series | None = None, title: str = "Strategy", mode: str = "full") -> str:
     try:
         import quantstats as qs
 
@@ -332,7 +337,7 @@ def calculate_friction_alignment(sharpe_real: float, sharpe_ideal: float) -> flo
     return float(1.0 - (sharpe_real / sharpe_ideal))
 
 
-def calculate_selection_jaccard(universe_a: List[str], universe_b: List[str]) -> float:
+def calculate_selection_jaccard(universe_a: list[str], universe_b: list[str]) -> float:
     """Jaccard similarity between two symbol sets."""
     set_a = set(universe_a)
     set_b = set(universe_b)
@@ -350,7 +355,7 @@ def calculate_antifragility_distribution(
     min_obs: int = 100,
     min_tail: int = 10,
     eps: float = 1e-12,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Quantified antifragility from return distribution (skew + tail asymmetry)."""
     rets = daily_returns.dropna().copy()
     n_obs = int(len(rets))
@@ -418,7 +423,7 @@ def calculate_antifragility_stress(
     q_stress: float = 0.10,
     min_obs: int = 100,
     min_stress: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Quantified antifragility from stress response vs a reference baseline."""
     strat = strategy_returns.dropna().copy()
     ref = reference_returns.dropna().copy()

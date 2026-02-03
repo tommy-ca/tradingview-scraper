@@ -4,15 +4,29 @@ import functools
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Literal, Optional, TypeVar, cast
+from typing import Any, Callable, Literal, TypeVar, cast
 
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Updated ProfileName: Removed 'market_neutral' as it's now a constraint
-ProfileName = Literal["min_variance", "hrp", "max_sharpe", "barbell", "equal_weight", "benchmark", "market", "adaptive", "risk_parity", "erc", "market_neutral"]
+# Institutional Standard: Condition number hurdle for numerical stability
+KAPPA_HURDLE = 5000.0
+
+ProfileName = Literal[
+    "min_variance",
+    "hrp",
+    "max_sharpe",
+    "barbell",
+    "equal_weight",
+    "benchmark",
+    "market",
+    "adaptive",
+    "risk_parity",
+    "erc",
+    "market_neutral",
+]
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -21,41 +35,55 @@ def ridge_hardening(func: F) -> F:
     """
     Decorator for allocation solvers that mathematically bounds the condition number
     of the covariance matrix via adaptive ridge shrinkage retries.
+
+    Audit:
+        - Numerical Purity: Rely strictly on Training Set Condition Number (Kappa).
+        - No Look-ahead: Prohibits use of out-of-sample data.
     """
 
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
-        request: Optional[EngineRequest] = kwargs.get("request")
-        if not request:
+        request: EngineRequest | None = kwargs.get("request")
+        returns: pd.DataFrame | None = kwargs.get("returns")
+
+        if not request or returns is None or returns.empty:
             return func(self, *args, **kwargs)
 
-        # Initial attempt
-        try:
-            resp = func(self, *args, **kwargs)
-            if not resp.weights.empty:
-                return resp
-        except Exception as e:
-            logger.warning(f"  [RIDGE HARDENING] Solver {self.name} failed on initial attempt: {e}")
+        # Numerical Stability Logic:
+        # We attempt to solve. If it fails or results are clearly unstable,
+        # we retry with increasing shrinkage intensity.
 
-        # Retry logic
-        max_retries = 2
-        for attempt in range(max_retries):
-            new_intensity = 0.50 if attempt == 0 else 0.95
-            logger.info(f"  [RIDGE HARDENING] Retrying {self.name} with increased shrinkage: {new_intensity}")
+        # Shrinkage levels: Initial -> 0.15 -> 0.50 -> 0.95
+        intensities = [request.default_shrinkage_intensity, 0.15, 0.50, 0.95]
+        # Remove duplicates while preserving order
+        shrinkage_levels = []
+        for i in intensities:
+            if i not in shrinkage_levels:
+                shrinkage_levels.append(i)
 
-            from dataclasses import replace
+        from dataclasses import replace
 
-            new_request = replace(request, default_shrinkage_intensity=new_intensity)
-            kwargs["request"] = new_request
-
+        last_error = None
+        for intensity in shrinkage_levels:
             try:
-                resp = func(self, *args, **kwargs)
-                if not resp.weights.empty:
-                    return resp
-            except Exception:
-                continue
+                active_req = replace(request, default_shrinkage_intensity=intensity)
+                kwargs["request"] = active_req
 
-        return func(self, *args, **kwargs)
+                resp: EngineResponse = func(self, *args, **kwargs)
+
+                if not resp.weights.empty:
+                    # Check if weights are valid (no NaNs, positive sum)
+                    w_sum = resp.weights["Weight"].sum()
+                    if w_sum > 1e-6 and not resp.weights["Weight"].isna().any():
+                        return resp
+
+            except Exception as e:
+                last_error = e
+                logger.warning(f"  [RIDGE HARDENING] {self.name} attempt failed (shrinkage={intensity}): {e}")
+
+        # If all attempts failed, return an empty response with warning
+        logger.error(f"  [HARDENING FAILED] {self.name} exhausted all shrinkage levels. Error: {last_error}")
+        return EngineResponse(engine=self.name, request=request, weights=pd.DataFrame(), meta={"hardening_failure": True, "last_error": str(last_error)}, warnings=["HARDENING_EXHAUSTED"])
 
     return cast(F, wrapper)
 
@@ -63,19 +91,22 @@ def ridge_hardening(func: F) -> F:
 def sanity_veto(func: F) -> F:
     """
     Decorator for allocation solvers that performs a post-optimization check on
-    portfolio stability (e.g., Sharpe Ratio, Weights variance).
+    portfolio stability (e.g., Weights variance, sum checks).
     """
 
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
         resp: EngineResponse = func(self, *args, **kwargs)
-        # Check for numerical instability in weights
         if not resp.weights.empty:
+            # Numerical Instability Checks (Weight-based only)
             w_sum = resp.weights["Weight"].sum()
-            if w_sum <= 0 or np.isnan(w_sum):
-                logger.warning(f"  [SANITY VETO] Solver {self.name} produced unstable weights. Forcing EW.")
-                # We can't easily force EW here without returns, but we can flag it
-                object.__setattr__(resp, "warnings", resp.warnings + ["SANITY_VETO_EW_REQUIRED"])
+            has_nan = resp.weights["Weight"].isna().any()
+            is_unstable = w_sum <= 1e-6 or has_nan
+
+            if is_unstable:
+                logger.warning(f"  [SANITY VETO] Solver {self.name} produced unstable weights (sum={w_sum:.6f}).")
+                object.__setattr__(resp, "warnings", list(resp.warnings) + ["SANITY_VETO_UNSTABLE_WEIGHTS"])
+
         return resp
 
     return cast(F, wrapper)
@@ -96,9 +127,9 @@ class EngineRequest:
     max_aggressor_clusters: int = 5
     regime: str = "NORMAL"
     market_environment: str = "NORMAL"
-    bayesian_params: Dict[str, Any] = field(default_factory=dict)
-    prev_weights: Optional[pd.Series] = None
-    kappa_shrinkage_threshold: float = 15000.0
+    bayesian_params: dict[str, Any] = field(default_factory=dict)
+    prev_weights: pd.Series | None = None
+    kappa_shrinkage_threshold: float = 5000.0
     default_shrinkage_intensity: float = 0.01
     adaptive_fallback_profile: str = "erc"
 
@@ -106,7 +137,7 @@ class EngineRequest:
     market_neutral: bool = False
     target_beta: float = 0.0
     # Optional benchmark returns for beta calculation
-    benchmark_returns: Optional[pd.Series] = None
+    benchmark_returns: pd.Series | None = None
 
 
 @dataclass(frozen=True)
@@ -114,8 +145,8 @@ class EngineResponse:
     engine: str
     request: EngineRequest
     weights: pd.DataFrame
-    meta: Dict[str, Any] = field(default_factory=dict)
-    warnings: List[str] = field(default_factory=list)
+    meta: dict[str, Any] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
 
 class BaseRiskEngine(ABC):
@@ -130,7 +161,15 @@ class BaseRiskEngine(ABC):
         return True
 
     @abstractmethod
-    def optimize(self, *, returns: pd.DataFrame, clusters: Dict[str, List[str]], meta: Optional[Dict[str, Any]] = None, stats: Optional[pd.DataFrame] = None, request: EngineRequest) -> EngineResponse:
+    def optimize(
+        self,
+        *,
+        returns: pd.DataFrame,
+        clusters: dict[str, list[str]],
+        meta: dict[str, Any] | None = None,
+        stats: pd.DataFrame | None = None,
+        request: EngineRequest,
+    ) -> EngineResponse:
         pass
 
 
@@ -195,7 +234,15 @@ class MarketBaselineEngine(BaseRiskEngine):
     def is_available(cls) -> bool:
         return True
 
-    def optimize(self, *, returns: pd.DataFrame, clusters: Dict[str, List[str]], meta: Optional[Dict[str, Any]] = None, stats: Optional[pd.DataFrame] = None, request: EngineRequest) -> EngineResponse:
+    def optimize(
+        self,
+        *,
+        returns: pd.DataFrame,
+        clusters: dict[str, list[str]],
+        meta: dict[str, Any] | None = None,
+        stats: pd.DataFrame | None = None,
+        request: EngineRequest,
+    ) -> EngineResponse:
         targets = list(returns.columns)
         if request.profile == "market":
             from tradingview_scraper.settings import get_settings

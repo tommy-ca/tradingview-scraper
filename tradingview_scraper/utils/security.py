@@ -59,3 +59,23 @@ class SecurityUtils:
                 raise ValueError(f"Path traversal attempt detected: {symbol}")
 
         return target_path
+
+    @staticmethod
+    def ensure_safe_path(path: Path | str, allowed_roots: list[Path]) -> Path:
+        """
+        Enforces strict path anchoring to prevent traversal attacks.
+
+        Args:
+            path: The path to validate.
+            allowed_roots: List of directories the path is allowed to be in.
+
+        Returns:
+            Path: The resolved absolute path.
+
+        Raises:
+            ValueError: If the path is outside the allowed roots.
+        """
+        resolved = Path(path).resolve()
+        if not any(resolved.is_relative_to(root.resolve()) for root in allowed_roots):
+            raise ValueError(f"Security violation: Path {resolved} is outside allowed roots.")
+        return resolved

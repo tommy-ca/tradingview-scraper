@@ -2,7 +2,6 @@
 """Script invoked by quant-optimize skill."""
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -20,13 +19,8 @@ def main():
 
     print(f"Starting optimization for run: {args.run_id} (Profile: {args.profile})")
 
-    os.environ["TV_RUN_ID"] = args.run_id
-    settings = get_settings()
+    settings = get_settings().clone(run_id=args.run_id)
     run_dir = settings.prepare_summaries_run_dir()
-
-    # We use QuantSDK to run optimization
-    # Note: allocation.optimize stage must be registered
-    # (Actually optimization is often profile-driven)
 
     from scripts.optimize_clustered_v2 import optimize_clustered_portfolio
 
