@@ -180,7 +180,9 @@ def build_meta_returns(
                 if target_file.suffix == ".parquet":
                     s_rets_raw = pd.read_parquet(target_file)
                 else:
-                    s_rets_raw = pd.read_pickle(target_file)
+                    # Institutional Security: Anchor pickle loads to allowed roots
+                    safe_p = loader.ensure_safe_path(target_file)
+                    s_rets_raw = pd.read_pickle(safe_p)
 
                 s_rets = s_rets_raw.iloc[:, 0].to_frame(s_id) if isinstance(s_rets_raw, pd.DataFrame) else s_rets_raw.to_frame(s_id)
 

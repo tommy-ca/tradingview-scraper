@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Dict, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -22,6 +24,9 @@ from tradingview_scraper.utils.scoring import (
     calculate_mps_score,
 )
 
+if TYPE_CHECKING:
+    from tradingview_scraper.backtest.models import NumericalWorkspace
+
 logger = logging.getLogger("selection_engines")
 
 
@@ -41,10 +46,17 @@ class SelectionEngineV3(BaseSelectionEngine):
     def name(self) -> str:
         return "v3"
 
-    def select(self, returns, raw_candidates, stats_df, request):
-        return self._select_v3_core(returns, raw_candidates, stats_df, request)
+    def select(
+        self,
+        returns: pd.DataFrame,
+        raw_candidates: list[dict[str, Any]],
+        stats_df: pd.DataFrame | None,
+        request: SelectionRequest,
+        workspace: NumericalWorkspace | None = None,
+    ) -> SelectionResponse:
+        return self._select_v3_core(returns, raw_candidates, stats_df, request, workspace)
 
-    def _get_active_thresholds(self, request: SelectionRequest) -> Dict[str, float]:
+    def _get_active_thresholds(self, request: SelectionRequest) -> dict[str, float]:
         s = get_settings()
         return {
             "entropy_max": request.params.get("entropy_max_threshold", s.features.entropy_max_threshold),
@@ -63,7 +75,14 @@ class SelectionEngineV3(BaseSelectionEngine):
             f_m["efficiency"] = mps_metrics["efficiency"]
         return calculate_mps_score(f_m, methods=methods) * (1.0 - frag_penalty)
 
-    def _select_v3_core(self, returns, raw_candidates, stats_df, request):
+    def _select_v3_core(
+        self,
+        returns: pd.DataFrame,
+        raw_candidates: list[dict[str, Any]],
+        stats_df: pd.DataFrame | None,
+        request: SelectionRequest,
+        workspace: NumericalWorkspace | None = None,
+    ) -> SelectionResponse:
         candidate_map = {c["symbol"]: c for c in raw_candidates}
         settings, selection_warnings, metrics, vetoes = get_settings(), [], {}, {}
         thresholds = self._get_active_thresholds(request)
@@ -90,9 +109,19 @@ class SelectionEngineV3(BaseSelectionEngine):
         af_all, frag_all, regime_all = pd.Series(0.5, index=returns.columns), pd.Series(0.0, index=returns.columns), pd.Series(1.0, index=returns.columns)
 
         lookback = min(len(returns), 120)
-        pe_all = returns.apply(lambda col: calculate_permutation_entropy(col.tail(lookback).to_numpy(), order=5))
-        er_all = returns.apply(lambda col: calculate_efficiency_ratio(col.tail(lookback).to_numpy()))
-        hurst_all = returns.apply(lambda col: calculate_hurst_exponent(col.to_numpy()))
+
+        # Wire up NumericalWorkspace if available
+        perm_counts = workspace.perm_counts if workspace else None
+        segment_buffer = workspace.segment_buffer if workspace else None
+
+        pe_all_raw = returns.apply(lambda col: calculate_permutation_entropy(col.tail(lookback).to_numpy(), order=5, perm_counts=perm_counts, segment_buffer=segment_buffer))
+        pe_all = pd.Series(pe_all_raw, index=returns.columns)
+
+        er_all_raw = returns.apply(lambda col: calculate_efficiency_ratio(col.tail(lookback).to_numpy()))
+        er_all = pd.Series(er_all_raw, index=returns.columns)
+
+        hurst_all_raw = returns.apply(lambda col: calculate_hurst_exponent(col.to_numpy()))
+        hurst_all = pd.Series(hurst_all_raw, index=returns.columns)
 
         if stats_df is not None:
             common = [s for s in returns.columns if s in stats_df.index]
@@ -120,8 +149,8 @@ class SelectionEngineV3(BaseSelectionEngine):
             "antifragility": af_all,
             "survival": regime_all,
             "efficiency": er_all,
-            "entropy": (1.0 - pe_all.fillna(1.0)).clip(0, 1),
-            "hurst_clean": (1.0 - (hurst_all.fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1),
+            "entropy": (1.0 - pe_all.astype(float).fillna(1.0)).clip(0, 1),
+            "hurst_clean": (1.0 - (hurst_all.astype(float).fillna(0.5) - 0.5).abs() * 2.0).clip(0, 1),
             "adx": adx_all,
         }
         methods = {
@@ -354,10 +383,17 @@ class SelectionEngineV3_2(SelectionEngineV3_1):
             },
         )
 
-    def select(self, returns, raw_candidates, stats_df, request):
+    def select(
+        self,
+        returns: pd.DataFrame,
+        raw_candidates: list[dict[str, Any]],
+        stats_df: pd.DataFrame | None,
+        request: SelectionRequest,
+        workspace: NumericalWorkspace | None = None,
+    ) -> SelectionResponse:
         s = get_settings()
         self.weights = s.features.weights_global
-        return self._select_v3_core(returns, raw_candidates, stats_df, request)
+        return self._select_v3_core(returns, raw_candidates, stats_df, request, workspace)
 
     def _calculate_alpha_scores(self, mps_metrics, methods, frag_penalty):
         from tradingview_scraper.utils.scoring import map_to_probability

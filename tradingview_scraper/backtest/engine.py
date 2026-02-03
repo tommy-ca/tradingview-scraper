@@ -13,7 +13,7 @@ from tradingview_scraper.backtest.strategies import StrategyFactory
 from tradingview_scraper.data.loader import DataLoader
 from tradingview_scraper.portfolio_engines import EngineRequest, ProfileName, build_engine, build_simulator
 from tradingview_scraper.selection_engines import build_selection_engine, get_hierarchical_clusters
-from tradingview_scraper.selection_engines.base import SelectionRequest
+from tradingview_scraper.selection_engines.base import SelectionRequest, SelectionResponse
 from tradingview_scraper.settings import TradingViewScraperSettings, get_settings
 from tradingview_scraper.utils.audit import AuditLedger
 from tradingview_scraper.utils.synthesis import StrategySynthesizer
@@ -170,22 +170,8 @@ class BacktestEngine:
         engines: list[str],
         sim_names: list[str],
     ) -> None:
-        """
-        Executes the 3-pillar sequence for a single rolling window.
-
-        Args:
-            window: Current window definition.
-            orchestrator: Active orchestrator for data slicing.
-            is_meta: Whether this is a meta-portfolio run.
-            profiles: List of optimization profiles to execute.
-            engines: List of optimization engines to use.
-            sim_names: List of simulators to run.
-
-        Audit:
-            - Performance: Leverages pre-allocated NumericalWorkspace.
-            - Traceability: Records selection outcome to AuditLedger.
-        """
-        current_date = cast(pd.Timestamp, window.test_dates[0])
+        """Executes the 3-pillar sequence for a single rolling window."""
+        current_date = window.test_dates[0]
         train_rets, test_rets = orchestrator.slice_data(self.returns, window)
 
         # 1. Dynamic Filtering
@@ -193,9 +179,33 @@ class BacktestEngine:
             train_rets = self._apply_dynamic_filter(current_date, train_rets)
 
         # 2. Regime Detection
-        regime_name, market_env = self._detect_market_regime(train_rets)
+        regime_name, market_env = self._detect_market_regime(train_rets, workspace=self.workspace)
 
         # 3. Pillar 1: Universe Selection
+        selection = self._execute_selection(train_rets, window.step_index)
+        if not selection:
+            return
+
+        # 4. Pillar 2: Strategy Synthesis
+        train_rets_strat = self._execute_synthesis(train_rets, selection.winners, is_meta)
+
+        # 5. Pillar 3: Allocation & Simulation
+        self._execute_allocation(
+            window=window,
+            regime_name=regime_name,
+            market_env=market_env,
+            train_rets=train_rets,
+            train_rets_strat=train_rets_strat,
+            selection=selection,
+            profiles=profiles,
+            engines=engines,
+            sim_names=sim_names,
+            is_meta=is_meta,
+            test_rets=test_rets,
+        )
+
+    def _execute_selection(self, train_rets: pd.DataFrame, window_index: int) -> SelectionResponse | None:
+        """Orchestrates Pillar 1: Universe Selection."""
         strategy = StrategyFactory.infer_strategy(self.settings.profile or "", self.settings.strategy)
         selection_engine = build_selection_engine(self.settings.features.selection_mode)
 
@@ -204,7 +214,13 @@ class BacktestEngine:
             threshold=self.settings.threshold,
             strategy=strategy,
         )
-        selection = selection_engine.select(returns=train_rets, raw_candidates=self.raw_candidates, stats_df=self.stats, request=req_select)
+        selection = selection_engine.select(
+            returns=train_rets,
+            raw_candidates=self.raw_candidates,
+            stats_df=self.stats,
+            request=req_select,
+            workspace=self.workspace,
+        )
 
         # Integrity Check: Filter winners missing from returns matrix
         if selection.winners:
@@ -212,23 +228,42 @@ class BacktestEngine:
             object.__setattr__(selection, "winners", winners)
 
         if not selection.winners:
-            return
+            return None
 
         winners_syms = [w["symbol"] for w in selection.winners]
-        window_meta = self.metadata.copy()
+
+        # Merge winner metadata into local state
         for w in selection.winners:
-            window_meta[w["symbol"]] = w
+            self.metadata[w["symbol"]] = w
 
         if self.ledger:
-            self._record_selection_audit(selection, winners_syms, train_rets, selection_engine.name, window.step_index)
+            self._record_selection_audit(selection, winners_syms, train_rets, selection_engine.name, window_index)
 
-        # 4. Pillar 2: Strategy Synthesis
+        return selection
+
+    def _execute_synthesis(self, train_rets: pd.DataFrame, winners: list[dict[str, Any]], is_meta: bool) -> pd.DataFrame:
+        """Orchestrates Pillar 2: Strategy Synthesis."""
         if is_meta:
-            train_rets_strat = train_rets[winners_syms]
-        else:
-            train_rets_strat = self.synthesizer.synthesize(train_rets, selection.winners, self.settings.features)
+            winners_syms = [w["symbol"] for w in winners]
+            return train_rets[winners_syms]
 
-        # 5. Pillar 3: Allocation & Simulation
+        return self.synthesizer.synthesize(train_rets, winners, self.settings.features)
+
+    def _execute_allocation(
+        self,
+        window: WalkForwardWindow,
+        regime_name: str,
+        market_env: str,
+        train_rets: pd.DataFrame,
+        train_rets_strat: pd.DataFrame,
+        selection: SelectionResponse,
+        profiles: list[str],
+        engines: list[str],
+        sim_names: list[str],
+        is_meta: bool,
+        test_rets: pd.DataFrame,
+    ) -> None:
+        """Orchestrates Pillar 3: Portfolio Allocation & Simulation."""
         new_cluster_ids, _ = get_hierarchical_clusters(train_rets_strat, float(self.settings.threshold), 25)
         stringified_clusters = {}
         for sym, c_id in zip(train_rets_strat.columns, new_cluster_ids):
@@ -236,6 +271,9 @@ class BacktestEngine:
 
         bench_sym = self.settings.benchmark_symbols[0] if self.settings.benchmark_symbols else None
         bench_rets = train_rets[bench_sym] if bench_sym and bench_sym in train_rets.columns else None
+
+        # Snapshot metadata for this cross-section
+        window_meta = {s: self.metadata.get(s, {}) for s in train_rets_strat.columns}
 
         for engine_name in engines:
             profiles_to_run = ["adaptive"] if engine_name == "adaptive" else profiles
@@ -414,21 +452,21 @@ class BacktestEngine:
             run_dir = self.settings.prepare_summaries_run_dir()
 
         anchor_prof = "hrp"
-        temp_meta_path = run_dir / "data" / f"meta_returns_{config.profile}_{anchor_prof}.pkl"
+        temp_meta_path = run_dir / "data" / f"meta_returns_{config.profile}_{anchor_prof}.parquet"
 
         # Deferred import to avoid circular dependency
         from scripts.build_meta_returns import build_meta_returns
 
         build_meta_returns(
             meta_profile=config.profile,
-            output_path=str(run_dir / "data" / "meta.pkl"),
+            output_path=str(run_dir / "data" / "meta.parquet"),
             profiles=[anchor_prof],
             manifest_path=config.manifest_path,
             base_dir=run_dir / "data",
         )
 
         if temp_meta_path.exists():
-            data = pd.read_pickle(temp_meta_path)
+            data = pd.read_parquet(temp_meta_path)
             if isinstance(data, pd.Series):
                 self.returns = data.to_frame()
             else:
@@ -475,10 +513,9 @@ class BacktestEngine:
 
         return train_rets
 
-    def _detect_market_regime(self, train_rets: pd.DataFrame) -> tuple[str, str]:
+    def _detect_market_regime(self, train_rets: pd.DataFrame, workspace: NumericalWorkspace | None = None) -> tuple[str, str]:
         if not train_rets.empty and len(train_rets) > 60:
-            regime_label, _, quadrant = self.detector.detect_regime(train_rets)
-            return regime_label, quadrant
+            return self.detector.detect_regime(train_rets, workspace=workspace)[:3:2]  # label, quadrant
         return "NORMAL", "NORMAL"
 
     def _record_selection_audit(self, selection, winners_syms, train_rets, engine_name, window_index):

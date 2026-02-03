@@ -97,23 +97,25 @@ def _weights_df_from_cluster_weights(*, universe: ClusteredUniverse, cluster_wei
     return df
 
 
-def _cov_shrunk(returns: pd.DataFrame, kappa_thresh: float = 15000.0, default_shrinkage: float = 0.01) -> np.ndarray:
+def _cov_shrunk(returns: pd.DataFrame, shrinkage: float = 0.01) -> np.ndarray:
+    """
+    Computes a shrunk covariance matrix.
+    Standardized to a single-pass implementation; retries are handled by decorators.
+    """
     if returns.shape[1] < 2:
         c = returns.cov().values * 252
         return np.asarray(c, dtype=float)
+
     s_cov, _ = ledoit_wolf(returns.values)
     cov = s_cov * 252
-    n, shr = cov.shape[0], default_shrinkage
-    while shr <= 0.1:
-        vols = np.sqrt(np.diag(cov) + 1e-15)
-        corr = cov / np.outer(vols, vols)
-        corr_r = corr * (1.0 - shr) + np.eye(n) * shr
-        evs = np.linalg.eigvalsh(corr_r)
-        k = float(evs.max() / (np.abs(evs).min() + 1e-15))
-        if k <= kappa_thresh:
-            return np.outer(vols, vols) * corr_r
-        shr += 0.01
-    return cov + np.eye(n) * 0.1 * np.mean(np.diag(cov))
+    n = cov.shape[0]
+
+    # Simple single-pass shrinkage
+    vols = np.sqrt(np.diag(cov) + 1e-15)
+    corr = cov / np.outer(vols, vols)
+    corr_r = corr * (1.0 - shrinkage) + np.eye(n) * shrinkage
+
+    return np.outer(vols, vols) * corr_r
 
 
 def _solve_cvxpy(
@@ -191,49 +193,12 @@ def _solve_cvxpy(
 
         if w.value is None or prob.status not in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}:
             logger.warning(f"Solver failed: status={prob.status}, profile={profile}, neutral={market_neutral}")
-            if market_neutral:
-                # Recursive fallback to unconstrained or relaxed
-                current_tol = beta_tolerance or (0.05 if n >= 15 else 0.15)
-                if current_tol < 0.3:
-                    logger.info(f"Retrying Market Neutral with relaxed tolerance: {current_tol + 0.1}")
-                    return _solve_cvxpy(
-                        n=n,
-                        cap=cap,
-                        cov=cov,
-                        mu=mu,
-                        penalties=penalties,
-                        profile=profile,
-                        risk_free_rate=risk_free_rate,
-                        prev_weights=prev_weights,
-                        l2_gamma=l2_gamma,
-                        solver=solver,
-                        solver_options=options,
-                        betas=betas,
-                        market_neutral=True,
-                        beta_tolerance=current_tol + 0.1,
-                    )
-                return _solve_cvxpy(
-                    n=n,
-                    cap=cap,
-                    cov=cov,
-                    mu=mu,
-                    penalties=penalties,
-                    profile=profile,
-                    risk_free_rate=risk_free_rate,
-                    prev_weights=prev_weights,
-                    l2_gamma=l2_gamma,
-                    solver=solver,
-                    solver_options=options,
-                    betas=betas,
-                    market_neutral=False,
-                    beta_tolerance=None,
-                )
-            return np.array([1.0 / n] * n)
+            return np.array([])  # Let the decorator handle retries or fallbacks
 
         return np.array(w.value).flatten()
     except Exception as e:
         logger.error(f"CVXPY Internal Error: {e}")
-        return np.array([1.0 / n] * n)
+        return np.array([])
 
 
 def _cluster_penalties(u):
@@ -321,7 +286,7 @@ class CustomClusteredEngine(BaseRiskEngine):
         cap = _effective_cap(cap_val, n_clean)
 
         # Calculate covariance on clean data
-        cov = _cov_shrunk(X_clean, kappa_thresh=request.kappa_shrinkage_threshold, default_shrinkage=request.default_shrinkage_intensity)
+        cov = _cov_shrunk(X_clean, shrinkage=request.default_shrinkage_intensity)
 
         if request.profile == "hrp":
             link = sch.linkage(squareform(np.sqrt(0.5 * (1 - X_clean.corr().values.clip(-1, 1))), checks=False), method="ward")

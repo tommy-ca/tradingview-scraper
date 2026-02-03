@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -19,6 +21,9 @@ from tradingview_scraper.utils.predictability import (
 )
 from tradingview_scraper.utils.scoring import calculate_liquidity_score_vectorized, normalize_series
 
+if TYPE_CHECKING:
+    from tradingview_scraper.backtest.models import NumericalWorkspace
+
 logger = logging.getLogger("selection_engines")
 
 
@@ -35,9 +40,10 @@ class SelectionEngineV2(BaseSelectionEngine):
     def select(
         self,
         returns: pd.DataFrame,
-        raw_candidates: List[Dict[str, Any]],
-        stats_df: Optional[pd.DataFrame],
+        raw_candidates: list[dict[str, Any]],
+        stats_df: pd.DataFrame | None,
         request: SelectionRequest,
+        workspace: NumericalWorkspace | None = None,
     ) -> SelectionResponse:
         return self._select_additive_core(
             returns,
@@ -55,9 +61,10 @@ class SelectionEngineV2(BaseSelectionEngine):
                 "entropy": "rank",
                 "hurst_clean": "rank",
             },
+            workspace=workspace,
         )
 
-    def _select_additive_core(self, returns, raw_candidates, stats_df, request, weights, methods, clipping_sigma=3.0):
+    def _select_additive_core(self, returns, raw_candidates, stats_df, request, weights, methods, clipping_sigma=3.0, workspace=None):
         candidate_map = {c["symbol"]: c for c in raw_candidates}
         settings = get_settings()
         cluster_ids, _ = get_hierarchical_clusters(returns, request.threshold, request.max_clusters)
@@ -80,7 +87,12 @@ class SelectionEngineV2(BaseSelectionEngine):
         af_all, frag_all, regime_all = pd.Series(0.5, index=returns.columns), pd.Series(0.0, index=returns.columns), pd.Series(1.0, index=returns.columns)
 
         lookback = min(len(returns), 120)
-        pe_all = returns.apply(lambda col: calculate_permutation_entropy(col.tail(lookback).to_numpy(), order=5))
+
+        # Numerical Workspace integration
+        perm_counts = workspace.perm_counts if workspace else None
+        segment_buffer = workspace.segment_buffer if workspace else None
+
+        pe_all = returns.apply(lambda col: calculate_permutation_entropy(col.tail(lookback).to_numpy(), order=5, perm_counts=perm_counts, segment_buffer=segment_buffer))
         er_all = returns.apply(lambda col: calculate_efficiency_ratio(col.tail(lookback).to_numpy()))
         hurst_all = returns.apply(lambda col: calculate_hurst_exponent(col.to_numpy()))
 
@@ -151,10 +163,17 @@ class SelectionEngineV2_1(SelectionEngineV2):
         super().__init__()
         self.spec_version = "2.1"
 
-    def select(self, returns, raw_candidates, stats_df, request):
+    def select(self, returns, raw_candidates, stats_df, request, workspace=None):
         s = get_settings()
         return self._select_additive_core(
-            returns, raw_candidates, stats_df, request, weights=s.features.weights_v2_1_global, methods=s.features.normalization_methods_v2_1, clipping_sigma=s.features.clipping_sigma_v2_1
+            returns,
+            raw_candidates,
+            stats_df,
+            request,
+            weights=s.features.weights_v2_1_global,
+            methods=s.features.normalization_methods_v2_1,
+            clipping_sigma=s.features.clipping_sigma_v2_1,
+            workspace=workspace,
         )
 
 
@@ -163,7 +182,7 @@ class SelectionEngineV2_0(SelectionEngineV2):
     def name(self) -> str:
         return "v2.0"
 
-    def select(self, returns, raw_candidates, stats_df, request):
+    def select(self, returns, raw_candidates, stats_df, request, workspace=None):
         s, alpha_scores = get_settings(), pd.Series(0.0, index=returns.columns)
         cluster_ids, _ = get_hierarchical_clusters(returns, request.threshold, request.max_clusters)
         clusters = {}

@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional, Tuple, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -13,6 +15,9 @@ from tradingview_scraper.utils.predictability import (
     calculate_permutation_entropy,
     calculate_stationarity_score,
 )
+
+if TYPE_CHECKING:
+    from tradingview_scraper.backtest.models import NumericalWorkspace
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +37,7 @@ class MarketRegimeDetector:
         audit_path: str | Path | None = None,
         enable_audit_log: bool = True,
         # CRP-270: Injectable weights
-        weights: Optional[Dict[str, float]] = None,
+        weights: dict[str, float] | None = None,
     ):
         self.crisis_threshold = crisis_threshold
         self.quiet_threshold = quiet_threshold
@@ -66,7 +71,7 @@ class MarketRegimeDetector:
         self,
         regime: str,
         score: float,
-        metrics: Dict[str, float | int | str],
+        metrics: dict[str, float | int | str],
         quadrant: str = "UNKNOWN",
     ):
         import datetime
@@ -102,8 +107,10 @@ class MarketRegimeDetector:
         s = calculate_stationarity_score(x)
         return float(s) if s is not None else 0.5
 
-    def _permutation_entropy(self, x: np.ndarray, order: int = 3, delay: int = 1) -> float:
-        pe = calculate_permutation_entropy(x, order, delay)
+    def _permutation_entropy(self, x: np.ndarray, order: int = 3, delay: int = 1, workspace: NumericalWorkspace | None = None) -> float:
+        perm_counts = workspace.perm_counts if workspace else None
+        segment_buffer = workspace.segment_buffer if workspace else None
+        pe = calculate_permutation_entropy(x, order, delay, perm_counts=perm_counts, segment_buffer=segment_buffer)
         return float(pe) if pe is not None else 1.0
 
     def _dwt_turbulence(self, returns: np.ndarray) -> float:
@@ -154,7 +161,7 @@ class MarketRegimeDetector:
         except Exception:
             return "NORMAL"
 
-    def detect_quadrant_regime(self, returns: pd.DataFrame) -> Tuple[str, Dict[str, float]]:
+    def detect_quadrant_regime(self, returns: pd.DataFrame) -> tuple[str, dict[str, float]]:
         if returns.empty or len(returns) < 20:
             return "STAGNATION", {"growth": 0.0, "stress": 0.0}
         mean_rets = cast(pd.Series, returns.mean(axis=1)).dropna()
@@ -176,7 +183,7 @@ class MarketRegimeDetector:
             regime = "NORMAL"
         return regime, {"growth_axis": ann_return, "stress_axis": stress_axis, "ann_return": ann_return, "vol_ratio": vol_ratio, "turbulence": turbulence}
 
-    def _tail_risk_metrics(self, returns: np.ndarray) -> Dict[str, float]:
+    def _tail_risk_metrics(self, returns: np.ndarray) -> dict[str, float]:
         """Calculates skewness and kurtosis to identify fat tails."""
         from scipy.stats import kurtosis, skew
 
@@ -189,7 +196,7 @@ class MarketRegimeDetector:
         k = float(kurtosis(r))
         return {"skew": s, "kurtosis": k}
 
-    def detect_regime(self, returns: pd.DataFrame) -> Tuple[str, float, str]:
+    def detect_regime(self, returns: pd.DataFrame, workspace: NumericalWorkspace | None = None) -> tuple[str, float, str]:
         if returns.empty or len(returns) < 20:
             return "NORMAL", 1.0, "NORMAL"
         mean_rets_series = cast(pd.Series, returns.mean(axis=1)).dropna()
@@ -201,12 +208,7 @@ class MarketRegimeDetector:
         baseline_vol = float(mean_rets_series.std()) if len(mean_rets_series.dropna()) > 1 else 1.0
         vol_ratio = current_vol / (baseline_vol + 1e-12)
 
-        # Debug Log (remove in prod)
-        # logger.info(f"DEBUG: Vol Ratio: {vol_ratio}, Current Vol: {current_vol}")
-
-        ent = self._permutation_entropy(market_rets[-64:])
-        # Fix Entropy Scale: If PE is 1.0 (Random Noise), we shouldn't necessarily assume Crisis.
-        # But high entropy is typical of turbulence.
+        ent = self._permutation_entropy(market_rets[-64:], workspace=workspace)
 
         vc = max(0.0, self._volatility_clustering(market_rets))
         turbulence = self._dwt_turbulence(market_rets[-64:])
@@ -228,17 +230,10 @@ class MarketRegimeDetector:
             + 0.15 * fat_tail_score  # Add 15% weight to tail risk
         )
 
-        # CR-FIX: Ensure regime_score is strictly capped at sensible limits or normalized
-        # If quiet data has zero vol, vol_ratio ~ 0.
-        # But other metrics like entropy might be high for noise (random walk entropy ~ 1).
-        # We need to penalize score if Vol Ratio is extremely low.
         if vol_ratio < 0.2:
             regime_score *= 0.5  # Dampen score for very low vol environments (Noise)
 
-        # Additional Dampener for ultra-low absolute volatility (Flatline)
-        # If absolute vol < 0.001 (0.1%), it's dead quiet.
         if current_vol < 0.001:
-            logger.info(f"Damping Score for Flatline Vol: {current_vol}")
             regime_score *= 0.01  # Near-zero for flatline
 
         # Hard Cap at 2.5 (Theoretical max)
@@ -250,23 +245,6 @@ class MarketRegimeDetector:
 
         quadrant, quad_metrics = self.detect_quadrant_regime(returns)
         hmm_regime = self._hmm_classify(market_rets)
-
-        # CR-FIX: Ensure strict floor for Quiet regime
-        # Quiet requires very low vol ratio. With turbulence defaulting to 0.5 or higher for noise,
-        # the score can drift up.
-        # If score is between quiet and crisis, it's NORMAL.
-        # But if vol_ratio is extremely low (< 0.5), it should bias heavily towards QUIET.
-
-        # Adjust score logic? Or just trust weights?
-        # Current weights: Vol (0.35), Turb (0.25).
-        # If Vol Ratio is 0.1 (Quiet), Turb is 0.5 (Noise), others 0.5.
-        # Score ~= 0.035 + 0.125 + ... ~ 0.5
-        # Quiet threshold is 0.7.
-        # So low vol should trigger QUIET.
-
-        # Issue in test: Score was 1.0 > 1.0 (AssertionError) or similar?
-        # The test asserted score < 1.0. If score was exactly 1.0 or higher it failed.
-        # Let's inspect the weights calculation carefully.
 
         if regime_score >= self.crisis_threshold:
             regime = "CRISIS"

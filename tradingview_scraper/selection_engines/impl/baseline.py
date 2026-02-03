@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
@@ -9,6 +11,9 @@ from tradingview_scraper.selection_engines.base import (
     SelectionResponse,
     get_hierarchical_clusters,
 )
+
+if TYPE_CHECKING:
+    from tradingview_scraper.backtest.models import NumericalWorkspace
 
 logger = logging.getLogger("selection_engines")
 
@@ -27,9 +32,10 @@ class BaselineSelectionEngine(BaseSelectionEngine):
     def select(
         self,
         returns: pd.DataFrame,
-        raw_candidates: List[Dict[str, Any]],
-        stats_df: Optional[pd.DataFrame],
+        raw_candidates: list[dict[str, Any]],
+        stats_df: pd.DataFrame | None,
         request: SelectionRequest,
+        workspace: NumericalWorkspace | None = None,
     ) -> SelectionResponse:
         # 1. Map candidates to winners (pass everything)
         winners = []

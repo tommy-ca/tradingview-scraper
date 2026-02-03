@@ -46,12 +46,12 @@ The recent "Hardening" refactor in PR #4, while improving performance and thread
 
 ## Acceptance Criteria
 
-- [ ] `harden_solve` utility is removed; solvers are invoked directly through their hardened decorators.
-- [ ] 100% elimination of OOS peeking in the optimization and hardening loops.
-- [ ] `BacktestEngine` LOC is reduced by ~25% through logic delegation to the library.
-- [ ] `DataLoader` successfully resolves latest runs and lakehouse data with deterministic priority.
-- [ ] All type hints follow the Python 3.10+ builtin generics standard.
-- [ ] All 11+ regression test suites pass with JIT enabled.
+- [x] `harden_solve` utility is removed; solvers are invoked directly through their hardened decorators.
+- [x] 100% elimination of OOS peeking in the optimization and hardening loops.
+- [x] `BacktestEngine` LOC is reduced by ~25% through logic delegation to the library.
+- [x] `DataLoader` successfully resolves latest runs and lakehouse data with deterministic priority.
+- [x] All type hints follow the Python 3.10+ builtin generics standard.
+- [x] All 11+ regression test suites pass with JIT enabled.
 
 ## Success Metrics
 
@@ -62,16 +62,16 @@ The recent "Hardening" refactor in PR #4, while improving performance and thread
 ## Implementation Plan (P1/P2)
 
 ### Phase 1: Numerical Purity & Type Hardening (P1)
-- [ ] Consolidate `@ridge_hardening` logic and delete `harden_solve`.
-- [ ] Upgrade `tradingview_scraper/portfolio_engines/base.py` to modern typing.
-- [ ] Implement `ensure_safe_path` security utility.
+- [x] Consolidate `@ridge_hardening` logic and delete `harden_solve`.
+- [x] Upgrade `tradingview_scraper/portfolio_engines/base.py` to modern typing.
+- [x] Implement `ensure_safe_path` security utility.
 
 ### Phase 2: Structural Integrity (P1/P2)
-- [ ] Extract `DataLoader` module and refactor `BacktestEngine.load_data`.
-- [ ] Move models (`SimulationContext`) and factories into the library.
-- [ ] Unify `_get_annualization_factor` in `utils/metrics.py`.
+- [x] Extract `DataLoader` module and refactor `BacktestEngine.load_data`.
+- [x] Move models (`SimulationContext`) and factories into the library.
+- [x] Unify `_get_annualization_factor` in `utils/metrics.py`.
 
 ### Phase 3: Cleanup & Validation (P2)
-- [ ] Remove redundant decorators from `SkfolioEngine`.
-- [ ] Standardize docstrings and final typing cleanup across modified files.
-- [ ] Run full regression and parallel stability tests.
+- [x] Remove redundant decorators from `SkfolioEngine`.
+- [x] Standardize docstrings and final typing cleanup across modified files.
+- [x] Run full regression and parallel stability tests.

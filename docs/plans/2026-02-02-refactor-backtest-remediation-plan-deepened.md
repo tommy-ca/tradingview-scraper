@@ -47,24 +47,24 @@ The recent "Hardening" refactor introduced critical regressions:
 ## Implementation Plan
 
 ### Phase 1: Foundation & Namespace (P1)
-- [ ] Move `BacktestEngine` to `tradingview_scraper.backtest.engine`.
-- [ ] Move `SimulationContext` and `StrategyFactory` to library; narrow all types.
-- [ ] Implement `NumericalWorkspace` dataclass (minimalist buffers only).
+- [x] Move `BacktestEngine` to `tradingview_scraper.backtest.engine`.
+- [x] Move `SimulationContext` and `StrategyFactory` to library; narrow all types.
+- [x] Implement `NumericalWorkspace` dataclass (minimalist buffers only).
 
 ### Phase 2: Numerical Purity & Hardening (P1)
-- [ ] Refactor `@ridge_hardening` to handle retries internally (Condition-number based).
-- [ ] Delete `harden_solve` and all look-ahead peeking logic.
-- [ ] Refactor JIT kernels for zero-allocation NaN handling and buffer reuse.
+- [x] Refactor `@ridge_hardening` to handle retries internally (Condition-number based).
+- [x] Delete `harden_solve` and all look-ahead peeking logic.
+- [x] Refactor JIT kernels for zero-allocation NaN handling and buffer reuse.
 
 ### Phase 3: Data & Structural Cleanup (P1/P2)
-- [ ] Implement functional `DataLoader` with inlined path anchoring.
-- [ ] Unify `detect_annualization_factor` in `utils/metrics.py`.
-- [ ] Remove redundant decorators from `SkfolioEngine`.
+- [x] Implement functional `DataLoader` with inlined path anchoring.
+- [x] Unify `detect_annualization_factor` in `utils/metrics.py`.
+- [x] Remove redundant decorators from `SkfolioEngine`.
 
 ### Phase 4: Validation & Parity (P2)
-- [ ] Implement Parquet artifact loading.
-- [ ] Verify "Bit-Exact" parity for optimized kernels.
-- [ ] Final docstring audit (Args/Returns/Audit format).
+- [x] Implement Parquet artifact loading.
+- [x] Verify "Bit-Exact" parity for optimized kernels.
+- [x] Final docstring audit (Args/Returns/Audit format).
 
 ## Success Metrics
 - 100% elimination of look-ahead bias.
