@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import cast
 
 import numpy as np
-import pandas as pd
 
 from tradingview_scraper.data.loader import DataLoader
 from tradingview_scraper.settings import get_settings
