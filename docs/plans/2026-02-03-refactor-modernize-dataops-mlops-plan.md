@@ -2,10 +2,29 @@
 title: "refactor: Modernize DataOps/MLOps Infrastructure (v2)"
 type: refactor
 date: 2026-02-03
-status: revised_by_architectural_review
+status: completed
+pull_request: "https://github.com/tommy-ca/tradingview-scraper/pull/7"
 ---
 
 # refactor: Modernize DataOps/MLOps Infrastructure (v2)
+
+## Enhancement Summary
+
+**Deepened on:** 2026-02-03
+**Sections enhanced:** 4
+**Research agents used:** Architecture Strategist, Security Sentinel, Kieran Python Reviewer, Quant Backtest, Learnings Researcher
+
+### Key Improvements
+1.  **Strict Service Decoupling**: Validated the architectural separation of DVC (Infrastructure) from DataLoader (Application). Verified that backtesting works directly with filesystem paths.
+2.  **Security Hardening**: Confirmed `SecurityUtils` usage in refactored services to prevent path traversal, matching institutional learnings.
+3.  **Observability Pattern**: Validated the "Sidecar" pattern for MLflow, ensuring telemetry failures cannot crash production pipelines.
+
+### New Considerations Discovered
+-   **Environment Sync**: Backtesting now requires an explicit `make env-sync` to restore dependencies (`numba`, `nautilus-trader`) that were decoupled.
+-   **Parameter Bloat Risk**: Warning identified against replacing "Context Trap" with excessive argument lists; recommended "Stateful Orchestrator" pattern for complex internal state.
+-   **DVC Remote Security**: Explicit warning to NEVER commit S3 credentials to `.dvc/config`; usage of environment variables verified as the correct approach.
+
+---
 
 ## Overview
 
@@ -35,6 +54,21 @@ This plan outlines the modernization of the platform's DataOps and MLOps infrast
     -   Refactor monolithic scripts into Services with **explicit signatures** (e.g., `service(date, symbol_list)`).
     -   Use a thin `StageContext` *only* at the top-level CLI/Controller layer to parse args, but do not pass it deep into business logic ("Context Trap").
 
+### Research Insights
+
+**Best Practices:**
+-   **Separation of Concerns**: Treat DVC as infrastructure. The application should assume data exists (Sidecar Pattern).
+-   **Thin Context**: Use `StageContext` strictly for CLI parsing. Pass primitive types or domain objects to Services.
+-   **Stateful Orchestrator**: For services with complex internal state, initialize configuration in `__init__` rather than passing 20+ arguments to every method.
+
+**Security Considerations:**
+-   **Path Traversal**: Continue using `SecurityUtils.get_safe_path()` in all new Service implementations.
+-   **Credential Isolation**: Ensure AWS/S3 credentials for DVC are provided via environment variables (`AWS_ACCESS_KEY_ID`), never in `.dvc/config`.
+
+**Edge Cases:**
+-   **Missing Data**: If `dvc pull` fails silently, `DataLoader` must handle `FileNotFoundError` gracefully or fail fast with a clear "Run dvc pull" message.
+-   **Environment Drift**: Major refactors can desync dependencies. Add `make env-sync` to CI pipelines.
+
 ## Technical Considerations
 
 -   **Architecture**:
@@ -47,10 +81,10 @@ This plan outlines the modernization of the platform's DataOps and MLOps infrast
 
 ## Acceptance Criteria
 
-- [ ] **QuantSDK**: Pipeline stages log metrics to MLflow without affecting execution flow.
-- [ ] **DVC**: Data is versioned via DVC; `DataLoader` reads from the current filesystem state without DVC coupling.
-- [ ] **Migration**: `backfill_features.py` is refactored into a clean Service with explicit arguments.
-- [ ] **Cleanup**: Legacy `WorkspaceManager` and `ForensicSpanExporter` are deleted.
+- [x] **QuantSDK**: Pipeline stages log metrics to MLflow without affecting execution flow.
+- [x] **DVC**: Data is versioned via DVC; `DataLoader` reads from the current filesystem state without DVC coupling.
+- [x] **Migration**: `backfill_features.py` is refactored into a clean Service with explicit arguments.
+- [x] **Cleanup**: Legacy `WorkspaceManager` and `ForensicSpanExporter` are deleted.
 
 ## Success Metrics
 
@@ -66,20 +100,20 @@ This plan outlines the modernization of the platform's DataOps and MLOps infrast
 ## Implementation Phases
 
 ### Phase 1: MLOps Foundation (MLflow & Cleanup)
-- [ ] Implement `MLflowAuditDriver` in `tradingview_scraper/utils/telemetry.py` (Observability only).
-- [ ] **Refactor**: Delete legacy `tradingview_scraper/telemetry/exporter.py` (`ForensicSpanExporter`).
-- [ ] Add `@mlflow_metric` helpers to `QuantSDK` (avoiding control-flow decorators).
+- [x] Implement `MLflowAuditDriver` in `tradingview_scraper/utils/telemetry.py` (Observability only).
+- [x] **Refactor**: Delete legacy `tradingview_scraper/telemetry/exporter.py` (`ForensicSpanExporter`).
+- [x] Add `@mlflow_metric` helpers to `QuantSDK` (avoiding control-flow decorators).
 
 ### Phase 2: Data Versioning (DVC Setup)
-- [ ] Initialize DVC in the repo.
-- [ ] **Refactor**: Delete `tradingview_scraper/utils/workspace.py` (Golden Snapshots).
-- [ ] Verify `DataLoader` works seamlessly with DVC-managed paths (standard filesystem access).
+- [x] Initialize DVC in the repo.
+- [x] **Refactor**: Delete `tradingview_scraper/utils/workspace.py` (Golden Snapshots).
+- [x] Verify `DataLoader` works seamlessly with DVC-managed paths (standard filesystem access).
 
 ### Phase 3: Script Migration & Refactoring
-- [ ] Define thin `StageContext` protocol in `tradingview_scraper/orchestration/models.py` (for CLI arg parsing only).
-- [ ] Refactor `scripts/services/backfill_features.py` to use explicit arguments (decouple from Context).
-- [ ] Refactor `scripts/services/ingest_data.py` to use explicit arguments.
-- [ ] Update `scripts/run_production_pipeline.py` to orchestrate `dvc pull` before execution.
+- [x] Define thin `StageContext` protocol in `tradingview_scraper/orchestration/models.py` (for CLI arg parsing only).
+- [x] Refactor `scripts/services/backfill_features.py` to use explicit arguments (decouple from Context).
+- [x] Refactor `scripts/services/ingest_data.py` to use explicit arguments.
+- [x] Update `scripts/run_production_pipeline.py` to orchestrate `dvc pull` before execution.
 
 ### Phase 4: [DELETED]
 *Distributed Scaling (Ray) / ArtifactHydrator removed to avoid premature optimization and favor vertical scaling.*
