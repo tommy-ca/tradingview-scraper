@@ -1,8 +1,7 @@
 import functools
-import time
 from typing import Optional
 
-from opentelemetry import metrics, trace
+from opentelemetry import trace
 
 from tradingview_scraper.telemetry.provider import TelemetryProvider
 

@@ -2,10 +2,9 @@ import argparse
 import json
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import ccxt
-import pandas as pd
 
 from tradingview_scraper.execution.metadata import ExecutionMetadataCatalog
 

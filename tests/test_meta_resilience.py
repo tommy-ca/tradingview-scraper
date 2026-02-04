@@ -1,7 +1,6 @@
 import unittest
+
 import pandas as pd
-import numpy as np
-from scripts.build_meta_returns import build_meta_returns
 
 
 class TestMetaResilience(unittest.TestCase):

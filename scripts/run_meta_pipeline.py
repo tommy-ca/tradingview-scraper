@@ -10,7 +10,7 @@ sys.path.append(os.getcwd())
 from scripts.audit_directional_sign_test import run_sign_test_for_meta_profile, write_findings_json
 from tradingview_scraper.orchestration.compute import RayComputeEngine
 from tradingview_scraper.pipelines.meta.base import MetaContext
-from tradingview_scraper.settings import get_settings
+from tradingview_scraper.settings import clear_settings_cache, get_settings
 from tradingview_scraper.telemetry.logging import setup_logging
 from tradingview_scraper.telemetry.tracing import trace_span
 
@@ -49,7 +49,7 @@ def run_meta_pipeline(
 
     # CR-FIX: Ensure global context for internal modules (AuditLedger, Settings)
     os.environ["TV_RUN_ID"] = run_id
-    get_settings.cache_clear()
+    clear_settings_cache()
     settings = get_settings()
     target_profiles = profiles or settings.profiles.split(",")
 
@@ -66,11 +66,11 @@ def run_meta_pipeline(
     logger.info(f"📂 Workspace: {run_dir}")
     logger.info(f"📂 Data Dir: {run_data_dir}")
 
-    from tradingview_scraper.orchestration.sdk import QuantSDK
+    from tradingview_scraper.lib.common import QuantLib
 
     # CR-855: Lakehouse Immutability (Snapshot)
     if os.getenv("TV_STRICT_ISOLATION") == "1":
-        QuantSDK.create_snapshot(run_id)
+        QuantLib.create_snapshot(run_id)
 
     # CR-850: Parallel Sleeve Execution (Phase 223/345)
     if execute_sleeves:
@@ -125,7 +125,7 @@ def run_meta_pipeline(
     # 1. Build Returns (Recursive)
     logger.info(">>> STAGE 1: Aggregating Sleeve Returns")
     # Output to isolated run directory
-    QuantSDK.run_stage(
+    QuantLib.run_stage(
         "meta.aggregation",
         meta_profile=meta_profile,
         output_path=str(run_data_dir / "meta_returns.pkl"),
@@ -137,7 +137,7 @@ def run_meta_pipeline(
     # 2. Optimize
     logger.info(">>> STAGE 2: Meta-Optimization")
     # optimize_meta infers base_dir from input path (run_data_dir / "meta_returns.pkl")
-    QuantSDK.run_stage(
+    QuantLib.run_stage(
         "risk.optimize_meta",
         returns_path=str(run_data_dir / "meta_returns.pkl"),
         output_path=str(run_data_dir / "meta_optimized.json"),
@@ -149,7 +149,7 @@ def run_meta_pipeline(
     for prof in target_profiles:
         prof = prof.strip()
         # flatten_weights needs to know where to look. We pass the output path in run_data_dir.
-        QuantSDK.run_stage("risk.flatten_meta", meta_profile=meta_profile, output_path=str(run_data_dir / "portfolio_optimized_meta.json"), profile=prof)
+        QuantLib.run_stage("risk.flatten_meta", meta_profile=meta_profile, output_path=str(run_data_dir / "portfolio_optimized_meta.json"), profile=prof)
 
     # 4. Reporting
     logger.info(">>> STAGE 4: Generating Forensic Report")
@@ -157,7 +157,7 @@ def run_meta_pipeline(
     report_path = run_dir / "reports" / "meta_portfolio_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    QuantSDK.run_stage("risk.report_meta", meta_dir=run_data_dir, output_path=str(report_path), profiles=target_profiles, meta_profile=meta_profile)
+    QuantLib.run_stage("risk.report_meta", meta_dir=run_data_dir, output_path=str(report_path), profiles=target_profiles, meta_profile=meta_profile)
 
     # Also update 'latest'
     latest_path = settings.artifacts_dir / "summaries/latest/meta_portfolio_report.md"
@@ -184,9 +184,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.sdk:
-        from tradingview_scraper.orchestration.sdk import QuantSDK
+        from tradingview_scraper.lib.common import QuantLib
 
-        QuantSDK.run_pipeline("meta.full", profile=args.profile, run_id=args.run_id, profiles=args.profiles)
+        QuantLib.run_pipeline("meta.full", profile=args.profile, run_id=args.run_id, profiles=args.profiles)
         sys.exit(0)
 
     target_profs = args.profiles.split(",") if args.profiles else None

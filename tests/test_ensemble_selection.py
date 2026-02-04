@@ -1,7 +1,7 @@
 import unittest
-from unittest.mock import MagicMock
-from tradingview_scraper.pipelines.selection.rankers.ensemble import EnsembleRanker
+
 from tradingview_scraper.pipelines.selection.rankers.base import BaseRanker
+from tradingview_scraper.pipelines.selection.rankers.ensemble import EnsembleRanker
 
 
 class MockRanker(BaseRanker):

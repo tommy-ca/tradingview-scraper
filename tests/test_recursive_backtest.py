@@ -1,7 +1,7 @@
-import unittest
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+import unittest
+from unittest.mock import MagicMock, mock_open, patch
+
 from scripts.backtest_engine import BacktestEngine
 
 
@@ -34,8 +34,8 @@ class TestRecursiveBacktest(unittest.TestCase):
         mock_settings.return_value = settings
 
         # Mock returns
-        import pandas as pd
         import numpy as np
+        import pandas as pd
 
         dates = pd.date_range("2024-01-01", periods=150)
         engine.returns = pd.DataFrame(np.random.randn(150, 2), index=dates, columns=["A", "B"])

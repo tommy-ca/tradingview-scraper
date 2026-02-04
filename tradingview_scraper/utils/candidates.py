@@ -12,6 +12,9 @@ CANONICAL_KEYS = {
     "sector",
     "industry",
     "metadata",
+    "recommend_all",
+    "recommend_ma",
+    "recommend_other",
 }
 
 
@@ -79,6 +82,11 @@ def normalize_candidate_record(raw: Dict[str, Any], *, strict: bool) -> Optional
     # Identity is a canonical unique key; it must match symbol exactly.
     identity = symbol
 
+    # Map TradingView alpha signals
+    recommend_all = raw.get("recommend_all", raw.get("Recommend.All"))
+    recommend_ma = raw.get("recommend_ma", raw.get("Recommend.MA"))
+    recommend_other = raw.get("recommend_other", raw.get("Recommend.Other"))
+
     # Metadata should preserve any non-canonical keys to avoid silently dropping information.
     metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
     for k, v in raw.items():
@@ -95,5 +103,8 @@ def normalize_candidate_record(raw: Dict[str, Any], *, strict: bool) -> Optional
         "volume_24h": raw.get("volume_24h", raw.get("volume")),
         "sector": raw.get("sector"),
         "industry": raw.get("industry"),
+        "recommend_all": recommend_all,
+        "recommend_ma": recommend_ma,
+        "recommend_other": recommend_other,
         "metadata": metadata,
     }

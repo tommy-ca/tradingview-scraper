@@ -1,5 +1,7 @@
 import unittest
+
 from opentelemetry import metrics
+
 from tradingview_scraper.telemetry.provider import TelemetryProvider
 
 

@@ -43,6 +43,9 @@ def flatten_strategy_weights():
     with open(input_path, "r") as f:
         opt_data = json.load(f)
 
+    profiles = opt_data.get("profiles", {})
+    logger.info(f"Found {len(profiles)} profiles in optimized portfolio")
+
     # 2. Load Candidates (Logic Definitions) to resolve Atom -> Physical + Direction
     candidates_path = os.getenv("CANDIDATES_SELECTED") or str(run_dir / "data" / "portfolio_candidates.json")
     if not os.path.exists(candidates_path):
@@ -50,6 +53,7 @@ def flatten_strategy_weights():
 
     atom_map = {}  # atom_id -> {physical, direction}
     if os.path.exists(candidates_path):
+        logger.info(f"Loading candidates from {candidates_path}")
         with open(candidates_path, "r") as f:
             candidates = json.load(f)
             for c in candidates:
@@ -62,6 +66,7 @@ def flatten_strategy_weights():
                     atom_id = f"{phys}_{logic}_{direction}"
 
                 atom_map[atom_id] = {"physical": c.get("physical_symbol") or c.get("symbol"), "direction": c.get("direction", "LONG"), "market": c.get("market"), "sector": c.get("sector")}
+        logger.info(f"Mapped {len(atom_map)} atoms from candidates")
     else:
         logger.warning(f"Candidates file not found at {candidates_path}. Flattening will rely on heuristic parsing.")
 
@@ -71,9 +76,13 @@ def flatten_strategy_weights():
     profiles = opt_data.get("profiles", {})
     for profile_name, p_data in profiles.items():
         if "assets" not in p_data:
+            logger.warning(f"Profile '{profile_name}' has no assets key")
             continue
 
         assets = p_data["assets"]
+        if not assets:
+            logger.warning(f"Profile '{profile_name}' has empty assets list")
+
         # Aggregators
         phys_net = defaultdict(float)
         phys_gross = defaultdict(float)
@@ -92,14 +101,29 @@ def flatten_strategy_weights():
                 direction = meta["direction"]
             else:
                 # Heuristic Parse: SYMBOL_logic_DIRECTION
+                # Try to handle known logic suffixes first to support multi-word logics (e.g. rating_all)
                 parts = atom.split("_")
-                if len(parts) >= 3 and parts[-1] in ["LONG", "SHORT"]:
-                    direction = parts[-1]
-                    phys = "_".join(parts[:-2])  # Rough guess
-                else:
-                    # Assume strictly physical or unknown
-                    phys = atom
-                    direction = "LONG"
+                direction = parts[-1] if parts[-1] in ["LONG", "SHORT"] else "LONG"
+
+                known_logics = ["rating_all", "rating_ma", "rating_osc", "vol_breakout", "trend", "rating_all_long", "rating_all_short"]
+                phys = None
+
+                if direction in ["LONG", "SHORT"]:
+                    for known_logic in known_logics:
+                        suffix = f"_{known_logic}_{direction}"
+                        if atom.endswith(suffix):
+                            phys = atom[: -len(suffix)]
+                            break
+
+                if not phys:
+                    # Fallback: Assume logic is single word (risky for rating_all)
+                    if len(parts) >= 3 and parts[-1] in ["LONG", "SHORT"]:
+                        direction = parts[-1]
+                        phys = "_".join(parts[:-2])  # Rough guess (likely wrong for rating_all)
+                    else:
+                        # Assume strictly physical or unknown
+                        phys = atom
+                        direction = "LONG"
 
                 meta = {"market": "UNKNOWN", "sector": "UNKNOWN"}
 

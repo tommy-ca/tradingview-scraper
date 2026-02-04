@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
@@ -85,8 +85,9 @@ class IngestionValidator:
         Validates returns matrix against toxicity and padding rules.
         Uses Pandera for formal schema enforcement (Phase 620).
         """
-        from tradingview_scraper.pipelines.contracts import ReturnsSchema
         import pandera as pa
+
+        from tradingview_scraper.pipelines.contracts import ReturnsSchema
 
         if df.empty:
             return []

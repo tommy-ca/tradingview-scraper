@@ -1,7 +1,7 @@
 import unittest
-import pandas as pd
+
 import numpy as np
-from tradingview_scraper.utils.technicals import TechnicalRatings
+import pandas as pd
 import pandas_ta_classic as ta
 
 

@@ -49,7 +49,20 @@ class DiscoveryPipeline:
         with open(manifest_path, "r") as f:
             manifest = json.load(f)
 
-        profile = manifest.get("profiles", {}).get(profile_name)
+        profiles = manifest.get("profiles", {})
+        profile = profiles.get(profile_name)
+
+        # Resolve aliases (e.g. "production" -> "production_2026_q1")
+        visited = {profile_name}
+        while isinstance(profile, str):
+            if profile in visited:
+                logger.error(f"Circular alias detected: {' -> '.join(visited)} -> {profile}")
+                return []
+            visited.add(profile)
+            logger.info(f"Resolving profile alias: {profile_name} -> {profile}")
+            profile_name = profile
+            profile = profiles.get(profile_name)
+
         if not profile:
             logger.error(f"Profile {profile_name} not found in manifest")
             return []

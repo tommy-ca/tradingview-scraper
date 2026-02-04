@@ -1,4 +1,5 @@
 from typing import Dict, Optional
+
 from opentelemetry import propagate
 from opentelemetry.context.context import Context
 

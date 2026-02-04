@@ -1,9 +1,9 @@
 import os
-import shutil
 import tempfile
+from pathlib import Path
+
 import pytest
 import ray
-from pathlib import Path
 
 # Only run if ray is installed
 try:
@@ -96,7 +96,6 @@ class TestRayIsolation:
             def pipeline_task(storage_path_str):
                 import os
                 import shutil
-                from pathlib import Path
 
                 # simulate generating data
                 os.makedirs("artifacts/run_123", exist_ok=True)

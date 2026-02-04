@@ -1,5 +1,5 @@
 import pytest
-import pandas as pd
+
 from tradingview_scraper.portfolio_engines import build_engine, list_available_engines
 from tradingview_scraper.portfolio_engines.base import BaseRiskEngine
 

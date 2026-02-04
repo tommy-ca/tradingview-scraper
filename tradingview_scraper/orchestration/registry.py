@@ -74,10 +74,10 @@ class StageRegistry:
         if hasattr(cls, "_loaded") and cls._loaded:
             return
 
-        import pkgutil
         import importlib
+        import pkgutil
+
         import tradingview_scraper.pipelines
-        import scripts
 
         # 1. Discover all modules in pipelines package
         for loader, module_name, is_pkg in pkgutil.walk_packages(tradingview_scraper.pipelines.__path__, tradingview_scraper.pipelines.__name__ + "."):

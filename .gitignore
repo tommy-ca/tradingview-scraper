@@ -55,6 +55,8 @@ pylint-output.txt
 outputs/
 artifacts/
 data/
+!data/**/*.dvc
+!data/**/.gitignore
 .temp_gist_*
 .gemini/
 

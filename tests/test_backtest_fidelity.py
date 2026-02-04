@@ -11,8 +11,8 @@ import pytest
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from scripts.backtest_engine import BacktestEngine  # type: ignore
-from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
 from tradingview_scraper.portfolio_engines import build_engine
+from tradingview_scraper.portfolio_engines.base import EngineRequest, ProfileName
 from tradingview_scraper.settings import get_settings
 
 

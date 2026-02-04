@@ -5,8 +5,10 @@ trend:
   logic: "AND"
   adx: { enabled: false }
   recommendation: { enabled: false }
+volume:
+  value_traded_min: 1000000  # Override institutional floor (10M) to allow broad recruitment
 filters:
-  - { left: "Recommend.All", operation: "greater", right: 0 }
+  - { left: "Recommend.All", operation: "greater", right: -0.3 }  # Allow weak/oversold candidates
 sort_by: Recommend.All
 sort_order: desc
 limit: 100

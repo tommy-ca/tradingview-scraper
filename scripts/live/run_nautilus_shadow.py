@@ -6,7 +6,7 @@ import sys
 from typing import Literal, cast
 
 from tradingview_scraper.portfolio_engines.nautilus_live import NautilusLiveEngine
-from tradingview_scraper.portfolio_engines.nautilus_live_strategy import LiveRebalanceStrategy, HAS_NAUTILUS
+from tradingview_scraper.portfolio_engines.nautilus_live_strategy import HAS_NAUTILUS, LiveRebalanceStrategy
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("nautilus_shadow_runner")

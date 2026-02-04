@@ -3,10 +3,9 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-from tradingview_scraper.regime import MarketRegimeDetector
-
-from tradingview_scraper.pipelines.selection.rankers.base import BaseRanker
 from tradingview_scraper.pipelines.selection.base import SelectionContext
+from tradingview_scraper.pipelines.selection.rankers.base import BaseRanker
+from tradingview_scraper.regime import MarketRegimeDetector
 
 logger = logging.getLogger(__name__)
 

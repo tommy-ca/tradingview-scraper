@@ -46,10 +46,10 @@ class SleeveProductionActor:
         try:
             import scripts.run_production_pipeline
             import tradingview_scraper
-            from tradingview_scraper.settings import get_settings
+            from tradingview_scraper.settings import clear_settings_cache, get_settings
 
             # Force reload settings to pick up new env vars
-            get_settings.cache_clear()
+            clear_settings_cache()
             self.settings = get_settings()
         except ImportError as e:
             raise RuntimeError(f"Failed to import project modules in Ray Actor: {e}")

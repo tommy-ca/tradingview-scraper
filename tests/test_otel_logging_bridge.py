@@ -1,7 +1,9 @@
-import unittest
 import logging
+import unittest
+
 from opentelemetry import _logs
-from opentelemetry.sdk._logs import LoggerProvider, LogRecordProcessor
+from opentelemetry.sdk._logs import LogRecordProcessor
+
 from tradingview_scraper.telemetry.provider import TelemetryProvider
 
 

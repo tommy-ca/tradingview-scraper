@@ -87,11 +87,32 @@ class IngestionStage(BasePipelineStage):
 
         return ""
 
+    def _resolve_features_path(self, *, context: SelectionContext) -> str:
+        settings = get_settings()
+        strict_iso = os.getenv("TV_STRICT_ISOLATION") == "1"
+
+        run_data_dir = (settings.summaries_runs_dir / context.run_id / "data").resolve()
+        run_feat = run_data_dir / "features_matrix.parquet"
+
+        if run_feat.exists():
+            return str(run_feat)
+
+        if strict_iso:
+            return ""
+
+        lake_feat = settings.lakehouse_dir / "features_matrix.parquet"
+        if lake_feat.exists():
+            logger.warning("IngestionStage: falling back to lakehouse features at %s (run_id=%s).", lake_feat, context.run_id)
+            return str(lake_feat)
+
+        return ""
+
     def execute(self, context: SelectionContext) -> SelectionContext:
         candidates_path = self._resolve_candidates_path(context=context)
         returns_path = self._resolve_returns_path(context=context)
+        features_path = self._resolve_features_path(context=context)
 
-        logger.info("Executing Ingestion Stage (run_id=%s) candidates=%s returns=%s", context.run_id, candidates_path, returns_path)
+        logger.info("Executing Ingestion Stage (run_id=%s) candidates=%s returns=%s features=%s", context.run_id, candidates_path, returns_path, features_path)
 
         # 1. Load Candidates
         if not os.path.exists(candidates_path):
@@ -142,6 +163,49 @@ class IngestionStage(BasePipelineStage):
             if strict:
                 logger.error("STRICT MODE: Failing pipeline due to data contract violations: %s", failed_symbols)
                 raise RuntimeError(f"Data Contract Violation: {failed_symbols}")
+
+        # 4. Load Features (Finding 056)
+        if features_path and os.path.exists(features_path):
+            try:
+                logger.info("Loading features from %s", features_path)
+                features_df = pd.read_parquet(features_path)
+                context.feature_store = features_df
+
+                # Determine alignment timestamp
+                # Prefer the last timestamp in returns_df to ensure alignment
+                alignment_dt = None
+                if not context.returns_df.empty:
+                    alignment_dt = context.returns_df.index[-1]
+
+                # Extract the slice
+                if alignment_dt is not None and alignment_dt in features_df.index:
+                    current_features = features_df.loc[alignment_dt]
+                else:
+                    if alignment_dt is not None:
+                        logger.warning("Features matrix missing timestamp %s. Using last available.", alignment_dt)
+                    current_features = features_df.iloc[-1]
+
+                merged_count = 0
+                for candidate in context.raw_pool:
+                    sym = candidate.get("symbol")
+                    if not sym:
+                        continue
+
+                    # Known features to merge
+                    for feat in ["recommend_all", "recommend_ma", "recommend_other"]:
+                        if (sym, feat) in current_features.index:
+                            val = current_features[(sym, feat)]
+                            if pd.notna(val):
+                                candidate[feat] = float(val)
+                                merged_count += 1
+
+                logger.info("Merged %d feature points into candidates pool.", merged_count)
+
+            except Exception as e:
+                logger.error("Failed to load/merge features matrix: %s", e)
+                # We don't raise here unless STRICT, but keeping it robust for now
+                if strict:
+                    raise
 
         context.log_event(self.name, "DataLoaded", {"n_candidates": len(context.raw_pool), "returns_shape": context.returns_df.shape, "n_dropped": len(failed_symbols)})
 

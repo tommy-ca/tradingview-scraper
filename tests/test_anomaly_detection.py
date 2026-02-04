@@ -1,6 +1,4 @@
 import unittest
-import pandas as pd
-from scripts.backtest_engine import BacktestEngine
 
 
 class TestAnomalyDetection(unittest.TestCase):

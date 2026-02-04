@@ -1,8 +1,9 @@
-import numpy as np
-import pandas as pd
-import pytest
-from tradingview_scraper.regime import MarketRegimeDetector
 import time
+
+import numpy as np
+import pytest
+
+from tradingview_scraper.regime import MarketRegimeDetector
 
 
 @pytest.fixture

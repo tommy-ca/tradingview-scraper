@@ -1,6 +1,7 @@
 import unittest
+
 import pandas as pd
-import numpy as np
+
 from tradingview_scraper.pipelines.selection.base import AdvancedToxicityValidator
 
 

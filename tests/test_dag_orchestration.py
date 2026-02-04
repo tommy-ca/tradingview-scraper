@@ -1,6 +1,7 @@
 import unittest
-from tradingview_scraper.orchestration.runner import DAGRunner
+
 from tradingview_scraper.orchestration.registry import StageRegistry
+from tradingview_scraper.orchestration.runner import DAGRunner
 
 
 class TestDAGOrchestration(unittest.TestCase):

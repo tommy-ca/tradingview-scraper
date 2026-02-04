@@ -25,7 +25,7 @@ def mock_manifest_content():
 def mock_deps():
     with (
         patch("scripts.run_meta_pipeline.RayComputeEngine") as mock_ray,
-        patch("tradingview_scraper.orchestration.sdk.QuantSDK.run_stage") as mock_run_stage,
+        patch("tradingview_scraper.lib.common.QuantLib.run_stage") as mock_run_stage,
         patch("scripts.run_meta_pipeline.get_settings") as mock_settings,
     ):
         # Setup settings mock
