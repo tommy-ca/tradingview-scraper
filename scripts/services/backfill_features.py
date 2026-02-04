@@ -28,6 +28,8 @@ def backfill_features_stage(candidates_path: str | None = None, output_path: str
     out_p = Path(output_path) if output_path else None
     lh_p = Path(lakehouse_dir) if lakehouse_dir else None
 
+    # Resolve paths using explicit arguments
+    # If no paths provided, rely on Service to fallback to defaults
     service = BackfillService(lakehouse_dir=lh_p)
     service.run(candidates_path=cand_p, output_path=out_p)
     return True

@@ -197,5 +197,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     lakehouse_arg = Path(args.lakehouse) if args.lakehouse else None
+
+    # We now call IngestionService with explicit args
     service = IngestionService(lakehouse_dir=lakehouse_arg)
     service.process_candidate_file(Path(args.candidates))

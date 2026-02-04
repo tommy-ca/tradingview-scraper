@@ -379,9 +379,9 @@ class ProductionPipeline:
             self.console.print("[bold red]Foundation Gate FAILED. Aborting.[/]")
             raise RuntimeError("Foundation Gate failed")
 
-        # CR-855: Lakehouse Immutability (Snapshot)
-        if os.getenv("TV_STRICT_ISOLATION") == "1":
-            QuantSDK.create_snapshot(self.run_id)
+        # CR-855: Lakehouse Immutability (Snapshot) is now handled via DVC externally
+        # We ensure DVC pull happens before this script runs (in Makefile/CI)
+        # Verify DVC status via git if needed, but for now we assume data is present.
 
         # Pillar Verification (Crypto Only)
         if self.profile == "crypto_production":
