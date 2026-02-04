@@ -45,13 +45,9 @@ class SleeveActorImpl:
         clear_settings_cache()
         self.settings = get_settings()
 
-        # 4. Workspace Isolation (WorkspaceManager) - DEPRECATED
+        # 4. Workspace Isolation - DEPRECATED
         # We now rely on DVC or shared filesystem. WorkspaceManager removed.
         self.workspace = None
-
-    def _setup_workspace(self):
-        """Deprecated: Logic moved to WorkspaceManager."""
-        pass
 
     @trace_span("sleeve_actor.run_pipeline")
     def run_pipeline(self, profile: str, run_id: str) -> Dict[str, Any]:

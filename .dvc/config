@@ -2,4 +2,4 @@
     analytics = false
     remote = local_storage
 ['remote "local_storage"']
-    url = /tmp/dvc_storage
+    url = ../data/dvc_storage

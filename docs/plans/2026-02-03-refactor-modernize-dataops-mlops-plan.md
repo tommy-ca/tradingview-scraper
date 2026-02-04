@@ -85,6 +85,7 @@ This plan outlines the modernization of the platform's DataOps and MLOps infrast
 - [x] **DVC**: Data is versioned via DVC; `DataLoader` reads from the current filesystem state without DVC coupling.
 - [x] **Migration**: `backfill_features.py` is refactored into a clean Service with explicit arguments.
 - [x] **Cleanup**: Legacy `WorkspaceManager` and `ForensicSpanExporter` are deleted.
+- [x] **Hardening**: Post-review security and environment sync adjustments (`env-sync`, credential isolation) are verified.
 
 ## Success Metrics
 
@@ -117,3 +118,8 @@ This plan outlines the modernization of the platform's DataOps and MLOps infrast
 
 ### Phase 4: [DELETED]
 *Distributed Scaling (Ray) / ArtifactHydrator removed to avoid premature optimization and favor vertical scaling.*
+
+### Phase 5: Post-Review Adjustments
+- [x] **Environment**: Add `make env-sync` to restore dependencies decoupled during refactor.
+- [x] **Design**: Implement "Stateful Orchestrator" pattern to prevent parameter bloat in complex services.
+- [x] **Security**: Verify DVC remote credentials are strictly handled via environment variables.
