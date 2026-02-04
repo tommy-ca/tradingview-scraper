@@ -68,6 +68,11 @@ class ProductionPipeline:
         if self.settings.features.feat_audit_ledger:
             self.ledger = AuditLedger(self.run_dir)
 
+            # Inject Ledger into MLflow driver for hybrid logging
+            from tradingview_scraper.utils.telemetry import MLflowAuditDriver
+
+            MLflowAuditDriver.set_ledger(self.ledger)
+
             # Record Genesis
             manifest_hash = self._get_file_hash(self.manifest_path)
             self.ledger.record_genesis(self.run_id, self.profile, manifest_hash)
@@ -369,13 +374,13 @@ class ProductionPipeline:
             self._execute_impl(start_step)
 
     def _execute_impl(self, start_step: int = 1):
-        from tradingview_scraper.orchestration.sdk import QuantSDK
+        from tradingview_scraper.lib.common import QuantLib
 
         self.console.print("\n[bold cyan]🚀 Starting Production Pipeline[/]")
         self.console.print(f"[dim]Profile:[/] {self.profile} | [dim]Run ID:[/] {self.run_id} | [dim]Start Step:[/] {start_step}\n")
 
         # L1 Ingestion Gate: Foundation Validation
-        if not QuantSDK.validate_foundation():
+        if not QuantLib.validate_foundation():
             self.console.print("[bold red]Foundation Gate FAILED. Aborting.[/]")
             raise RuntimeError("Foundation Gate failed")
 
@@ -606,9 +611,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.sdk:
-        from tradingview_scraper.orchestration.sdk import QuantSDK
+        from tradingview_scraper.lib.common import QuantLib
 
-        QuantSDK.run_pipeline("alpha.full", profile=args.profile, run_id=args.run_id)
+        QuantLib.run_pipeline("alpha.full", profile=args.profile, run_id=args.run_id)
         sys.exit(0)
 
     pipeline = ProductionPipeline(profile=args.profile, manifest=args.manifest, run_id=args.run_id, skip_analysis=args.skip_analysis, skip_validation=args.skip_validation)

@@ -2,8 +2,8 @@ from typing import Dict, List, Optional
 
 from prefect import flow, task
 
+from tradingview_scraper.lib.common import QuantLib
 from tradingview_scraper.orchestration.compute import RayComputeEngine
-from tradingview_scraper.orchestration.sdk import QuantSDK
 
 
 @task(name="Execute Sleeves (Ray)")
@@ -15,26 +15,26 @@ def task_execute_sleeves(sleeves: List[Dict[str, str]]) -> List[Dict]:
 
 @task(name="Meta Aggregation")
 def task_aggregation(meta_profile: str, run_id: str, profiles: List[str]):
-    return QuantSDK.run_stage("meta.aggregation", meta_profile=meta_profile, run_id=run_id, profiles=profiles)
+    return QuantLib.run_stage("meta.aggregation", meta_profile=meta_profile, run_id=run_id, profiles=profiles)
 
 
 @task(name="Meta Optimization")
 def task_optimization(meta_profile: str, run_id: str):
-    return QuantSDK.run_stage("risk.optimize_meta", meta_profile=meta_profile, run_id=run_id)
+    return QuantLib.run_stage("risk.optimize_meta", meta_profile=meta_profile, run_id=run_id)
 
 
 @task(name="Weight Flattening")
 def task_flattening(meta_profile: str, run_id: str, profiles: List[str]):
     results = []
     for prof in profiles:
-        res = QuantSDK.run_stage("risk.flatten_meta", meta_profile=meta_profile, run_id=run_id, profile=prof)
+        res = QuantLib.run_stage("risk.flatten_meta", meta_profile=meta_profile, run_id=run_id, profile=prof)
         results.append(res)
     return results
 
 
 @task(name="Forensic Report")
 def task_reporting(meta_profile: str, run_id: str, profiles: List[str]):
-    return QuantSDK.run_stage("risk.report_meta", meta_profile=meta_profile, run_id=run_id, profiles=profiles)
+    return QuantLib.run_stage("risk.report_meta", meta_profile=meta_profile, run_id=run_id, profiles=profiles)
 
 
 @flow(name="Meta Portfolio Flow")

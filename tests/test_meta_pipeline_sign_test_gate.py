@@ -43,7 +43,7 @@ def test_meta_pipeline_sign_test_gate_passes_and_continues(monkeypatch, tmp_path
     # Avoid running the real meta stages in this unit test.
     from tradingview_scraper.orchestration import sdk as sdk_mod
 
-    monkeypatch.setattr(sdk_mod.QuantSDK, "run_stage", lambda *a, **k: None)
+    monkeypatch.setattr(sdk_mod.QuantLib, "run_stage", lambda *a, **k: None)
 
     run_id = "meta_crypto_only_test_pass"
     meta.run_meta_pipeline("meta_crypto_only", profiles=["hrp"], execute_sleeves=False, run_id=run_id)

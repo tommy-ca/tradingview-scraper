@@ -7,8 +7,8 @@ from pathlib import Path
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from tradingview_scraper.lib.common import QuantLib
 from tradingview_scraper.orchestration.registry import StageRegistry
-from tradingview_scraper.orchestration.sdk import QuantSDK
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("quant_cli")
@@ -39,7 +39,7 @@ def handle_stage_run(args):
     run_id = args.run_id or "cli_" + Path(".").resolve().name
 
     try:
-        result = QuantSDK.run_stage(args.id, run_id=run_id, **params)
+        result = QuantLib.run_stage(args.id, run_id=run_id, **params)
         print(f"Stage {args.id} completed successfully.")
         # If result is a context or dict, print summary?
     except Exception as e:

@@ -116,9 +116,9 @@ def test_meta_pipeline_uses_settings_manifest_path_for_execute_sleeves(tmp_path,
         def run_stage(_id: str, **_params):
             return None
 
-    import tradingview_scraper.orchestration.sdk as sdk_mod
+    import tradingview_scraper.lib.common as sdk_mod
 
-    monkeypatch.setattr(sdk_mod, "QuantSDK", FakeSDK)
+    monkeypatch.setattr(sdk_mod, "QuantLib", FakeSDK)
 
     rmp.run_meta_pipeline("meta_test", execute_sleeves=True, run_id="meta_test_run", manifest=str(manifest_path))
     assert called["path"] == manifest_path

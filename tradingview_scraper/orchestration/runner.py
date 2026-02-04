@@ -44,12 +44,12 @@ class DAGRunner:
 
     def _run_stage(self, stage_id: str, context: Any) -> Any:
         """Executes a single stage via the SDK logic."""
-        from tradingview_scraper.orchestration.sdk import QuantSDK
+        from tradingview_scraper.lib.common import QuantLib
 
         # We use the internal implementation to avoid nested dag.execute spans
-        # if run_stage itself is decorated (which it is via QuantSDK).
-        # Actually, QuantSDK._run_stage_impl is what we want.
-        return QuantSDK.run_stage(stage_id, context=context)
+        # if run_stage itself is decorated (which it is via QuantLib).
+        # Actually, QuantLib._run_stage_impl is what we want.
+        return QuantLib.run_stage(stage_id, context=context)
 
     def _run_parallel(self, branch_ids: List[str], context: Any) -> Any:
         """Executes multiple stages in parallel using Ray if available."""
@@ -76,9 +76,9 @@ class DAGRunner:
 
         @ray.remote
         def execute_remote(sid: str, ctx: Any):
-            from tradingview_scraper.orchestration.sdk import QuantSDK
+            from tradingview_scraper.lib.common import QuantLib
 
-            return QuantSDK.run_stage(sid, context=ctx)
+            return QuantLib.run_stage(sid, context=ctx)
 
         with RayComputeEngine() as engine:
             engine.ensure_initialized()
