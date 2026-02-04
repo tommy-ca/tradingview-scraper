@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from typing import Any, List, Optional, Union, cast
 
 from tradingview_scraper.orchestration.registry import StageRegistry
@@ -56,9 +55,10 @@ class QuantSDK:
         Checks for missing Parquet files, staleness, and schema drift.
         Also verifies FoundationHealthRegistry status.
         """
-        from tradingview_scraper.settings import get_settings
-        from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
         import os
+
+        from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
+        from tradingview_scraper.settings import get_settings
 
         settings = get_settings()
         lakehouse = settings.lakehouse_dir
@@ -78,8 +78,9 @@ class QuantSDK:
         logger.info(f"Foundation Registry: {len(registry.data)} symbols tracked")
 
         # 2.1 Feature Consistency Audit (Phase 630)
-        from tradingview_scraper.utils.features import FeatureConsistencyValidator
         import pandas as pd
+
+        from tradingview_scraper.utils.features import FeatureConsistencyValidator
 
         returns_f = lakehouse / "returns_matrix.parquet"
         features_f = lakehouse / "features_matrix.parquet"
@@ -116,17 +117,6 @@ class QuantSDK:
         return True
 
     @staticmethod
-    def create_snapshot(run_id: str) -> Path:
-        """
-        Creates a 'Golden Snapshot' of the Lakehouse for run immutability.
-        Uses WorkspaceManager for hybrid copy/link strategy.
-        """
-        from tradingview_scraper.utils.workspace import WorkspaceManager
-
-        manager = WorkspaceManager(run_id)
-        return manager.create_golden_snapshot()
-
-    @staticmethod
     @trace_span("sdk.repair_foundation")
     def repair_foundation(run_id: str, max_fills: int = 15) -> bool:
         """
@@ -154,21 +144,23 @@ class QuantSDK:
         Executes a full named pipeline (e.g., 'alpha.full').
         Resolves the DAG from the manifest and executes using DAGRunner.
         """
+        import json
+
         from tradingview_scraper.orchestration.runner import DAGRunner
         from tradingview_scraper.settings import get_settings
         from tradingview_scraper.telemetry.provider import TelemetryProvider
-        import json
+        from tradingview_scraper.utils.telemetry import MLflowAuditDriver
 
         settings = get_settings()
         run_id = params.get("run_id", settings.run_id)
 
-        # 1. Initialize Forensic Telemetry for the run
+        # 1. Initialize Telemetry
         telemetry = TelemetryProvider()
         if not telemetry.is_initialized:
             telemetry.initialize(service_name="quant-orchestrator")
 
-        trace_file = settings.summaries_runs_dir / run_id / "data" / "forensic_trace.json"
-        exporter = telemetry.register_forensic_exporter(trace_file)
+        # Initialize MLflow
+        MLflowAuditDriver.initialize(tracking_uri=settings.mlflow_tracking_uri)
 
         # 2. Resolve DAG from manifest
         with open(settings.manifest_path, "r") as f:
@@ -210,9 +202,16 @@ class QuantSDK:
                 context = MetaContext(run_id=run_id, meta_profile=params.get("profile", "meta_production"), sleeve_profiles=params.get("profiles", []))
 
         # 4. Execute DAG and Flush Telemetry
-        try:
-            result = runner.execute(context)
-            telemetry.flush_metrics(job_name=f"quant_{name}", grouping_key={"run_id": run_id})
-            return result
-        finally:
-            exporter.save()
+        # Start MLflow run for the pipeline
+        with MLflowAuditDriver.start_run(run_name=f"{name}_{run_id}") as run:
+            MLflowAuditDriver.log_params({"pipeline": name, "run_id": run_id, "steps": str(steps)})
+            try:
+                result = runner.execute(context)
+                telemetry.flush_metrics(job_name=f"quant_{name}", grouping_key={"run_id": run_id})
+                MLflowAuditDriver.log_metrics({"success": 1.0})
+                return result
+            except Exception as e:
+                MLflowAuditDriver.log_metrics({"success": 0.0})
+                # Log exception as tag or param
+                MLflowAuditDriver.set_tags({"error": str(e)})
+                raise

@@ -10,7 +10,6 @@ from tradingview_scraper.pipelines.discovery.base import (
     CandidateMetadata,
 )
 from tradingview_scraper.pipelines.selection.base import (
-    AdvancedToxicityValidator,
     FoundationHealthRegistry,
 )
 from tradingview_scraper.settings import get_settings

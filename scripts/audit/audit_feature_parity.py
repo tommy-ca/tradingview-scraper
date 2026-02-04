@@ -1,13 +1,12 @@
 import json
 import logging
-import os
-from pathlib import Path
-from typing import Dict, List
+from typing import List
 
 import pandas as pd
+
+from tradingview_scraper.settings import get_settings
 from tradingview_scraper.symbols.screener import Screener
 from tradingview_scraper.utils.technicals import TechnicalRatings
-from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("feature_parity_audit")
@@ -84,8 +83,8 @@ def audit_feature_parity(symbols: List[str]):
 
     # 4. Final Summary
     if audit_results:
-        from scipy import stats
         import numpy as np
+        from scipy import stats
 
         gt_vec = np.array([r["ground_truth"]["all"] or 0 for r in audit_results])
         rep_vec = np.array([r["replicated"]["rep_all"] or 0 for r in audit_results])
@@ -98,7 +97,7 @@ def audit_feature_parity(symbols: List[str]):
         # Sign Accuracy
         sign_match = np.mean(np.sign(gt_vec) == np.sign(rep_vec))
 
-        logger.info(f"--- FINAL SUMMARY ---")
+        logger.info("--- FINAL SUMMARY ---")
         logger.info(f"Sample Size: {len(audit_results)}")
         logger.info(f"Average Delta (MAE): {avg_delta:.4f}")
         logger.info(f"Rank Correlation: {corr:.4f} (p={p_val:.4f})")

@@ -232,6 +232,7 @@ class TradingViewScraperSettings(BaseSettings):
     summaries_dir: Path | None = None
     manifest_path: Path = Path("configs/manifest.json")
     profile: str = Field(default_factory=lambda: os.getenv("TV_PROFILE") or "")
+    mlflow_tracking_uri: str | None = None
 
     # Discovery & Prep
     batch_size: int = 5

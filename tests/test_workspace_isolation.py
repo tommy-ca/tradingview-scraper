@@ -1,7 +1,7 @@
-import unittest
-import os
 import shutil
+import unittest
 from pathlib import Path
+
 from tradingview_scraper.utils.workspace import WorkspaceManager
 
 

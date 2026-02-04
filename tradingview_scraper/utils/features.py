@@ -1,7 +1,7 @@
 import logging
+from typing import List
+
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 

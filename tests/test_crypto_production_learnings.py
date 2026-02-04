@@ -6,8 +6,8 @@ Validates staleness logic, barbell split, and calendar alignment.
 import json
 import unittest
 from pathlib import Path
+
 import pandas as pd
-import numpy as np
 
 
 class TestCryptoLearnings(unittest.TestCase):

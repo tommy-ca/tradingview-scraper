@@ -1,6 +1,7 @@
-import unittest
 import os
+import unittest
 from unittest.mock import patch
+
 from tradingview_scraper.telemetry.provider import TelemetryProvider
 
 

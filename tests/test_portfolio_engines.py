@@ -4,12 +4,12 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
-from tradingview_scraper.portfolio_engines.base import EngineRequest
 from tradingview_scraper.portfolio_engines import (
     CustomClusteredEngine,
     build_engine,
     list_available_engines,
 )
+from tradingview_scraper.portfolio_engines.base import EngineRequest
 
 
 class TestPortfolioEngineFactory(unittest.TestCase):

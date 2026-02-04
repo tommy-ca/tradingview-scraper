@@ -1,8 +1,9 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
-from tradingview_scraper.pipelines.selection.rankers.regime import StrategyRegimeRanker
+
 from tradingview_scraper.pipelines.selection.base import SelectionContext
+from tradingview_scraper.pipelines.selection.rankers.regime import StrategyRegimeRanker
 
 
 @pytest.fixture

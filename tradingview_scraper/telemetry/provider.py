@@ -1,18 +1,16 @@
 import logging
 import os
 import threading
-from pathlib import Path
+from typing import Optional
 
-from typing import Any, Dict, List, Optional
-
-from opentelemetry import metrics, trace, _logs
+from opentelemetry import _logs, metrics, trace
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, ConsoleLogExporter
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import ConsoleMetricExporter, PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, ConsoleLogExporter
 
 logger = logging.getLogger(__name__)
 
@@ -118,19 +116,6 @@ class TelemetryProvider:
         """Standard OTel metrics flushing."""
         # Standard OTel MetricReaders flush automatically or on shutdown
         pass
-
-    def register_forensic_exporter(self, output_path: Path):
-        """Registers a run-specific forensic exporter."""
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-        from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
-
-        exporter = ForensicSpanExporter(output_path)
-        # Use standard API to add processor
-        tp = trace.get_tracer_provider()
-        if isinstance(tp, TracerProvider):
-            tp.add_span_processor(SimpleSpanProcessor(exporter))
-        return exporter
 
     @property
     def is_initialized(self) -> bool:

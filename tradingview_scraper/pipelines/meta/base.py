@@ -3,8 +3,6 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
-from tradingview_scraper.pipelines.selection.base import SelectionContext
-
 
 class MetaContext(BaseModel):
     """

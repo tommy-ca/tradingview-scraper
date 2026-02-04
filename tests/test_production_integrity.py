@@ -1,6 +1,6 @@
-import unittest
 import os
-from pathlib import Path
+import unittest
+
 from tradingview_scraper.settings import get_settings
 
 

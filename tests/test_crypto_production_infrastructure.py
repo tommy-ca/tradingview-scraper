@@ -6,12 +6,10 @@ Validates BINANCE-only scanner architecture, hygiene templates, and manifest con
 import json
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import yaml
 
 from tradingview_scraper.futures_universe_selector import SelectorConfig, load_config
-from tradingview_scraper.settings import get_settings
 
 
 class TestCryptoHygieneTemplate(unittest.TestCase):

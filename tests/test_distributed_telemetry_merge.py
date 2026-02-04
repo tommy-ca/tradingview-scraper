@@ -1,6 +1,7 @@
 import unittest
-from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
 from pathlib import Path
+
+from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
 
 
 class TestDistributedTelemetryMerge(unittest.TestCase):

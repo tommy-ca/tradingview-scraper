@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 import pytest
-from tradingview_scraper.portfolio_engines.impl.custom import CustomClusteredEngine
+
 from tradingview_scraper.portfolio_engines.base import EngineRequest
-from tradingview_scraper.portfolio_engines.cluster_adapter import build_clustered_universe
+from tradingview_scraper.portfolio_engines.impl.custom import CustomClusteredEngine
 
 
 @pytest.fixture

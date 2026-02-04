@@ -2,11 +2,7 @@ import json
 import logging
 import os
 import shutil
-import sys
 from datetime import datetime
-from typing import Dict, List, Optional
-
-import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("shadow_loop")

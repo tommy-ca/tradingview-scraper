@@ -1,7 +1,6 @@
 import argparse
 import json
 import logging
-from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd

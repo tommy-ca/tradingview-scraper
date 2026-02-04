@@ -4,7 +4,7 @@ import math
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 import pandas as pd

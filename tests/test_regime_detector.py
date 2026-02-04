@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+
 from tradingview_scraper.regime import MarketRegimeDetector
 
 

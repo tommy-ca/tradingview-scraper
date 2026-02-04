@@ -1,7 +1,6 @@
 import logging
 from typing import Any, List, Union
 
-from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.telemetry.tracing import trace_span
 
 logger = logging.getLogger(__name__)
@@ -54,8 +53,8 @@ class DAGRunner:
 
     def _run_parallel(self, branch_ids: List[str], context: Any) -> Any:
         """Executes multiple stages in parallel using Ray if available."""
-        import os
         import copy
+        import os
 
         use_parallel = os.getenv("TV_ORCH_PARALLEL") == "1"
 
@@ -69,8 +68,9 @@ class DAGRunner:
             return context
 
         # Ray execution for parallel branches
-        from tradingview_scraper.orchestration.compute import RayComputeEngine
         import ray
+
+        from tradingview_scraper.orchestration.compute import RayComputeEngine
 
         logger.info(f"DAGRunner: Dispatching {len(branch_ids)} branches to Ray")
 

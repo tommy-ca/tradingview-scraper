@@ -1,6 +1,7 @@
-import unittest
-from unittest.mock import MagicMock, patch
 import time
+import unittest
+from unittest.mock import patch
+
 from tradingview_scraper.telemetry.provider import TelemetryProvider
 from tradingview_scraper.telemetry.tracing import trace_span
 

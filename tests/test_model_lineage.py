@@ -1,6 +1,6 @@
 import unittest
-import json
 from pathlib import Path
+
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 
 

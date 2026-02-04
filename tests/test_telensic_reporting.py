@@ -1,10 +1,11 @@
-import unittest
 import json
-import os
+import unittest
 from pathlib import Path
+
 from opentelemetry import trace
-from tradingview_scraper.telemetry.provider import TelemetryProvider
 from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
+
+from tradingview_scraper.telemetry.provider import TelemetryProvider
 
 
 class TestTelensicReporting(unittest.TestCase):

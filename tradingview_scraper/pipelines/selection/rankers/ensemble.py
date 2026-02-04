@@ -1,7 +1,8 @@
 import logging
-from typing import Any, Dict, List, Optional
-from tradingview_scraper.pipelines.selection.rankers.base import BaseRanker
+from typing import Dict, List, Optional
+
 from tradingview_scraper.pipelines.selection.base import SelectionContext
+from tradingview_scraper.pipelines.selection.rankers.base import BaseRanker
 
 logger = logging.getLogger(__name__)
 

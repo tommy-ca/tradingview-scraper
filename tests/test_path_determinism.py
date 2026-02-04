@@ -1,7 +1,8 @@
-import unittest
 import os
+import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
 from tradingview_scraper.settings import get_settings
 
 

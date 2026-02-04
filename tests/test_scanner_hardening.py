@@ -1,8 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
-import pandas as pd
+
 from tradingview_scraper.pipelines.discovery.tradingview import TradingViewDiscoveryScanner
-from tradingview_scraper.pipelines.discovery.base import CandidateMetadata
 
 
 class TestScannerHardening(unittest.TestCase):

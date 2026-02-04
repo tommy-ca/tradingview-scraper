@@ -1,7 +1,9 @@
 import unittest
+
 from opentelemetry import trace
+
+from tradingview_scraper.telemetry.context import extract_trace_context, inject_trace_context
 from tradingview_scraper.telemetry.provider import TelemetryProvider
-from tradingview_scraper.telemetry.context import inject_trace_context, extract_trace_context
 
 
 class TestDistributedTracing(unittest.TestCase):
