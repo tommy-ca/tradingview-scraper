@@ -40,14 +40,14 @@ class SleeveActorImpl:
         self.trace_context = trace_context
 
         # 3. Settings Initialization
-        get_settings.cache_clear()
+        from tradingview_scraper.settings import clear_settings_cache
+
+        clear_settings_cache()
         self.settings = get_settings()
 
-        # 4. Workspace Isolation (WorkspaceManager)
-        from tradingview_scraper.utils.workspace import WorkspaceManager
-
-        self.workspace = WorkspaceManager(run_id=os.getenv("TV_RUN_ID", "remote_run"))
-        self.workspace.setup_worker_workspace(worker_cwd=Path(os.getcwd()), host_cwd=Path(host_cwd))
+        # 4. Workspace Isolation (WorkspaceManager) - DEPRECATED
+        # We now rely on DVC or shared filesystem. WorkspaceManager removed.
+        self.workspace = None
 
     def _setup_workspace(self):
         """Deprecated: Logic moved to WorkspaceManager."""
@@ -91,21 +91,7 @@ class SleeveActorImpl:
 
     def get_telemetry_spans(self) -> List[Dict[str, Any]]:
         """Returns the captured telemetry spans from this worker."""
-        # Find the forensic exporter in the tracer provider
-        from opentelemetry import trace
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-        from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
-
-        tp = trace.get_tracer_provider()
-        # opentelemetry-sdk internal access
-        if isinstance(tp, TracerProvider):
-            # Accessing private attribute for forensic collection
-            processors = getattr(tp, "_active_span_processor", None)
-            if processors:
-                for proc in processors._span_processors:
-                    if isinstance(proc, SimpleSpanProcessor) and isinstance(proc.span_exporter, ForensicSpanExporter):
-                        return proc.span_exporter.spans
+        # Deprecated: Telemetry is now handled by MLflow / OpenTelemetry
         return []
 
     def _export_artifacts(self, run_id: str):
