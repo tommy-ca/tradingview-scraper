@@ -24,7 +24,7 @@ def generate_factor_map():
     # CR-831: Workspace Isolation
     default_returns = str(run_dir / "data" / "returns_matrix.parquet")
     if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
+        default_returns = "data/lakehouse/portfolio_returns.parquet"
 
     default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
     if not os.path.exists(default_clusters):
@@ -46,7 +46,7 @@ def generate_factor_map():
         returns = pd.read_parquet(returns_path)
     else:
         with open(returns_path, "rb") as f:
-            returns = cast(pd.DataFrame, pd.read_pickle(f))
+            returns = cast(pd.DataFrame, pd.read_parquet(f))
 
     with open(clusters_path, "r") as f:
         clusters = json.load(f)

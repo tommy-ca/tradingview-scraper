@@ -1,7 +1,6 @@
 import argparse
 import json
 import logging
-from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
@@ -47,10 +46,10 @@ def load_data(run_id: str):
     # run_data_dir is run_dir / "data"
     returns_dir = run_dir / "data" / "returns"
     if returns_dir.exists():
-        for pkl in returns_dir.glob("*.pkl"):
+        for pkl in returns_dir.glob("*.parquet"):
             try:
                 key = pkl.stem  # e.g. custom_vectorbt_max_sharpe
-                stitched_returns[key] = pd.read_pickle(pkl)
+                stitched_returns[key] = pd.read_parquet(pkl)
             except Exception as e:
                 logger.warning(f"Failed to load stitched returns {pkl}: {e}")
 

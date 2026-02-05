@@ -18,7 +18,7 @@ def research_regime():
     # CR-831: Workspace Isolation
     default_returns = str(run_dir / "data" / "returns_matrix.parquet")
     if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
+        default_returns = "data/lakehouse/portfolio_returns.parquet"
 
     returns_path = os.getenv("RETURNS_MATRIX", default_returns)
     if not os.path.exists(returns_path):
@@ -29,7 +29,7 @@ def research_regime():
     if returns_path.endswith(".parquet"):
         returns = pd.read_parquet(returns_path)
     else:
-        returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+        returns = cast(pd.DataFrame, pd.read_parquet(returns_path))
     detector = MarketRegimeDetector()
 
     # Test full series

@@ -444,7 +444,7 @@ class ProductionPipeline:
                         "run",
                         "scripts/build_meta_returns.py",
                         f"--profile={self.profile}",
-                        f"--output={self.run_dir}/data/meta_returns.pkl",
+                        f"--output={self.run_dir}/data/meta_returns.parquet",
                         f"--profiles={target_risk_profiles}",
                     ],
                     None,
@@ -455,10 +455,10 @@ class ProductionPipeline:
                         "uv",
                         "run",
                         "scripts/optimize_meta_portfolio.py",
-                        f"--returns={self.run_dir}/data/meta_returns.pkl",
+                        f"--returns={self.run_dir}/data/meta_returns.parquet",
                         f"--output={self.run_dir}/data/meta_optimized.json",
                     ],
-                    None,  # Optimization loops through all found meta_returns_*.pkl
+                    None,  # Optimization loops through all found meta_returns_*.parquet
                 ),
             ]
 

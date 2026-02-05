@@ -187,7 +187,7 @@ class BacktestEngine:
             return
 
         # 4. Pillar 2: Strategy Synthesis
-        train_rets_strat = self._execute_synthesis(train_rets, selection.winners, is_meta)
+        train_rets_strat = self._execute_synthesis(train_rets, selection.winners, is_meta, workspace=self.workspace)
 
         # 5. Pillar 3: Allocation & Simulation
         self._execute_allocation(
@@ -241,13 +241,19 @@ class BacktestEngine:
 
         return selection
 
-    def _execute_synthesis(self, train_rets: pd.DataFrame, winners: list[dict[str, Any]], is_meta: bool) -> pd.DataFrame:
+    def _execute_synthesis(
+        self,
+        train_rets: pd.DataFrame,
+        winners: list[dict[str, Any]],
+        is_meta: bool,
+        workspace: NumericalWorkspace | None = None,
+    ) -> pd.DataFrame:
         """Orchestrates Pillar 2: Strategy Synthesis."""
         if is_meta:
             winners_syms = [w["symbol"] for w in winners]
             return train_rets[winners_syms]
 
-        return self.synthesizer.synthesize(train_rets, winners, self.settings.features)
+        return self.synthesizer.synthesize(train_rets, winners, self.settings.features, workspace=workspace)
 
     def _execute_allocation(
         self,
@@ -455,7 +461,7 @@ class BacktestEngine:
         temp_meta_path = run_dir / "data" / f"meta_returns_{config.profile}_{anchor_prof}.parquet"
 
         # Deferred import to avoid circular dependency
-        from scripts.build_meta_returns import build_meta_returns
+        from tradingview_scraper.utils.meta_returns import build_meta_returns
 
         build_meta_returns(
             meta_profile=config.profile,
@@ -483,7 +489,7 @@ class BacktestEngine:
         if self.features_matrix.empty:
             return train_rets
 
-        idx_loc = self.features_matrix.index.searchsorted([current_date])[0]
+        idx_loc = self.features_matrix.index.searchsorted(current_date)  # type: ignore
         if idx_loc <= 0:
             return train_rets
 

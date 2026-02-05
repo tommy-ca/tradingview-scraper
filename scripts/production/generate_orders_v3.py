@@ -37,13 +37,13 @@ def generate_production_orders(source_run_id: str = "20260106-prod-q1", top_n: i
     logger.info(f"🏆 Identified {n_winners} unique winners from {source_run_id}")
 
     # 2. Load Live Data
-    returns_path = settings.lakehouse_dir / "portfolio_returns.pkl"
+    returns_path = settings.lakehouse_dir / "portfolio_returns.parquet"
     clusters_path = settings.lakehouse_dir / "portfolio_clusters.json"
     meta_path = settings.lakehouse_dir / "portfolio_meta.json"
     stats_path = settings.lakehouse_dir / "antifragility_stats.json"
 
     with open(returns_path, "rb") as f:
-        returns = cast(pd.DataFrame, pd.read_pickle(f))
+        returns = cast(pd.DataFrame, pd.read_parquet(f))
     with open(clusters_path, "r") as f:
         clusters = cast(Dict[str, List[str]], json.load(f))
     with open(meta_path, "r") as f:

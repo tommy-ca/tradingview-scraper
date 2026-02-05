@@ -123,7 +123,7 @@ def generate_markdown_report(data_path: str, returns_path: str, candidates_path:
             if str(returns_path).endswith(".parquet"):
                 returns_df = pd.read_parquet(returns_path)
             else:
-                raw_rets = pd.read_pickle(returns_path)
+                raw_rets = pd.read_parquet(returns_path)
                 if isinstance(raw_rets, pd.DataFrame):
                     returns_df = raw_rets
         except Exception:
@@ -323,7 +323,7 @@ if __name__ == "__main__":
 
     default_returns = run_dir / "data" / "returns_matrix.parquet"
     if not default_returns.exists():
-        default_returns = settings.lakehouse_dir / "portfolio_returns.pkl"
+        default_returns = settings.lakehouse_dir / "portfolio_returns.parquet"
 
     default_candidates = run_dir / "data" / "portfolio_candidates.json"
     if not default_candidates.exists():

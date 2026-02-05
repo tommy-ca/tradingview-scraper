@@ -133,7 +133,7 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
                         sharpes.append(float(m.get("sharpe", 0)))
                         rets.append(float(m.get("annualized_return", 0)))
                         drawdowns.append(float(m.get("max_drawdown", 0)))
-                    except:
+                    except Exception:
                         continue
 
                 if sharpes:
@@ -147,14 +147,14 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
     for prof in profiles:
         prof = prof.strip()
         opt_path = meta_dir / f"meta_optimized_{meta_profile}_{prof}.json"
-        rets_path = meta_dir / f"meta_returns_{meta_profile}_{prof}.pkl"
+        rets_path = meta_dir / f"meta_returns_{meta_profile}_{prof}.parquet"
         flat_path = meta_dir / f"portfolio_optimized_meta_{meta_profile}_{prof}.json"
 
         # Fallbacks for legacy files
         if not opt_path.exists():
             opt_path = meta_dir / f"meta_optimized_{prof}.json"
         if not rets_path.exists():
-            rets_path = meta_dir / f"meta_returns_{prof}.pkl"
+            rets_path = meta_dir / f"meta_returns_{prof}.parquet"
         if not flat_path.exists():
             flat_path = meta_dir / f"portfolio_optimized_meta_{prof}.json"
 
@@ -169,7 +169,7 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
 
         # 0. META PERFORMANCE (Phase 159)
         if rets_path.exists():
-            returns_df = cast(pd.DataFrame, pd.read_pickle(rets_path))
+            returns_df = cast(pd.DataFrame, pd.read_parquet(rets_path))
             if not returns_df.empty:
                 md.append("\n### 📈 Meta-Performance Metrics")
                 # Calculate metrics for the ensembled portfolio (Mean of sleeves weighted by opt weights)
@@ -227,7 +227,7 @@ def generate_meta_markdown_report(meta_dir: Path, output_path: str, profiles: Li
 
         # 2. SLEEVE CORRELATIONS
         if rets_path.exists():
-            returns_df = cast(pd.DataFrame, pd.read_pickle(rets_path))
+            returns_df = cast(pd.DataFrame, pd.read_parquet(rets_path))
             md.append("\n### 📊 Sleeve Correlations")
             corr = returns_df.corr()
             cols = list(corr.columns)

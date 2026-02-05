@@ -109,7 +109,7 @@ def natural_selection(
     if returns_path.endswith(".parquet"):
         returns = pd.read_parquet(returns_path)
     else:
-        returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+        returns = cast(pd.DataFrame, pd.read_parquet(returns_path))
 
     with open(meta_path, "r") as f_meta:
         meta_data = json.load(f_meta)

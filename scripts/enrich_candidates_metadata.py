@@ -72,7 +72,7 @@ def get_defaults(asset_class: str, symbol: str) -> Dict[str, Any]:
     }
 
 
-def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_raw.json", returns_path: str = "data/lakehouse/portfolio_returns.pkl"):
+def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_raw.json", returns_path: str = "data/lakehouse/portfolio_returns.parquet"):
     if not os.path.exists(candidates_path):
         logger.error(f"Candidates file not found: {candidates_path}")
         return
@@ -105,7 +105,7 @@ def enrich_metadata(candidates_path: str = "data/lakehouse/portfolio_candidates_
             if returns_path.endswith(".parquet"):
                 returns = pd.read_parquet(returns_path)
             else:
-                returns = pd.read_pickle(returns_path)
+                returns = pd.read_parquet(returns_path)
             active_symbols = returns.columns.tolist()
         except Exception as e:
             logger.error(f"Error loading returns matrix for enrichment: {e}")

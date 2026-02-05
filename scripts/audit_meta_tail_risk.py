@@ -3,7 +3,7 @@ import pandas as pd
 
 
 def audit_meta_tail_risk(returns_path: str):
-    df = pd.read_pickle(returns_path)
+    df = pd.read_parquet(returns_path)
 
     # Sleeve weights (assuming equal weight for this super-meta test)
     # The report showed 25% each
@@ -32,4 +32,4 @@ def audit_meta_tail_risk(returns_path: str):
 
 
 if __name__ == "__main__":
-    audit_meta_tail_risk("data/lakehouse/meta_returns_hrp.pkl")
+    audit_meta_tail_risk("data/lakehouse/meta_returns_hrp.parquet")

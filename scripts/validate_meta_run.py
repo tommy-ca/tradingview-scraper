@@ -120,7 +120,8 @@ def _calendar_sanity(rets: pd.DataFrame) -> Dict[str, object]:
 
     # Cast to DatetimeIndex to satisfy static analysis for normalize/dayofweek
     dt_index = cast(pd.DatetimeIndex, idx)
-    d = dt_index.normalize()
+    # Use Series.dt accessor for better type checker support
+    d = pd.Series(dt_index).dt.normalize().values
     unique_days = pd.Index(d).unique().sort_values()
 
     # Cast unique_days to DatetimeIndex for dayofweek
@@ -129,9 +130,12 @@ def _calendar_sanity(rets: pd.DataFrame) -> Dict[str, object]:
     gaps = day_diffs[day_diffs > pd.Timedelta(days=1)]
 
     # For crypto-only runs we EXPECT weekend presence (Sat/Sun).
-    dow = dt_unique.dayofweek  # Mon=0 ... Sun=6
-    has_sat = bool((dow == 5).any())
-    has_sun = bool((dow == 6).any())
+    # Explicitly convert to Series to use dt accessor, then to numpy array
+    dow_series = pd.Series(dt_unique).dt.dayofweek
+    dow_arr = np.asarray(dow_series)
+
+    has_sat = bool(np.any(dow_arr == 5))
+    has_sun = bool(np.any(dow_arr == 6))
 
     return {
         "n_days": int(dt_unique.size),
@@ -143,8 +147,8 @@ def _calendar_sanity(rets: pd.DataFrame) -> Dict[str, object]:
 
 
 def _load_meta_returns(base_dir: Path, meta_profile: str, risk_profile: str) -> pd.DataFrame:
-    path = base_dir / f"meta_returns_{meta_profile}_{risk_profile}.pkl"
-    data = pd.read_pickle(path)
+    path = base_dir / f"meta_returns_{meta_profile}_{risk_profile}.parquet"
+    data = pd.read_parquet(path)
     if isinstance(data, pd.Series):
         return data.to_frame()
     return cast(pd.DataFrame, data)
@@ -167,7 +171,7 @@ def _load_cluster_tree(base_dir: Path, meta_profile: str, risk_profile: str) -> 
 
 def _required_artifacts(base_dir: Path, meta_profile: str, risk_profile: str) -> List[Tuple[str, Path]]:
     return [
-        ("meta_returns", base_dir / f"meta_returns_{meta_profile}_{risk_profile}.pkl"),
+        ("meta_returns", base_dir / f"meta_returns_{meta_profile}_{risk_profile}.parquet"),
         ("meta_optimized", base_dir / f"meta_optimized_{meta_profile}_{risk_profile}.json"),
         ("meta_cluster_tree", base_dir / f"meta_cluster_tree_{meta_profile}_{risk_profile}.json"),
         ("portfolio_optimized_meta", base_dir / f"portfolio_optimized_meta_{meta_profile}_{risk_profile}.json"),

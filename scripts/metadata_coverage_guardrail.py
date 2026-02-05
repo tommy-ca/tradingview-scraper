@@ -107,7 +107,7 @@ def main() -> None:
             logger.info(f"{target.label}: coverage {pct:.2%} below threshold {args.threshold:.2%}, running enrichment")
             enrich_metadata(
                 candidates_path=str(target.candidates),
-                returns_path=str(target.returns) if target.returns else "data/lakehouse/portfolio_returns.pkl",
+                returns_path=str(target.returns) if target.returns else "data/lakehouse/portfolio_returns.parquet",
             )
             total, covered, pct = coverage_for(target.candidates)
             enriched = True

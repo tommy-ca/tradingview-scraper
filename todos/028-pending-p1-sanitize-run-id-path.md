@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "028"
 tags: ['security', 'path-traversal', 'sanitization']
@@ -36,9 +36,9 @@ Ensure that the final constructed path is always a subdirectory of the intended 
 Implement a sanitization function using whitelist validation for `run_id` and apply it at the point where `run_id` is first received or used for path construction.
 
 ## Acceptance Criteria
-- [ ] `run_id` is validated against a safe whitelist (regex).
-- [ ] Attempts to use a `run_id` with directory traversal characters (e.g., `/`, `\`, `..`) are rejected with an error.
-- [ ] Unit tests verify both safe and unsafe `run_id` inputs.
+- [x] `run_id` is validated against a safe whitelist (regex).
+- [x] Attempts to use a `run_id` with directory traversal characters (e.g., `/`, `\`, `..`) are rejected with an error.
+- [x] Unit tests verify both safe and unsafe `run_id` inputs.
 
 ## Work Log
 - 2026-02-02: Issue identified during P1 security audit. Created todo file.

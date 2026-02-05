@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-from pathlib import Path
 from typing import Dict, Optional, cast
 
 import numpy as np
@@ -76,7 +75,7 @@ def research_regime_v3():
     # Use settings.lakehouse_dir instead of hardcoded strings
     default_returns = str(run_dir / "data" / "returns_matrix.parquet")
     if not os.path.exists(default_returns):
-        default_returns = str(settings.lakehouse_dir / "portfolio_returns.pkl")
+        default_returns = str(settings.lakehouse_dir / "portfolio_returns.parquet")
 
     returns_path = os.getenv("RETURNS_MATRIX", default_returns)
 
@@ -87,7 +86,7 @@ def research_regime_v3():
     if str(returns_path).endswith(".parquet"):
         returns = pd.read_parquet(returns_path)
     else:
-        returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+        returns = cast(pd.DataFrame, pd.read_parquet(returns_path))
 
     logger.info(f"Loaded returns matrix from {returns_path} with shape: {returns.shape}")
 

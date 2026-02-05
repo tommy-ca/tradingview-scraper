@@ -5,7 +5,7 @@ import pandas as pd
 
 LAKEHOUSE_PATH = "data/lakehouse"
 CANDIDATES_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_candidates.json")
-RETURNS_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_returns.pkl")
+RETURNS_FILE = os.path.join(LAKEHOUSE_PATH, "portfolio_returns.parquet")
 
 
 def get_missing_symbols():
@@ -14,7 +14,7 @@ def get_missing_symbols():
     candidate_symbols = [c["symbol"] for c in candidates]
 
     try:
-        returns_df = pd.read_pickle(RETURNS_FILE)
+        returns_df = pd.read_parquet(RETURNS_FILE)
         matrix_symbols = returns_df.columns.tolist()
     except Exception:
         matrix_symbols = []

@@ -24,9 +24,10 @@ Move the meta-returns calculation logic from `scripts/build_meta_returns.py` to 
 Relocate meta-returns calculation logic to the library and update imports in `backtest_engine.py` and the existing script.
 
 ## Acceptance Criteria
-- [ ] `backtest_engine.py` no longer imports from the `scripts/` directory.
-- [ ] `scripts/build_meta_returns.py` refactored to use the new library module.
-- [ ] All tests for meta-returns pass after relocation.
+- [x] `backtest_engine.py` no longer imports from the `scripts/` directory.
+- [x] `scripts/build_meta_returns.py` refactored to use the new library module.
+- [x] All tests for meta-returns pass after relocation.
 
 ## Work Log
 - 2026-02-02: Issue identified as P1 finding. Created todo file.
+- 2026-02-05: Verified `tradingview_scraper/utils/meta_returns.py` exists and is used by both scripts and engine. AC checked.

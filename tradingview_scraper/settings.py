@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 from contextvars import ContextVar
 from datetime import datetime
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +16,6 @@ from pydantic_settings import (
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
-
-from tradingview_scraper.utils.security import SecurityUtils
 
 logger = logging.getLogger(__name__)
 
@@ -302,11 +300,11 @@ class TradingViewScraperSettings(BaseSettings):
         """Ensures run_id is a valid filename and prevents path traversal."""
         if not v:
             return v
-        # Use SecurityUtils pattern for validation
-        if not SecurityUtils.SYMBOL_PATTERN.match(v):
-            raise ValueError(f"Invalid run_id format: {v}")
-        if ".." in v or "/" in v or "\\" in v:
-            raise ValueError(f"Potentially malicious run_id detected: {v}")
+
+        # Strict whitelist: alphanumeric, underscore, hyphen
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", v):
+            raise ValueError(f"Invalid run_id format: {v}. Must contain only a-z, A-Z, 0-9, _, -")
+
         return v
 
     def clone(self, **overrides: Any) -> TradingViewScraperSettings:
@@ -465,7 +463,6 @@ TradingViewScraperSettings.model_rebuild()
 _SETTINGS_CTX: ContextVar[TradingViewScraperSettings | None] = ContextVar("settings_ctx", default=None)
 
 
-@lru_cache
 def _get_cached_base_settings() -> TradingViewScraperSettings:
     """Loads default settings once and caches them."""
     return TradingViewScraperSettings()
@@ -475,7 +472,7 @@ def clear_settings_cache():
     """
     Clears the global settings cache, forcing a reload from environment and manifest.
     """
-    _get_cached_base_settings.cache_clear()
+    logger.debug("Cache cleared (noop)")
 
 
 def get_settings() -> TradingViewScraperSettings:

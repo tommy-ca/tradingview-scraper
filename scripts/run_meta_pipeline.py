@@ -128,7 +128,7 @@ def run_meta_pipeline(
     QuantSDK.run_stage(
         "meta.aggregation",
         meta_profile=meta_profile,
-        output_path=str(run_data_dir / "meta_returns.pkl"),
+        output_path=str(run_data_dir / "meta_returns.parquet"),
         profiles=target_profiles,
         manifest_path=settings.manifest_path,
         base_dir=run_data_dir,
@@ -136,10 +136,10 @@ def run_meta_pipeline(
 
     # 2. Optimize
     logger.info(">>> STAGE 2: Meta-Optimization")
-    # optimize_meta infers base_dir from input path (run_data_dir / "meta_returns.pkl")
+    # optimize_meta infers base_dir from input path (run_data_dir / "meta_returns.parquet")
     QuantSDK.run_stage(
         "risk.optimize_meta",
-        returns_path=str(run_data_dir / "meta_returns.pkl"),
+        returns_path=str(run_data_dir / "meta_returns.parquet"),
         output_path=str(run_data_dir / "meta_optimized.json"),
         meta_profile=meta_profile,
     )

@@ -194,7 +194,7 @@ def analyze_clusters(clusters_path: str, meta_path: str, returns_path: str, stat
     if returns_path.endswith(".parquet"):
         returns = pd.read_parquet(returns_path)
     else:
-        returns = pd.read_pickle(returns_path)
+        returns = pd.read_parquet(returns_path)
 
     if not isinstance(returns, pd.DataFrame):
         returns = pd.DataFrame(returns)
@@ -360,7 +360,7 @@ if __name__ == "__main__":
         default_returns = str(run_dir / "data" / "returns_matrix.parquet")
 
     if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
+        default_returns = "data/lakehouse/portfolio_returns.parquet"
 
     default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
     if not os.path.exists(default_clusters):

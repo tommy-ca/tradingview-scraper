@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 import logging
 
-from tradingview_scraper.backtest.meta import build_meta_returns
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.utils.meta_returns import build_meta_returns
 
 logger = logging.getLogger("build_meta_returns")
 

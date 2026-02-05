@@ -200,7 +200,7 @@ class PortfolioAuditor:
         returns_file = RETURNS_FILE if mode == "selected" else RETURNS_RAW_FILE
         if not os.path.exists(returns_file):
             # Fallback to parquet
-            parquet_file = returns_file.replace(".pkl", ".parquet")
+            parquet_file = returns_file.replace(".parquet", ".parquet")
             if os.path.exists(parquet_file):
                 returns_file = parquet_file
             else:
@@ -215,7 +215,7 @@ class PortfolioAuditor:
                 if returns_file.endswith(".parquet"):
                     returns_df = pd.read_parquet(returns_file)
                 else:
-                    returns_df = pd.read_pickle(returns_file)
+                    returns_df = pd.read_parquet(returns_file)
                 if isinstance(returns_df, pd.DataFrame):
                     returns_symbols = set(returns_df.columns)
             except Exception:
@@ -390,7 +390,7 @@ class PortfolioAuditor:
 
         returns_df: Optional[pd.DataFrame] = None
         if os.path.exists(RETURNS_FILE):
-            raw_rets = pd.read_pickle(RETURNS_FILE)
+            raw_rets = pd.read_parquet(RETURNS_FILE)
             if isinstance(raw_rets, pd.DataFrame):
                 returns_df = raw_rets
 

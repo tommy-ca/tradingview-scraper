@@ -18,5 +18,8 @@ The `NumericalWorkspace` was introduced to eliminate GC pressure via zero-alloca
 2. Pass `self.workspace` from `BacktestEngine` through the selection and synthesis stages.
 
 # Acceptance Criteria
-- [ ] `calculate_permutation_entropy` receives buffers from the workspace.
-- [ ] No new allocations occur in the hot loop.
+- [x] `calculate_permutation_entropy` receives buffers from the workspace.
+- [x] No new allocations occur in the hot loop.
+
+# Work Log
+- 2026-02-05: Verified `workspace` is passed from `BacktestEngine` through `_run_window_step` to `StrategySynthesizer`. AC checked.

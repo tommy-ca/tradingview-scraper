@@ -1,9 +1,12 @@
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, cast
+from typing import TYPE_CHECKING, Any, Dict, List, cast
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from tradingview_scraper.backtest.models import NumericalWorkspace
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +88,13 @@ class StrategySynthesizer:
         # Maps StrategyName -> {PhysicalSymbol: CompositionWeight}
         self.composition_map: Dict[str, Dict[str, float]] = {}
 
-    def synthesize(self, returns_df: pd.DataFrame, winners_meta: List[Dict[str, Any]], features: Any) -> pd.DataFrame:
+    def synthesize(
+        self,
+        returns_df: pd.DataFrame,
+        winners_meta: List[Dict[str, Any]],
+        features: Any,
+        workspace: "NumericalWorkspace | None" = None,
+    ) -> pd.DataFrame:
         """
         Synthesizes the strategy matrix from the selected universe.
         Each column in the output is a purified alpha stream (Synthetic Long).

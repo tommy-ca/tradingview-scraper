@@ -11,7 +11,7 @@ def validate_parity():
     print("🚀 Starting Nautilus Parity Validation...")
 
     # 1. Load Data
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
+    returns_path = "data/lakehouse/portfolio_returns.parquet"
     try:
         import pickle
 

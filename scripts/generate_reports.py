@@ -81,9 +81,9 @@ class ReportGenerator:
 
         self.returns_dir = self.data_dir / "returns"
         # Backward compatibility check for returns
-        if not any(self.returns_dir.glob("*.pkl")):
+        if not any(self.returns_dir.glob("*.parquet")):
             legacy_returns = self.summary_dir / "returns"
-            if legacy_returns.exists() and any(legacy_returns.glob("*.pkl")):
+            if legacy_returns.exists() and any(legacy_returns.glob("*.parquet")):
                 self.returns_dir = legacy_returns
 
         self.tearsheet_root.mkdir(parents=True, exist_ok=True)
@@ -146,14 +146,14 @@ class ReportGenerator:
                         summary = {}
 
                         # CR-Fix: Calculate summary from Stitched Returns (Global) instead of averaging windows
-                        # Standard name format from backtest_engine.py is {engine}_{simulator}_{profile}.pkl
-                        pkl_name = f"{eng}_{sim}_{prof}.pkl"
+                        # Standard name format from backtest_engine.py is {engine}_{simulator}_{profile}.parquet
+                        pkl_name = f"{eng}_{sim}_{prof}.parquet"
                         pkl_path = self.returns_dir / pkl_name
 
                         full_series = None
                         if pkl_path.exists():
                             try:
-                                full_series = pd.read_pickle(pkl_path)
+                                full_series = pd.read_parquet(pkl_path)
                             except Exception as e:
                                 logger.warning(f"Failed to load stitched returns for {pkl_name}: {e}")
 
@@ -161,9 +161,14 @@ class ReportGenerator:
                             # Calculate global metrics
                             from tradingview_scraper.utils.metrics import calculate_performance_metrics
 
+                            # Ensure we pass a Series
+                            s_metric = full_series
+                            if isinstance(s_metric, pd.DataFrame):
+                                s_metric = s_metric.iloc[:, 0]
+
                             # Assume 365 for crypto if undetectable, or use logic
                             # We can reuse the utility
-                            m = calculate_performance_metrics(full_series)
+                            m = calculate_performance_metrics(s_metric)
                             summary["annualized_return"] = m["annualized_return"]
                             summary["return"] = m["annualized_return"]
                             summary["annualized_vol"] = m["annualized_vol"]
@@ -225,11 +230,11 @@ class ReportGenerator:
         return candidates[-1].name if candidates else None
 
     def _load_spy_benchmark(self) -> Optional[pd.Series]:
-        returns_path = Path("data/lakehouse/portfolio_returns.pkl")
+        returns_path = Path("data/lakehouse/portfolio_returns.parquet")
         if not returns_path.exists():
             return None
         try:
-            all_rets = cast(pd.DataFrame, pd.read_pickle(returns_path))
+            all_rets = cast(pd.DataFrame, pd.read_parquet(returns_path))
             if not self.settings.benchmark_symbols:
                 return None
             symbol = self.settings.benchmark_symbols[0]
@@ -361,7 +366,7 @@ class ReportGenerator:
 
             r_path = os.getenv("RETURNS_MATRIX", str(self.data_dir / "returns_matrix.parquet"))
             if not os.path.exists(r_path):
-                r_path = "data/lakehouse/portfolio_returns.pkl"
+                r_path = "data/lakehouse/portfolio_returns.parquet"
 
             s_path = os.getenv("ANTIFRAGILITY_STATS", str(self.data_dir / "antifragility_stats.json"))
             if not os.path.exists(s_path):
@@ -389,10 +394,10 @@ class ReportGenerator:
         essential_reports: List[str] = []
         if not self.returns_dir.exists():
             return
-        for pkl_path in self.returns_dir.glob("*.pkl"):
+        for pkl_path in self.returns_dir.glob("*.parquet"):
             try:
                 name = pkl_path.stem
-                rets = cast(pd.Series, pd.read_pickle(pkl_path))
+                rets = cast(pd.Series, pd.read_parquet(pkl_path))
                 if rets.empty:
                     continue
                 new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in rets.index]

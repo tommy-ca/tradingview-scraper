@@ -46,7 +46,7 @@ class ClusteredOptimizerV2:
             df = pd.read_parquet(returns_path)
         else:
             with open(returns_path, "rb") as f_in:
-                df = cast(pd.DataFrame, pd.read_pickle(f_in))
+                df = cast(pd.DataFrame, pd.read_parquet(f_in))
 
         # Ultra-robust forcing of naive index
         try:
@@ -121,7 +121,7 @@ def optimize_clustered_portfolio(run_id: Optional[str] = None, risk_profiles: Op
         default_returns = str(run_dir / "data" / "returns_matrix.parquet")
 
     if not os.path.exists(default_returns):
-        default_returns = str(settings.lakehouse_dir / "portfolio_returns.pkl")
+        default_returns = str(settings.lakehouse_dir / "portfolio_returns.parquet")
 
     default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
     if not os.path.exists(default_clusters):

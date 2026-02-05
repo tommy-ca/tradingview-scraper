@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "029"
 tags: ['security', 'deserialization', 'data-loading']
@@ -34,10 +34,11 @@ If Pickle must be used, ensure that the files being loaded are strictly anchored
 Replace `pd.read_pickle` with `pd.read_parquet` in `BacktestEngine.load_data` and update the corresponding save logic to use `to_parquet`. Ensure that the storage directory is strictly controlled.
 
 ## Acceptance Criteria
-- [ ] `pd.read_pickle` replaced with `pd.read_parquet` in `BacktestEngine.load_data`.
-- [ ] Data saving logic updated to use Parquet.
-- [ ] Existing data files migrated or handled gracefully.
-- [ ] Unit tests verify that data can be saved and loaded securely.
+- [x] `pd.read_pickle` replaced with `pd.read_parquet` in `BacktestEngine.load_data`.
+- [x] Data saving logic updated to use Parquet.
+- [x] Existing data files migrated or handled gracefully.
+- [x] Unit tests verify that data can be saved and loaded securely.
 
 ## Work Log
 - 2026-02-02: Issue identified during P1 security audit. Created todo file.
+- 2026-02-04: Removed pickle loading support from `tradingview_scraper/data/loader.py` to enforce Parquet usage.

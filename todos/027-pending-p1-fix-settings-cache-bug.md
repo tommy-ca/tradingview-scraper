@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "027"
 tags: ['bug', 'settings', 'cache']
@@ -30,9 +30,9 @@ Use a more standard singleton pattern or a property that explicitly handles the 
 Remove `@lru_cache` from `_get_cached_base_settings` to ensure that settings are always fresh and can be overridden by environment variables or runtime configuration changes.
 
 ## Acceptance Criteria
-- [ ] `@lru_cache` removed from `_get_cached_base_settings`.
-- [ ] Unit tests verify that settings can be updated/overridden between calls.
-- [ ] No regression in performance for settings access.
+- [x] `@lru_cache` removed from `_get_cached_base_settings`.
+- [x] Unit tests verify that settings can be updated/overridden between calls.
+- [x] No regression in performance for settings access.
 
 ## Work Log
 - 2026-02-02: Issue identified during P1 settings audit. Created todo file.

@@ -4,7 +4,7 @@ import argparse
 import logging
 import sys
 
-from tradingview_scraper.backtest.meta import validate_sleeve_health
+from tradingview_scraper.utils.meta_returns import validate_sleeve_health
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
