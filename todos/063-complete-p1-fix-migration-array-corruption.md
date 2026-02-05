@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "063"
 tags: [data-integrity, bug, critical, migration]
@@ -31,9 +31,10 @@ if isinstance(o, np.bool_):
 Implement Solution A immediately.
 
 ## Acceptance Criteria
-- [ ] `np.ndarray` serializes as JSON list.
-- [ ] `np.bool_` serializes as JSON boolean.
-- [ ] Verify using `reproduce_json_numpy.py`.
+- [x] `np.ndarray` serializes as JSON list.
+- [x] `np.bool_` serializes as JSON boolean.
+- [x] Verify using `reproduce_json_numpy.py`.
 
 ## Work Log
 - 2026-02-05: Identified during data integrity review.
+- 2026-02-05: Implemented Solution A. Added `np.ndarray` and `np.bool_` handlers to `default` function in `scripts/maintenance/migrate_pickle_to_parquet.py`. Verified with a reproduction script.

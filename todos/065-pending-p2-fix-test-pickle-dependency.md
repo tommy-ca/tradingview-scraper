@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "065"
 tags: [quality, testing, regression]
@@ -28,3 +28,4 @@ Refactor tests to use `DataLoader` or support Parquet.
 
 ## Work Log
 - 2026-02-05: Identified during data integrity review.
+- 2026-02-05: Updated tests to use `pd.read_parquet` and reference `returns_matrix.parquet`. Refactored `tests/test_selection_evolution.py`, `tests/test_crypto_recovery_validation.py`, and `tests/test_tournament_v2_tdd.py` to remove pickle dependency.

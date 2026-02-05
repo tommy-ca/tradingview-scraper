@@ -6,10 +6,10 @@ import pytest
 
 
 def test_selection_engine_anchor_prioritization():
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
+    returns_path = "data/lakehouse/returns_matrix.parquet"
     if not os.path.exists(returns_path):
         pytest.skip("Returns matrix missing")
-    df = pd.read_pickle(returns_path)
+    df = pd.read_parquet(returns_path)
     anchors = ["BINANCE:BTCUSDT", "BINANCE:SOLUSDT.P", "BINANCE:XRPUSDT.P"]
     present = [a for a in anchors if a in df.columns]
     assert len(present) > 0

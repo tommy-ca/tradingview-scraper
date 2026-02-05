@@ -102,6 +102,10 @@ def convert_artifact(pkl_path: Path, dry_run: bool = False) -> str:
                     return int(o)
                 if isinstance(o, np.floating):
                     return float(o)
+                if isinstance(o, np.ndarray):
+                    return o.tolist()
+                if isinstance(o, np.bool_):
+                    return bool(o)
                 if isinstance(o, (pd.Timestamp, pd.Period)):
                     return str(o)
                 return str(o)
