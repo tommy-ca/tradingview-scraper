@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 from joblib import Parallel, delayed
 
 # Standard Institutional Imports
@@ -97,6 +98,10 @@ def convert_artifact(pkl_path: Path, dry_run: bool = False) -> str:
 
             # Handle non-serializable types gracefully-ish
             def default(o):
+                if isinstance(o, np.integer):
+                    return int(o)
+                if isinstance(o, np.floating):
+                    return float(o)
                 if isinstance(o, (pd.Timestamp, pd.Period)):
                     return str(o)
                 return str(o)

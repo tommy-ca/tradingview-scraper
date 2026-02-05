@@ -65,8 +65,6 @@ class IngestionStage(BasePipelineStage):
         run_data_dir = (settings.summaries_runs_dir / context.run_id / "data").resolve()
         candidates = [
             run_data_dir / "returns_matrix.parquet",
-            run_data_dir / "returns_matrix.pkl",
-            run_data_dir / "returns_matrix.pickle",
         ]
         for p in candidates:
             if p.exists():
@@ -77,7 +75,6 @@ class IngestionStage(BasePipelineStage):
 
         lake_candidates = [
             settings.lakehouse_dir / "returns_matrix.parquet",
-            settings.lakehouse_dir / "portfolio_returns.pkl",
             settings.lakehouse_dir / "portfolio_returns.parquet",
         ]
         for p in lake_candidates:
@@ -121,12 +118,6 @@ class IngestionStage(BasePipelineStage):
             ext = os.path.splitext(returns_path)[1].lower()
             if ext == ".parquet":
                 context.returns_df = pd.read_parquet(returns_path)
-            elif ext in [".pkl", ".pickle"]:
-                data = pd.read_pickle(returns_path)
-                if isinstance(data, pd.Series):
-                    context.returns_df = data.to_frame()
-                else:
-                    context.returns_df = data
             else:
                 context.returns_df = pd.read_csv(returns_path, index_col=0, parse_dates=True)
 

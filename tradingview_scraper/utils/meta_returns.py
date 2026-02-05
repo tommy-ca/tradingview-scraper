@@ -169,20 +169,13 @@ def build_meta_returns(
                     continue
 
                 returns_dir = run_path / "data" / "returns"
-                # Preference: Parquet -> Pickle
+                # Preference: Parquet Only
                 target_file = next(returns_dir.glob(f"*_{prof}.parquet"), None)
-                if not target_file:
-                    target_file = next(returns_dir.glob(f"*_{prof}.pkl"), None)
 
                 if not target_file:
                     continue
 
-                if target_file.suffix == ".parquet":
-                    s_rets_raw = pd.read_parquet(target_file)
-                else:
-                    # Institutional Security: Anchor pickle loads to allowed roots
-                    safe_p = loader.ensure_safe_path(target_file)
-                    s_rets_raw = pd.read_pickle(safe_p)
+                s_rets_raw = pd.read_parquet(target_file)
 
                 s_rets = s_rets_raw.iloc[:, 0].to_frame(s_id) if isinstance(s_rets_raw, pd.DataFrame) else s_rets_raw.to_frame(s_id)
 

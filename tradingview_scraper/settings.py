@@ -461,18 +461,24 @@ TradingViewScraperSettings.model_rebuild()
 
 
 _SETTINGS_CTX: ContextVar[TradingViewScraperSettings | None] = ContextVar("settings_ctx", default=None)
+_GlobalSettingsCache: TradingViewScraperSettings | None = None
 
 
 def _get_cached_base_settings() -> TradingViewScraperSettings:
     """Loads default settings once and caches them."""
-    return TradingViewScraperSettings()
+    global _GlobalSettingsCache
+    if _GlobalSettingsCache is None:
+        _GlobalSettingsCache = TradingViewScraperSettings()
+    return _GlobalSettingsCache
 
 
 def clear_settings_cache():
     """
     Clears the global settings cache, forcing a reload from environment and manifest.
     """
-    logger.debug("Cache cleared (noop)")
+    global _GlobalSettingsCache
+    _GlobalSettingsCache = None
+    logger.debug("Cache cleared")
 
 
 def get_settings() -> TradingViewScraperSettings:
