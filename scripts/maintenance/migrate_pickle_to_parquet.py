@@ -43,6 +43,25 @@ def _is_safe_to_convert(pkl_path: Path) -> bool:
         return False
 
 
+def _ensure_utc(index: pd.Index) -> pd.Index:
+    """Recursively ensures all datetime levels are UTC."""
+    if isinstance(index, pd.MultiIndex):
+        new_levels = []
+        for level in index.levels:
+            if isinstance(level, pd.DatetimeIndex):
+                if level.tz is None:
+                    level = level.tz_localize("UTC")
+                else:
+                    level = level.tz_convert("UTC")
+            new_levels.append(level)
+        return index.set_levels(new_levels)
+    elif isinstance(index, pd.DatetimeIndex):
+        if index.tz is None:
+            return index.tz_localize("UTC")
+        return index.tz_convert("UTC")
+    return index
+
+
 def convert_artifact(pkl_path: Path, dry_run: bool = False) -> str:
     """
     Converts a single Pickle artifact to Parquet (DataFrames) or JSON (Metadata).
@@ -80,10 +99,7 @@ def convert_artifact(pkl_path: Path, dry_run: bool = False) -> str:
             try:
                 # Use Zstd for max compression (Performance Oracle req)
                 # Ensure UTC index
-                if isinstance(obj.index, pd.DatetimeIndex) and obj.index.tz is None:
-                    obj.index = obj.index.tz_localize("UTC")
-                elif isinstance(obj.index, pd.DatetimeIndex):
-                    obj.index = obj.index.tz_convert("UTC")
+                obj.index = _ensure_utc(obj.index)
 
                 obj.to_parquet(temp_path, compression="zstd", index=True)
                 shutil.move(temp_path, parquet_path)
