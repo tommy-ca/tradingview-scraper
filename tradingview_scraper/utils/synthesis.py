@@ -70,7 +70,10 @@ def generate_atom_returns(returns: pd.Series, atom: StrategyAtom) -> pd.Series:
         # binary trend based on moving average
         ma_rets = s_rets.rolling(window=window).mean()
         # signal is 1 if average return > 0 else 0
-        sig_vals = (ma_rets.shift(1).fillna(-1.0).values > 0).astype(float)
+        vals = ma_rets.values if isinstance(ma_rets, (pd.Series, pd.DataFrame)) else ma_rets
+        shifted = np.roll(vals, 1)
+        shifted[0] = -1.0
+        sig_vals = (shifted > 0).astype(float)
         return s_rets * pd.Series(sig_vals, index=s_rets.index)
     else:
         # direct pass (raw asset return)

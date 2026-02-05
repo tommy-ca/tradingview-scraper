@@ -158,7 +158,7 @@ class BacktestEngine:
 
         self._save_artifacts(run_dir)
 
-        final_series_map = {key: pd.concat(series_list).sort_index() for key, series_list in self.return_series.items() if series_list}
+        final_series_map = {key: cast(pd.Series, pd.concat(series_list)).sort_index() for key, series_list in self.return_series.items() if series_list}
         return {"results": self.results, "meta": results_meta, "stitched_returns": final_series_map}
 
     def _run_window_step(
@@ -175,7 +175,8 @@ class BacktestEngine:
         train_rets, test_rets = orchestrator.slice_data(self.returns, window)
 
         # 2. Regime Detection
-        regime_name, market_env = self._detect_market_regime(train_rets, workspace=self.workspace)
+        regime_name, quadrant_name = self._detect_market_regime(train_rets, workspace=self.workspace)
+        market_env = quadrant_name  # In new regime model, quadrant is the market env
 
         # 3. Pillar 1: Universe Selection
         selection = self._execute_selection(train_rets, window.step_index)
@@ -247,7 +248,7 @@ class BacktestEngine:
         """Orchestrates Pillar 2: Strategy Synthesis."""
         if is_meta:
             winners_syms = [w["symbol"] for w in winners]
-            return train_rets[winners_syms]
+            return cast(pd.DataFrame, train_rets[winners_syms])
 
         return self.synthesizer.synthesize(train_rets, winners, self.settings.features, workspace=workspace)
 
@@ -272,7 +273,7 @@ class BacktestEngine:
             stringified_clusters.setdefault(str(c_id), []).append(str(sym))
 
         bench_sym = self.settings.benchmark_symbols[0] if self.settings.benchmark_symbols else None
-        bench_rets = train_rets[bench_sym] if bench_sym and bench_sym in train_rets.columns else None
+        bench_rets = cast(pd.Series, train_rets[bench_sym]) if bench_sym and bench_sym in train_rets.columns else None
 
         # Snapshot metadata for this cross-section
         window_meta = {s: self.metadata.get(s, {}) for s in train_rets_strat.columns}
@@ -382,7 +383,7 @@ class BacktestEngine:
         window: WalkForwardWindow,
         final_flat_weights: pd.DataFrame,
         test_rets: pd.DataFrame,
-    ):
+    ) -> None:
         """Runs simulation and records results."""
         sim_ctx = {
             "window_index": window.step_index,
@@ -483,7 +484,8 @@ class BacktestEngine:
 
     def _detect_market_regime(self, train_rets: pd.DataFrame, workspace: NumericalWorkspace | None = None) -> tuple[str, str]:
         if not train_rets.empty and len(train_rets) > 60:
-            return self.detector.detect_regime(train_rets, workspace=workspace)[:3:2]  # label, quadrant
+            regime, _, quadrant = self.detector.detect_regime(train_rets, workspace=workspace)
+            return regime, quadrant
         return "NORMAL", "NORMAL"
 
     def _record_selection_audit(self, selection, winners_syms, train_rets, engine_name, window_index):
@@ -516,7 +518,7 @@ class BacktestEngine:
         returns_out.mkdir(parents=True, exist_ok=True)
         for key, series_list in self.return_series.items():
             if series_list:
-                full_series = pd.concat(series_list)
+                full_series = cast(pd.Series, pd.concat(series_list))
                 full_series = full_series[~full_series.index.duplicated()].sort_index()
                 # Transition to Parquet
                 out_path = returns_out / f"{key}.parquet"
