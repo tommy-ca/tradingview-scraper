@@ -174,10 +174,6 @@ class BacktestEngine:
         current_date = window.test_dates[0]
         train_rets, test_rets = orchestrator.slice_data(self.returns, window)
 
-        # 1. Dynamic Filtering
-        if not is_meta:
-            train_rets = self._apply_dynamic_filter(current_date, train_rets)
-
         # 2. Regime Detection
         regime_name, market_env = self._detect_market_regime(train_rets, workspace=self.workspace)
 
@@ -484,40 +480,6 @@ class BacktestEngine:
         else:
             logger.error(f"Failed to build meta-returns matrix at {temp_meta_path}. Aborting.")
             return False
-
-    def _apply_dynamic_filter(self, current_date: pd.Timestamp, train_rets: pd.DataFrame) -> pd.DataFrame:
-        if self.features_matrix.empty:
-            return train_rets
-
-        idx_loc = self.features_matrix.index.searchsorted(current_date)  # type: ignore
-        if idx_loc <= 0:
-            return train_rets
-
-        try:
-            if current_date in self.features_matrix.index:
-                current_features = self.features_matrix.loc[current_date]
-            else:
-                prev_date = self.features_matrix.index[self.features_matrix.index < current_date][-1]
-                current_features = self.features_matrix.loc[prev_date]
-
-            if isinstance(self.features_matrix.columns, pd.MultiIndex):
-                ratings = current_features.xs("recommend_all", level="feature")
-            else:
-                ratings = current_features
-
-            min_rating = 0.0
-            valid_symbols = ratings[ratings > min_rating].index.tolist()
-            valid_universe = [s for s in valid_symbols if s in train_rets.columns]
-
-            if len(valid_universe) >= 2:
-                logger.info(f"  Dynamic Filter: {len(valid_universe)} / {len(ratings)} valid candidates (Rating > {min_rating})")
-                return cast(pd.DataFrame, train_rets[valid_universe])
-            else:
-                logger.warning(f"  Dynamic Filter too strict (found {len(valid_universe)}). Falling back to full universe.")
-        except Exception as e:
-            logger.warning(f"  Dynamic Filter failed: {e}. Using static universe.")
-
-        return train_rets
 
     def _detect_market_regime(self, train_rets: pd.DataFrame, workspace: NumericalWorkspace | None = None) -> tuple[str, str]:
         if not train_rets.empty and len(train_rets) > 60:
