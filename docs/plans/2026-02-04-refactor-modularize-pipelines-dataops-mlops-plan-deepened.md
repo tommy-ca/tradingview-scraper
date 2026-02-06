@@ -177,14 +177,15 @@ def validate_and_filter(df, schema):
 - [ ] Verify Library Independence: Ensure `StageRegistry` allows execution without Prefect/Ray dependencies.
 
 ### Phase 2: Prefect Orchestration (P1)
-- [ ] Refactor `DAGRunner` to support Prefect-driven execution.
-- [ ] Update `orchestration/flows/selection.py` to cover the full v4 HTR loop.
-- [ ] Implement `Zombie Purge` cleanup hooks for Ray workers.
+- [x] Refactor `DAGRunner` to support Prefect-driven execution via `TV_ORCH_MODE=prefect`.
+- [x] Update `orchestration/flows/selection.py` to cover the full v4 HTR loop.
+- [x] Implement `Zombie Purge` cleanup hooks for Ray workers.
 
 ### Phase 3: Lifecycle & Registry (P2)
-- [ ] Implement automated "Model" registration for successful Selection policies.
-- [ ] Add `context.diff()` method for stage-level state auditing.
-- [ ] Integrate MLflow metrics logging into `Inference` and `Synthesis` stages.
+- [ ] Automated Model Registration (Local): Implement logic to "tag" successful runs in `audit.jsonl` as candidates.
+- [ ] Implement `context.diff()` for stage-level state auditing.
+- [ ] Integrate MLflow metrics logging into `Inference` and `Synthesis` stages (using `MLflowTracker`).
+- [ ] Fix `BacktestEngine` to use Pydantic `RunData` (dot notation) instead of dict access.
 
 ### Research Insights
 
