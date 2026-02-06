@@ -79,11 +79,11 @@ class BacktestEngine:
             - Integrity: Ensures UTC DatetimeIndex on all loaded matrices.
         """
         data = self.loader.load_run_data(run_dir)
-        self.returns = data["returns"]
-        self.features_matrix = data["features"]
-        self.metadata = data["metadata"]
-        self.stats = data["stats"]
-        self.raw_candidates = data["raw_candidates"]
+        self.returns = data.returns
+        self.features_matrix = data.features
+        self.metadata = data.metadata
+        self.stats = data.stats
+        self.raw_candidates = data.raw_candidates
 
     def run_tournament(
         self,

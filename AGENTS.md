@@ -175,3 +175,19 @@ The platform provides a set of Claude Code skills for high-level interaction.
 | `/quant-optimize` | Run portfolio optimization | `/quant-optimize 20260121_143022` |
 
 These skills leverage the `QuantSDK` and `StageRegistry` for deterministic execution.
+
+## 13. DataOps & MLOps Standards (v4.1)
+The platform follows a "Simplified Majestic Monolith" architecture for DataOps, prioritizing library stability over orchestration complexity.
+
+### Core Principles
+1.  **Engine-Agnostic Library**: Core logic (Stages, Engines) MUST NOT depend on orchestration tools (Prefect/Ray). They should be runnable via simple Python scripts.
+2.  **Ledger as Truth**: `audit.jsonl` is the immutable forensic ledger. External tools (MLflow) are treated as "Views" for visualization, not primary storage.
+3.  **Reference-First State**: Distributed workloads MUST pass `Ray.ObjectRef` or file paths, never raw DataFrames (Serialization Tax).
+
+### Implementation Standards
+1.  **Configuration**: Distributed code MUST use `ThreadSafeConfig` with `ContextLocal` storage to prevent settings leakage across workers.
+2.  **Data Contracts**:
+    *   **Tier 1 (Schema)**: Structural checks (types, bounds) enforced at Ingestion.
+    *   **Tier 2 (Audit)**: Semantic checks (No Weekend Padding, Toxic Data) enforced at Pillar boundaries.
+    *   **Filter-and-Log**: Validation should drop invalid data and log it, rather than crashing the pipeline ("Lazy Validation" is an anti-pattern for production).
+3.  **Type Safety**: Critical data structures (`RunData`, `SelectionContext`) MUST be **Pydantic Models** to ensure runtime validation. `TypedDict` is considered "Safety Theater."

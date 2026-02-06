@@ -209,12 +209,20 @@ A "Convergence Anomaly" occurs when distinct risk profiles produce identical wei
 - **Detection**: The `audit_ledger_anomalies.py` utility flags windows where HRP and Max Sharpe produce identical weight vectors.
 - **Remediation**: Convergence is treated as a "Sparsity Warning." If persistent, the `top_n` or discovery liquidity floors must be relaxed.
 
-## 38. High-Fidelity Simulation: Physical Normalization (CR-832)
-To maintain compatibility with institutional execution engines (e.g., NautilusTrader), the simulation layer enforces a **Physical Normalization** standard.
-- **Constraint**: Execution engines often have strict regular expression guards for symbol formats, which typically disallow metadata-augmented strings like logical Atom IDs (`Asset_Logic_Direction`).
-- **Standard**: Before initiating a high-fidelity simulation or generating trade orders, all logical atoms MUST be flattened into their physical constituent assets.
-- **Consolidation Logic**:
-    - **Weights**: Sum the target weights of all atoms sharing the same `physical_symbol`.
-    - **Returns**: Utilize the returns series of the physical asset (which is shared across its logical atoms).
-- **Rationale**: This ensures the simulator acts upon tradeable exchange instruments while preserving the net intended exposure of the multi-strategy portfolio.
+## 40. DataOps Implementation Standards (v4.1)
+To ensure long-term maintainability without "Infrastructure Bloat," the pipeline adheres to the **Simplified Majestic Monolith** pattern.
 
+### 40.1 Thread-Safe Configuration
+Distributed execution (Ray) requires strict configuration isolation to prevent "Settings Leakage" between concurrent runs.
+- **Pattern**: `ThreadSafeConfig` utilizing `contextvars`.
+- **Constraint**: Global `os.environ` is strictly for initialization; runtime config must be passed via context or thread-local storage.
+
+### 40.2 Validation Strategy (2-Tier)
+Data contracts are enforced via **Pandera** at pillar boundaries only, avoiding the "Validation Tax" of checking every internal step.
+- **Tier 1 (Schema)**: Structural validity (Types, Column Existence, NaNs). Enforced at Ingestion.
+- **Tier 2 (Audit)**: Semantic validity (Weekend Padding, Return Spikes, Drift). Enforced at Selection and Allocation gates.
+- **Strategy**: **Filter-and-Log**. Invalid assets are dropped and logged to `audit.jsonl`; the pipeline continues with the valid subset.
+
+### 40.3 Forensic Ledger vs. Telemetry View
+- **Primary Truth**: The local `audit.jsonl` file is the legal record of the run.
+- **Visualization**: MLflow is used strictly as a *view* layer. The pipeline pushes metrics to MLflow for charting, but the system does not depend on the MLflow server for state or registry lookups.

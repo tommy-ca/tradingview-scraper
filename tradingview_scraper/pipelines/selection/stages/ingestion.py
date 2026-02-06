@@ -62,8 +62,8 @@ class IngestionStage(BasePipelineStage):
                         context.returns_df = pd.read_parquet(safe_rets) if str(safe_rets).endswith(".parquet") else pd.read_csv(safe_rets, index_col=0, parse_dates=True)
             else:
                 run_data = loader.load_run_data(run_dir=run_dir, strict=strict)
-                context.raw_pool = run_data["raw_candidates"]
-                context.returns_df = run_data["returns"]
+                context.raw_pool = run_data.raw_candidates
+                context.returns_df = run_data.returns
         except FileNotFoundError as e:
             if strict:
                 raise
