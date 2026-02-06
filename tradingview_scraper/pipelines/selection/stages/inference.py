@@ -7,6 +7,14 @@ from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
 from tradingview_scraper.utils.scoring import calculate_mps_score, map_to_probability
 
+# Optional MLflow
+try:
+    from tradingview_scraper.telemetry.mlflow_tracker import MLflowTracker
+
+    HAS_MLFLOW = True
+except ImportError:
+    HAS_MLFLOW = False
+
 logger = logging.getLogger("pipelines.selection.inference")
 
 
@@ -102,5 +110,28 @@ class InferenceStage(BasePipelineStage):
         context.model_metadata = {"model": "Log-MPS-v4", "weights": self.weights, "methods": self.methods}
 
         context.log_event(self.name, "ScoringComplete", {"mean_score": float(alpha_scores.mean()), "max_score": float(alpha_scores.max())})
+
+        # Phase 1: MLflow Tracking
+        if HAS_MLFLOW:
+            try:
+                tracker = MLflowTracker(experiment_name=context.run_id)
+                metrics = {
+                    "mean_conviction": float(alpha_scores.mean()),
+                    "max_conviction": float(alpha_scores.max()),
+                    "n_scored_assets": len(alpha_scores),
+                }
+
+                # Log feature importance if available
+                if hasattr(context, "feature_importance") and context.feature_importance:
+                    # Flattening is handled by log_metrics, but assuming feature_importance is a dict of scores
+                    # We might want to prefix them to avoid collision? MLflowTracker flattens.
+                    # If feature_importance is {"momentum": 0.5}, it logs as "momentum": 0.5
+                    metrics.update(context.feature_importance)
+
+                tracker.log_metrics(metrics)
+                tracker.log_params({"weights": self.weights, "model": "Log-MPS-v4"})
+
+            except Exception as e:
+                logger.warning(f"MLflow logging failed in InferenceStage: {e}")
 
         return context

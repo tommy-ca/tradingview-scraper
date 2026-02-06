@@ -10,7 +10,7 @@ import pandas as pd
 from tradingview_scraper.backtest.models import NumericalWorkspace, SimulationContext
 from tradingview_scraper.backtest.orchestration import WalkForwardOrchestrator, WalkForwardWindow
 from tradingview_scraper.backtest.strategies import StrategyFactory
-from tradingview_scraper.data.loader import DataLoader
+from tradingview_scraper.data.loader import DataLoader, RunData
 from tradingview_scraper.portfolio_engines import EngineRequest, ProfileName, build_engine, build_simulator
 from tradingview_scraper.selection_engines import build_selection_engine, get_hierarchical_clusters
 from tradingview_scraper.selection_engines.base import SelectionRequest, SelectionResponse
@@ -78,7 +78,7 @@ class BacktestEngine:
             - Security: Validates path boundaries via DataLoader.
             - Integrity: Ensures UTC DatetimeIndex on all loaded matrices.
         """
-        data = self.loader.load_run_data(run_dir)
+        data: RunData = self.loader.load_run_data(run_dir)
         self.returns = data.returns
         self.features_matrix = data.features
         self.metadata = data.metadata

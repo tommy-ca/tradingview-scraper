@@ -95,6 +95,61 @@ class SelectionContext(BaseModel):
         if overlay.composition_map:
             self.composition_map.update(overlay.composition_map)
 
+    def diff(self, other: SelectionContext) -> Dict[str, Any]:
+        """
+        Compare state with another context to audit stage effects.
+        Returns differences in raw_pool, feature_store, winners, and params.
+        """
+        changes = {}
+
+        # 1. Raw Pool (Count changes)
+        if len(self.raw_pool) != len(other.raw_pool):
+            changes["raw_pool"] = {
+                "count_before": len(other.raw_pool),
+                "count_after": len(self.raw_pool),
+                "delta": len(self.raw_pool) - len(other.raw_pool),
+            }
+
+        # 2. Feature Store (Column changes)
+        cols_self = set(self.feature_store.columns) if not self.feature_store.empty else set()
+        cols_other = set(other.feature_store.columns) if not other.feature_store.empty else set()
+
+        if cols_self != cols_other:
+            changes["feature_store"] = {
+                "added_cols": list(sorted(cols_self - cols_other)),
+                "removed_cols": list(sorted(cols_other - cols_self)),
+            }
+
+        # 3. Winners (Content/Count changes)
+        if self.winners != other.winners:
+            changes["winners"] = {
+                "count_before": len(other.winners),
+                "count_after": len(self.winners),
+                "delta": len(self.winners) - len(other.winners),
+            }
+            # Attempt symbolic diff if possible
+            try:
+                s_self = {w.get("symbol") for w in self.winners if isinstance(w, dict) and "symbol" in w}
+                s_other = {w.get("symbol") for w in other.winners if isinstance(w, dict) and "symbol" in w}
+                if s_self or s_other:
+                    changes["winners"]["added"] = list(sorted(s_self - s_other))
+                    changes["winners"]["removed"] = list(sorted(s_other - s_self))
+            except Exception:
+                pass
+
+        # 4. Params (Value changes)
+        if self.params != other.params:
+            p_changes = {}
+            all_keys = set(self.params.keys()) | set(other.params.keys())
+            for k in all_keys:
+                val_self = self.params.get(k)
+                val_other = other.params.get(k)
+                if val_self != val_other:
+                    p_changes[k] = {"before": val_other, "after": val_self}
+            changes["params"] = p_changes
+
+        return changes
+
 
 def validate_io(func):
     """
