@@ -168,7 +168,7 @@ class QuantSDK:
             raise KeyError(f"Pipeline '{name}' not found in manifest.")
 
         steps = cast(List[Union[str, List[str]]], pipeline_cfg["steps"])
-        runner = DAGRunner(steps)
+        runner = DAGRunner(steps, pipeline_name=name)
 
         # 3. Initialize context if not provided
         if context is None:
