@@ -26,7 +26,12 @@ class SelectionPipelineAdapter(BaseSelectionEngine):
 
     def __init__(self):
         super().__init__()
-        self.pipeline = SelectionPipeline(run_id="v4_adapter_run")
+        from tradingview_scraper.settings import get_settings
+
+        settings = get_settings()
+        # Prefer active run ID from settings to ensure audit continuity
+        run_id = settings.run_id or "v4_adapter_run"
+        self.pipeline = SelectionPipeline(run_id=run_id)
 
     def select(
         self,

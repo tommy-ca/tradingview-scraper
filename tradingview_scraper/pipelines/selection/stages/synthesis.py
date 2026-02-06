@@ -124,7 +124,7 @@ class SynthesisStage(BasePipelineStage):
                 logger.info(f"High-Potential Candidate Detected (In-Sample Sharpe: {sharpe:.2f}). Registering...")
 
                 # Derive Run Dir
-                run_dir = settings.summaries_dir / "runs" / context.run_id
+                run_dir = settings.summaries_runs_dir / context.run_id
 
                 registry = ModelRegistry(run_dir)
                 registry.register_model(
