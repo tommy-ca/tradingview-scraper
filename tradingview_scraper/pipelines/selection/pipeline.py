@@ -64,47 +64,12 @@ class SelectionPipeline:
         self.policy = SelectionPolicyStage()
         self.synthesis = SynthesisStage()
 
-    def run_with_data(self, returns_df: Any, raw_candidates: Any, overrides: Optional[Dict[str, Any]] = None) -> SelectionContext:
-        """
-        Execute pipeline with in-memory data (Adapter Mode).
-        Bypasses IngestionStage file loading.
-        """
-        logger.info(f"Starting Selection Pipeline Run (Adapter Mode): {self.run_id}")
-
-        # 1. Initialize Context
-        params = {
-            "feature_lookback": self.settings.features.feature_lookback,
-            "cluster_threshold": 0.7,
-            "max_clusters": 25,
-            "top_n": self.settings.top_n,
-        }
-        if overrides:
-            params.update(overrides)
-
-        context = SelectionContext(run_id=self.run_id, params=params)
-
-        # 2. Inject Data
-        context.returns_df = returns_df
-        context.raw_pool = raw_candidates
-        context.log_event("Ingestion", "DataInjected", {"n_candidates": len(raw_candidates)})
-
-        # 3. Execute rest of pipeline (Skipping Ingestion)
-        context = self.feature_eng.execute(context)
-
-        # HTR Loop
+    def _execute_htr_loop(self, context: SelectionContext) -> SelectionContext:
+        """Executes the Hierarchical Threshold Relaxation (HTR) loop."""
+        req_stage = int(context.params.get("relaxation_stage", 0))
         final_stage = 1
+
         for stage in [1, 2, 3, 4]:
-            # Respect requested relaxation stage if provided in overrides
-            # If adapter passed explicit relaxation_stage, use it and don't loop?
-            # Or treat it as starting stage?
-            # Legacy engine behavior: single pass at requested stage.
-            # So if overrides has 'relaxation_stage', we might want to respect that.
-
-            # Logic: If 'relaxation_stage' is in overrides, we set current stage to it.
-            # But the loop iterates 1..4.
-            # If we want to support single-stage execution (legacy style), we should check.
-
-            req_stage = int(overrides.get("relaxation_stage", 0)) if overrides else 0
             if req_stage > 0 and stage != req_stage:
                 continue
 
@@ -115,7 +80,7 @@ class SelectionPipeline:
             if not context.feature_store.empty:
                 avg_entropy = float(context.feature_store["entropy"].mean())
                 if avg_entropy > 0.95:
-                    logger.warning(f"High-Entropy Regime detected ({avg_entropy:.4f}). Tightening vetoes (CR-490).")
+                    logger.warning(f"High-Entropy Regime detected ({avg_entropy:.4f}). Tightening vetoes.")
                     base_ent = context.params.get("entropy_max_threshold", self.settings.features.entropy_max_threshold)
                     context.params["entropy_max_threshold"] = base_ent * 0.9
 
@@ -125,6 +90,7 @@ class SelectionPipeline:
                 context.params["entropy_max_threshold"] = min(1.0, base_ent * 1.2)
                 context.params["efficiency_min_threshold"] = base_eff * 0.8
 
+            # Execute Core Stages (Optimized: only Inference/Clustering once)
             if context.inference_outputs.empty:
                 context = self.inference.execute(context)
             if not context.clusters:
@@ -138,21 +104,18 @@ class SelectionPipeline:
                 break
 
             final_stage = stage
-
-            # If we were forced to a specific stage, break after one pass
             if req_stage > 0:
                 break
 
-        context = self.synthesis.execute(context)
-        return context
+        return self.synthesis.execute(context)
 
-    def run(self, overrides: Optional[Dict[str, Any]] = None) -> SelectionContext:
+    def run_with_data(self, returns_df: Any, raw_candidates: Any, overrides: Optional[Dict[str, Any]] = None) -> SelectionContext:
         """
-        Execute the full selection pipeline with HTR loop.
+        Execute pipeline with in-memory data (Adapter Mode).
+        Bypasses IngestionStage file loading.
         """
-        logger.info(f"Starting Selection Pipeline Run: {self.run_id}")
+        logger.info(f"Starting Selection Pipeline Run (Adapter Mode): {self.run_id}")
 
-        # 1. Initialize Context
         params = {
             "feature_lookback": self.settings.features.feature_lookback,
             "cluster_threshold": 0.7,
@@ -163,56 +126,28 @@ class SelectionPipeline:
             params.update(overrides)
 
         context = SelectionContext(run_id=self.run_id, params=params)
+        context.returns_df = returns_df
+        context.raw_pool = raw_candidates
+        context.log_event("Ingestion", "DataInjected", {"n_candidates": len(raw_candidates)})
 
-        # 2. Ingestion & Feature Engineering (Once)
+        context = self.feature_eng.execute(context)
+        return self._execute_htr_loop(context)
+
+    def run(self, overrides: Optional[Dict[str, Any]] = None) -> SelectionContext:
+        """Execute the full selection pipeline with HTR loop."""
+        logger.info(f"Starting Selection Pipeline Run: {self.run_id}")
+
+        params = {
+            "feature_lookback": self.settings.features.feature_lookback,
+            "cluster_threshold": 0.7,
+            "max_clusters": 25,
+            "top_n": self.settings.top_n,
+        }
+        if overrides:
+            params.update(overrides)
+
+        context = SelectionContext(run_id=self.run_id, params=params)
         context = self.ingestion.execute(context)
         context = self.feature_eng.execute(context)
 
-        # 3. HTR Loop (Policy Optimization)
-        # Stages 1 to 4
-        final_stage = 1
-        for stage in [1, 2, 3, 4]:
-            logger.info(f"--- HTR Stage {stage} ---")
-            context.params["relaxation_stage"] = stage
-
-            # Update thresholds for Stage 2 (Spectral Relaxation)
-            if stage == 2:
-                # v3 logic: min(1.0, t["entropy_max"] * 1.2), efficiency * 0.8
-                base_ent = self.settings.features.entropy_max_threshold
-                base_eff = self.settings.features.efficiency_min_threshold
-                context.params["entropy_max_threshold"] = min(1.0, base_ent * 1.2)
-                context.params["efficiency_min_threshold"] = base_eff * 0.8
-
-            # Execute Core Loop
-            # Note: We re-run Inference/Clustering only if parameters affecting them change.
-            # Inference weights are static. Clustering params are static.
-            # So theoretically we can run Inference/Clustering ONCE outside the loop?
-            # Clustering depends on correlations. Correlations don't change.
-            # Inference depends on features. Features don't change.
-            # So ONLY Policy changes!
-
-            # Optimization: Run Inference/Clustering ONCE if not already done
-            if context.inference_outputs.empty:
-                context = self.inference.execute(context)
-            if not context.clusters:
-                context = self.clustering.execute(context)
-
-            # Policy Pruning
-            context = self.policy.execute(context)
-
-            # Check Exit Condition
-            n_winners = len(context.winners)
-            logger.info(f"Stage {stage} Candidates: {n_winners}")
-
-            if n_winners >= 15:
-                logger.info(f"Target pool size reached ({n_winners} >= 15). Exiting loop.")
-                final_stage = stage
-                break
-
-            final_stage = stage
-
-        # 4. Synthesis
-        context = self.synthesis.execute(context)
-
-        logger.info(f"Pipeline Complete. Selected {len(context.winners)} atoms at Stage {final_stage}.")
-        return context
+        return self._execute_htr_loop(context)

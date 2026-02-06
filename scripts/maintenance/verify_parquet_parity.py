@@ -16,6 +16,8 @@ from collections import Counter
 import pandas as pd
 import numpy as np
 
+from tradingview_scraper.utils.data_utils import ensure_utc_index
+
 # Configure Logging
 logging.basicConfig(
     level=logging.INFO,
@@ -27,21 +29,50 @@ logger = logging.getLogger("parity_check")
 
 def verify_artifact(pkl_path: Path, verbose: bool = False, rtol: float = 1e-5, atol: float = 1e-8) -> str:
     """
-    Compares a Pickle artifact with its Parquet counterpart.
+    Compares a Pickle artifact with its Parquet or JSON counterpart.
     """
     try:
-        parquet_path = pkl_path.with_suffix(".parquet")
-
         # Load Pickle
         try:
             pkl_obj = pd.read_pickle(pkl_path)
         except Exception as e:
             return f"LOAD_ERROR_PKL: {e}"
 
-        # If not DataFrame/Series, skip
-        if not isinstance(pkl_obj, (pd.DataFrame, pd.Series)):
-            return "SKIPPED_NOT_DF"
+        # 1. Handle Metadata (JSON)
+        if isinstance(pkl_obj, (dict, list)):
+            json_path = pkl_path.with_suffix(".json")
+            if not json_path.exists():
+                return "MISSING_JSON"
+            try:
+                with open(json_path, "r") as f:
+                    json_obj = json.load(f)
 
+                # Deep compare dicts/lists
+                # Handle numpy types in pkl that became standard types in json
+                def normalize(obj):
+                    if isinstance(obj, np.ndarray):
+                        return obj.tolist()
+                    if isinstance(obj, (np.integer, np.floating)):
+                        return obj.item()
+                    if isinstance(obj, dict):
+                        return {k: normalize(v) for k, v in obj.items()}
+                    if isinstance(obj, list):
+                        return [normalize(x) for x in obj]
+                    return obj
+
+                norm_pkl = normalize(pkl_obj)
+                if norm_pkl == json_obj:
+                    return "MATCH"
+                else:
+                    return "MISMATCH_METADATA"
+            except Exception as e:
+                return f"LOAD_ERROR_JSON: {e}"
+
+        # 2. Handle DataFrames/Series (Parquet)
+        if not isinstance(pkl_obj, (pd.DataFrame, pd.Series)):
+            return "SKIPPED_UNSUPPORTED_TYPE"
+
+        parquet_path = pkl_path.with_suffix(".parquet")
         if not parquet_path.exists():
             return "MISSING_PARQUET"
 
@@ -58,12 +89,9 @@ def verify_artifact(pkl_path: Path, verbose: bool = False, rtol: float = 1e-5, a
         else:
             pkl_df = pkl_obj
 
-        # 2. UTC Index
-        if isinstance(pkl_df.index, pd.DatetimeIndex):
-            if pkl_df.index.tz is None:
-                pkl_df.index = pkl_df.index.tz_localize("UTC")
-            else:
-                pkl_df.index = pkl_df.index.tz_convert("UTC")
+        # 2. UTC Index (Using MultiIndex-aware helper)
+        pkl_df = ensure_utc_index(pkl_df)
+        pq_df = ensure_utc_index(pq_df)
 
         # Compare
         try:

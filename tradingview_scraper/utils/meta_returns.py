@@ -159,7 +159,12 @@ def build_meta_returns(
 
                 s_rets_raw = pd.read_parquet(sub_returns_file)
                 # Simplified: use mean for nested if not optimized (logic moved from script)
-                s_rets = s_rets_raw.mean(axis=1).to_frame(s_id)
+                avg_rets = s_rets_raw.mean(axis=1)
+                if isinstance(avg_rets, (pd.Series, pd.DataFrame)):
+                    s_rets = avg_rets.to_frame(s_id)
+                else:
+                    # Fallback for scalar or unknown
+                    s_rets = pd.Series([avg_rets], index=s_rets_raw.index).to_frame(s_id)
                 target_file = sub_returns_file
             else:
                 s_profile = sleeve["profile"]
@@ -180,7 +185,7 @@ def build_meta_returns(
                 s_rets = s_rets_raw.iloc[:, 0].to_frame(s_id) if isinstance(s_rets_raw, pd.DataFrame) else s_rets_raw.to_frame(s_id)
 
             # Alignment
-            s_rets.index = pd.to_datetime(s_rets.index).tz_localize(None)
+            s_rets = ensure_utc_index(s_rets)
             meta_df = s_rets if meta_df.empty else meta_df.join(s_rets, how="inner")
 
         if not meta_df.empty:

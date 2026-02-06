@@ -5,10 +5,11 @@ import logging
 import os
 import re
 import sys
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from threading import Lock
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (
@@ -460,25 +461,45 @@ class TradingViewScraperSettings(BaseSettings):
 TradingViewScraperSettings.model_rebuild()
 
 
-_SETTINGS_CTX: ContextVar[TradingViewScraperSettings | None] = ContextVar("settings_ctx", default=None)
-_GlobalSettingsCache: TradingViewScraperSettings | None = None
-
-
-def _get_cached_base_settings() -> TradingViewScraperSettings:
-    """Loads default settings once and caches them."""
-    global _GlobalSettingsCache
-    if _GlobalSettingsCache is None:
-        _GlobalSettingsCache = TradingViewScraperSettings()
-    return _GlobalSettingsCache
-
-
-def clear_settings_cache():
+class ThreadSafeConfig:
     """
-    Clears the global settings cache, forcing a reload from environment and manifest.
+    Singleton manager for thread-safe configuration access.
+
+    Implements the ThreadSafeConfig pattern using ContextVars for task-local isolation
+    while maintaining a global singleton fallback for legacy code.
     """
-    global _GlobalSettingsCache
-    _GlobalSettingsCache = None
-    logger.debug("Cache cleared")
+
+    _instance: ClassVar[TradingViewScraperSettings | None] = None
+    _context: ClassVar[ContextVar[TradingViewScraperSettings | None]] = ContextVar("settings_ctx", default=None)
+    _lock: ClassVar[Lock] = Lock()
+
+    @classmethod
+    def get(cls) -> TradingViewScraperSettings:
+        # 1. Check Context (Priority)
+        if (ctx := cls._context.get()) is not None:
+            return ctx
+
+        # 2. Check Global Singleton (Double-checked locking)
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = TradingViewScraperSettings()
+        return cls._instance
+
+    @classmethod
+    def set_active(cls, settings: TradingViewScraperSettings) -> Token:
+        return cls._context.set(settings)
+
+    @classmethod
+    def reset_active(cls, token: Token) -> None:
+        cls._context.reset(token)
+
+    @classmethod
+    def clear_global_cache(cls) -> None:
+        """Forces a reload of the global singleton (useful for tests/legacy scripts)."""
+        with cls._lock:
+            cls._instance = None
+            logger.debug("Global settings cache cleared")
 
 
 def get_settings() -> TradingViewScraperSettings:
@@ -489,19 +510,25 @@ def get_settings() -> TradingViewScraperSettings:
         TradingViewScraperSettings: The active context settings if set,
                                     falling back to cached global settings.
     """
-    if (ctx_settings := _SETTINGS_CTX.get()) is not None:
-        return ctx_settings
-    return _get_cached_base_settings()
+    return ThreadSafeConfig.get()
 
 
-def set_active_settings(settings: TradingViewScraperSettings):
+def set_active_settings(settings: TradingViewScraperSettings) -> Token:
     """
     Sets the active settings for the current context (thread/task).
 
     Args:
         settings: The settings instance to activate.
     """
-    return _SETTINGS_CTX.set(settings)
+    return ThreadSafeConfig.set_active(settings)
+
+
+def clear_settings_cache():
+    """
+    Clears the global settings cache, forcing a reload from environment and manifest.
+    Deprecated: Prefer using dependency injection or set_active_settings.
+    """
+    ThreadSafeConfig.clear_global_cache()
 
 
 def inspect_active_settings() -> dict[str, Any]:

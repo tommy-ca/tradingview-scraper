@@ -15,15 +15,11 @@ class QuantSDK:
     """
 
     @staticmethod
+    @trace_span("sdk.run_stage")
     def run_stage(id: str, context: Optional[Any] = None, **params) -> Any:
         """
         Executes a single pipeline stage by its ID.
         """
-        return QuantSDK._run_stage_impl(id, context, **params)
-
-    @staticmethod
-    @trace_span("sdk.run_stage")
-    def _run_stage_impl(id: str, context: Optional[Any] = None, **params) -> Any:
         logger.info(f"SDK: Executing stage {id}")
         stage_callable = StageRegistry.get_stage(id)
         spec = StageRegistry.get_spec(id)
@@ -31,16 +27,9 @@ class QuantSDK:
         # If it's a class (BasePipelineStage), instantiate and execute
         if spec.stage_class:
             instance = spec.stage_class(**params)
-            if context is None:
-                # Some stages might create their own context if needed
-                # but for selection stages, it's usually required.
-                pass
             return instance.execute(context)
 
         # If it's a function/method
-        # Functions might not take 'context' as first arg, but we'll try to be flexible
-        # If context is provided, we could pass it, but meta functions currently don't use it.
-        # Let's check the signature if possible or just call with params.
         import inspect
 
         sig = inspect.signature(stage_callable)
@@ -176,38 +165,32 @@ class QuantSDK:
 
         pipeline_cfg = manifest.get("pipelines", {}).get(name)
         if not pipeline_cfg:
-            # Fallback for core pipelines if missing from manifest
-            core_pipelines: dict[str, list[str | list[str]]] = {
-                "alpha.full": [
-                    "foundation.ingest",
-                    "foundation.features",
-                    "alpha.inference",
-                    "alpha.clustering",
-                    "alpha.policy",
-                    "alpha.synthesis",
-                    "risk.optimize",
-                ],
-                "meta.full": ["meta.aggregation", "risk.optimize_meta", "risk.flatten_meta", "risk.report_meta"],
-            }
-            if name not in core_pipelines:
-                raise KeyError(f"Pipeline '{name}' not found in manifest or core defaults.")
-            steps = core_pipelines[name]
-        else:
-            steps = cast(List[Union[str, List[str]]], pipeline_cfg["steps"])
+            raise KeyError(f"Pipeline '{name}' not found in manifest.")
 
+        steps = cast(List[Union[str, List[str]]], pipeline_cfg["steps"])
         runner = DAGRunner(steps)
 
         # 3. Initialize context if not provided
         if context is None:
-            # Determine correct context type based on pipeline category
-            if name.startswith("alpha"):
-                from tradingview_scraper.pipelines.selection.base import SelectionContext
+            # Determine correct context type based on pipeline name prefix (Manifest-First)
+            from tradingview_scraper.pipelines.selection.base import SelectionContext
+            from tradingview_scraper.pipelines.meta.base import MetaContext
 
-                context = SelectionContext(run_id=run_id, params=params)
-            elif name.startswith("meta"):
-                from tradingview_scraper.pipelines.meta.base import MetaContext
+            context_map = {
+                "alpha": lambda: SelectionContext(run_id=run_id, params=params),
+                "meta": lambda: MetaContext(
+                    run_id=run_id,
+                    meta_profile=params.get("profile", "meta_production"),
+                    sleeve_profiles=params.get("profiles", []),
+                ),
+            }
 
-                context = MetaContext(run_id=run_id, meta_profile=params.get("profile", "meta_production"), sleeve_profiles=params.get("profiles", []))
+            prefix = name.split(".")[0]
+            if prefix in context_map:
+                context = context_map[prefix]()
+            else:
+                # Default context if no prefix match
+                context = {"run_id": run_id, "params": params}
 
         # 4. Execute DAG and Flush Telemetry
         try:

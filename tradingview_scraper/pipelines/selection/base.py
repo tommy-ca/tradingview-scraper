@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import logging
+import functools
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field
+import re
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger("pipelines.selection")
 
@@ -22,6 +24,15 @@ class SelectionContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     run_id: str
+
+    @field_validator("run_id")
+    @classmethod
+    def validate_run_id(cls, v: str) -> str:
+        """Strict whitelist for run_id to prevent path traversal (Phase 373)."""
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", v):
+            raise ValueError(f"Invalid run_id format: {v}. Must be alphanumeric, underscores, or hyphens.")
+        return v
+
     trace_id: Optional[str] = None
     params: Dict[str, Any] = Field(default_factory=dict)
 
@@ -51,12 +62,126 @@ class SelectionContext(BaseModel):
     def log_event(self, stage: str, event: str, data: Optional[Dict[str, Any]] = None):
         self.audit_trail.append({"stage": stage, "event": event, "data": data or {}})
 
+    def merge(self, overlay: SelectionContext):
+        """Merges another context into this one (additive and concatenation)."""
+        import pandas as pd
+
+        # Merge Feature Store (Concatenate distinct columns)
+        if not overlay.feature_store.empty:
+            if self.feature_store.empty:
+                self.feature_store = overlay.feature_store
+            else:
+                # Only add new columns
+                new_cols = overlay.feature_store.columns.difference(self.feature_store.columns)
+                if not new_cols.empty:
+                    self.feature_store = pd.concat([self.feature_store, overlay.feature_store[new_cols]], axis=1)
+
+        # Merge Audit Trail (Append only new entries)
+        if len(overlay.audit_trail) > len(self.audit_trail):
+            new_entries = overlay.audit_trail[len(self.audit_trail) :]
+            self.audit_trail.extend(new_entries)
+
+        # Merge other fields if necessary (usually they are overridden by the last stage)
+        if not overlay.returns_df.empty:
+            self.returns_df = overlay.returns_df
+        if overlay.raw_pool:
+            self.raw_pool = overlay.raw_pool
+        if overlay.inference_outputs:
+            self.inference_outputs = overlay.inference_outputs
+        if overlay.winners:
+            self.winners = overlay.winners
+        if overlay.strategy_atoms:
+            self.strategy_atoms = overlay.strategy_atoms
+        if overlay.composition_map:
+            self.composition_map.update(overlay.composition_map)
+
+
+def validate_io(func):
+    """
+    Decorator implementing the 'Filter & Log' strategy for pipeline stages.
+
+    If validation fails, drop the invalid rows/symbols, log them to the audit trail,
+    and proceed with the valid subset.
+    """
+
+    @functools.wraps(func)
+    def wrapper(self, context: SelectionContext, *args, **kwargs) -> SelectionContext:
+        # Execute the stage logic
+        result_context = func(self, context, *args, **kwargs)
+
+        # Check if the stage has validators defined
+        validators = getattr(self, "validators", [])
+
+        for field, validator_fn in validators:
+            if not hasattr(result_context, field):
+                continue
+
+            data = getattr(result_context, field)
+
+            # Currently supports DataFrame column filtering (symbols)
+            if isinstance(data, pd.DataFrame):
+                try:
+                    # Expecting validator(df, strict=False) -> List[failed_keys]
+                    failed_keys = validator_fn(data, strict=False)
+                except TypeError:
+                    # Fallback for validators without strict arg
+                    failed_keys = validator_fn(data)
+
+                if failed_keys:
+                    logger.warning(f"[{self.name}] @validate_io: Dropping {len(failed_keys)} invalid items from '{field}' (Validator: {validator_fn.__name__})")
+
+                    # Log to audit trail
+                    result_context.log_event(
+                        stage=self.name,
+                        event="validation_filter",
+                        data={
+                            "field": field,
+                            "validator": validator_fn.__name__,
+                            "dropped_count": len(failed_keys),
+                            "dropped_samples": failed_keys[:10],
+                        },
+                    )
+
+                    # Filter the DataFrame (Keep columns that are NOT in failed_keys)
+                    valid_cols = [c for c in data.columns if c not in failed_keys]
+                    filtered_df = data[valid_cols]
+                    setattr(result_context, field, filtered_df)
+
+        return result_context
+
+    return wrapper
+
 
 class BasePipelineStage(ABC):
     """
     Abstract Base Class for all Pipeline Stages.
     Ensures statelessness and consistent interfaces.
     """
+
+    @property
+    def validators(self) -> List[Tuple[str, Callable[[Any], List[str]]]]:
+        """
+        Validators to apply after execution.
+        Returns list of (context_field_name, validator_function).
+        """
+        return []
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Automatically wrap the execute method of subclasses with @validate_io
+        # This ensures the 'Filter & Log' strategy is enforced if validators are present.
+        # We check if 'execute' is defined in the subclass or its MRO (excluding BasePipelineStage if possible,
+        # but BasePipelineStage.execute is abstract so it shouldn't be callable in a way that matters,
+        # actually abstract methods can be called via super()).
+
+        # Note: cls.execute refers to the method that will be used.
+        # If the subclass doesn't override execute (which it must as it's abstract), this might wrap the abstract one?
+        # No, __init_subclass__ runs when the subclass is defined.
+        if hasattr(cls, "execute") and callable(cls.execute):
+            # Avoid double wrapping if possible (though unlikely here)
+            if not getattr(cls.execute, "_is_validate_io_wrapped", False):
+                cls.execute = validate_io(cls.execute)
+                cls.execute._is_validate_io_wrapped = True
 
     @property
     @abstractmethod
@@ -85,7 +210,7 @@ class IngestionValidator:
         Validates returns matrix against toxicity and padding rules.
         Uses Pandera for formal schema enforcement (Phase 620).
         """
-        from tradingview_scraper.pipelines.contracts import ReturnsSchema
+        from tradingview_scraper.pipelines.contracts import ReturnsMatrixSchema
         import pandera as pa
 
         if df.empty:
@@ -93,11 +218,15 @@ class IngestionValidator:
 
         try:
             # 1. Formal Schema Validation (Bounds, Index, Types)
-            ReturnsSchema.validate(df)
-        except pa.errors.SchemaError as e:
-            logger.warning(f"Data Contract Violation in returns_matrix: {e}")
-            if strict:
-                raise
+            ReturnsMatrixSchema.validate(df)
+        except Exception as e:
+            # Using string comparison for the exception type to bypass module attribute LSP issues
+            if e.__class__.__name__ == "SchemaError":
+                logger.warning(f"Data Contract Violation in returns_matrix: {e}")
+                if strict:
+                    raise
+            else:
+                raise e
 
         failed_symbols = []
         for col in df.columns:

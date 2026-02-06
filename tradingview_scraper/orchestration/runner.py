@@ -91,37 +91,16 @@ class DAGRunner:
         return context
 
     def _merge_contexts(self, base: Any, overlay: Any) -> Any:
-        """Merges two context objects using additive and concatenation protocols."""
+        """Merges two context objects using polymorphic delegation."""
         if base is None:
             return overlay
 
-        # 1. SelectionContext Merging
-        from tradingview_scraper.pipelines.selection.base import SelectionContext
-
-        if isinstance(base, SelectionContext) and isinstance(overlay, SelectionContext):
-            import pandas as pd
-
-            # Merge Feature Store (Concatenate distinct columns)
-            if not overlay.feature_store.empty:
-                if base.feature_store.empty:
-                    base.feature_store = overlay.feature_store
-                else:
-                    # Only add new columns
-                    new_cols = overlay.feature_store.columns.difference(base.feature_store.columns)
-                    if not new_cols.empty:
-                        base.feature_store = pd.concat([base.feature_store, overlay.feature_store[new_cols]], axis=1)
-
-            # Merge Audit Trail (Append only new entries)
-            # Assumption: audit_trail is strictly additive.
-            if len(overlay.audit_trail) > len(base.audit_trail):
-                # This is a bit risky if base was modified since the branch started
-                # but for now we assume branches are isolated.
-                new_entries = overlay.audit_trail[len(base.audit_trail) :]
-                base.audit_trail.extend(new_entries)
-
+        # Polymorphic Merge (New)
+        if hasattr(base, "merge") and callable(getattr(base, "merge")):
+            base.merge(overlay)
             return base
 
-        # 2. Dict-based context (for generic/test steps)
+        # Fallback for Dict-based context (for generic/test steps)
         if isinstance(base, dict) and isinstance(overlay, dict):
             for k, v in overlay.items():
                 if k in base and isinstance(base[k], list) and isinstance(v, list):
