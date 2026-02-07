@@ -87,6 +87,7 @@
         "min_days_floor": 252
       },
       "selection": {
+        "strategy": "trend_following",
         "top_n": 2,
         "threshold": 0.5,
         "selection_mode": "v4"
@@ -120,6 +121,9 @@
       "data": {
         "lookback_days": 500,
         "min_days_floor": 252
+      },
+      "selection": {
+        "strategy": "trend_following"
       },
       "features": {
         "selection_mode": "v4"
@@ -556,6 +560,7 @@
     "binance_spot_rating_all_long": {
       "description": "Binance Spot LONG only - Rating All (Exhaustive Matrix)",
       "selection": {
+        "strategy": "trend_following",
         "top_n": 15,
         "threshold": 0.45,
         "selection_mode": "v4"
@@ -596,6 +601,7 @@
     "binance_spot_rating_all_short": {
       "description": "Binance Spot SHORT only - Rating All (Exhaustive Matrix)",
       "selection": {
+        "strategy": "trend_following",
         "top_n": 15,
         "threshold": 0.45,
         "selection_mode": "v4"
@@ -636,6 +642,7 @@
     "binance_spot_rating_ma_long": {
       "description": "Binance Spot LONG only - Rating MA (Exhaustive Matrix)",
       "selection": {
+        "strategy": "trend_following",
         "top_n": 15,
         "threshold": 0.45,
         "selection_mode": "v4",
@@ -675,6 +682,7 @@
     "binance_spot_rating_ma_short": {
       "description": "Binance Spot SHORT only - Rating MA (Exhaustive Matrix)",
       "selection": {
+        "strategy": "trend_following",
         "top_n": 15,
         "threshold": 0.45,
         "selection_mode": "v4",

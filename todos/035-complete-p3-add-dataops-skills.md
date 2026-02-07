@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "035"
 tags: ['dx', 'tooling', 'data-ops']
@@ -25,10 +25,11 @@ Implement two new skills using the `QuantSDK` that wrap the existing `make data-
 Define the `quant-ingest` and `quant-repair` skills in the project's skill registry. Update `AGENTS.md` to document these new capabilities.
 
 ## Acceptance Criteria
-- [ ] `quant-ingest` skill implemented and tested.
-- [ ] `quant-repair` skill implemented and tested.
-- [ ] Skills documented in `AGENTS.md`.
-- [ ] Skills integrated with the platform's telemetry and audit ledger.
+- [x] `quant-ingest` skill implemented and tested.
+- [x] `quant-repair` skill implemented and tested.
+- [x] Skills documented in `AGENTS.md`.
+- [x] Skills integrated with the platform's telemetry and audit ledger.
 
 ## Work Log
 - 2026-02-02: Issue identified during P3 findings review. Created todo file.
+- 2026-02-07: Added `quant-ingest`, `quant-repair`, and `quant-audit` skills to `.claude/skills/` and documented them in `AGENTS.md`.

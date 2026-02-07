@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import pandas_ta_classic as ta
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any, cast
 
 
 class TechnicalRatings:
@@ -26,12 +28,12 @@ class TechnicalRatings:
         if df.empty:
             return pd.Series(dtype=float)
 
-        close = df["close"]
-        high = df["high"]
-        low = df["low"]
-        volume = df["volume"] if "volume" in df.columns else None
+        close = cast(pd.Series, df["close"])
+        high = cast(pd.Series, df["high"])
+        low = cast(pd.Series, df["low"])
+        volume = cast(pd.Series, df["volume"]) if "volume" in df.columns else None
 
-        all_votes = []
+        all_votes: list[pd.Series] = []
 
         # Tuning Experiment 1: Reduce lengths list to match TV more closely if possible
         # Standard: 10, 20, 30, 50, 100, 200
@@ -99,11 +101,11 @@ class TechnicalRatings:
         if df.empty:
             return pd.Series(dtype=float)
 
-        close = df["close"]
-        high = df["high"]
-        low = df["low"]
+        close = cast(pd.Series, df["close"])
+        high = cast(pd.Series, df["high"])
+        low = cast(pd.Series, df["low"])
 
-        all_votes = []
+        all_votes: list[pd.Series] = []
 
         # 1. RSI
         rsi = ta.rsi(close, length=14)

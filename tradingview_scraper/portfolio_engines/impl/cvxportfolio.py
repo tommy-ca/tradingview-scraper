@@ -62,10 +62,9 @@ class CVXPortfolioEngine(CustomClusteredEngine):
             X_cvx = X.copy()
             if not isinstance(X_cvx.index, pd.DatetimeIndex):
                 X_cvx.index = pd.to_datetime(X_cvx.index, utc=True)
-            if cast(Any, X_cvx.index).tz is None:
-                X_cvx = X_cvx.tz_localize("UTC")
-            else:
-                X_cvx = X_cvx.tz_convert("UTC")
+            from tradingview_scraper.utils.data_utils import ensure_utc_index
+
+            ensure_utc_index(X_cvx)
 
             weights = cvx.SinglePeriodOptimization(obj, cons).values_in_time(
                 t=X_cvx.index[-1],

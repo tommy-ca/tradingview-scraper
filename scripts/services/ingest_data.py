@@ -129,7 +129,7 @@ class IngestionService:
                     if is_toxic_ret or is_toxic_vol or is_stalled:
                         reason = "return_spike" if is_toxic_ret else ("volume_spike" if is_toxic_vol else "price_stall")
                         logger.warning(f"TOXIC DATA DETECTED for {symbol} (Reason: {reason}). Deleting corrupted file.")
-                        os.remove(p_path)
+                        p_path.unlink(missing_ok=True)
                         self.registry.update_status(symbol, status="toxic", reason=reason)
                     else:
                         logger.info(f"Successfully ingested {symbol}")

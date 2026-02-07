@@ -11,6 +11,7 @@ import pandas as pd
 from tradingview_scraper.data.loader import DataLoader
 from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.settings import get_settings
+from tradingview_scraper.utils.data_utils import ensure_utc_index
 
 logger = logging.getLogger(__name__)
 

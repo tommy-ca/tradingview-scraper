@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "059"
 tags: [quality, refactor, circular-dependency]
@@ -8,7 +8,7 @@ created_at: 2026-02-05
 ---
 
 ## Problem Statement
-The `BacktestEngine` contains a local import `from tradingview_scraper.regime import MarketRegimeDetector` inside `__init__`, indicating a circular dependency workaround.
+The `BacktestEngine` contained a local import `from tradingview_scraper.regime import MarketRegimeDetector` inside `__init__`, indicating a circular dependency workaround.
 
 ## Findings
 - **Location**: `tradingview_scraper/backtest/engine.py`: Line 66
@@ -26,8 +26,9 @@ Move `MarketRegimeDetector` or `BacktestEngine` to break the cycle.
 Implement Solution A if feasible, or B.
 
 ## Acceptance Criteria
-- [ ] Local import removed.
-- [ ] Circular dependency resolved.
+- [x] Local import removed.
+- [x] Circular dependency resolved (Import moved to top as cycle was non-functional).
 
 ## Work Log
 - 2026-02-05: Identified during code quality review.
+- 2026-02-07: Resolved circular dependency by moving `MarketRegimeDetector` import to top of `engine.py`. Verified that `MarketRegimeDetector` does not import `BacktestEngine` functionally.

@@ -64,10 +64,9 @@ class NautilusRebalanceStrategy(Strategy):
             self.target_weights.index = pd.to_datetime(self.target_weights.index)
 
         # Ensure UTC timezone for consistency
-        if self.target_weights.index.tz is None:
-            self.target_weights.index = self.target_weights.index.tz_localize("UTC")
-        else:
-            self.target_weights.index = self.target_weights.index.tz_convert("UTC")
+        from tradingview_scraper.utils.data_utils import ensure_utc_index
+
+        ensure_utc_index(self.target_weights)
 
         self.catalog = catalog or ExecutionMetadataCatalog()
         self.initial_cash = initial_cash

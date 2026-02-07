@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
@@ -118,6 +118,17 @@ class DataLoader:
                     pass
         return None
 
+    def _resolve_path(self, filenames: List[str], search_dirs: List[Path]) -> Path | None:
+        """
+        Helper to find the first existing file from a list of filenames across search directories.
+        """
+        for d in search_dirs:
+            for fname in filenames:
+                p = d / fname
+                if p.exists():
+                    return p
+        return None
+
     def load_run_data(self, run_dir: Path | None = None, strict: bool = False) -> RunData:
         """
         Orchestrates the deterministic loading of backtest data from run directories.
@@ -132,96 +143,118 @@ class DataLoader:
         if not run_dir:
             run_dir = self.resolve_latest_run_dir()
 
-        data_dir = (run_dir / "data") if run_dir else self.settings.lakehouse_dir
-        logger.info(f"Loading data from {data_dir} (strict={strict})")
+        search_dirs = []
+        if run_dir:
+            search_dirs.append(run_dir / "data")
+
+        # Fallback to lakehouse if no run found (legacy behavior) or if not strict
+        if not run_dir or not strict:
+            if self.settings.lakehouse_dir not in search_dirs:
+                search_dirs.append(self.settings.lakehouse_dir)
+
+        logger.info(f"Loading run data (run_dir={run_dir}, strict={strict})")
 
         result = RunData()
 
         # 1. Load Candidates
-        cands_priority = [data_dir / "portfolio_candidates.json", data_dir / "portfolio_candidates_raw.json"]
-        if not strict:
-            cands_priority.extend([self.settings.lakehouse_dir / "portfolio_candidates.json", self.settings.lakehouse_dir / "portfolio_candidates_raw.json"])
+        cands_path = self._resolve_path(["portfolio_candidates.json", "portfolio_candidates_raw.json"], search_dirs)
 
-        for p in cands_priority:
-            if p.exists():
-                try:
-                    with open(p, "r") as f:
-                        raw_data = json.load(f)
-                    # Handle both list and dict formats (Phase 373)
-                    if isinstance(raw_data, list):
-                        result.raw_candidates = raw_data
-                    elif isinstance(raw_data, dict):
-                        result.raw_candidates = []
-                        for sym, meta in raw_data.items():
-                            if isinstance(meta, dict):
-                                meta["symbol"] = sym
-                                result.raw_candidates.append(meta)
-                    break
-                except Exception as e:
-                    logger.warning(f"Failed to load candidates from {p}: {e}")
+        if cands_path:
+            try:
+                with open(cands_path, "r") as f:
+                    raw_data = json.load(f)
+                # Handle both list and dict formats (Phase 373)
+                if isinstance(raw_data, list):
+                    result.raw_candidates = raw_data
+                elif isinstance(raw_data, dict):
+                    result.raw_candidates = []
+                    for sym, meta in raw_data.items():
+                        if isinstance(meta, dict):
+                            meta["symbol"] = sym
+                            result.raw_candidates.append(meta)
+            except Exception as e:
+                logger.warning(f"Failed to load candidates from {cands_path}: {e}")
 
-        # 2. Load Returns (Hybrid Loader)
-        # Priority: Run Parquet -> Lakehouse Parquet
-        returns_priority = [
-            data_dir / "returns_matrix.parquet",
-        ]
-        if not strict:
-            returns_priority.extend(
-                [
-                    self.settings.lakehouse_dir / "returns_matrix.parquet",
-                    self.settings.lakehouse_dir / "portfolio_returns.parquet",
-                ]
-            )
+        # 2. Load Returns
+        r_path = self._resolve_path(["returns_matrix.parquet", "portfolio_returns.parquet"], search_dirs)
 
-        r_path = next((p for p in returns_priority if p.exists()), None)
+        if not r_path:
+            r_path = self._resolve_path(["returns_matrix.pkl", "portfolio_returns.pkl"], search_dirs)
+            if r_path:
+                logger.warning(f"Using deprecated pickle format for returns: {r_path}")
+                r_path = self.ensure_safe_path(r_path)
 
         if r_path:
-            result.returns = pd.read_parquet(r_path)
-            result.returns = ensure_utc_index(result.returns)
+            try:
+                if r_path.suffix == ".parquet":
+                    df_ret = pd.read_parquet(r_path)
+                elif r_path.suffix == ".pkl":
+                    df_ret = pd.read_pickle(r_path)
+                else:
+                    df_ret = pd.DataFrame()  # Should not happen with current filenames
 
-        # 3. Load Features (Hybrid Loader)
-        features_priority = [
-            data_dir / "features_matrix.parquet",
-        ]
-        if not strict:
-            features_priority.extend(
-                [
-                    self.settings.lakehouse_dir / "features_matrix.parquet",
-                ]
-            )
+                # Type ignore: ensure_utc_index returns Union, but we know it's a DataFrame here
+                result.returns = cast(pd.DataFrame, ensure_utc_index(df_ret))
+            except Exception as e:
+                logger.warning(f"Failed to load returns matrix from {r_path}: {e}")
 
-        f_path = next((p for p in features_priority if p.exists()), None)
+        # 3. Load Features
+        f_path = self._resolve_path(["features_matrix.parquet"], search_dirs)
+
+        if not f_path:
+            f_path = self._resolve_path(["features_matrix.pkl"], search_dirs)
+            if f_path:
+                logger.warning(f"Using deprecated pickle format for features: {f_path}")
+                f_path = self.ensure_safe_path(f_path)
 
         if f_path:
             try:
-                result.features = pd.read_parquet(f_path)
-                result.features = ensure_utc_index(result.features)
+                if f_path.suffix == ".parquet":
+                    df_feat = pd.read_parquet(f_path)
+                elif f_path.suffix == ".pkl":
+                    df_feat = pd.read_pickle(f_path)
+                else:
+                    df_feat = pd.DataFrame()
+
+                # Type ignore: ensure_utc_index returns Union, but we know it's a DataFrame here
+                result.features = cast(pd.DataFrame, ensure_utc_index(df_feat))
             except Exception as e:
-                logger.warning(f"Failed to load features matrix: {e}")
+                logger.warning(f"Failed to load features matrix from {f_path}: {e}")
 
         # 4. Load Metadata
-        metadata_priority = [data_dir / "metadata_catalog.json", data_dir / "portfolio_meta.json"]
-        if not strict:
-            metadata_priority.extend([self.settings.lakehouse_dir / "metadata_catalog.json", self.settings.lakehouse_dir / "portfolio_meta.json"])
+        m_path = self._resolve_path(["metadata_catalog.json", "portfolio_meta.json"], search_dirs)
 
-        metadata_path = next((p for p in metadata_priority if p.exists()), None)
-        if metadata_path:
-            with open(metadata_path, "r") as f:
-                result.metadata = json.load(f)
+        if m_path:
+            try:
+                with open(m_path, "r") as f:
+                    result.metadata = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load metadata: {e}")
 
         # 5. Load Stats
-        stats_priority = [data_dir / "stats_matrix.parquet", data_dir / "antifragility_stats.json"]
-        if not strict:
-            stats_priority.extend([self.settings.lakehouse_dir / "stats_matrix.parquet", self.settings.lakehouse_dir / "antifragility_stats.json"])
+        s_path = self._resolve_path(["stats_matrix.parquet", "antifragility_stats.json"], search_dirs)
 
-        stats_path = next((p for p in stats_priority if p.exists()), None)
-        if stats_path:
-            if stats_path.suffix == ".parquet":
-                result.stats = pd.read_parquet(stats_path)
+        if not s_path:
+            s_path = self._resolve_path(["stats_matrix.pkl"], search_dirs)
+            if s_path:
+                logger.warning(f"Using deprecated pickle format for stats: {s_path}")
+                s_path = self.ensure_safe_path(s_path)
+
+        if s_path:
+            if s_path.suffix == ".parquet":
+                try:
+                    result.stats = pd.read_parquet(s_path)
+                except Exception as e:
+                    logger.warning(f"Failed to load parquet stats: {e}")
+            elif s_path.suffix == ".pkl":
+                try:
+                    result.stats = pd.read_pickle(s_path)
+                except Exception as e:
+                    logger.warning(f"Failed to load pickle stats: {e}")
             else:
                 try:
-                    result.stats = pd.read_json(stats_path)
+                    result.stats = pd.read_json(s_path)
                 except Exception:
-                    logger.warning(f"Failed to parse JSON stats at {stats_path}")
+                    logger.warning(f"Failed to parse JSON stats at {s_path}")
 
         return result

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "013"
 tags: ['performance', 'ray', 'parallelization']
@@ -26,20 +26,21 @@ The `scripts/services/backfill_features.py` script currently processes symbols s
 ## Proposed Solutions
 
 ### Solution A: Use `RayComputeEngine` (Recommended)
-Refactor the symbol processing logic into a standalone function and use `RayComputeEngine.map()` or similar to distribute the workload. This leverages existing infrastructure and ensures consistent resource management.
+Refactor the symbol processing logic into a standalone function and use `RayComputeEngine` to distribute the workload. This leverages existing infrastructure and ensures consistent resource management.
 
 ### Solution B: `concurrent.futures.ProcessPoolExecutor`
 Use Python's standard library for local multiprocessing. Simpler but lacks the distributed capabilities and telemetry integration provided by `RayComputeEngine`.
 
 ## Recommended Action
-Refactor `backfill_features.py` to use `RayComputeEngine` for parallel symbol processing. Wrap the logic from lines 80-128 into a `_process_single_symbol` task.
+Refactor `backfill_features.py` to use `RayComputeEngine` for parallel symbol processing. Wrap the logic from lines 80-128 into a `_process_single_symbol_task`.
 
 ## Acceptance Criteria
-- [ ] Processing logic extracted into a parallelizable task.
-- [ ] `RayComputeEngine` integrated into the script lifecycle.
-- [ ] Telemetry/logging shows distributed execution traces.
-- [ ] Significant reduction in execution time for large universes.
-- [ ] Feature matrix output remains bit-identical to sequential version.
+- [x] Processing logic extracted into a parallelizable task.
+- [x] `RayComputeEngine` integrated into the script lifecycle.
+- [x] Telemetry/logging shows distributed execution traces.
+- [x] Significant reduction in execution time for large universes.
+- [x] Feature matrix output remains bit-identical to sequential version.
 
 ## Work Log
 - 2026-02-01: Issue identified during P3 findings review. Created todo file.
+- 2026-02-07: Refactored `backfill_features.py` to use Ray via `RayComputeEngine`. Extracted processing logic into `_process_single_symbol_task`.

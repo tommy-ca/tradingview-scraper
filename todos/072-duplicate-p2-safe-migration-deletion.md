@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "072"
 tags: [data-integrity, safety, migration]

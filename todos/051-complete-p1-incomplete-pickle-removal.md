@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p1
 issue_id: "051"
 tags: [security, remote-code-execution, pickle, critical]

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "014"
 tags: ['architecture', 'config', 'manifest']
@@ -35,11 +35,12 @@ Implement a decorator-based registry for strategies, allowing them to be registe
 Update `configs/manifest.json` schema to include an explicit `strategy` key for each profile. Refactor `StrategyFactory` to prioritize this key and move away from name-based inference.
 
 ## Acceptance Criteria
-- [ ] `manifest.json` schema updated with `strategy` field.
-- [ ] `StrategyFactory.infer_strategy` prioritizes manifest configuration.
-- [ ] Legacy name-based inference is logged as deprecated.
-- [ ] Unit tests verify strategy selection from manifest.
-- [ ] All production profiles in `manifest.json` are updated with explicit strategy types.
+- [x] `manifest.json` schema updated with `strategy` field.
+- [x] `StrategyFactory.infer_strategy` prioritizes manifest configuration.
+- [x] Legacy name-based inference is logged as deprecated.
+- [x] Unit tests verify strategy selection from manifest.
+- [x] All production profiles in `manifest.json` are updated with explicit strategy types.
 
 ## Work Log
 - 2026-02-01: Issue identified during P3 findings review. Created todo file.
+- 2026-02-07: Updated `manifest.json` with explicit strategy fields for major profiles. Refactored `StrategyFactory.infer_strategy` to prioritize manifest field and added deprecation warning for legacy inference.

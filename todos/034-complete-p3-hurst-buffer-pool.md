@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "034"
 tags: ['performance', 'numba', 'memory']
@@ -36,10 +36,11 @@ Implement a simple thread-local or object-based buffer pool that manages `np.nda
 Implement Solution A: Update `calculate_hurst_exponent` to accept `z_buffer: np.ndarray | None = None`. Update selection engines (`v3_mps.py`, `v2_cars.py`) and feature engineering pipelines to reuse buffers across symbols.
 
 ## Acceptance Criteria
-- [ ] `calculate_hurst_exponent` supports an optional pre-allocated buffer.
-- [ ] Major selection engines updated to reuse buffers.
-- [ ] Unit tests verify that buffer reuse does not corrupt results (ensure buffer is correctly sliced or reset).
-- [ ] Micro-benchmark shows reduction in allocation overhead.
+- [x] `calculate_hurst_exponent` supports an optional pre-allocated buffer.
+- [x] Major selection engines updated to reuse buffers.
+- [x] Unit tests verify that buffer reuse does not corrupt results (ensure buffer is correctly sliced or reset).
+- [x] Micro-benchmark shows reduction in allocation overhead.
 
 ## Work Log
 - 2026-02-02: Issue identified during P3 findings review. Created todo file.
+- 2026-02-07: Updated `calculate_hurst_exponent` and `_get_rs_jit` to support pre-allocated `z_buffer`. Implemented `compute_rolling_hurst_numba` with buffer reuse.

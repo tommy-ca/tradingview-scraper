@@ -17,11 +17,13 @@ from tradingview_scraper.selection_engines.base import SelectionRequest, Selecti
 from tradingview_scraper.settings import TradingViewScraperSettings, get_settings
 from tradingview_scraper.utils.audit import AuditLedger
 from tradingview_scraper.utils.synthesis import StrategySynthesizer
+from tradingview_scraper.regime import MarketRegimeDetector
+from tradingview_scraper.risk.constraints import apply_diversity_constraints
 
 logger = logging.getLogger(__name__)
 
 
-def persist_tournament_artifacts(results: dict[str, Any], output_dir: Path):
+def persist_tournament_artifacts(results: dict[str, Any], output_dir: Path) -> None:
     """
     Saves tournament results and high-level metadata to structured CSV and JSON files.
 
@@ -63,8 +65,6 @@ class BacktestEngine:
         self.workspace: NumericalWorkspace | None = None
 
         # Components
-        from tradingview_scraper.regime import MarketRegimeDetector
-
         self.detector = MarketRegimeDetector(enable_audit_log=False)
 
     def load_data(self, run_dir: Path | None = None) -> None:
@@ -158,7 +158,13 @@ class BacktestEngine:
 
         self._save_artifacts(run_dir)
 
-        final_series_map = {key: cast(pd.Series, pd.concat(series_list)).sort_index() for key, series_list in self.return_series.items() if series_list}
+        final_series_map = {}
+        for key, series_list in self.return_series.items():
+            if series_list:
+                s_raw = pd.concat(series_list)
+                s_series = s_raw if isinstance(s_raw, pd.Series) else pd.Series(s_raw)
+                final_series_map[key] = s_series.sort_index()
+
         return {"results": self.results, "meta": results_meta, "stitched_returns": final_series_map}
 
     def _run_window_step(
@@ -334,7 +340,7 @@ class BacktestEngine:
                 engine=target_engine,
                 regime=ctx.regime_name,
                 market_environment=ctx.market_env,
-                cluster_cap=0.25,
+                cluster_cap=float(self.settings.cluster_cap),
                 kappa_shrinkage_threshold=float(self.settings.features.kappa_shrinkage_threshold),
                 default_shrinkage_intensity=float(self.settings.features.default_shrinkage_intensity),
                 adaptive_fallback_profile=str(self.settings.features.adaptive_fallback_profile),
@@ -356,7 +362,7 @@ class BacktestEngine:
                 # Automatic fallback to Equal Weight if solver failed even with hardening
                 flat_weights = self._get_equal_weight_flat(returns_for_opt, ctx.is_meta)
 
-            self._apply_diversity_constraints(flat_weights)
+            apply_diversity_constraints(flat_weights, self.settings)
 
             if self.ledger:
                 weights_dict = flat_weights.set_index("Symbol")["Net_Weight"].to_dict()
@@ -392,43 +398,55 @@ class BacktestEngine:
             "simulator": sim_name,
         }
         try:
-            simulator = build_simulator(sim_name)
             state_key = f"{target_engine}_{sim_name}_{profile}"
             last_state = self.current_holdings.get(state_key)
 
-            sim_results = simulator.simulate(weights_df=final_flat_weights, returns=test_rets, initial_holdings=last_state)
+            # 1. Execute Simulator
+            sim_results = self._execute_simulator(sim_name, final_flat_weights, test_rets, last_state)
 
-            if isinstance(sim_results, dict):
-                self.current_holdings[state_key] = sim_results.get("final_holdings")
-            else:
-                self.current_holdings[state_key] = getattr(sim_results, "final_holdings", None)
+            # 2. Sanitize Metrics
+            metrics = self._sanitize_sim_metrics(sim_results)
 
-            metrics = sim_results.get("metrics", sim_results) if isinstance(sim_results, dict) else getattr(sim_results, "metrics", {})
+            # 3. Update State
+            self._update_sim_state(state_key, sim_results, metrics)
 
-            # Record returns
-            daily_rets = metrics.get("daily_returns")
-            if isinstance(daily_rets, pd.Series):
-                self.return_series.setdefault(state_key, []).append(daily_rets.clip(-1.0, 1.0))
+            # 4. Record Outcome
+            self._record_sim_outcome(sim_ctx, metrics, window.step_index, target_engine, profile, sim_name)
 
-            if self.ledger:
-                self.ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=metrics, context=sim_ctx)
-
-            self.results.append({"window": window.step_index, "engine": target_engine, "profile": profile, "simulator": sim_name, "metrics": metrics})
         except Exception as e:
             if self.ledger:
                 self.ledger.record_outcome(step="backtest_simulate", status="error", output_hashes={}, metrics={"error": str(e)}, context=sim_ctx)
 
-    def _apply_diversity_constraints(self, flat_weights: pd.DataFrame):
-        """Standardizes weight clipping and normalization."""
-        w_sum_abs = flat_weights["Weight"].sum()
-        if w_sum_abs > 0:
-            flat_weights["Weight"] = flat_weights["Weight"].clip(upper=0.25 * w_sum_abs)
-            flat_weights["Net_Weight"] = flat_weights["Net_Weight"].clip(lower=-0.25 * w_sum_abs, upper=0.25 * w_sum_abs)
-            new_sum = flat_weights["Weight"].sum()
-            if new_sum > 0:
-                scale = w_sum_abs / new_sum
-                flat_weights["Weight"] *= scale
-                flat_weights["Net_Weight"] *= scale
+    def _execute_simulator(self, sim_name: str, weights_df: pd.DataFrame, test_rets: pd.DataFrame, last_state: Any) -> Any:
+        """Instantiates and runs the simulator."""
+        simulator = build_simulator(sim_name)
+        return simulator.simulate(weights_df=weights_df, returns=test_rets, initial_holdings=last_state)
+
+    def _sanitize_sim_metrics(self, sim_results: Any) -> dict[str, Any]:
+        """Extracts and cleans metrics from simulation results."""
+        if isinstance(sim_results, dict):
+            return sim_results.get("metrics", sim_results)
+        return getattr(sim_results, "metrics", {})
+
+    def _update_sim_state(self, state_key: str, sim_results: Any, metrics: dict[str, Any]) -> None:
+        """Updates holdings and return series state."""
+        # Update holdings
+        if isinstance(sim_results, dict):
+            self.current_holdings[state_key] = sim_results.get("final_holdings")
+        else:
+            self.current_holdings[state_key] = getattr(sim_results, "final_holdings", None)
+
+        # Record returns
+        daily_rets = metrics.get("daily_returns")
+        if isinstance(daily_rets, pd.Series):
+            self.return_series.setdefault(state_key, []).append(daily_rets.clip(-1.0, 1.0))
+
+    def _record_sim_outcome(self, sim_ctx: dict[str, Any], metrics: dict[str, Any], window_idx: int, engine: str, profile: str, simulator: str) -> None:
+        """Persists simulation outcome to ledger and results list."""
+        if self.ledger:
+            self.ledger.record_outcome(step="backtest_simulate", status="success", output_hashes={}, metrics=metrics, context=sim_ctx)
+
+        self.results.append({"window": window_idx, "engine": engine, "profile": profile, "simulator": simulator, "metrics": metrics})
 
     def _get_equal_weight_flat(self, returns_for_opt: pd.DataFrame, is_meta: bool) -> pd.DataFrame:
         """Returns equal-weighted portfolio weights."""
@@ -509,7 +527,7 @@ class BacktestEngine:
                 context={"window_index": window_index, "engine": engine_name},
             )
 
-    def _save_artifacts(self, run_dir: Path):
+    def _save_artifacts(self, run_dir: Path) -> None:
         """
         Persists stitched return series and profile aliases to disk.
         (Standard: Parquet format for institutional auditability).
@@ -518,7 +536,9 @@ class BacktestEngine:
         returns_out.mkdir(parents=True, exist_ok=True)
         for key, series_list in self.return_series.items():
             if series_list:
-                full_series = cast(pd.Series, pd.concat(series_list))
+                full_series_raw = pd.concat(series_list)
+                # Ensure it's a Series for LSP and runtime stability
+                full_series = full_series_raw if isinstance(full_series_raw, pd.Series) else pd.Series(full_series_raw)
                 full_series = full_series[~full_series.index.duplicated()].sort_index()
                 # Transition to Parquet
                 out_path = returns_out / f"{key}.parquet"

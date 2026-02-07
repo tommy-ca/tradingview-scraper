@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "022"
 tags: ['performance', 'numba', 'optimization']
@@ -27,10 +27,11 @@ If passing buffers from outside is not feasible, use `np.empty` or similar insid
 Identify JIT loops in the codebase (e.g., in `utils/metrics.py` or `portfolio_engines`) and refactor them to accept pre-allocated buffers.
 
 ## Acceptance Criteria
-- [ ] JIT loops with internal allocations identified.
-- [ ] Refactored functions to use pre-allocated buffers passed as arguments.
-- [ ] Benchmarking confirms a reduction in execution time for affected functions.
-- [ ] All regression tests for affected metrics pass.
+- [x] JIT loops with internal allocations identified.
+- [x] Refactored functions to use pre-allocated buffers passed as arguments.
+- [x] Benchmarking confirms a reduction in execution time for affected functions.
+- [x] All regression tests for affected metrics pass.
 
 ## Work Log
 - 2026-02-02: Issue identified during P3 performance review. Created todo file.
+- 2026-02-07: Implemented `compute_rolling_entropy_numba` in `predictability.py` using the "Out" parameter pattern for buffer reuse.

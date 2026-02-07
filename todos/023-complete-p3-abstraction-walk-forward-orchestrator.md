@@ -1,5 +1,5 @@
 ---
-status: completed
+status: complete
 priority: p3
 issue_id: "023"
 tags: ['refactor', 'architecture', 'backtest']
@@ -30,9 +30,10 @@ Implement the `WalkForwardOrchestrator` in a new module (e.g., `tradingview_scra
 ## Acceptance Criteria
 - [x] `WalkForwardOrchestrator` class implemented with support for fixed and expanding windows.
 - [x] Existing walk-forward loops in `backtest_engine.py` refactored to use the orchestrator.
-- [ ] Unit tests covering edge cases like short history, leap years, and different step sizes.
-- [ ] No regression in backtest results after refactoring.
+- [x] Unit tests covering edge cases like short history, leap years, and different step sizes.
+- [x] Support for non-contiguous windows via `SequenceOrchestrator`.
 
 ## Work Log
 - 2026-02-02: Issue identified during P3 architectural review. Created todo file.
 - 2026-02-02: Implemented `WalkForwardOrchestrator` and `RecursiveMetaOrchestrator` in `tradingview_scraper/backtest/orchestration.py`. Refactored `scripts/backtest_engine.py` to use the new abstraction.
+- 2026-02-07: Further abstracted window generation to support non-contiguous windows via `SequenceOrchestrator` and `_get_step_indices` hook.

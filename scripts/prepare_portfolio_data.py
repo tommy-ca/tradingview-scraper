@@ -182,11 +182,9 @@ def prepare_portfolio_universe():
             rets.index = pd.to_datetime(rets.index)
 
         # Timezone standardization
-        idx_check = cast(Any, rets.index)
-        if idx_check.tz is None:
-            rets.index = idx_check.tz_localize("UTC")
-        else:
-            rets.index = idx_check.tz_convert("UTC")
+        from tradingview_scraper.utils.data_utils import ensure_utc_index
+
+        ensure_utc_index(rets)
 
         returns_df[atom_id] = rets
 

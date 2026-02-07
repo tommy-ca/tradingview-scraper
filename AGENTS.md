@@ -16,6 +16,7 @@ The platform is organized into three orthogonal pillars to ensure logical purity
 - **Composition**: Atoms can be ensembled into complex strategies (e.g., Long/Short pairs).
 
 ### Pillar 3: Portfolio Allocation (Risk Layer)
+- **Stateful Orchestrator**: The `BacktestEngine` manages the full simulation lifecycle, maintaining holdings state across windows for high-fidelity path dependency.
 - **Decision-Naive Solvers**: Mathematical engines (`skfolio`, `riskfolio`) that optimize provided streams.
 - **Synthetic Hierarchical Clustering**: Clustering is performed on *synthesized* return streams to identify logic-space correlations.
 - **Constraint Delegation**: Targets like **Market Neutrality** are handled as native solver constraints ($|w^T\beta| \le 0.15$), ensuring global optimality across all atoms.
@@ -41,7 +42,8 @@ For tactical runs, use environment variables or Makefile shortcuts instead of ed
 | `LOOKBACK=N` | `TV_LOOKBACK_DAYS=N` | Override secular history depth. |
 
 ### Execution
-Agents should prioritize namespace-prefixed targets:
+Agents should prioritize the `BacktestEngine` for all tournament-style simulations. It coordinates Pillar 2 (Alpha) and Pillar 3 (Allocation) within a unified walk-forward loop.
+Namespace-prefixed targets:
 ```bash
 make flow-production PROFILE=production
 ```
@@ -170,9 +172,12 @@ The platform provides a set of Claude Code skills for high-level interaction.
 | Skill | Purpose | Example |
 | :--- | :--- | :--- |
 | `/quant-select` | Run selection pipeline | `/quant-select crypto_long` |
-| `/quant-backtest` | Run historical simulation | `/quant-backtest 20260121_143022` |
+| `/quant-backtest` | Run historical simulation (BacktestEngine) | `/quant-backtest 20260121_143022` |
 | `/quant-discover` | Discover candidate assets | `/quant-discover binance_spot` |
-| `/quant-optimize` | Run portfolio optimization | `/quant-optimize 20260121_143022` |
+| `/quant-optimize` | Run portfolio optimization (BacktestEngine) | `/quant-optimize 20260121_143022` |
+| `/quant-ingest` | Ingest new symbols from providers | `/quant-ingest binance_spot` |
+| `/quant-repair` | Repair historical data gaps | `/quant-repair` |
+| `/quant-audit` | Verify lakehouse integrity | `/quant-audit` |
 
 These skills leverage the `QuantSDK` and `StageRegistry` for deterministic execution.
 

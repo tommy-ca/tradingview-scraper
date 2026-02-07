@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: "015"
 tags: ['refactor', 'utility', 'timezone']
@@ -42,10 +42,11 @@ Create a robust utility function `ensure_utc_index(df_or_series)` in a common mo
 Implement `ensure_utc_index` and refactor the identified occurrences to use this shared utility.
 
 ## Acceptance Criteria
-- [ ] `ensure_utc_index` utility implemented with comprehensive error handling/edge case support.
-- [ ] At least 5 identified occurrences refactored to use the utility.
-- [ ] Unit tests covering naive, aware, and "contaminated" index scenarios.
-- [ ] No regression in data processing pipelines.
+- [x] `ensure_utc_index` utility implemented with comprehensive error handling/edge case support.
+- [x] At least 5 identified occurrences refactored to use the utility.
+- [x] Unit tests covering naive, aware, and "contaminated" index scenarios.
+- [x] No regression in data processing pipelines.
 
 ## Work Log
 - 2026-02-01: Issue identified during P3 findings review. Created todo file.
+- 2026-02-07: Refactored `backfill_features.py`, `prepare_portfolio_data.py`, `nautilus_strategy.py`, `metrics.py`, and `cvxportfolio.py` to use `ensure_utc_index` from `tradingview_scraper.utils.data_utils`.

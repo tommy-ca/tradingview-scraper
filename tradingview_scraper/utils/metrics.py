@@ -100,22 +100,10 @@ def calculate_performance_metrics(daily_returns: pd.Series, periods: int | None 
     # We clip them to prevent mathematical divergence in summary reporting.
     rets = daily_returns.clip(-0.9999, 10.0).dropna().copy()
 
-    # Consistent Timezone Handling - Force Naive
-    try:
-        new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in rets.index]
-        rets.index = pd.DatetimeIndex(new_idx)
-    except Exception as e_idx:
-        logger.debug(f"Metrics index forcing failed: {e_idx}")
-        if hasattr(rets.index, "tz") and getattr(rets.index, "tz") is not None:
-            try:
-                rets.index = cast(Any, rets.index).tz_convert(None)
-            except AttributeError:
-                rets.index = pd.to_datetime(rets.index).tz_convert(None)
-        else:
-            try:
-                rets.index = cast(Any, rets.index).tz_localize(None)
-            except AttributeError:
-                rets.index = pd.to_datetime(rets.index).tz_localize(None)
+    # Consistent Timezone Handling
+    from tradingview_scraper.utils.data_utils import ensure_utc_index
+
+    ensure_utc_index(rets)
 
     n_obs = len(rets)
     if n_obs == 0:
@@ -239,29 +227,14 @@ def get_full_report_markdown(daily_returns: pd.Series, benchmark: pd.Series | No
 
         rets = daily_returns.dropna().copy()
 
-        # Consistent Timezone Handling - Force Naive
-        try:
-            new_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in rets.index]
-            rets.index = pd.DatetimeIndex(new_idx)
-        except Exception:
-            # Fallback using safer casting
-            idx = pd.DatetimeIndex(rets.index)
-            if idx.tz is not None:
-                rets.index = idx.tz_convert(None).tz_localize(None)
-            else:
-                rets.index = idx.tz_localize(None)
+        # Consistent Timezone Handling
+        from tradingview_scraper.utils.data_utils import ensure_utc_index
+
+        ensure_utc_index(rets)
 
         if benchmark is not None:
             benchmark = benchmark.copy()
-            try:
-                new_b_idx = [pd.to_datetime(t).replace(tzinfo=None) for t in benchmark.index]
-                benchmark.index = pd.DatetimeIndex(new_b_idx)
-            except Exception:
-                b_idx = pd.DatetimeIndex(benchmark.index)
-                if b_idx.tz is not None:
-                    benchmark.index = b_idx.tz_convert(None).tz_localize(None)
-                else:
-                    benchmark.index = b_idx.tz_localize(None)
+            ensure_utc_index(benchmark)
 
             idx = rets.index.union(benchmark.index)
             benchmark = benchmark.reindex(idx)
