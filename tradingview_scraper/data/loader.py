@@ -179,43 +179,23 @@ class DataLoader:
         r_path = self._resolve_path(["returns_matrix.parquet", "portfolio_returns.parquet"], search_dirs)
 
         if not r_path:
-            r_path = self._resolve_path(["returns_matrix.pkl", "portfolio_returns.pkl"], search_dirs)
-            if r_path:
-                logger.warning(f"Using deprecated pickle format for returns: {r_path}")
-                r_path = self.ensure_safe_path(r_path)
+            logger.error(f"Required returns matrix (.parquet) not found in search dirs: {search_dirs}")
+            raise FileNotFoundError(f"Required returns matrix not found. Searched: {search_dirs}")
 
-        if r_path:
-            try:
-                if r_path.suffix == ".parquet":
-                    df_ret = pd.read_parquet(r_path)
-                elif r_path.suffix == ".pkl":
-                    df_ret = pd.read_pickle(r_path)
-                else:
-                    df_ret = pd.DataFrame()  # Should not happen with current filenames
-
-                # Type ignore: ensure_utc_index returns Union, but we know it's a DataFrame here
-                result.returns = cast(pd.DataFrame, ensure_utc_index(df_ret))
-            except Exception as e:
-                logger.warning(f"Failed to load returns matrix from {r_path}: {e}")
+        try:
+            df_ret = pd.read_parquet(r_path)
+            # Type ignore: ensure_utc_index returns Union, but we know it's a DataFrame here
+            result.returns = cast(pd.DataFrame, ensure_utc_index(df_ret))
+        except Exception as e:
+            logger.error(f"Failed to load returns matrix from {r_path}: {e}")
+            raise
 
         # 3. Load Features
         f_path = self._resolve_path(["features_matrix.parquet"], search_dirs)
 
-        if not f_path:
-            f_path = self._resolve_path(["features_matrix.pkl"], search_dirs)
-            if f_path:
-                logger.warning(f"Using deprecated pickle format for features: {f_path}")
-                f_path = self.ensure_safe_path(f_path)
-
         if f_path:
             try:
-                if f_path.suffix == ".parquet":
-                    df_feat = pd.read_parquet(f_path)
-                elif f_path.suffix == ".pkl":
-                    df_feat = pd.read_pickle(f_path)
-                else:
-                    df_feat = pd.DataFrame()
-
+                df_feat = pd.read_parquet(f_path)
                 # Type ignore: ensure_utc_index returns Union, but we know it's a DataFrame here
                 result.features = cast(pd.DataFrame, ensure_utc_index(df_feat))
             except Exception as e:
@@ -234,26 +214,16 @@ class DataLoader:
         # 5. Load Stats
         s_path = self._resolve_path(["stats_matrix.parquet", "antifragility_stats.json"], search_dirs)
 
-        if not s_path:
-            s_path = self._resolve_path(["stats_matrix.pkl"], search_dirs)
-            if s_path:
-                logger.warning(f"Using deprecated pickle format for stats: {s_path}")
-                s_path = self.ensure_safe_path(s_path)
-
         if s_path:
             if s_path.suffix == ".parquet":
                 try:
                     result.stats = pd.read_parquet(s_path)
                 except Exception as e:
                     logger.warning(f"Failed to load parquet stats: {e}")
-            elif s_path.suffix == ".pkl":
-                try:
-                    result.stats = pd.read_pickle(s_path)
-                except Exception as e:
-                    logger.warning(f"Failed to load pickle stats: {e}")
             else:
                 try:
-                    result.stats = pd.read_json(s_path)
+                    df_stats = pd.read_json(s_path)
+                    result.stats = cast(pd.DataFrame, df_stats)
                 except Exception:
                     logger.warning(f"Failed to parse JSON stats at {s_path}")
 

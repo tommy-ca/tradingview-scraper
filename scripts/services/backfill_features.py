@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("backfill_features")
 
 
-def _process_single_symbol(symbol: str, lakehouse_dir: Path) -> Optional[Tuple[str, pd.Series, pd.Series, pd.Series]]:
+def _process_single_symbol(symbol: str, lakehouse_dir: Path, output_dir: Optional[Path] = None) -> Optional[Tuple[str, str]]:
     """Logic for calculating features for a single symbol."""
     try:
         file_path = SecurityUtils.get_safe_path(lakehouse_dir, symbol)
@@ -59,16 +59,29 @@ def _process_single_symbol(symbol: str, lakehouse_dir: Path) -> Optional[Tuple[s
         osc = osc.ffill(limit=3)
         rating = rating.ffill(limit=3)
 
-        return symbol, ma, osc, rating
+        if output_dir:
+            # Create a small DataFrame for this symbol's features
+            # Use MultiIndex columns to match the expected format
+            feat_df = pd.DataFrame({"recommend_ma": ma, "recommend_other": osc, "recommend_all": rating})
 
-    except Exception:
+            # Sanitize symbol for filename
+            symbol_safe = symbol.replace(":", "_")
+            out_file = output_dir / f"{symbol_safe}_features.parquet"
+            feat_df.to_parquet(out_file)
+            return symbol, str(out_file)
+
+        # Legacy return (though we should avoid this now)
+        return symbol, "success"
+
+    except Exception as e:
+        logger.error(f"Error processing {symbol}: {e}")
         return None
 
 
 @ray.remote
-def _process_single_symbol_task(symbol: str, lakehouse_dir: Path) -> Optional[Tuple[str, pd.Series, pd.Series, pd.Series]]:
+def _process_single_symbol_task(symbol: str, lakehouse_dir: Path, output_dir: Path) -> Optional[Tuple[str, str]]:
     """Distributed task wrapper."""
-    return _process_single_symbol(symbol, lakehouse_dir)
+    return _process_single_symbol(symbol, lakehouse_dir, output_dir)
 
 
 @StageRegistry.register(
@@ -134,68 +147,95 @@ class BackfillService:
 
         # 2. Parallel Processing (Phase 470)
         use_parallel = os.getenv("TV_ORCH_PARALLEL") == "1"
+        processed_results = {}  # Map of symbol -> file_path
+
+        # Create a temp directory for individual feature files to avoid OOM in driver
+        temp_features_dir = self.lakehouse_dir / "temp_features"
+        temp_features_dir.mkdir(parents=True, exist_ok=True)
 
         if use_parallel:
             logger.info(f"Dispatching {len(symbols)} symbols to Ray cluster...")
             with RayComputeEngine() as engine:
                 engine.ensure_initialized()
-                futures = [_process_single_symbol_task.remote(s, self.lakehouse_dir) for s in symbols]
+                futures = [_process_single_symbol_task.remote(s, self.lakehouse_dir, temp_features_dir) for s in symbols]
                 results = ray.get(futures)
 
                 for res in results:
                     if res:
-                        symbol, ma, osc, rating = res
-                        all_features[(symbol, "recommend_ma")] = ma
-                        all_features[(symbol, "recommend_other")] = osc
-                        all_features[(symbol, "recommend_all")] = rating
+                        symbol, path = res
+                        processed_results[symbol] = path
         else:
             # Sequential Fallback
             for symbol in tqdm(symbols, desc="Processing Symbols"):
-                res = _process_single_symbol(symbol, self.lakehouse_dir)
+                res = _process_single_symbol(symbol, self.lakehouse_dir, temp_features_dir)
                 if res:
-                    symbol, ma, osc, rating = res
-                    all_features[(symbol, "recommend_ma")] = ma
-                    all_features[(symbol, "recommend_other")] = osc
-                    all_features[(symbol, "recommend_all")] = rating
+                    symbol, path = res
+                    processed_results[symbol] = path
 
-        if not all_features:
+        if not processed_results:
             logger.error("No ratings generated.")
             return
 
-        # 2. Consolidation & Validation
-        logger.info("Consolidating features matrix...")
-        features_df = pd.DataFrame(all_features)
-        features_df.columns.names = ["symbol", "feature"]
+        # 3. Consolidation & Validation (Memory-efficient)
+        logger.info(f"Consolidating features matrix from {len(processed_results)} temporary files...")
 
-        # Drop rows that are all NaN (before any meaningful history started)
-        features_df = features_df.dropna(how="all")
-
-        # 3. PIT Consistency Audit (Phase 630)
         from tradingview_scraper.pipelines.selection.base import FoundationHealthRegistry
         from tradingview_scraper.utils.features import FeatureConsistencyValidator
 
         registry = FoundationHealthRegistry(path=self.lakehouse_dir / "foundation_health.json")
 
-        for symbol in symbols:
-            # Check for NaN density in 'recommend_all'
-            if (symbol, "recommend_all") in features_df.columns:
-                val_series = features_df[(symbol, "recommend_all")]
-                if isinstance(val_series, pd.DataFrame):
-                    val_series = val_series.iloc[:, 0]
+        # We collect DataFrames for the final matrix, but we audit them one-by-one
+        # to keep memory usage predictable during the audit phase.
+        all_dfs = []
+        for symbol, path in tqdm(processed_results.items(), desc="Auditing & Collecting"):
+            try:
+                df = pd.read_parquet(path)
 
-                is_degraded = FeatureConsistencyValidator.check_nan_density(cast(pd.Series, val_series))
-                if is_degraded:
-                    logger.warning(f"Feature Store: {symbol} has degraded feature density. Flagging.")
-                    registry.update_status(symbol, status="toxic", reason="feature_nan_density")
+                # Check for NaN density in 'recommend_all' (Phase 630 Audit)
+                if "recommend_all" in df.columns:
+                    val_series = df["recommend_all"]
+                    is_degraded = FeatureConsistencyValidator.check_nan_density(val_series)
+                    if is_degraded:
+                        logger.warning(f"Feature Store: {symbol} has degraded feature density. Flagging.")
+                        registry.update_status(symbol, status="toxic", reason="feature_nan_density")
+
+                # Prepare for wide-matrix consolidation
+                df.columns = pd.MultiIndex.from_product([[symbol], df.columns])
+                all_dfs.append(df)
+            except Exception as e:
+                logger.error(f"Failed to load/audit {symbol} from {path}: {e}")
 
         registry.save()
 
-        # 4. Save Artifact
-        # Ensure output dir exists
+        if not all_dfs:
+            logger.error("No valid feature DataFrames collected for consolidation.")
+            return
+
+        # 4. Final Matrix Generation
+        # This is the single point where memory usage will peak.
+        # By using pd.concat on the list of DataFrames, we avoid the overhead of the large dictionary.
+        logger.info("Performing final matrix concatenation...")
+        features_df = pd.concat(all_dfs, axis=1)
+
+        # Clear the list of individual DataFrames as soon as possible
+        del all_dfs
+
+        # Drop rows that are all NaN (before any meaningful history started)
+        features_df = features_df.dropna(how="all")
+
+        # 5. Save Artifact
         out_p.parent.mkdir(parents=True, exist_ok=True)
         features_df.to_parquet(out_p)
 
-        logger.info(f"Saved feature matrix to {out_p}")
+        # Cleanup temp files
+        import shutil
+
+        try:
+            shutil.rmtree(temp_features_dir)
+        except Exception as e:
+            logger.warning(f"Failed to cleanup temp features directory: {e}")
+
+        logger.info(f"Saved consolidated feature matrix to {out_p}")
         logger.info(f"Shape: {features_df.shape} | Hash: {get_df_hash(features_df)}")
 
 

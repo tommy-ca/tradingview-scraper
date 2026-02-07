@@ -124,6 +124,104 @@ def calculate_hurst_exponent(x: np.ndarray, z_buffer: np.ndarray | None = None) 
         return 0.5
 
 
+@njit(float64(float64[::1], int32[::1], float64[::1], int64, int64), cache=True, fastmath=True)
+def _calculate_permutation_entropy_jit(x, perm_counts, segment_buffer, order=3, delay=1):
+    """
+    JIT optimized Permutation Entropy core logic using pre-allocated buffers.
+    Handles NaNs by skipping segments that contain any NaN values.
+
+    Args:
+        x: Input contiguous float64 array.
+        perm_counts: Workspace buffer for permutation frequencies.
+        segment_buffer: Workspace buffer for current window segment.
+        order: Permutation order (embedding dimension).
+        delay: Time delay factor.
+
+    Returns:
+        float: Raw entropy value.
+    """
+    n = len(x) - (order - 1) * delay
+    if n <= 0:
+        return 0.0
+
+    # Reset counts buffer
+    perm_counts.fill(0)
+    valid_segments = 0
+
+    for i in range(n):
+        # Fill segment from pre-allocated buffer and check for NaNs
+        has_nan = False
+        for j in range(order):
+            val = x[i + j * delay]
+            if np.isnan(val):
+                has_nan = True
+                break
+            segment_buffer[j] = val
+
+        if has_nan:
+            continue
+
+        perm_idx = np.argsort(segment_buffer)
+
+        key = 0
+        for val in perm_idx:
+            key = key * order + val
+
+        if key < len(perm_counts):
+            perm_counts[key] += 1
+            valid_segments += 1
+
+    if valid_segments == 0:
+        return 0.0
+
+    # Calculate entropy
+    ent = 0.0
+    for i in range(len(perm_counts)):
+        count = perm_counts[i]
+        if count > 0:
+            p = count / valid_segments
+            ent -= p * np.log(p)
+
+    return ent
+
+
+def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1, perm_counts: np.ndarray | None = None, segment_buffer: np.ndarray | None = None) -> float | None:
+    """
+    Calculates Permutation Entropy as a measure of structural randomness.
+    Low values = ordered/trending, High values = noisy/random.
+
+    Args:
+        x: Input time-series data.
+        order: Embedding dimension (default=3).
+        delay: Time delay factor (default=1).
+        perm_counts: Optional pre-allocated workspace for frequencies.
+        segment_buffer: Optional pre-allocated workspace for window segments.
+
+    Returns:
+        float | None: Normalized entropy in [0, 1] or None if insufficient history.
+    """
+    # Pillar 3: Ensure memory contiguity for JIT efficiency
+    x_arr = np.ascontiguousarray(x, dtype=np.float64)
+    # Check total non-NaN observations
+    if np.sum(~np.isnan(x_arr)) < order:
+        return None
+
+    try:
+        if perm_counts is None:
+            max_key = int(order**order)
+            buf_size = max(4000, max_key + 1)
+            perm_counts = np.zeros(buf_size, dtype=np.int32)
+
+        if segment_buffer is None:
+            segment_buffer = np.zeros(order, dtype=np.float64)
+
+        pe_val = _calculate_permutation_entropy_jit(x_arr, perm_counts, segment_buffer, int(order), int(delay))
+        # Normalize by log(n!) which is the maximum possible entropy for order n
+        return float(pe_val / math.log(math.factorial(order)))
+    except Exception:
+        return None
+
+
 @njit(float64[:](float64[::1], int64, int32[::1], float64[::1], int64, int64), cache=True, fastmath=True)
 def compute_rolling_entropy_numba(x, window, perm_counts, segment_buffer, order=3, delay=1):
     """

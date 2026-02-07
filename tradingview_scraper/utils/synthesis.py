@@ -53,11 +53,13 @@ def generate_atom_returns(returns: pd.Series, atom: StrategyAtom) -> pd.Series:
     s_rets = pd.Series(returns)
 
     if logic == "momentum":
-        # sign of trailing returns shifted to avoid bias
-        def roll_prod(x):
-            return np.prod(1 + x) - 1
+        # Vectorized rolling product using log-sum-exp
+        log_rets = np.log1p(s_rets)
+        cum_log_rets = log_rets.cumsum()
+        res = cum_log_rets - cum_log_rets.shift(window).fillna(0.0)
+        res.iloc[: window - 1] = np.nan
+        mom = np.exp(res) - 1
 
-        mom = s_rets.rolling(window=window).apply(roll_prod, raw=True)
         signal = np.sign(mom.shift(1).fillna(0.0).values)
         return s_rets * pd.Series(signal, index=s_rets.index)
     elif logic == "reversion":

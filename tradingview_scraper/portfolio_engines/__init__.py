@@ -8,7 +8,7 @@ from .backtest_simulators import (
     VectorBTSimulator,
     build_simulator,
 )
-from .base import BaseRiskEngine, EngineRequest, EngineResponse, EngineUnavailableError, ProfileName, MarketBaselineEngine
+from .base import BaseRiskEngine, EngineRequest, EngineResponse, EngineUnavailableError, ProfileName, MarketBaselineEngine, _enforce_cap_series, _project_capped_simplex
 from .cluster_adapter import ClusteredUniverse, build_clustered_universe
 
 from .impl.custom import CustomClusteredEngine
@@ -67,4 +67,6 @@ __all__ = [
     "build_engine",
     "list_known_engines",
     "list_available_engines",
+    "_enforce_cap_series",
+    "_project_capped_simplex",
 ]

@@ -10,19 +10,24 @@ if TYPE_CHECKING:
 def apply_diversity_constraints(flat_weights: pd.DataFrame, settings: TradingViewScraperSettings) -> None:
     """
     Standardizes weight clipping and normalization based on cluster_cap.
+    Uses institutional simplex projection to ensure diversity without cash drag.
     (Pillar 3: Diversity Compliance).
     """
-    cluster_cap = settings.cluster_cap
-    w_sum_abs = flat_weights["Weight"].sum()
+    if flat_weights.empty:
+        return
 
-    if w_sum_abs > 0:
-        # 1. Clip individual weights based on the configurable cap
-        flat_weights["Weight"] = flat_weights["Weight"].clip(upper=cluster_cap * w_sum_abs)
-        flat_weights["Net_Weight"] = flat_weights["Net_Weight"].clip(lower=-cluster_cap * w_sum_abs, upper=cluster_cap * w_sum_abs)
+    from tradingview_scraper.portfolio_engines.base import _project_capped_simplex
 
-        # 2. Re-normalize to preserve original absolute exposure
-        new_sum = flat_weights["Weight"].sum()
-        if new_sum > 0:
-            scale = w_sum_abs / new_sum
-            flat_weights["Weight"] *= scale
-            flat_weights["Net_Weight"] *= scale
+    cluster_cap = float(settings.cluster_cap)
+    w_sum_abs = float(flat_weights["Weight"].sum())
+
+    if w_sum_abs > 1e-6:
+        # Enforce cap using Simplex Projection to maintain sum=1.0 (or original sum)
+        weights_np = flat_weights["Weight"].values
+        capped_weights = _project_capped_simplex(weights_np / w_sum_abs, cluster_cap)
+
+        flat_weights["Weight"] = capped_weights * w_sum_abs
+
+        # Adjust Net_Weight accordingly (preserving direction)
+        directions = flat_weights["Net_Weight"].apply(lambda x: 1.0 if x >= 0 else -1.0)
+        flat_weights["Net_Weight"] = flat_weights["Weight"] * directions
