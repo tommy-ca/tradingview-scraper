@@ -62,6 +62,55 @@ def _calculate_asset_turnover(w_target: pd.Series, h_init: Optional[pd.Series]) 
 class BaseSimulator(ABC):
     """Abstract base class for all backtest simulators."""
 
+    def _validate_inputs(self, weights_df: pd.DataFrame, returns: pd.DataFrame) -> None:
+        """
+        Validates input data consistency.
+        1. Checks if 'Net_Weight' exists in weights_df.
+        2. Checks if all symbols in weights_df exist in returns.columns.
+        """
+        if "Net_Weight" not in weights_df.columns:
+            raise ValueError("Missing Net_Weight")
+
+        if "Symbol" in weights_df.columns:
+            symbols = weights_df["Symbol"].unique()
+            # Filter out cash if present
+            symbols = [s for s in symbols if str(s).lower() != "cash"]
+
+            available = set(returns.columns)
+            missing = [s for s in symbols if s not in available]
+
+            if missing:
+                raise ValueError("Orphaned weights")
+
+    def _sanitize_metrics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Recursively sanitizes metrics dictionary for JSON serialization.
+        - np.int64/float64 -> int/float
+        - pd.Series/np.ndarray -> list
+        - inf/nan -> None
+        """
+
+        def _sanitize_value(v: Any) -> Any:
+            if isinstance(v, dict):
+                return {k: _sanitize_value(val) for k, val in v.items()}
+            elif isinstance(v, (list, tuple)):
+                return [_sanitize_value(x) for x in v]
+            elif isinstance(v, pd.Series):
+                return [_sanitize_value(x) for x in v.values]
+            elif isinstance(v, np.ndarray):
+                return [_sanitize_value(x) for x in v]
+            elif isinstance(v, (np.integer, int)):
+                return int(v)
+            elif isinstance(v, (np.floating, float)):
+                if np.isnan(v) or np.isinf(v):
+                    return None
+                return float(v)
+            elif pd.isna(v):
+                return None
+            return v
+
+        return _sanitize_value(metrics)
+
     @abstractmethod
     def simulate(
         self,
@@ -87,16 +136,13 @@ class ReturnsSimulator(BaseSimulator):
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
+        self._validate_inputs(weights_df, returns)
+
         settings = get_settings()
         target_len = len(returns)
 
         # Use Net_Weight to handle directional returns correctly (Long/Short).
-        # Fallback to Weight if Net_Weight is missing.
-        w_target = pd.Series(dtype=float)
-        if "Net_Weight" in weights_df.columns:
-            w_target = weights_df.set_index("Symbol")["Net_Weight"].astype(float)
-        else:
-            w_target = weights_df.set_index("Symbol")["Weight"].astype(float)
+        w_target = weights_df.set_index("Symbol")["Net_Weight"].astype(float)
 
         if isinstance(w_target, pd.DataFrame):
             w_target = w_target.iloc[:, 0]
@@ -210,7 +256,7 @@ class ReturnsSimulator(BaseSimulator):
         res["daily_returns"] = p_returns
         res["turnover"] = total_turnover
         res["final_weights"] = current_weights
-        return res
+        return self._sanitize_metrics(res)
 
 
 class CVXPortfolioSimulator(BaseSimulator):
@@ -233,6 +279,8 @@ class CVXPortfolioSimulator(BaseSimulator):
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
+        self._validate_inputs(weights_df, returns)
+
         if self.cvp is None:
             return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
 
@@ -246,10 +294,7 @@ class CVXPortfolioSimulator(BaseSimulator):
             universe.append(cash_key)
 
         # Use Net_Weight to handle directional returns correctly (Long/Short).
-        if "Net_Weight" in weights_df.columns:
-            w_target_raw = weights_df.set_index("Symbol")["Net_Weight"].astype(float)
-        else:
-            w_target_raw = weights_df.set_index("Symbol")["Weight"].astype(float)
+        w_target_raw = weights_df.set_index("Symbol")["Net_Weight"].astype(float)
 
         if isinstance(w_target_raw, pd.DataFrame):
             w_target_raw = w_target_raw.iloc[:, 0]
@@ -336,12 +381,9 @@ class CVXPortfolioSimulator(BaseSimulator):
                     "turnover": float(result.turnover.sum()),
                 }
             )
-            return res
+            return self._sanitize_metrics(res)
         except Exception as e:
             logger.error(f"cvxportfolio backtest failed: {e}")
-            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
-        except Exception as e:
-            logger.error(f"cvxportfolio failed: {e}")
             return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
 
 
@@ -366,6 +408,8 @@ class VectorBTSimulator(BaseSimulator):
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
     ) -> Dict[str, Any]:
+        self._validate_inputs(weights_df, returns)
+
         if self.vbt is None:
             return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
 
@@ -375,16 +419,18 @@ class VectorBTSimulator(BaseSimulator):
         rebalance_mode = settings.features.feat_rebalance_mode
 
         # Use Net_Weight to handle directional returns correctly in VectorBT
-        if "Net_Weight" in weights_df.columns:
-            w_series = weights_df.set_index("Symbol")["Net_Weight"].astype(float)
-        else:
-            w_series = weights_df.set_index("Symbol")["Weight"].astype(float)
+        w_series = weights_df.set_index("Symbol")["Net_Weight"].astype(float)
 
         if isinstance(w_series, pd.DataFrame):
             w_series = w_series.iloc[:, 0]
         w_series = cast(pd.Series, w_series)
 
         prices = (1.0 + returns[w_series.index]).cumprod()
+
+        # Determine initial capital from holdings if available
+        init_cash = 100.0
+        if initial_holdings is not None:
+            init_cash = float(initial_holdings.sum())
 
         if rebalance_mode == "daily":
             w_df = pd.DataFrame([w_series.values] * len(prices), columns=w_series.index, index=prices.index)
@@ -393,7 +439,14 @@ class VectorBTSimulator(BaseSimulator):
             w_df.iloc[0] = w_series.values
 
         portfolio = vbt.Portfolio.from_orders(
-            close=prices, size=w_df, size_type="target_percent", fees=settings.backtest_slippage + settings.backtest_commission, freq="D", init_cash=100.0, cash_sharing=True, group_by=True
+            close=prices,
+            size=w_df,
+            size_type="target_percent",
+            fees=settings.backtest_slippage + settings.backtest_commission,
+            freq="D",
+            init_cash=init_cash,
+            cash_sharing=True,
+            group_by=True,
         )
         # Shift and cap returns
         p_returns = portfolio.returns().fillna(0.0)
@@ -441,7 +494,7 @@ class VectorBTSimulator(BaseSimulator):
             try:
                 # Value of all trades
                 total_trade_val = portfolio.trades().value.abs().sum()
-                vbt_total_turnover = total_trade_val / 2.0 / 100.0  # Normalize by init_cash=100
+                vbt_total_turnover = total_trade_val / 2.0 / init_cash  # Normalize by init_cash
 
                 # Correct it
                 final_turnover = vbt_total_turnover - vbt_t0_turnover + t0_turnover
@@ -452,7 +505,7 @@ class VectorBTSimulator(BaseSimulator):
         else:
             res["turnover"] = t0_turnover
 
-        return res
+        return self._sanitize_metrics(res)
 
 
 def build_simulator(name: str) -> BaseSimulator:
@@ -471,6 +524,8 @@ class NautilusSimulator(BaseSimulator):
     """Event-driven high-fidelity simulator using NautilusTrader (Placeholder)."""
 
     def simulate(self, returns: pd.DataFrame, weights_df: pd.DataFrame, initial_holdings: Optional[pd.Series] = None) -> Dict[str, Any]:
+        self._validate_inputs(weights_df, returns)
+
         # Requirement: Physical Flattening
         # Ensure we are not passing Strategy Atoms (e.g. "BINANCE:BTCUSDT_rating_ma_LONG") to the simulator.
         if "Symbol" in weights_df.columns and not weights_df.empty:
@@ -482,7 +537,9 @@ class NautilusSimulator(BaseSimulator):
         try:
             from tradingview_scraper.portfolio_engines.nautilus_adapter import run_nautilus_backtest
 
-            return run_nautilus_backtest(returns=returns, weights_df=weights_df, initial_holdings=initial_holdings, settings=get_settings())
+            res = run_nautilus_backtest(returns=returns, weights_df=weights_df, initial_holdings=initial_holdings, settings=get_settings())
         except Exception as e:
             logger.warning(f"Nautilus adapter unavailable, falling back to custom simulator: {e}")
-            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+            res = ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+
+        return self._sanitize_metrics(res)
