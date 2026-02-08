@@ -37,13 +37,13 @@ def generate_production_orders(source_run_id: str = "20260106-prod-q1", top_n: i
     logger.info(f"🏆 Identified {n_winners} unique winners from {source_run_id}")
 
     # 2. Load Live Data
-    returns_path = settings.lakehouse_dir / "portfolio_returns.pkl"
+    returns_path = settings.lakehouse_dir / "portfolio_returns.parquet"
     clusters_path = settings.lakehouse_dir / "portfolio_clusters.json"
     meta_path = settings.lakehouse_dir / "portfolio_meta.json"
     stats_path = settings.lakehouse_dir / "antifragility_stats.json"
 
     with open(returns_path, "rb") as f:
-        returns = cast(pd.DataFrame, pd.read_pickle(f))
+        returns = cast(pd.DataFrame, pd.read_parquet(f))
     with open(clusters_path, "r") as f:
         clusters = cast(Dict[str, List[str]], json.load(f))
     with open(meta_path, "r") as f:
@@ -95,6 +95,33 @@ def generate_production_orders(source_run_id: str = "20260106-prod-q1", top_n: i
         if weights_df.empty:
             logger.warning(f"Optimization failed for {engine_name}/{profile_name}")
             continue
+
+        # 4b. Order Validation (Missing Metadata)
+        # Pillar 1.2: No orders for assets with missing metadata (Lot Size, Min Notional)
+        valid_assets = []
+        for _, row in weights_df.iterrows():
+            sym = str(row["Symbol"])
+            asset_meta = meta.get(sym, {})
+            lot_size = asset_meta.get("lot_size")
+            min_notional = asset_meta.get("min_notional")
+
+            if lot_size is None or min_notional is None:
+                logger.warning(f"Vetoing {sym} in {engine_name}/{profile_name}: Missing Metadata (Lot: {lot_size}, MinNotional: {min_notional})")
+                continue
+            valid_assets.append(row)
+
+        if not valid_assets:
+            logger.warning(f"No valid assets remaining for {engine_name}/{profile_name} after metadata validation.")
+            continue
+
+        weights_df = pd.DataFrame(valid_assets)
+
+        # 4c. Re-normalize weights if we dropped assets
+        if len(weights_df) < len(response.weights):
+            total_weight = weights_df["Net_Weight"].sum()
+            if total_weight > 0:
+                weights_df["Net_Weight"] = weights_df["Net_Weight"] / total_weight
+                logger.info(f"Re-normalized weights for {engine_name}/{profile_name} (Total: {total_weight:.4f})")
 
         # Add Provenance Metadata
         weights_df["Rank"] = rank

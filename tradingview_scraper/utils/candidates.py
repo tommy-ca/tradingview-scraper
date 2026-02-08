@@ -7,6 +7,7 @@ CANONICAL_KEYS = {
     "exchange",
     "asset_type",
     "identity",
+    "direction",  # Added CR-1020
     "market_cap_rank",
     "volume_24h",
     "sector",
@@ -79,8 +80,19 @@ def normalize_candidate_record(raw: Dict[str, Any], *, strict: bool) -> Optional
     # Identity is a canonical unique key; it must match symbol exactly.
     identity = symbol
 
+    # Normalize Direction (CR-1020)
+    # Default to LONG if missing, as legacy behavior assumes long-only.
+    # Case-insensitive input, UPPER output.
+    raw_dir = raw.get("direction", raw.get("metadata", {}).get("direction"))
+    direction = _as_str(raw_dir).upper()
+    if direction not in ("LONG", "SHORT"):
+        direction = "LONG"
+
     # Metadata should preserve any non-canonical keys to avoid silently dropping information.
     metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
+    if metadata is None:  # Defensive fallback
+        metadata = {}
+
     for k, v in raw.items():
         if k in CANONICAL_KEYS:
             continue
@@ -91,6 +103,7 @@ def normalize_candidate_record(raw: Dict[str, Any], *, strict: bool) -> Optional
         "exchange": exchange,
         "asset_type": asset_type,
         "identity": identity,
+        "direction": direction,
         "market_cap_rank": raw.get("market_cap_rank"),
         "volume_24h": raw.get("volume_24h", raw.get("volume")),
         "sector": raw.get("sector"),

@@ -21,7 +21,7 @@ def detect_hedge_anchors():
     # CR-831: Workspace Isolation
     default_returns = str(run_dir / "data" / "returns_matrix.parquet")
     if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
+        default_returns = "data/lakehouse/portfolio_returns.parquet"
 
     default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
     if not os.path.exists(default_clusters):
@@ -44,7 +44,7 @@ def detect_hedge_anchors():
         returns = pd.read_parquet(returns_path)
     else:
         with open(returns_path, "rb") as f_in:
-            returns_raw = pd.read_pickle(f_in)
+            returns_raw = pd.read_parquet(f_in)
         if not isinstance(returns_raw, pd.DataFrame):
             returns = pd.DataFrame(returns_raw)
         else:

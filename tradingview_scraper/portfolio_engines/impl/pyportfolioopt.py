@@ -41,7 +41,11 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
             if request.profile == "hrp":
                 hrp = HRPOpt(
                     returns=X,
-                    cov_matrix=pd.DataFrame(_cov_shrunk(X, kappa_thresh=request.kappa_shrinkage_threshold, default_shrinkage=request.default_shrinkage_intensity), index=X.columns, columns=X.columns),
+                    cov_matrix=pd.DataFrame(
+                        _cov_shrunk(X, shrinkage=request.default_shrinkage_intensity, kappa_thresh=request.kappa_shrinkage_threshold),
+                        index=X.columns,
+                        columns=X.columns,
+                    ),
                 )
                 weights = hrp.optimize(linkage_method=str(request.bayesian_params.get("hrp_linkage", "single")))
                 s_res = _safe_series(np.array([float(cast(Dict[Any, Any], weights).get(str(k), 0.0)) for k in X.columns]), X.columns)
@@ -50,7 +54,11 @@ class PyPortfolioOptEngine(CustomClusteredEngine):
             else:
                 ef = EfficientFrontier(
                     X.mean() * 252,
-                    pd.DataFrame(_cov_shrunk(X, kappa_thresh=request.kappa_shrinkage_threshold, default_shrinkage=request.default_shrinkage_intensity), index=X.columns, columns=X.columns),
+                    pd.DataFrame(
+                        _cov_shrunk(X, shrinkage=request.default_shrinkage_intensity, kappa_thresh=request.kappa_shrinkage_threshold),
+                        index=X.columns,
+                        columns=X.columns,
+                    ),
                     weight_bounds=(0.0, cap),
                 )
                 ef.add_objective(objective_functions.L2_reg, gamma=float(request.l2_gamma))

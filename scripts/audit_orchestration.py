@@ -129,10 +129,10 @@ class OrchestrationAuditor:
                 logger.warning(f"Could not read log file {log_file}: {e}")
 
     def _check_causality(self, meta_dir: Path, sleeves: List[Dict], report: Dict):
-        meta_matrix = meta_dir / "data" / "meta_returns.pkl"
+        meta_matrix = meta_dir / "data" / "meta_returns.parquet"
         if not meta_matrix.exists():
             # Try other common names
-            alt = list(meta_dir.glob("**/meta_returns*.pkl"))
+            alt = list(meta_dir.glob("**/meta_returns*.parquet"))
             if alt:
                 meta_matrix = alt[0]
             else:
@@ -150,9 +150,9 @@ class OrchestrationAuditor:
                 continue
 
             # Check most recent return file in sleeve
-            s_rets = list(s_dir.glob("**/returns/*.pkl"))
+            s_rets = list(s_dir.glob("**/returns/*.parquet"))
             if not s_rets:
-                s_rets = list(s_dir.glob("*.pkl"))
+                s_rets = list(s_dir.glob("*.parquet"))
 
             for ret_file in s_rets:
                 if ret_file.stat().st_mtime > meta_mtime:

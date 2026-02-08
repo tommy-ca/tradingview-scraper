@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import pandas_ta_classic as ta
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any, cast
 
 
 class TechnicalRatings:
@@ -12,10 +14,12 @@ class TechnicalRatings:
     @staticmethod
     def _safe_vote(cond_buy: pd.Series, cond_sell: pd.Series, index: pd.Index) -> pd.Series:
         """Helper to create a vote series with proper alignment."""
-        v = pd.Series(0.0, index=index)
-        v.loc[cond_buy.reindex(index, fill_value=False).values] = 1.0
-        v.loc[cond_sell.reindex(index, fill_value=False).values] = -1.0
-        return v
+        # Align series to index (fast path if already aligned)
+        b = cond_buy.reindex(index, fill_value=False).to_numpy(dtype=bool)
+        s = cond_sell.reindex(index, fill_value=False).to_numpy(dtype=bool)
+
+        # Vectorized subtraction: True(1) - False(0) = 1, False(0) - True(1) = -1
+        return pd.Series(b.astype(float) - s.astype(float), index=index)
 
     @staticmethod
     def calculate_recommend_ma_series(df: pd.DataFrame) -> pd.Series:
@@ -26,12 +30,12 @@ class TechnicalRatings:
         if df.empty:
             return pd.Series(dtype=float)
 
-        close = df["close"]
-        high = df["high"]
-        low = df["low"]
-        volume = df["volume"] if "volume" in df.columns else None
+        close = cast(pd.Series, df["close"])
+        high = cast(pd.Series, df["high"])
+        low = cast(pd.Series, df["low"])
+        volume = cast(pd.Series, df["volume"]) if "volume" in df.columns else None
 
-        all_votes = []
+        all_votes: list[pd.Series] = []
 
         # Tuning Experiment 1: Reduce lengths list to match TV more closely if possible
         # Standard: 10, 20, 30, 50, 100, 200
@@ -99,11 +103,11 @@ class TechnicalRatings:
         if df.empty:
             return pd.Series(dtype=float)
 
-        close = df["close"]
-        high = df["high"]
-        low = df["low"]
+        close = cast(pd.Series, df["close"])
+        high = cast(pd.Series, df["high"])
+        low = cast(pd.Series, df["low"])
 
-        all_votes = []
+        all_votes: list[pd.Series] = []
 
         # 1. RSI
         rsi = ta.rsi(close, length=14)

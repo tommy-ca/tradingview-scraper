@@ -22,7 +22,7 @@ def monitor_drift():
     # CR-831: Workspace Isolation
     default_returns = str(run_dir / "data" / "returns_matrix.parquet")
     if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
+        default_returns = "data/lakehouse/portfolio_returns.parquet"
 
     default_clusters = str(run_dir / "data" / "portfolio_clusters.json")
     if not os.path.exists(default_clusters):
@@ -39,7 +39,7 @@ def monitor_drift():
     if returns_path.endswith(".parquet"):
         returns = pd.read_parquet(returns_path)
     else:
-        returns = cast(pd.DataFrame, pd.read_pickle(returns_path))
+        returns = cast(pd.DataFrame, pd.read_parquet(returns_path))
 
     with open(clusters_path, "r") as f:
         clusters = cast(Dict[str, List[str]], json.load(f))

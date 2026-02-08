@@ -242,6 +242,20 @@ def flatten_weights(meta_profile: str, output_path: str, profile: Optional[str] 
             # but didn't catch in the loop. We re-verify by sym lookup.
             pass
 
+    # L4 Data Contract Validation
+    import pandera as pa
+
+    from tradingview_scraper.pipelines.contracts import WeightsSchema
+
+    try:
+        df_weights = pd.DataFrame(output_weights)
+        if not df_weights.empty:
+            WeightsSchema.validate(df_weights)
+    except pa.errors.SchemaError as e:
+        logger.error(f"L4 Data Contract Violation in portfolio_weights: {e}")
+        if os.getenv("TV_STRICT_STABILITY") == "1":
+            raise
+
     # CR-Hardening: Physical Concentration Check (Phase 580)
     MAX_ASSET_CAP = 0.25
     concentrated_assets = [w["Symbol"] for w in output_weights if w["Weight"] > MAX_ASSET_CAP]

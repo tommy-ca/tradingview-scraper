@@ -29,7 +29,7 @@ def synthesize_strategy_matrix():
     returns_path = os.getenv("PORTFOLIO_RETURNS_PATH") or str(run_dir / "data" / "returns_matrix.parquet")
     if not os.path.exists(returns_path):
         # Fallback
-        returns_path = "data/lakehouse/portfolio_returns.pkl"
+        returns_path = "data/lakehouse/portfolio_returns.parquet"
 
     if not os.path.exists(returns_path):
         logger.error(f"Physical returns matrix not found at {returns_path}")
@@ -39,7 +39,7 @@ def synthesize_strategy_matrix():
     if str(returns_path).endswith(".parquet"):
         phys_df = pd.read_parquet(returns_path)
     else:
-        phys_df = pd.read_pickle(returns_path)
+        phys_df = pd.read_parquet(returns_path)
 
     # 2. Load Candidates (Logic Definitions)
     candidates_path = os.getenv("CANDIDATES_SELECTED") or str(run_dir / "data" / "portfolio_candidates.json")

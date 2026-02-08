@@ -9,6 +9,7 @@ import logging
 import os
 import secrets
 import string
+import time
 
 from websocket import create_connection
 
@@ -47,7 +48,20 @@ class StreamHandler:
             "User-Agent": ("Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"),
         }
         ws_timeout = float(os.getenv("STREAMER_WS_TIMEOUT", "15"))
-        self.ws = create_connection(websocket_url, headers=self.request_header, timeout=ws_timeout)
+
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                self.ws = create_connection(websocket_url, headers=self.request_header, timeout=ws_timeout)
+                break
+            except Exception as e:
+                if "429" in str(e) and attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2
+                    logging.warning(f"Handshake 429 detected. Retrying in {wait_time}s... (Attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    raise e
+
         self._initialize(jwt_token=jwt_token)
 
     def _initialize(self, jwt_token: str):

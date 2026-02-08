@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import cast
 
 import numpy as np
-import pandas as pd
 
+from tradingview_scraper.data.loader import DataLoader
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.predictability import (
     calculate_correlation_structure,
@@ -26,26 +26,22 @@ def analyze_persistence():
     # CR-831: Workspace Isolation - Infer returns path from run context
     run_dir = settings.summaries_runs_dir / settings.run_id if settings.run_id else None
 
-    returns_path = None
-    if run_dir:
-        returns_path = run_dir / "data" / "returns_matrix.parquet"
+    logger.info("Initializing DataLoader...")
+    loader = DataLoader(settings=settings)
 
-    if not returns_path or not returns_path.exists():
-        # Fallback to env or legacy lakehouse
-        returns_path = Path(os.getenv("PORTFOLIO_RETURNS_PATH", "data/lakehouse/portfolio_returns.pkl"))
-
-    # meta_path is usually not used here, but for isolation:
-    # meta_path = Path(os.getenv("PORTFOLIO_META_PATH", "data/lakehouse/portfolio_meta.json"))
-
-    if not returns_path.exists():
-        logger.error(f"Returns matrix missing at {returns_path}")
+    try:
+        # Load data using the centralized loader which handles:
+        # 1. Path resolution (run_dir -> lakehouse)
+        # 2. Format detection (parquet vs pickle)
+        # 3. UTC index enforcement
+        data_bundle = loader.load_run_data(run_dir=run_dir)
+        returns_df = data_bundle["returns"]
+    except FileNotFoundError as e:
+        logger.error(f"Failed to load returns data: {e}")
         return
-
-    logger.info(f"Loading returns from {returns_path}")
-    if str(returns_path).endswith(".parquet"):
-        returns_df = pd.read_parquet(returns_path)
-    else:
-        returns_df = cast(pd.DataFrame, pd.read_pickle(returns_path))
+    except Exception as e:
+        logger.error(f"Unexpected error loading data: {e}")
+        return
 
     if returns_df.empty:
         logger.error("Returns matrix is empty.")
@@ -67,6 +63,10 @@ def analyze_persistence():
             prices = cast(np.ndarray, price_df[symbol].values)
 
             hurst = calculate_hurst_exponent(rets)
+            # Default to 0.5 if hurst calc fails or returns None
+            if hurst is None:
+                hurst = 0.5
+
             half_life = calculate_half_life(prices)
             duration = calculate_trend_duration(prices, window=50)
             ac_structure = calculate_correlation_structure(rets, max_lags=3)
@@ -115,6 +115,9 @@ def analyze_persistence():
     out_json = Path("data/lakehouse/persistence_metrics.json")
     if run_dir:
         out_json = run_dir / "data" / "persistence_metrics.json"
+
+    # Ensure parent directory exists
+    out_json.parent.mkdir(parents=True, exist_ok=True)
 
     with open(out_json, "w") as f:
         json.dump(results, f, indent=2)

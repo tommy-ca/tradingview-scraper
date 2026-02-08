@@ -1,9 +1,12 @@
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, cast
+from typing import TYPE_CHECKING, Any, Dict, List, cast
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from tradingview_scraper.backtest.models import NumericalWorkspace
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +53,13 @@ def generate_atom_returns(returns: pd.Series, atom: StrategyAtom) -> pd.Series:
     s_rets = pd.Series(returns)
 
     if logic == "momentum":
-        # sign of trailing returns shifted to avoid bias
-        def roll_prod(x):
-            return np.prod(1 + x) - 1
+        # Vectorized rolling product using log-sum-exp
+        log_rets = np.log1p(s_rets)
+        cum_log_rets = log_rets.cumsum()
+        res = cum_log_rets - cum_log_rets.shift(window).fillna(0.0)
+        res.iloc[: window - 1] = np.nan
+        mom = np.exp(res) - 1
 
-        mom = s_rets.rolling(window=window).apply(roll_prod, raw=True)
         signal = np.sign(mom.shift(1).fillna(0.0).values)
         return s_rets * pd.Series(signal, index=s_rets.index)
     elif logic == "reversion":
@@ -66,9 +71,9 @@ def generate_atom_returns(returns: pd.Series, atom: StrategyAtom) -> pd.Series:
     elif logic == "trend":
         # binary trend based on moving average
         ma_rets = s_rets.rolling(window=window).mean()
-        # signal is 1 if average return > 0 else 0
-        sig_vals = (ma_rets.shift(1).fillna(-1.0).values > 0).astype(float)
-        return s_rets * pd.Series(sig_vals, index=s_rets.index)
+        # signal is 1 if average return > 0 else 0 (shifted to avoid look-ahead)
+        sig_vals = (ma_rets.shift(1).fillna(-1.0) > 0).astype(float)
+        return s_rets * sig_vals
     else:
         # direct pass (raw asset return)
         return s_rets
@@ -85,7 +90,13 @@ class StrategySynthesizer:
         # Maps StrategyName -> {PhysicalSymbol: CompositionWeight}
         self.composition_map: Dict[str, Dict[str, float]] = {}
 
-    def synthesize(self, returns_df: pd.DataFrame, winners_meta: List[Dict[str, Any]], features: Any) -> pd.DataFrame:
+    def synthesize(
+        self,
+        returns_df: pd.DataFrame,
+        winners_meta: List[Dict[str, Any]],
+        features: Any,
+        workspace: "NumericalWorkspace | None" = None,
+    ) -> pd.DataFrame:
         """
         Synthesizes the strategy matrix from the selected universe.
         Each column in the output is a purified alpha stream (Synthetic Long).

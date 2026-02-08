@@ -20,13 +20,13 @@ def test_tournament_v2_spec_configuration(tmp_path):
     lakehouse = tmp_path / "data" / "lakehouse"
     lakehouse.mkdir(parents=True)
 
-    returns_path = lakehouse / "portfolio_returns.pkl"
+    returns_path = lakehouse / "returns_matrix.parquet"
     candidates_path = lakehouse / "portfolio_candidates_raw.json"
 
     symbols = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "SPY"]
     dates = pd.date_range("2025-01-01", periods=200)
     df_returns = pd.DataFrame(np.random.randn(200, len(symbols)) * 0.01, columns=pd.Index(symbols), index=dates)
-    df_returns.to_pickle(returns_path)
+    df_returns.to_parquet(returns_path)
 
     candidates = [{"symbol": s, "identity": s, "direction": "LONG", "value_traded": 1e9} for s in symbols]
     with open(candidates_path, "w") as f:
@@ -43,7 +43,7 @@ def test_tournament_v2_spec_configuration(tmp_path):
     # We need to monkeypatch the paths in BacktestEngine or use environment variables
     # BacktestEngine hardcodes paths, so we'll temporarily point to our mock files
 
-    original_returns_path = "data/lakehouse/portfolio_returns.pkl"
+    original_returns_path = "data/lakehouse/returns_matrix.parquet"
     original_candidates_path = "data/lakehouse/portfolio_candidates_raw.json"
 
     # Ensure directories exist for the actual code to not crash if it tries to write elsewhere
@@ -52,9 +52,9 @@ def test_tournament_v2_spec_configuration(tmp_path):
     # We'll use a safer approach: backup real data if it exists
     backup_returns = None
     if os.path.exists(original_returns_path):
-        backup_returns = pd.read_pickle(original_returns_path)
+        backup_returns = pd.read_parquet(original_returns_path)
 
-    df_returns.to_pickle(original_returns_path)
+    df_returns.to_parquet(original_returns_path)
     with open(original_candidates_path, "w") as f:
         json.dump(candidates, f)
 
@@ -86,7 +86,7 @@ def test_tournament_v2_spec_configuration(tmp_path):
     finally:
         # Restore or cleanup
         if backup_returns is not None:
-            backup_returns.to_pickle(original_returns_path)
+            backup_returns.to_parquet(original_returns_path)
         # We don't delete candidates as it might be needed by others,
         # but in a real TDD we should be more careful with global state.
         pass

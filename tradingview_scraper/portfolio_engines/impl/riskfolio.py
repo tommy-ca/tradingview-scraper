@@ -30,8 +30,8 @@ class RiskfolioEngine(CustomClusteredEngine):
         X = universe.cluster_benchmarks
         n = X.shape[1]
 
-        # CR-590: Strict 25% Cluster Cap Enforcement
-        cap_val = min(0.25, float(request.cluster_cap))
+        # CR-590: Strict Cluster Cap Enforcement
+        cap_val = float(request.cluster_cap)
         cap = _effective_cap(cap_val, n)
 
         if n <= 0:

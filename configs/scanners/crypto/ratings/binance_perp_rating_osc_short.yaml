@@ -1,13 +1,11 @@
-# Binance Perp - Oscillator Rating - SHORT
+# Binance Perp - binance_perp_rating_osc_short
 base_preset: ../../../base/universes/binance_perp_base.yaml
-trend:
-  direction: "short"
-  logic: "AND"
-  adx: { enabled: false }
+metadata:
+  intent: "SHORT"
 filters:
   - { left: "Recommend.Other", operation: "less", right: 0 }
-sort_by: Recommend.Other
-sort_order: asc
+sort_by: Recommend.All|240
+sort_order: desc
 limit: 100
 export_metadata:
   symbol: perp_rating_osc_short

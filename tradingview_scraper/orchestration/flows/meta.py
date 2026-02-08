@@ -2,6 +2,7 @@ from typing import Dict, List, Optional
 
 from prefect import flow, task
 
+from tradingview_scraper.orchestration.cleanup import cleanup_zombies
 from tradingview_scraper.orchestration.compute import RayComputeEngine
 from tradingview_scraper.orchestration.sdk import QuantSDK
 
@@ -43,15 +44,18 @@ def run_meta_flow(meta_profile: str, run_id: str, sleeves: Optional[List[Dict[st
     Prefect Flow for Meta-Portfolio aggregation and optimization.
     """
     # 1. Execute Sleeves if provided
-    if sleeves:
-        task_execute_sleeves(sleeves)
+    try:
+        if sleeves:
+            task_execute_sleeves(sleeves)
 
-    target_profiles = profiles or ["hrp", "min_variance", "equal_weight"]
+        target_profiles = profiles or ["hrp", "min_variance", "equal_weight"]
 
-    # 2. Pipeline Stages
-    task_aggregation(meta_profile, run_id, target_profiles)
-    task_optimization(meta_profile, run_id)
-    task_flattening(meta_profile, run_id, target_profiles)
-    task_reporting(meta_profile, run_id, target_profiles)
+        # 2. Pipeline Stages
+        task_aggregation(meta_profile, run_id, target_profiles)
+        task_optimization(meta_profile, run_id)
+        task_flattening(meta_profile, run_id, target_profiles)
+        task_reporting(meta_profile, run_id, target_profiles)
 
-    return True
+        return True
+    finally:
+        cleanup_zombies()

@@ -7,10 +7,10 @@ import pytest
 
 def test_portfolio_returns_freshness():
     """Verify that all assets in the returns matrix reach the current market date."""
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
+    returns_path = "data/lakehouse/returns_matrix.parquet"
     assert os.path.exists(returns_path), "Returns matrix missing"
 
-    df = pd.read_pickle(returns_path)
+    df = pd.read_parquet(returns_path)
     last_date = pd.to_datetime(df.index.max()).tz_localize(None)
 
     # Current date (approximate for test validation)
@@ -21,8 +21,8 @@ def test_portfolio_returns_freshness():
 
 def test_no_stale_assets_in_returns():
     """Verify that no individual column in the returns matrix is stale."""
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
-    df = pd.read_pickle(returns_path)
+    returns_path = "data/lakehouse/returns_matrix.parquet"
+    df = pd.read_parquet(returns_path)
 
     # Check each column's last non-nan value date
     for col in df.columns:
@@ -32,8 +32,8 @@ def test_no_stale_assets_in_returns():
 
 def test_secular_depth():
     """Verify that the returns matrix has sufficient depth (e.g. > 300 days)."""
-    returns_path = "data/lakehouse/portfolio_returns.pkl"
-    df = pd.read_pickle(returns_path)
+    returns_path = "data/lakehouse/returns_matrix.parquet"
+    df = pd.read_parquet(returns_path)
 
     assert len(df) >= 300, f"Insufficient depth: {len(df)} rows"
 

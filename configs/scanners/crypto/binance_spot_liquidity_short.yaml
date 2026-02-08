@@ -1,0 +1,3 @@
+base_preset: "binance_spot_liquidity.yaml"
+metadata:
+  intent: "SHORT"

@@ -133,19 +133,19 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
         base_dir = base_dir.resolve()
 
         logger.info(f"Searching for returns in: {base_dir}")
-        # Search for all meta_returns_{meta_profile}_*.pkl in the resolved directory
-        files = list(base_dir.glob(f"meta_returns_{m_prof}_*.pkl"))
-        logger.info(f"Found {len(files)} files matching meta_returns_{m_prof}_*.pkl")
+        # Search for all meta_returns_{meta_profile}_*.parquet in the resolved directory
+        files = list(base_dir.glob(f"meta_returns_{m_prof}_*.parquet"))
+        logger.info(f"Found {len(files)} files matching meta_returns_{m_prof}_*.parquet")
 
         # If none found in run dir, try lakehouse (Legacy fallback)
         if not files:
-            files = list(lakehouse_dir.glob(f"meta_returns_{m_prof}_*.pkl"))
+            files = list(lakehouse_dir.glob(f"meta_returns_{m_prof}_*.parquet"))
 
         # Global fallback to old pattern if no profile-specific ones found
         if not files:
-            files = list(base_dir.glob("meta_returns_*.pkl"))
+            files = list(base_dir.glob("meta_returns_*.parquet"))
             if not files:
-                files = list(lakehouse_dir.glob("meta_returns_*.pkl"))
+                files = list(lakehouse_dir.glob("meta_returns_*.parquet"))
 
         if not files and input_path.exists() and input_path.is_file():
             files = [input_path]
@@ -158,10 +158,10 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
             base_dir = input_path.parent
 
         candidates = [
-            base_dir / f"meta_returns_{m_prof}_{profile}.pkl",
-            lakehouse_dir / f"meta_returns_{m_prof}_{profile}.pkl",
-            base_dir / f"meta_returns_{profile}.pkl",
-            lakehouse_dir / f"meta_returns_{profile}.pkl",
+            base_dir / f"meta_returns_{m_prof}_{profile}.parquet",
+            lakehouse_dir / f"meta_returns_{m_prof}_{profile}.parquet",
+            base_dir / f"meta_returns_{profile}.parquet",
+            lakehouse_dir / f"meta_returns_{profile}.parquet",
         ]
         files = [c for c in candidates if c.exists()]
 
@@ -169,7 +169,7 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
         if not p_path.exists():
             continue
 
-        # Extract profile from filename: meta_returns_{m_prof}_<prof>.pkl or meta_returns_<prof>.pkl
+        # Extract profile from filename: meta_returns_{m_prof}_<prof>.parquet or meta_returns_<prof>.parquet
         stem = p_path.stem
         if f"meta_returns_{m_prof}_" in stem:
             prof_name = stem.replace(f"meta_returns_{m_prof}_", "")
@@ -188,7 +188,7 @@ def optimize_meta(returns_path: str, output_path: str, profile: Optional[str] = 
 
         logger.info(f"🔨 Fractal Meta-Optimization ({m_prof}): {target_profile}")
 
-        meta_rets = pd.read_pickle(p_path)
+        meta_rets = pd.read_parquet(p_path)
         if not isinstance(meta_rets, pd.DataFrame):
             meta_rets = pd.DataFrame(meta_rets)
 

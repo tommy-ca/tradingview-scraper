@@ -97,11 +97,14 @@ def _weights_df_from_cluster_weights(*, universe: ClusteredUniverse, cluster_wei
     return df
 
 
-def _cov_shrunk(returns: pd.DataFrame, shrinkage: float = 0.01) -> np.ndarray:
+def _cov_shrunk(returns: pd.DataFrame, shrinkage: float = 0.01, kappa_thresh: float = 5000.0, **kwargs) -> np.ndarray:
     """
     Computes a shrunk covariance matrix.
     Standardized to a single-pass implementation; retries are handled by decorators.
     """
+    # Accept common aliases for shrinkage from other engines
+    shrinkage = kwargs.get("default_shrinkage", shrinkage)
+
     if returns.shape[1] < 2:
         c = returns.cov().values * 252
         return np.asarray(c, dtype=float)
@@ -225,7 +228,7 @@ class CustomClusteredEngine(BaseRiskEngine):
             # CR-590: Capped Equal Weight
             n_assets = len(targets)
             w_raw = 1.0 / n_assets
-            w_capped = min(0.25, w_raw)
+            w_capped = min(float(request.cluster_cap), w_raw)
             # If capped, we have leftover. Standard is to redistribute or just use w_raw if N is small.
             # But the requirement is 25% cap.
             w = w_capped
@@ -281,8 +284,8 @@ class CustomClusteredEngine(BaseRiskEngine):
             w_clean = pd.Series([1.0], index=X_clean.columns)
             return w_clean.reindex(X.columns, fill_value=0.0)
 
-        # CR-590: Strict 25% Cluster Cap Enforcement
-        cap_val = min(0.25, float(request.cluster_cap))
+        # CR-590: Strict Cluster Cap Enforcement
+        cap_val = float(request.cluster_cap)
         cap = _effective_cap(cap_val, n_clean)
 
         # Calculate covariance on clean data

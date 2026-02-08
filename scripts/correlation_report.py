@@ -67,7 +67,7 @@ def load_returns(path: Path, min_col_frac: float, candidates_path: Optional[Path
         rets_raw = pd.read_parquet(path)
     else:
         with open(path, "rb") as f:
-            rets_raw = pd.read_pickle(f)
+            rets_raw = pd.read_parquet(f)
 
     if not isinstance(rets_raw, pd.DataFrame):
         rets = pd.DataFrame(rets_raw)
@@ -195,7 +195,7 @@ def main():
     # CR-831: Workspace Isolation
     default_returns = str(run_dir / "data" / "returns_matrix.parquet")
     if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
+        default_returns = "data/lakehouse/portfolio_returns.parquet"
 
     default_candidates = str(run_dir / "data" / "portfolio_candidates.json")
     if not os.path.exists(default_candidates):

@@ -47,7 +47,7 @@ def run_experiment():
         # If we use the same RUN_ID, it WILL overwrite.
         # But we want to use the *data* from the latest run.
         # backtest_engine loads returns from `BacktestEngine.returns` which comes from...
-        # Wait, BacktestEngine.__init__ loads `data/lakehouse/portfolio_returns.pkl`.
+        # Wait, BacktestEngine.__init__ loads `data/lakehouse/portfolio_returns.parquet`.
         # This file is global (latest).
         # So we don't need to force TV_RUN_ID to read the data.
         # We can let it create a new run ID for the results.
@@ -129,14 +129,14 @@ def run_experiment():
 
         markdown = f"# Grand Linkage Tournament Report\nGenerated: {datetime.now()}\n\n"
         markdown += "## Top Performers\n"
-        markdown += df.head(20).to_markdown(index=False)
+        markdown += str(df.head(20).to_markdown(index=False))
         markdown += "\n\n## HRP Sensitivity Analysis\n"
 
         # HRP Specific Pivot
         hrp_df = df[df["Profile"] == "hrp"]
         if not hrp_df.empty:
             pivot = hrp_df.pivot_table(index=["Engine", "Simulator"], columns="Linkage", values="Sharpe")
-            markdown += pivot.to_markdown()
+            markdown += str(pivot.to_markdown())
 
         with open(report_file, "w") as f:
             f.write(markdown)

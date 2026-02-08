@@ -1,27 +1,41 @@
-# Audit: Feature Store Consistency & PIT Integrity (v1)
+# Audit Report: Feature Store Consistency
 
-## 1. Objective
-To audit the integrity of the Point-in-Time (PIT) feature store, ensuring that the `features_matrix.parquet` is consistent with the latest 49-symbol Lakehouse foundation.
+**Date**: 2026-01-23
+**Scope**: Feature Store Ingestion & Backfill (`data/lakehouse/features_matrix.parquet`)
 
-## 2. Identified Issues
+## 1. Current Architecture
+The Feature Store is the "L1 Gate" for Alpha Generation. It transforms raw OHLCV data into a Point-in-Time (PIT) matrix of technical indicators.
 
-### 2.1 Incomplete Backfill Coverage
-- **Observation**: `backfill_features.py` processes symbols extracted from a candidates JSON file.
-- **Problem**: If a symbol exists in the Lakehouse but is missing from the provided candidates list, it will be missing from the global feature matrix. This causes failures in dynamic selection during backtests.
-- **Suggestion**: Implement a `coverage_check` that compares the feature matrix columns against all available `.parquet` files in the Lakehouse.
+### Data Flow
+1.  **Ingestion**: `ingest_data.py` -> `data/lakehouse/<SYMBOL>_1d.parquet`
+2.  **Backfill**: `backfill_features.py` -> `data/lakehouse/features_matrix.parquet`
+3.  **Consumption**: `BacktestEngine` (Ranking), `NaturalSelection` (Filtering)
 
-### 2.2 Feature NaN Propagation
-- **Observation**: Technical features (ADX, RSI) naturally produce NaNs during their warm-up periods.
-- **Problem**: Excessive NaNs in the feature matrix can lead to "Silent Vetoes" in the selection engine.
-- **Suggestion**: Implement strict NaN tracking. If an asset has > 10% NaNs after the initial warm-up, it should be flagged as "Degraded".
+## 2. Findings (Code Review)
 
-### 2.3 Timestamp Alignment
-- **Observation**: Features are calculated on individual symbol history and then merged.
-- **Problem**: If symbols have different start/end dates or missing bars, the outer-joined matrix will have sparse rows.
-- **Remediation**: Use `ffill(limit=3)` for minor gaps, but never ffill across large gaps (> 3 days) to avoid lookahead bias from stale data.
+### 2.1 Schema Looseness
+- **Issue**: `backfill_features.py` manually calculates indicators and stores them in a `dict` before DataFrame creation.
+- **Risk**: No formal guarantee that `recommend_ma`, `recommend_other`, `recommend_all` exist for every symbol.
+- **Impact**: Downstream `InferenceStage` (L2) might fail or default to 0.0 silently.
 
-## 3. Tool Research: Pandera
-- **Status**: `Pandera` has been successfully added to the project. It will be used to enforce these PIT integrity rules at the `backfill_features.py` boundary.
+### 2.2 NaN Handling
+- **Current**: `check_nan_density` checks for >10% NaNs after the first valid index.
+- **Gap**: Does not check for *recent* gaps (e.g. data stopped updating 5 days ago).
+- **Gap**: Does not enforce specific bounds (e.g. RSI must be 0-100).
 
-## 4. Conclusion
-The feature store is the most sensitive data artifact in the "Natural Selection" pillar. Implementing these consistency gates will ensure that alpha scoring is always performed on high-integrity, PIT-correct data.
+### 2.3 Feature Parity
+- **Issue**: Logic is duplicated between `backfill_features.py` (for Backtest) and `feature_engineering.py` (for Selection).
+- **Status**: Phase 640 aims to consolidate this, but strict schema enforcement must come first.
+
+### 2.4 Artifact Integrity
+- **Observation**: `features_matrix.parquet` is overwritten in place.
+- **Recommendation**: Write to `features_matrix_temp.parquet` -> Validate -> Atomic Rename.
+
+## 3. Recommendations
+1.  **Integrate Pandera**: Use `FeatureStoreSchema` (from Phase 740) inside `backfill_features.py`.
+2.  **Atomic Write**: Implement atomic write pattern to prevent corruption during generation.
+3.  **Lag Detection**: Add a check for "Last Valid Index" vs "Latest Price Date".
+4.  **Strict Mode**: If `TV_STRICT_HEALTH=1`, fail backfill if *any* candidate is degraded.
+
+## 4. Plan
+Proceed with Phase 630 (Feature Store Consistency Audit) to implement `FeatureConsistencyValidator` upgrades and integrate them into the backfill process.

@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from datetime import datetime
-from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from threading import Lock
+from typing import Any, ClassVar, Optional
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (
@@ -16,8 +17,6 @@ from pydantic_settings import (
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
-
-from tradingview_scraper.utils.security import SecurityUtils
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +54,7 @@ class FeatureFlags(BaseModel):
     feat_market_neutral: bool = False
     feat_directional_sign_test_gate: bool = False
     feat_directional_sign_test_gate_atomic: bool = False
+    feat_use_tv_ratings: bool = True  # New Flag: Use retrieved TV ratings if available (default True)
     feature_lookback: int = 120
     selection_mode: str = "v4"
 
@@ -257,6 +257,7 @@ class TradingViewScraperSettings(BaseSettings):
     strategy: str = "trend_following"
     cluster_lookbacks: list[int] = [60, 120, 200]
     ranking: SelectionRanking = Field(default_factory=SelectionRanking)
+    strategy_type: Optional[str] = None  # Resolved via Manifest or Profile Inference
 
     # Optimization
     cluster_cap: float = 0.25
@@ -267,7 +268,7 @@ class TradingViewScraperSettings(BaseSettings):
     test_window: int = 20
     step_size: int = 20
     backtest_simulator: str = "custom"
-    backtest_simulators: str = "custom,cvxportfolio,vectorbt"
+    backtest_simulators: str = "vectorbt,cvxportfolio,custom"
     backtest_slippage: float = 0.0005  # 5 bps
     backtest_commission: float = 0.0001  # 1 bp
     backtest_cash_asset: str = "USDT"
@@ -302,11 +303,11 @@ class TradingViewScraperSettings(BaseSettings):
         """Ensures run_id is a valid filename and prevents path traversal."""
         if not v:
             return v
-        # Use SecurityUtils pattern for validation
-        if not SecurityUtils.SYMBOL_PATTERN.match(v):
-            raise ValueError(f"Invalid run_id format: {v}")
-        if ".." in v or "/" in v or "\\" in v:
-            raise ValueError(f"Potentially malicious run_id detected: {v}")
+
+        # Strict whitelist: alphanumeric, underscore, hyphen
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", v):
+            raise ValueError(f"Invalid run_id format: {v}. Must contain only a-z, A-Z, 0-9, _, -")
+
         return v
 
     def clone(self, **overrides: Any) -> TradingViewScraperSettings:
@@ -462,20 +463,45 @@ class TradingViewScraperSettings(BaseSettings):
 TradingViewScraperSettings.model_rebuild()
 
 
-_SETTINGS_CTX: ContextVar[TradingViewScraperSettings | None] = ContextVar("settings_ctx", default=None)
-
-
-@lru_cache
-def _get_cached_base_settings() -> TradingViewScraperSettings:
-    """Loads default settings once and caches them."""
-    return TradingViewScraperSettings()
-
-
-def clear_settings_cache():
+class ThreadSafeConfig:
     """
-    Clears the global settings cache, forcing a reload from environment and manifest.
+    Singleton manager for thread-safe configuration access.
+
+    Implements the ThreadSafeConfig pattern using ContextVars for task-local isolation
+    while maintaining a global singleton fallback for legacy code.
     """
-    _get_cached_base_settings.cache_clear()
+
+    _instance: ClassVar[TradingViewScraperSettings | None] = None
+    _context: ClassVar[ContextVar[TradingViewScraperSettings | None]] = ContextVar("settings_ctx", default=None)
+    _lock: ClassVar[Lock] = Lock()
+
+    @classmethod
+    def get(cls) -> TradingViewScraperSettings:
+        # 1. Check Context (Priority)
+        if (ctx := cls._context.get()) is not None:
+            return ctx
+
+        # 2. Check Global Singleton (Double-checked locking)
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = TradingViewScraperSettings()
+        return cls._instance
+
+    @classmethod
+    def set_active(cls, settings: TradingViewScraperSettings) -> Token:
+        return cls._context.set(settings)
+
+    @classmethod
+    def reset_active(cls, token: Token) -> None:
+        cls._context.reset(token)
+
+    @classmethod
+    def clear_global_cache(cls) -> None:
+        """Forces a reload of the global singleton (useful for tests/legacy scripts)."""
+        with cls._lock:
+            cls._instance = None
+            logger.debug("Global settings cache cleared")
 
 
 def get_settings() -> TradingViewScraperSettings:
@@ -486,19 +512,25 @@ def get_settings() -> TradingViewScraperSettings:
         TradingViewScraperSettings: The active context settings if set,
                                     falling back to cached global settings.
     """
-    if (ctx_settings := _SETTINGS_CTX.get()) is not None:
-        return ctx_settings
-    return _get_cached_base_settings()
+    return ThreadSafeConfig.get()
 
 
-def set_active_settings(settings: TradingViewScraperSettings):
+def set_active_settings(settings: TradingViewScraperSettings) -> Token:
     """
     Sets the active settings for the current context (thread/task).
 
     Args:
         settings: The settings instance to activate.
     """
-    return _SETTINGS_CTX.set(settings)
+    return ThreadSafeConfig.set_active(settings)
+
+
+def clear_settings_cache():
+    """
+    Clears the global settings cache, forcing a reload from environment and manifest.
+    Deprecated: Prefer using dependency injection or set_active_settings.
+    """
+    ThreadSafeConfig.clear_global_cache()
 
 
 def inspect_active_settings() -> dict[str, Any]:

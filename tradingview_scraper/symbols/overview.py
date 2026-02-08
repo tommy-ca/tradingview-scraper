@@ -3,6 +3,7 @@
 from typing import Dict, List, Optional
 
 import requests
+from tenacity import retry, retry_if_exception_type, retry_if_result, stop_after_attempt, wait_exponential
 
 from tradingview_scraper.symbols.utils import (
     generate_user_agent,
@@ -185,6 +186,12 @@ class Overview:
 
         return symbol
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=(retry_if_exception_type(requests.RequestException) | retry_if_result(lambda res: isinstance(res, dict) and res.get("status") == "failed" and "429" in str(res.get("error")))),
+        reraise=True,
+    )
     def get_symbol_overview(self, symbol: str, fields: Optional[List[str]] = None) -> Dict:
         """
         Get comprehensive overview data for a symbol.

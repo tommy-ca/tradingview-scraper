@@ -431,9 +431,38 @@ class MetadataCatalog:
         return query["symbol"].tolist()
 
     def save(self):
-        """Persists the catalog to disk."""
-        self._df.to_parquet(self.catalog_path, index=False)
-        logger.info(f"Metadata catalog saved with {len(self._df)} entries.")
+        """Persists the catalog to disk using atomic write and file locking."""
+        import fcntl
+        import uuid
+
+        # Atomic write pattern: Write to temp -> Rename
+        temp_path = self.catalog_path.with_suffix(f".tmp.{uuid.uuid4().hex}.parquet")
+
+        # File lock path (separate from the data file to allow atomic rename)
+        lock_path = self.catalog_path.with_suffix(".lock")
+
+        try:
+            with open(lock_path, "w") as lock_file:
+                # Exclusive lock - blocks if another process is writing
+                fcntl.flock(lock_file, fcntl.LOCK_EX)
+
+                try:
+                    self._df.to_parquet(temp_path, index=False)
+                    # Atomic rename
+                    os.replace(temp_path, self.catalog_path)
+                    logger.info(f"Metadata catalog saved with {len(self._df)} entries.")
+                finally:
+                    # Unlock
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+        except Exception as e:
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
+            logger.error(f"Failed to save metadata catalog: {e}")
+            raise e
 
 
 class ExchangeCatalog:

@@ -1,7 +1,9 @@
 import logging
-from typing import Any, List, Union
+import os
+from typing import Any, List, Union, Optional
 
 from tradingview_scraper.orchestration.registry import StageRegistry
+from tradingview_scraper.orchestration.cleanup import cleanup_zombies
 from tradingview_scraper.telemetry.tracing import trace_span
 
 logger = logging.getLogger(__name__)
@@ -13,12 +15,14 @@ class DAGRunner:
     Supports sequential and parallel branch execution.
     """
 
-    def __init__(self, steps: List[Union[str, List[str]]]):
+    def __init__(self, steps: List[Union[str, List[str]]], pipeline_name: Union[str, None] = None):
         """
         Args:
             steps: A list of stage IDs or sub-lists of stage IDs (for parallel execution).
+            pipeline_name: Optional name of the pipeline (used for Prefect flow resolution).
         """
         self.steps = steps
+        self.pipeline_name = pipeline_name
 
     @trace_span("dag.execute")
     def execute(self, context: Any) -> Any:
@@ -26,22 +30,74 @@ class DAGRunner:
         Executes the DAG using the provided context.
         Returns the final transformed context.
         """
+        # Check for Prefect orchestration mode
+        if os.getenv("TV_ORCH_MODE") == "prefect" and self.pipeline_name:
+            try:
+                return self._run_prefect_flow(context)
+            except Exception as e:
+                logger.warning(f"Prefect execution failed or not available: {e}. Falling back to default runner.")
+
         logger.info(f"DAGRunner: Starting execution with {len(self.steps)} steps")
 
         current_context = context
 
-        for step in self.steps:
-            if isinstance(step, str):
-                # Sequential Stage
-                current_context = self._run_stage(step, current_context)
-            elif isinstance(step, list):
-                # Parallel Branches
-                current_context = self._run_parallel(step, current_context)
-            else:
-                raise TypeError(f"Invalid step type: {type(step)}")
+        try:
+            for step in self.steps:
+                if isinstance(step, str):
+                    # Sequential Stage
+                    current_context = self._run_stage(step, current_context)
+                elif isinstance(step, list):
+                    # Parallel Branches
+                    current_context = self._run_parallel(step, current_context)
+                else:
+                    raise TypeError(f"Invalid step type: {type(step)}")
 
-        logger.info("DAGRunner: Execution complete")
-        return current_context
+            logger.info("DAGRunner: Execution complete")
+            return current_context
+
+        finally:
+            cleanup_zombies()
+
+    def _run_prefect_flow(self, context: Any) -> Any:
+        """Executes the corresponding Prefect flow for the pipeline."""
+        logger.info(f"DAGRunner: Delegating execution to Prefect for pipeline '{self.pipeline_name}'")
+
+        if self.pipeline_name.startswith("alpha."):
+            from tradingview_scraper.orchestration.flows.selection import run_selection_flow
+
+            # Extract arguments from SelectionContext
+            run_id = getattr(context, "run_id", None)
+            params = getattr(context, "params", {})
+
+            # Fallback for dict context
+            if isinstance(context, dict):
+                run_id = context.get("run_id")
+                params = context.get("params", {})
+
+            # Prepare kwargs to avoid duplicate arguments
+            kwargs = params.copy() if isinstance(params, dict) else {}
+            profile = kwargs.pop("profile", "production")
+
+            return run_selection_flow(profile=profile, run_id=run_id, **kwargs)
+
+        elif self.pipeline_name.startswith("meta."):
+            from tradingview_scraper.orchestration.flows.meta import run_meta_flow
+
+            run_id = getattr(context, "run_id", None)
+            meta_profile = getattr(context, "meta_profile", "meta_production")
+            sleeve_profiles = getattr(context, "sleeve_profiles", None)
+
+            # Fallback for dict context
+            if isinstance(context, dict):
+                run_id = context.get("run_id")
+                params = context.get("params", {})
+                meta_profile = params.get("profile", "meta_production")
+                sleeve_profiles = params.get("profiles", [])
+
+            return run_meta_flow(meta_profile=meta_profile, run_id=run_id, profiles=sleeve_profiles)
+
+        else:
+            raise ValueError(f"No Prefect flow mapped for pipeline: {self.pipeline_name}")
 
     def _run_stage(self, stage_id: str, context: Any) -> Any:
         """Executes a single stage via the SDK logic."""
@@ -54,7 +110,6 @@ class DAGRunner:
 
     def _run_parallel(self, branch_ids: List[str], context: Any) -> Any:
         """Executes multiple stages in parallel using Ray if available."""
-        import os
         import copy
 
         use_parallel = os.getenv("TV_ORCH_PARALLEL") == "1"
@@ -91,37 +146,16 @@ class DAGRunner:
         return context
 
     def _merge_contexts(self, base: Any, overlay: Any) -> Any:
-        """Merges two context objects using additive and concatenation protocols."""
+        """Merges two context objects using polymorphic delegation."""
         if base is None:
             return overlay
 
-        # 1. SelectionContext Merging
-        from tradingview_scraper.pipelines.selection.base import SelectionContext
-
-        if isinstance(base, SelectionContext) and isinstance(overlay, SelectionContext):
-            import pandas as pd
-
-            # Merge Feature Store (Concatenate distinct columns)
-            if not overlay.feature_store.empty:
-                if base.feature_store.empty:
-                    base.feature_store = overlay.feature_store
-                else:
-                    # Only add new columns
-                    new_cols = overlay.feature_store.columns.difference(base.feature_store.columns)
-                    if not new_cols.empty:
-                        base.feature_store = pd.concat([base.feature_store, overlay.feature_store[new_cols]], axis=1)
-
-            # Merge Audit Trail (Append only new entries)
-            # Assumption: audit_trail is strictly additive.
-            if len(overlay.audit_trail) > len(base.audit_trail):
-                # This is a bit risky if base was modified since the branch started
-                # but for now we assume branches are isolated.
-                new_entries = overlay.audit_trail[len(base.audit_trail) :]
-                base.audit_trail.extend(new_entries)
-
+        # Polymorphic Merge (New)
+        if hasattr(base, "merge") and callable(getattr(base, "merge")):
+            base.merge(overlay)
             return base
 
-        # 2. Dict-based context (for generic/test steps)
+        # Fallback for Dict-based context (for generic/test steps)
         if isinstance(base, dict) and isinstance(overlay, dict):
             for k, v in overlay.items():
                 if k in base and isinstance(base[k], list) and isinstance(v, list):

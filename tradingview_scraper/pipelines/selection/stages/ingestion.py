@@ -28,107 +28,48 @@ class IngestionStage(BasePipelineStage):
         self.candidates_path = candidates_path
         self.returns_path = returns_path
 
-    def _resolve_candidates_path(self, *, context: SelectionContext) -> str:
-        settings = get_settings()
-        strict_iso = os.getenv("TV_STRICT_ISOLATION") == "1"
-
-        if self.candidates_path:
-            return self.candidates_path
-
-        run_data_dir = (settings.summaries_runs_dir / context.run_id / "data").resolve()
-        run_sel = run_data_dir / "portfolio_candidates.json"
-        run_raw = run_data_dir / "portfolio_candidates_raw.json"
-
-        for p in [run_sel, run_raw]:
-            if p.exists():
-                return str(p)
-
-        if strict_iso:
-            raise FileNotFoundError(f"[STRICT ISOLATION] Candidates missing in run-dir: {run_sel.name} / {run_raw.name}")
-
-        lake_sel = settings.lakehouse_dir / "portfolio_candidates.json"
-        lake_raw = settings.lakehouse_dir / "portfolio_candidates_raw.json"
-        for p in [lake_sel, lake_raw]:
-            if p.exists():
-                logger.warning("IngestionStage: falling back to lakehouse candidates at %s (run_id=%s).", p, context.run_id)
-                return str(p)
-
-        raise FileNotFoundError(f"Candidates manifest not found (run_id={context.run_id})")
-
-    def _resolve_returns_path(self, *, context: SelectionContext) -> str:
-        settings = get_settings()
-        strict_iso = os.getenv("TV_STRICT_ISOLATION") == "1"
-
-        if self.returns_path:
-            return self.returns_path
-
-        run_data_dir = (settings.summaries_runs_dir / context.run_id / "data").resolve()
-        candidates = [
-            run_data_dir / "returns_matrix.parquet",
-            run_data_dir / "returns_matrix.pkl",
-            run_data_dir / "returns_matrix.pickle",
-        ]
-        for p in candidates:
-            if p.exists():
-                return str(p)
-
-        if strict_iso:
-            raise FileNotFoundError(f"[STRICT ISOLATION] Returns matrix missing in run-dir (run_id={context.run_id})")
-
-        lake_candidates = [
-            settings.lakehouse_dir / "returns_matrix.parquet",
-            settings.lakehouse_dir / "portfolio_returns.pkl",
-            settings.lakehouse_dir / "portfolio_returns.parquet",
-        ]
-        for p in lake_candidates:
-            if p.exists():
-                logger.warning("IngestionStage: falling back to lakehouse returns at %s (run_id=%s).", p, context.run_id)
-                return str(p)
-
-        return ""
-
     def execute(self, context: SelectionContext) -> SelectionContext:
-        candidates_path = self._resolve_candidates_path(context=context)
-        returns_path = self._resolve_returns_path(context=context)
+        from tradingview_scraper.data.loader import DataLoader
 
-        logger.info("Executing Ingestion Stage (run_id=%s) candidates=%s returns=%s", context.run_id, candidates_path, returns_path)
+        settings = get_settings()
+        strict = os.getenv("TV_STRICT_ISOLATION") == "1"
+        loader = DataLoader(settings)
 
-        # 1. Load Candidates
-        if not os.path.exists(candidates_path):
-            raise FileNotFoundError(f"Candidates manifest not found: {candidates_path}")
+        # 1. Validate Run ID (Defense in Depth)
+        context.validate_run_id(context.run_id)
 
-        with open(candidates_path, "r") as f:
-            raw_data = json.load(f)
+        # 2. Resolve and Anchor Paths
+        run_dir = loader.ensure_safe_path(settings.summaries_runs_dir / context.run_id)
+        logger.info("Executing Ingestion Stage (run_id=%s) strict=%s", context.run_id, strict)
 
-        # Handle both list and dict formats
-        if isinstance(raw_data, list):
-            context.raw_pool = raw_data
-        elif isinstance(raw_data, dict):
-            # If it's a dict from portfolio_meta.json, convert to list of symbols with metadata
-            context.raw_pool = []
-            for sym, meta in raw_data.items():
-                if isinstance(meta, dict):
-                    meta["symbol"] = sym
-                    context.raw_pool.append(meta)
-        else:
-            context.raw_pool = []
+        # Use the centralized DataLoader for consistent loading logic (Phase 373)
+        try:
+            if self.candidates_path or self.returns_path:
+                # Manual overrides
+                if self.candidates_path:
+                    safe_cands = loader.ensure_safe_path(self.candidates_path)
+                    if safe_cands.exists():
+                        with open(safe_cands, "r") as f:
+                            raw_data = json.load(f)
+                            if isinstance(raw_data, list):
+                                context.raw_pool = raw_data
+                            elif isinstance(raw_data, dict):
+                                context.raw_pool = [{"symbol": k, **v} if isinstance(v, dict) else {"symbol": k} for k, v in raw_data.items()]
 
-        # 2. Load Returns
-        if not returns_path or not os.path.exists(returns_path):
-            logger.warning("Returns matrix not found. Initializing empty (run_id=%s).", context.run_id)
-            context.returns_df = pd.DataFrame()
-        else:
-            ext = os.path.splitext(returns_path)[1].lower()
-            if ext == ".parquet":
-                context.returns_df = pd.read_parquet(returns_path)
-            elif ext in [".pkl", ".pickle"]:
-                data = pd.read_pickle(returns_path)
-                if isinstance(data, pd.Series):
-                    context.returns_df = data.to_frame()
-                else:
-                    context.returns_df = data
+                if self.returns_path:
+                    safe_rets = loader.ensure_safe_path(self.returns_path)
+                    if safe_rets.exists():
+                        context.returns_df = pd.read_parquet(safe_rets) if str(safe_rets).endswith(".parquet") else pd.read_csv(safe_rets, index_col=0, parse_dates=True)
             else:
-                context.returns_df = pd.read_csv(returns_path, index_col=0, parse_dates=True)
+                run_data = loader.load_run_data(run_dir=run_dir, strict=strict)
+                context.raw_pool = run_data.raw_candidates
+                context.returns_df = run_data.returns
+        except FileNotFoundError as e:
+            if strict:
+                raise
+            logger.warning(f"IngestionStage: {e}. Initializing empty.")
+            context.raw_pool = []
+            context.returns_df = pd.DataFrame()
 
         # 3. L1 Data Contract Validation
         from tradingview_scraper.pipelines.selection.base import IngestionValidator

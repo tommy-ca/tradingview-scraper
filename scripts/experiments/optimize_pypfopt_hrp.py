@@ -17,7 +17,7 @@ def calculate_sharpe(weights, returns):
 
 def run_experiment():
     # Load data
-    df = pd.read_pickle("data/lakehouse/portfolio_returns.pkl")
+    df = pd.read_parquet("data/lakehouse/portfolio_returns.parquet")
     df.index = pd.to_datetime(df.index)
 
     # Slice for Window 6 (Turbulent)

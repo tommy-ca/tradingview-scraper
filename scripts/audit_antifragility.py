@@ -131,7 +131,7 @@ def audit_portfolio_fragility():
     # CR-831: Workspace Isolation
     default_returns = str(run_dir / "data" / "returns_matrix.parquet")
     if not os.path.exists(default_returns):
-        default_returns = "data/lakehouse/portfolio_returns.pkl"
+        default_returns = "data/lakehouse/portfolio_returns.parquet"
 
     default_meta = str(run_dir / "data" / "portfolio_meta.json")
     if not os.path.exists(default_meta):
@@ -151,7 +151,7 @@ def audit_portfolio_fragility():
     if returns_path.endswith(".parquet"):
         returns = pd.read_parquet(returns_path)
     else:
-        returns = pd.read_pickle(returns_path)
+        returns = pd.read_parquet(returns_path)
 
     if not os.path.exists(meta_path):
         logger.error(f"Metadata missing: {meta_path}")

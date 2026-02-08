@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Sequence
+from typing import Sequence
 
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
@@ -51,6 +51,17 @@ class ForensicSpanExporter(SpanExporter):
             logger.info(f"Forensic trace saved to {self.output_path} ({len(self.spans)} spans)")
         except Exception as e:
             logger.error(f"Failed to save forensic trace: {e}")
+
+
+def export_forensic_trace(run_dir: Path):
+    """
+    Legacy entry point to export forensic trace.
+    Note: This requires the ForensicSpanExporter to have been registered early in the process.
+    If using run_meta_pipeline.py without SDK, traces might not be captured effectively.
+    """
+    # In a full implementation, we would need a registry of active exporters.
+    # For now, we log a warning as this pattern is deprecated in favor of QuantSDK.run_pipeline
+    logger.warning(f"export_forensic_trace called for {run_dir}, but direct export is deprecated. Use TelemetryProvider.register_forensic_exporter() pattern.")
 
 
 def get_forensic_summary_md(trace_file: Path) -> str:

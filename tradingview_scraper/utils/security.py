@@ -54,8 +54,10 @@ class SecurityUtils:
             if not target_path.is_relative_to(base_path):
                 raise ValueError(f"Path traversal attempt detected: {symbol}")
         except AttributeError:
-            # Fallback for Python < 3.9 (unlikely given the environment)
-            if not str(target_path).startswith(str(base_path)):
+            # Robust fallback for Python < 3.9 using parts comparison
+            child_parts = target_path.parts
+            parent_parts = base_path.parts
+            if len(child_parts) < len(parent_parts) or child_parts[: len(parent_parts)] != parent_parts:
                 raise ValueError(f"Path traversal attempt detected: {symbol}")
 
         return target_path
@@ -76,6 +78,18 @@ class SecurityUtils:
             ValueError: If the path is outside the allowed roots.
         """
         resolved = Path(path).resolve()
-        if not any(resolved.is_relative_to(root.resolve()) for root in allowed_roots):
+
+        def is_safe(p: Path, root: Path) -> bool:
+            try:
+                return p.is_relative_to(root.resolve())
+            except AttributeError:
+                # Robust fallback for Python < 3.9
+                child_parts = p.parts
+                parent_parts = root.resolve().parts
+                return len(child_parts) >= len(parent_parts) and child_parts[: len(parent_parts)] == parent_parts
+            except ValueError:
+                return False
+
+        if not any(is_safe(resolved, root) for root in allowed_roots):
             raise ValueError(f"Security violation: Path {resolved} is outside allowed roots.")
         return resolved

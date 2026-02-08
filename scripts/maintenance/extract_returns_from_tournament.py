@@ -170,10 +170,10 @@ def extract_returns(run_id: str):
             continue
 
         # Construct filename consistent with build_meta_returns expectations
-        # typically: {engine}_{simulator}_{profile}.pkl or just {profile}.pkl
-        # build_meta_returns looks for *_{profile}.pkl
+        # typically: {engine}_{simulator}_{profile}.parquet or just {profile}.parquet
+        # build_meta_returns looks for *_{profile}.parquet
 
-        filename = f"{engine}_{simulator}_{profile}.pkl"
+        filename = f"{engine}_{simulator}_{profile}.parquet"
         out_path = returns_dir / filename
 
         series.to_pickle(out_path)

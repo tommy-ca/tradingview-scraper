@@ -13,6 +13,7 @@ The platform is organized into three orthogonal pillars to ensure logical purity
 
 ### Pillar 2: Strategy Synthesis (Alpha Generation)
 - **The Strategy Atom**: Smallest unit of alpha, defined as `(Asset, Logic)`. Each atom MUST have exactly ONE logic.
+- **Synthetic Return Streams**: Strategies are formalized as synthetic return streams. The `StrategySynthesizer` converts raw asset history into a stream representing the strategy's equity curve (e.g., Inverted for Short, Gated for Trend).
 - **Synthetic Long Normalization**: SHORT return streams are inverted to ensure positive-alpha bias for solvers:
   - $R_{syn,long} = R_{raw}$
   - $R_{syn,short} = -clip(R_{raw}, upper=1.0)$ (short loss cap at -100%)
@@ -26,7 +27,12 @@ The platform is organized into three orthogonal pillars to ensure logical purity
 
 ### Pillar 4 (Meta): Fractal Ensembling (Meta-Allocation)
 - **Atomic Sleeves as Inputs**: Meta portfolios treat completed sleeve runs as assets.
+- **Composable Long/Short**: Long and Short legs of a strategy SHOULD be executed as independent atomic sleeves (e.g., `spot_long_top10`, `spot_short_bottom10`) and aggregated at the Meta-Level. This allows for:
+    - Independent risk profiling (MaxSharpe for Long, MinVar for Short).
+    - Modular failure recovery (Longs survive even if Shorts fail).
+    - Fractal optimization (Meta-solver determines the optimal Hedge Ratio).
 - **Directional Integrity Gate**: Mixed-direction meta workflows MUST enforce a Directional Correction “Sign Test” at the sleeve boundary before ensembling.
+- **Sleeve Completeness Gate**: Meta pipelines MUST abort if any configured sleeve lacks a run_id, missing artifacts, or produces an empty return stream; single-sleeve metas are forbidden unless explicitly documented as one-sleeve profiles.
 - **Run Artifact Contracts**: Atomic sleeves MUST be meta-eligible only if required artifacts exist and are reproducible (see `docs/design/atomic_sleeve_audit_contract_v1.md`).
 - **Automation**: Atomic sleeve runs SHOULD be validated via `scripts/validate_atomic_run.py` before pinning into meta profiles.
 - **Spec Reference**: `docs/specs/atomic_run_validation_v1.md`
@@ -48,6 +54,33 @@ The platform is organized into three orthogonal pillars to ensure logical purity
 - **Normalization**: Multi-Method (Logistic/Z-score/Rank).
 - **Preferred for**: Conservative "Core" profiles where drawdown minimization is primary.
 
+### Selection v4.0 (Rank-Based Selection)
+- **Objective**: Support "Top N Percentile" selection logic for Production-Grade Long/Short strategies.
+- **Mechanism**: `PercentileFilter` applied before HTR logic.
+- **Sorting**:
+    - **Long**: Descending Sort (High Score = Better).
+    - **Short**: Ascending Sort (Low Score = Better).
+- **Rationale**: Ensures recruitment of the absolute "cream of the crop" (or "worst of the worst") regardless of cluster structure, essential for momentum/reversion strategies.
+
+### Selection v5.0 (Trend Regime & Signal)
+- **Objective**: Support classic "MA Crossover" and "MTF Trend" strategies.
+- **Mechanism**: "Broad Scan, Deep Filter" Pattern.
+    - **Scanner**: Broad Liquidity/Volatility floor only.
+    - **Filter**: `TrendRegimeFilter` (Local computation).
+- **Indicators**:
+    - **Regime**: `PriceProxy > SMA(200) * (1 + threshold)` (Bull), `PriceProxy < SMA(200) * (1 - threshold)` (Bear).
+    - **Signal**: `VWMA(20)` crossover `SMA(200)` (Golden/Death Cross).
+    - **Signal Recency**: Cross event must be within `N` bars (e.g., 3-5 days).
+    - **Smoothing**: Configurable `regime_source` (Close, SMA50, VWMA) and `threshold` (e.g., 0.5%) to prevent whipsaws in choppy markets.
+- **Rationale**: Moving complex signal logic from fragile external scanners to robust local Python pipelines ensures reproducibility and precise backtesting.
+
+### Selection v5.1 (Advanced Trend Filters)
+- **Objective**: Capture trend regimes using volatility and breakout logic, complementing the Mean/Momentum filters.
+- **Filters**:
+    - **ADX Regime**: `ADX > Threshold` (Strength) AND `+DI > -DI` (Direction).
+    - **Donchian Breakout**: Price near Upper Channel (Long) or Lower Channel (Short).
+    - **Bollinger Squeeze**: (Future) Bandwidth compression before expansion.
+
 ## 3. Strategic Principles
 1.  **Alpha must survive friction**: Optimization engines must maintain Sharpe ratio stability in high-fidelity simulation (slippage/commission).
 2.  **Spectral Intelligence**: Use spectral (DWT) and entropy metrics for regime detection.
@@ -55,6 +88,20 @@ The platform is organized into three orthogonal pillars to ensure logical purity
 4.  **Execution Integrity**: Use `feat_partial_rebalance` to avoid noisy small trades.
 5.  **Audit Integrity**: Every production decision must be backed by an entry in the `audit.jsonl` ledger.
 6.  **No Padding**: Ensure the returns matrix preserves real trading calendars.
+7.  **Data Density**: Portfolio matrices must be strictly dense (no NaNs allowed). Assets with sparse history (e.g., >10% gaps relative to the union index) must be dropped before optimization to prevent solver instability.
+8.  **Directional Sign Gate**: All SHORT sleeves (including Rating MA/ALL) MUST enable `feat_directional_sign_test_gate_atomic` and persist `directional_sign_test_pre_opt.json` / `directional_sign_test.json` in the run dir.
+9.  **Meta Forensic Trace**: Meta runs MUST persist directional sign test findings (when enabled), sleeve completeness table, and a forensic trace reference inside `meta_portfolio_report.md`; missing artifacts are a failure condition.
+10. **Meta Sleeve Completeness**: Meta workflows MUST fail fast if any configured sleeve is missing run_ids, required artifacts, or yields empty return streams; inadvertent single-sleeve metas are disallowed unless explicitly declared.
+11. **Meta Report Integrity**: Meta report generation MUST surface a failure status when required sections (completeness, sign-test when enabled) are missing or empty; report generation MUST not silently succeed in those cases.
+12. **Run Index Accuracy**: Generated run indexes (e.g., `INDEX.md`) MUST reflect the resolved profile name and run_id from the manifest/resolved_manifest for traceability.
+13. **Feature Ingest Guard**: Technical feature ingestion must treat zero-fetch results as a failure condition (unless explicitly allowed) and surface a clear error; silent "No technicals fetched" is not permitted in production pipelines. Enforce via runtime error and test coverage.
+14. **Feature Ingest Resilience**: TradingView technical fetches must use bounded retries with exponential (or linear) backoff for HTTP 429/handshake failures, emit per-attempt coverage logs, and still fail hard after the retry budget is exhausted.
+15. **Backfill Merge Efficiency**: Feature backfill must merge existing/new matrices using block assignment (no per-column loops) to avoid DataFrame fragmentation; cover with unit tests.
+16. **Crypto Liquidity Floors**: Binance Spot universes must enforce `$1M` current-bar `Value.Traded` floor, `Volatility.D > 0.1`, USD-pegged quotes, and sort by `Value.Traded` desc; Binance Perp universes must enforce `$50M` `Value.Traded` floor, `Volatility.D > 1`, and sort by `Recommend.All|240` desc; rating scanners must sort by `Recommend.All|240` desc and carry intent metadata (LONG/SHORT).
+17. **Feature Ingest Auditability**: Feature ingestion runs must persist per-attempt coverage metrics (fetched/failed symbol counts and symbol list on failures) to the run dir for postmortem review; audit must mark runs WARN/FAIL when coverage < 100% after retries.
+18. **Coverage Ledger Linking**: Feature-ingest coverage artifacts (JSON/NDJSON) must be referenced in the run's audit ledger entry so downstream production/meta runs can prove data hygiene before promotion.
+19. **Coverage Artifact Schema**: Coverage artifacts must include `run_id`, `profile`, `attempts` (ordered list with attempt index, fetched count, failed count, duration), and `failed_symbols` (deduped). Missing fields or empty artifacts are a FAIL condition in strict mode.
+20. **Promotion Evidence Gate**: Promotion of run_ids into manifest/meta workflows requires schema-valid coverage artifacts linked in the audit ledger, with 100% coverage (unless an explicit exception is documented); missing/invalid evidence is a FAIL condition.
 
 ## 4. Modular Pipeline Architecture (v3.5+)
 
@@ -303,6 +350,12 @@ This phase formalizes a set of **correctness invariants** that are foundational 
    - `interval` (optional)
    - `strategy` / `logic` tag (optional)
 
+### 6.5 Ingestion Integrity Invariants
+1. **Explicit Data Update Verification**: Ingestion (DataOps) MUST verify that new records were actually written for any symbol considered "Stale".
+   - Reporting success for a sync that returned 0 new candles while the file remains stale is PROHIBITED.
+2. **Freshness Audit Boundary**: Alpha production MUST fail or warn if required assets have not been updated within the configured stale threshold (default 168h).
+3. **Toxicity Transparency**: Assets dropped for toxicity MUST be recorded in the health registry with a timestamped reason.
+
 ---
 
 ## 7. Pipeline Audit Remediation Phases (371–374)
@@ -367,7 +420,8 @@ Required fields:
 2. `exchange` MUST be a string equal to the `symbol` prefix.
 3. `asset_type` MUST be a non-empty string (default `"spot"` if unknown).
 4. `identity` MUST be exactly `EXCHANGE:SYMBOL` (single prefix; equals `symbol`).
-5. `metadata` MUST be a dict (free-form; can store scanner-specific fields).
+5. `direction` MUST be `"LONG"` or `"SHORT"` (case-insensitive in input, normalized to UPPER in output).
+6. `metadata` MUST be a dict (free-form; can store scanner-specific fields).
 
 Optional fields (when known):
 - `market_cap_rank`, `volume_24h`, `sector`, `industry`
@@ -437,70 +491,77 @@ Requirements:
  ## 11. DataOps & MLOps Governance
  
  ### 11.1 Data Contract Standard
- 1. **Schema Validation**: Every stage MUST define its input/output schema.
+ 1. **Schema Validation**: Every stage MUST define its input/output schema using Pandera.
  2. **"No Padding" Compliance**: Returns matrices MUST NOT be zero-filled for TradFi calendars.
  3. **Toxicity Bounds**: Assets with $|r_d| > 500\%$ MUST be automatically dropped.
- 
+ 4. **Layered Invariants (L0-L4)**:
+    - **L0 (Foundation)**: $|r| \le 1.0$ (Warn), $|r| \le 5.0$ (Strict), No NaNs, No duplicates, Index MUST be UTC-aware `datetime64[ns, UTC]`.
+    - **L1 (Ingestion)**: Features $\in [0, 100]$ (RSI/ADX), Scores $\in [-1, 1]$ (Recommendations).
+    - **L2 (Inference)**: `alpha_score` $\in [0, 1]$, Probabilities $\in [0, 1]$.
+    - **L3 (Synthesis)**: Synthetic Shorts MUST be inverted ($R_{syn} = -R_{raw}$).
+    - **L4 (Allocation)**: Weights MUST sum to $\le 1.05$ (Simplex) and be non-negative.
+
  ### 11.2 Model Lineage & Immutability
  1. **Snapshot Isolation**: When a run begins, the platform SHOULD create a symlink-based snapshot of the Lakehouse to ensure immutability.
  2. **Lineage Linkage**: Every optimized portfolio MUST link back to the exact version (timestamp/hash) of the `features_matrix.parquet` used for inference.
  3. **Traceability**: The `trace_id` MUST be injected into all audit ledger entries across all L0-L4 stages.
  4. **Forensic Telemetry**: Every production run MUST persist its full OTel trace (spans and durations) to a `forensic_trace.json` file in the run directory for performance auditing.
  5. **Distributed Trace Unification**: Traces generated on parallel Ray worker nodes MUST be collected and unified into the master `forensic_trace.json` to provide a complete view of distributed executions.
- 
- ## 13. Advanced DataOps Hardening (v4.0+)
- 
- ### 13.1 Microstructure Toxicity Standards
- 1. **Price Stalls**: Assets with $> 3$ consecutive bars of zero price change (zero variance) MUST be vetoed if they are in a normally liquid asset class.
- 2. **Volume Spikes**: Assets with a 1-day volume $> 10\sigma$ (10x standard deviation of trailing 20d volume) MUST be flagged as "Toxic Microstructure" and dropped.
- 3. **Ghost Candles**: Crypto assets with zero volume during active trading windows MUST be flagged for repair or removal.
- 
- ### 13.2 Automated Foundation Resilience
- 1. **Repair-Mandatory Lifecycle**: The DataOps pipeline (`flow-data`) MUST include a mandatory repair pass. No foundation is considered "Golden" until all discoverable gaps are either filled or declared unrepairable.
- 2. **Health Registry**: The Lakehouse MUST maintain a `foundation_health.json` registry tracking the audit hash and repair status of every symbol.
- 3. **Fail-Fast Foundation Gate**: The Alpha pipeline MUST abort if any required symbol in the run manifest lacks a "Healthy" status in the foundation registry.
 
- ## 14. Multi-Engine Selection Policy (v4.1+)
- 
- ### 14.1 Ensemble Scoring
- 1. **Weight of Evidence (WoE)**: Selection decisions MUST be backed by multiple independent ranking engines (e.g., Log-MPS + Signal Quality + Regime Fit).
- 2. **Dynamic Weighting**: Ranker weights MUST be adjustable via the pipeline manifest to allow tuning for specific market environments.
- 3. **Consensus Requirement**: Candidates MUST meet a minimum ensemble score threshold to be recruited into the winning pool, ensuring high-conviction selection.
+### 11.3 Feature Store Consistency & Scoping
+ 1. **Run-Scoped Backfill**: The feature backfill process MUST be scoped to a specific run workspace. Global re-calculation of the entire 1200+ symbol Lakehouse is FORBIDDEN as a default operation.
+ 2. **Candidate Isolation**: Backfill operations MUST accept a run-specific `candidates.json` file. Only symbols present in this file SHALL be processed.
+ 3. **Hybrid Feature Sourcing**: The backfill process SHOULD prioritize technical features already retrieved from TradingView (stored in candidate metadata) if available and fresh. It SHALL fallback to local calculation only for missing features or historical Point-in-Time (PIT) backfilling.
+ 4. **Incremental Updates**: The backfill service MUST support merging results into the master `features_matrix.parquet` to preserve historical data for non-active assets.
+ 5. **Validation**: Every backfill operation MUST be validated by `FeatureConsistencyValidator`.
 
- ## 15. Real-time Pipeline Monitoring (v4.2+)
- 
- ### 15.1 Metrics Exposure
- 1. **Prometheus Standard**: The platform MUST expose execution metrics (durations, success/failure counts, resource usage) via a Prometheus-compatible scrape endpoint or Pushgateway.
- 2. **Stage-Level Granularity**: Metrics MUST be emitted at the individual stage level, allowing for bottleneck identification in real-time.
- 3. **Live Dashboards**: The platform SHOULD provide Grafana dashboard templates for visualizing pipeline health, execution throughput, and alpha quality drift.
+### 11.4 Atomic Pipeline Resource Management
+ 1. **Disposal**: All simulator engines (especially Nautilus) MUST be explicitly disposed/stopped after use to prevent resource leakage (threads, file handles) and process hangs.
+ 2. **Logging Silence**: Verbose internal logs from high-frequency components (e.g., Nautilus order events) MUST be suppressed in production to prevent I/O bottlenecks.
+ 3. **Simulator Tiering**: 
+    - **Tier 1 (Custom)**: Fast vectorized returns summation for rapid iteration.
+    - **Tier 2 (VectorBT)**: Vectorized transaction cost and drift simulation (Default).
+    - **Tier 3 (CVXPortfolio)**: High-fidelity convex optimization and complex constraint simulation (Secondary).
+    - **Tier 4 (Nautilus)**: Event-driven microstructure validation (Opt-in only).
 
- ## 16. Numerical Stability & Fractal Safety (v4.3+)
+### 11.5 Pipeline Decoupling (Alpha vs. DataOps)
+ 1. **DataOps Responsibilities**: Discovery, Ingestion (Price/Features), Metadata Enrichment, Master candidate consolidation, and **Full Alpha Feature Computation** (Statistical + Technical).
+ 2. **Alpha Responsibilities**: Universe Selection (Filtering/Ranking), Strategy Synthesis, Risk Optimization, and Weight Flattening.
+ 3. **Offline Alpha Standard**: The Alpha and Research pipelines MUST build on top of Data pipelines. They SHOULD NOT perform local computation of alpha factors (features) but instead LOAD them from the Point-in-Time (PIT) Feature Store.
+ 4. **Immutability Contract**: The Alpha pipeline MUST NOT mutate master Lakehouse artifacts. `portfolio_candidates.json` MUST be generated and stored exclusively within the run workspace (`data/artifacts/summaries/runs/<RUN_ID>/data/`) to ensure full isolation and reproducibility. Shared candidate lists in the Lakehouse root are DEPRECATED.
+ 5. **Enrichment Standard**: Assets MUST be fully enriched (sector, industry, tick size, venue limits) in the Lakehouse BEFORE they are eligible for Alpha selection.
+ 6. **Discovery Fail-Fast**: Discovery pipelines MUST fail with a non-zero exit code if zero candidates are found. Downstream consolidation MUST also fail if no valid candidates are available, preventing the corruption of master Lakehouse artifacts with empty data.
+ 7. **Foundation Gate**: The Alpha pipeline MUST implement a "Foundation Gate" immediately after universe aggregation. This gate SHALL perform a lightweight numerical validation of the returns matrix (L0 contract) and abort execution if the foundation is unstable (e.g. excessive NaNs, toxic returns).
+ 8. **Health Audit Responsibility**: Detailed data integrity audits (gaps, freshness, stale bars) are the EXCLUSIVE responsibility of the DataOps cycle (`flow-data`). The Alpha pipeline assumes the Lakehouse is healthy.
+ 9. **Liquidity & Volatility Tiers**:
+    - **Spot Assets**: MUST have a minimum daily turnover of $10M and a daily volatility > 1%.
+    - **Perp Assets**: MUST have a minimum daily turnover of $50M and a daily volatility > 1%.
+ 10. **Signal Freshness**: Discovery sorting SHOULD prioritize high-resolution signals (e.g. 4h Ratings) to capture intra-day momentum shifts.
 
- ### 16.1 Stable Sum Gate
- 1. **Weight Conservation**: The weight flattening stage MUST verify that the sum of projected physical weights matches the original meta-allocation (tolerance: $1 \times 10^{-4}$).
- 2. **Conservation Failure**: If weight leakage is detected, the system MUST log a warning. In strict stability mode (`TV_STRICT_STABILITY=1`), the pipeline MUST abort.
+### 11.6 Parallel Execution & Timeouts
+ 1. **Subagent Delegation**: Long-running blocking tasks (like `port-test` Backtesting tournaments > 2 minutes) MUST be executed via `Task` subagents to avoid interactive timeout limits.
+ 2. **Incremental Persistence**: Backtest engines MUST persist results *incrementally* (e.g., per window or per profile) to ensure partial progress is saved even if the process is terminated.
+ 3. **Artifact Verification**: Downstream aggregation stages (Meta) MUST verify the existence of required artifacts (`returns/*.pkl`) and fail fast or alert if a subagent execution failed to produce them.
 
- ### 16.2 Fractal Recursion Guard
- 1. **Depth Limit**: Recursive pipeline stages (Aggregation, Flattening) MUST enforce a maximum fractal depth (default = 3) to prevent infinite loops.
- 2. **Cycle Detection**: The orchestrator MUST track the profile call stack and abort if a circular dependency is detected in the manifest.
+### 11.7 Crypto Sleeve Operations (New)
+ 1. **Exchange Strategy**: Production runs MUST use `BINANCE` only. Research runs may use multi-exchange configs.
+ 2. **Calendar**: Crypto sleeves MUST use the `XCRY` calendar (24x7, no holidays).
+ 3. **Parameter Standards**:
+    - `entropy_max_threshold`: 0.999 (vs 0.995 TradFi)
+    - `backtest_slippage`: 0.001 (vs 0.0005 TradFi)
+    - `backtest_commission`: 0.0004 (vs 0.0001 TradFi)
+    - `feat_dynamic_selection`: `false` (Stable universe benefits crypto)
+ 4. **Production Pillars**:
+    - **Regime Alignment**: `step_size` MUST be 10 days (Bi-Weekly) for crypto production.
+    - **Tail-Risk Mitigation**: 20-day alignment provides best balance; Annualized Return Clipping (-99.99%) is enforced.
+    - **Alpha Capture**: High-resolution factor isolation (threshold=0.45) and Entropy Resolution (Order=5).
+    - **Directional Purity**: SHORT candidate returns MUST be inverted ($R_{synthetic} = -1 \times R_{raw}$).
+    - **Toxic Data Guard**: Assets with daily returns > 500% (5.0) are automatically dropped.
 
- ## 17. Fractal Backtesting Protocol (v4.4+)
- 
- ### 17.1 Recursive Walk-Forward
- 1. **Two-Tier Optimization**: Meta-portfolio backtests MUST simulate rebalancing at both the atomic sleeve level and the meta-allocation level.
- 2. **Dynamic Meta-Rebalancing**: At each rebalance window, the meta-allocation between sleeves MUST be re-calculated using the realized returns of those sleeves up to that point.
- 3. **Performance Consistency**: Equity curves generated for a meta-portfolio MUST be the result of a continuous walk-forward process that accounts for sleeve-level churn and meta-level reallocation.
-
- ## 18. Feature Store PIT Integrity (v4.5+)
- 
- ### 18.1 Point-in-Time Fidelity
- 1. **Zero-Gap Backfill**: The global `features_matrix.parquet` MUST provide 100% coverage for all symbols present in the returns matrix for the active training window.
- 2. **NaN Isolation**: Feature engineering MUST utilize a bounded forward-fill (`limit=3`) to prevent lookahead bias from stale data while ensuring numerical stability for ranking engines.
- 3. **Consistency Veto**: If an asset's feature history contains $> 10\%$ missing values after warm-up, it MUST be vetoed from the selection pool.
- 
- ## 12. The Unified DAG Orchestrator (v3.9+)
+## 12. The Unified DAG Orchestrator (v3.9+)
  
  The platform transitions from imperative script-based execution to a declarative Directed Acyclic Graph (DAG) model managed by the SDK.
+
  
  ### 12.1 Execution Model
  1. **Declarative Definition**: Pipelines MUST be defined as a sequence of addressable stage IDs (e.g., `["foundation.ingest", "alpha.inference", ...]`).
@@ -511,4 +572,3 @@ Requirements:
  1. **SDK-First**: All high-level workflows (`flow-production`, `flow-meta`) MUST be thin wrappers around `QuantSDK.run_pipeline()`.
  2. **Telemetry Coverage**: The DAG runner MUST create a root span for the entire pipeline and child spans for each stage, preserving the parent `trace_id`.
  3. **Resource Provisioning**: For parallel branches in the DAG, the orchestrator MUST automatically provision Ray actors or tasks based on the stage category.
-

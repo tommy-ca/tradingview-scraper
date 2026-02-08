@@ -88,8 +88,7 @@ class WalkForwardOrchestrator:
             logger.warning(f"Data length ({n_obs}) is insufficient for min_train ({self.min_train_window}) + test ({self.test_window})")
             return
 
-        # Starting point: first test window starts after the initial training window
-        for i in range(self.train_window, n_obs - self.test_window + 1, self.step_size):
+        for i in self._get_step_indices(n_obs):
             train_start = 0 if self.anchored else i - self.train_window
             train_end = i
             test_start = i
@@ -104,6 +103,13 @@ class WalkForwardOrchestrator:
                 train_dates=(cast(pd.Timestamp, index[train_start]), cast(pd.Timestamp, index[train_end - 1])),
                 test_dates=(cast(pd.Timestamp, index[test_start]), cast(pd.Timestamp, index[test_end - 1])),
             )
+
+    def _get_step_indices(self, n_obs: int) -> list[int]:
+        """
+        Returns the starting indices for each test window.
+        Can be overridden to support non-contiguous or custom windows.
+        """
+        return list(range(self.train_window, n_obs - self.test_window + 1, self.step_size))
 
     def slice_data(self, data: pd.DataFrame, window: WalkForwardWindow) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -149,6 +155,22 @@ class RecursiveMetaOrchestrator:
             "pattern": "Recursive Meta-Portfolio",
             "pillars_compliant": True,
         }
+
+
+class SequenceOrchestrator(WalkForwardOrchestrator):
+    """
+    Orchestrator that supports a predefined sequence of windows.
+    Useful for non-contiguous windows or specific event-based backtesting.
+    """
+
+    def __init__(self, windows: list[WalkForwardWindow]):
+        # Initialize with dummy values as windows are predefined
+        super().__init__(train_window=0, test_window=0, step_size=0)
+        self._predefined_windows = windows
+
+    def generate_windows(self, data: Any) -> Generator[WalkForwardWindow, None, None]:
+        for window in self._predefined_windows:
+            yield window
 
     def stitch_oos_returns(self, step_results: list[pd.Series]) -> pd.Series:
         """

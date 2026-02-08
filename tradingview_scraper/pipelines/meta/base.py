@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -34,3 +35,19 @@ class MetaContext(BaseModel):
 
     def log_event(self, stage: str, event: str, data: Optional[Dict[str, Any]] = None):
         self.audit_trail.append({"stage": stage, "event": event, "data": data or {}})
+
+    def merge(self, overlay: MetaContext):
+        """Merges another MetaContext into this one."""
+        if not overlay.meta_returns.empty:
+            self.meta_returns = overlay.meta_returns
+        if not overlay.meta_weights.empty:
+            self.meta_weights = overlay.meta_weights
+        if not overlay.flattened_weights.empty:
+            self.flattened_weights = overlay.flattened_weights
+
+        self.sleeve_weights.update(overlay.sleeve_weights)
+        self.sleeve_returns.update(overlay.sleeve_returns)
+
+        if len(overlay.audit_trail) > len(self.audit_trail):
+            new_entries = overlay.audit_trail[len(self.audit_trail) :]
+            self.audit_trail.extend(new_entries)

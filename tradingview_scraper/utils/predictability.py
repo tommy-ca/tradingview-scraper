@@ -11,14 +11,16 @@ from statsmodels.tsa.stattools import adfuller
 logger = logging.getLogger(__name__)
 
 
-@njit(float64(float64[::1]), cache=True, fastmath=True)
-def _get_rs_jit(series):
+@njit(float64(float64[::1], float64[::1]), cache=True, fastmath=True)
+def _get_rs_jit(series, z_buffer):
     """
     JIT optimized R/S calculation using scalar tracking (Zero-Allocation).
     Handles NaNs internally by skipping them.
+    z_buffer is provided for API compatibility and future buffer-heavy optimizations.
 
     Args:
         series: Array of returns or price changes.
+        z_buffer: Pre-allocated workspace (currently unused by scalar implementation).
 
     Returns:
         float: The calculated R/S value.
@@ -58,7 +60,7 @@ def _get_rs_jit(series):
     return r / s if s > 1e-12 else 0.0
 
 
-def calculate_hurst_exponent(x: np.ndarray) -> float | None:
+def calculate_hurst_exponent(x: np.ndarray, z_buffer: np.ndarray | None = None) -> float | None:
     """
     Calculates the Hurst Exponent using Rescaled Range (R/S) analysis.
     Values:
@@ -68,19 +70,24 @@ def calculate_hurst_exponent(x: np.ndarray) -> float | None:
 
     Args:
         x: Input time-series data.
+        z_buffer: Optional pre-allocated workspace buffer.
 
     Returns:
         float | None: Hurst exponent value or None if insufficient history.
     """
     # Pillar 3: Ensure memory contiguity for JIT efficiency
     x_arr = np.ascontiguousarray(x, dtype=np.float64)
+    n_total = len(x_arr)
+
     # Check total non-NaN observations
     if np.sum(~np.isnan(x_arr)) < 32:
         return None
 
     try:
+        if z_buffer is None:
+            z_buffer = np.zeros(n_total, dtype=np.float64)
+
         # Divide into segments
-        n_total = len(x_arr)
         # Use logarithmic scales for lags
         lags = [2**i for i in range(3, 10)]  # 8, 16, 32, 64, 128, 256, 512
         lags = [l for l in lags if l <= n_total // 2]
@@ -99,7 +106,7 @@ def calculate_hurst_exponent(x: np.ndarray) -> float | None:
             for i in range(n_segments):
                 segment = x_arr[i * l : (i + 1) * l]
                 if len(segment) > 0:
-                    rs = _get_rs_jit(segment)
+                    rs = _get_rs_jit(segment, z_buffer[: len(segment)])
                     if rs > 0:
                         rs_avg.append(rs)
             if rs_avg:
@@ -213,6 +220,41 @@ def calculate_permutation_entropy(x: np.ndarray, order: int = 3, delay: int = 1,
         return float(pe_val / math.log(math.factorial(order)))
     except Exception:
         return None
+
+
+@njit(float64[:](float64[::1], int64, int32[::1], float64[::1], int64, int64), cache=True, fastmath=True)
+def compute_rolling_entropy_numba(x, window, perm_counts, segment_buffer, order=3, delay=1):
+    """
+    Optimized rolling permutation entropy using pre-allocated buffers.
+    (Pillar 3: Zero-Allocation in hot loop).
+    """
+    n = len(x)
+    out = np.full(n, np.nan)
+    if n < window:
+        return out
+
+    for i in range(window, n + 1):
+        segment = x[i - window : i]
+        # We reuse the buffers by passing them to the kernel
+        out[i - 1] = _calculate_permutation_entropy_jit(segment, perm_counts, segment_buffer, order, delay)
+    return out
+
+
+@njit(float64[:](float64[::1], int64, float64[::1]), cache=True, fastmath=True)
+def compute_rolling_hurst_numba(x, window, z_buffer):
+    """
+    Optimized rolling R/S analysis using pre-allocated buffers.
+    Used as a proxy for Hurst in high-frequency rolling windows.
+    """
+    n = len(x)
+    out = np.full(n, np.nan)
+    if n < window:
+        return out
+
+    for i in range(window, n + 1):
+        segment = x[i - window : i]
+        out[i - 1] = _get_rs_jit(segment, z_buffer)
+    return out
 
 
 def calculate_efficiency_ratio(returns: np.ndarray) -> float | None:

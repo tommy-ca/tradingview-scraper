@@ -1,5 +1,6 @@
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
 
 
 def inspect_stitched(run_id, filename):
@@ -8,7 +9,7 @@ def inspect_stitched(run_id, filename):
         print(f"File not found: {path}")
         return
 
-    s = pd.read_pickle(path)
+    s = pd.read_parquet(path)
     print(f"--- {filename} ---")
     print(f"Count: {len(s)}")
     print(f"Mean: {s.mean():.6f}")
@@ -29,5 +30,5 @@ def inspect_stitched(run_id, filename):
 
 
 if __name__ == "__main__":
-    inspect_stitched("final_long_all_v4", "custom_cvxportfolio_min_variance.pkl")
-    inspect_stitched("final_long_all_v4", "custom_vectorbt_min_variance.pkl")
+    inspect_stitched("final_long_all_v4", "custom_cvxportfolio_min_variance.parquet")
+    inspect_stitched("final_long_all_v4", "custom_vectorbt_min_variance.parquet")

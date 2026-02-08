@@ -7,6 +7,14 @@ from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage, SelectionContext
 from tradingview_scraper.utils.scoring import calculate_mps_score, map_to_probability
 
+# Optional MLflow
+try:
+    from tradingview_scraper.telemetry.mlflow_tracker import MLflowTracker
+
+    HAS_MLFLOW = True
+except ImportError:
+    HAS_MLFLOW = False
+
 logger = logging.getLogger("pipelines.selection.inference")
 
 
@@ -84,7 +92,7 @@ class InferenceStage(BasePipelineStage):
 
         # 2. Calculate Final Alpha Score
         # This reuses the validated logic from utils.scoring
-        alpha_scores = calculate_mps_score(metrics=metrics_dict, weights=self.weights, methods=self.methods)
+        alpha_scores = calculate_mps_score(metrics=metrics_dict, weights=self.weights, methods=self.methods).fillna(0.0)
 
         # 3. Store Results
         # We store both the final score and the component probabilities for explainability
@@ -95,12 +103,47 @@ class InferenceStage(BasePipelineStage):
         for f in active_features:
             f_str = str(f)
             s_val = metrics_dict[f_str]
-            outputs[f"{f_str}_prob"] = map_to_probability(s_val, method=self.methods.get(f_str, "rank"))
+            # Ensure probabilities are non-null for contract compliance
+            outputs[f"{f_str}_prob"] = map_to_probability(s_val, method=self.methods.get(f_str, "rank")).fillna(0.5)
+
+        # 4. L2 Data Contract Validation
+        import pandera as pa
+
+        from tradingview_scraper.pipelines.contracts import InferenceSchema
+
+        try:
+            InferenceSchema.validate(outputs)
+        except pa.errors.SchemaError as e:
+            logger.error(f"L2 Data Contract Violation in inference_outputs: {e}")
+            raise
 
         context.inference_outputs = outputs
 
         context.model_metadata = {"model": "Log-MPS-v4", "weights": self.weights, "methods": self.methods}
 
         context.log_event(self.name, "ScoringComplete", {"mean_score": float(alpha_scores.mean()), "max_score": float(alpha_scores.max())})
+
+        # Phase 1: MLflow Tracking
+        if HAS_MLFLOW:
+            try:
+                tracker = MLflowTracker(experiment_name=context.run_id)
+                metrics = {
+                    "mean_conviction": float(alpha_scores.mean()),
+                    "max_conviction": float(alpha_scores.max()),
+                    "n_scored_assets": len(alpha_scores),
+                }
+
+                # Log feature importance if available
+                if hasattr(context, "feature_importance") and context.feature_importance:
+                    # Flattening is handled by log_metrics, but assuming feature_importance is a dict of scores
+                    # We might want to prefix them to avoid collision? MLflowTracker flattens.
+                    # If feature_importance is {"momentum": 0.5}, it logs as "momentum": 0.5
+                    metrics.update(context.feature_importance)
+
+                tracker.log_metrics(metrics)
+                tracker.log_params({"weights": self.weights, "model": "Log-MPS-v4"})
+
+            except Exception as e:
+                logger.warning(f"MLflow logging failed in InferenceStage: {e}")
 
         return context

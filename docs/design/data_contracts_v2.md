@@ -20,8 +20,28 @@ Schema models will be centralized in `tradingview_scraper/pipelines/contracts.py
 ```python
 import pandera as pa
 
+# L0: Returns Matrix
 ReturnsSchema = pa.DataFrameSchema({
-    "*": pa.Column(float, checks=[
+    ".*": pa.Column(float, checks=[
+        pa.Check.greater_than_or_equal_to(-1.0),
+        pa.Check.less_than_or_equal_to(1.0)
+    ])
+}, index=pa.Index(pa.DateTime))
+
+# L2: Inference Outputs
+InferenceSchema = pa.DataFrameSchema(
+    columns={
+        "alpha_score": pa.Column(float, checks=[pa.Check.in_range(0.0, 1.0)]),
+        # Probabilities should also be bounded
+        ".*_prob": pa.Column(float, checks=[pa.Check.in_range(0.0, 1.0)], regex=True, required=False),
+    },
+    index=pa.Index(pa.DateTime)
+)
+
+# L3: Synthetic Returns (Logic Purity)
+SyntheticReturnsSchema = pa.DataFrameSchema({
+    # Atom IDs (usually hashes or logic strings)
+    ".*": pa.Column(float, checks=[
         pa.Check.greater_than_or_equal_to(-1.0),
         pa.Check.less_than_or_equal_to(1.0)
     ])

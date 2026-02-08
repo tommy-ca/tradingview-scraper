@@ -19,6 +19,8 @@ class StrategyFactory:
         if config_strategy:
             return config_strategy
 
+        logger.warning(f"DEPRECATION: Profile '{profile_name}' relies on name-based strategy inference. Please add an explicit 'strategy' field to manifest.json.")
+
         p_name = profile_name.lower()
         if "mean_rev" in p_name or "meanrev" in p_name:
             return "mean_reversion"

@@ -10,7 +10,6 @@ from tradingview_scraper.pipelines.discovery.base import (
     CandidateMetadata,
 )
 from tradingview_scraper.pipelines.selection.base import (
-    AdvancedToxicityValidator,
     FoundationHealthRegistry,
 )
 from tradingview_scraper.settings import get_settings
@@ -53,11 +52,22 @@ class TradingViewDiscoveryScanner(BaseDiscoveryScanner):
                 return []
 
             # 3. Map to CandidateMetadata with Sanity Gate
+            # CR-770 / Phase 1250: Inject direction from 'metadata.intent' (new) or 'trend.direction' (legacy)
+            intent_direction = "LONG"
+            if cfg.metadata and "intent" in cfg.metadata:
+                intent_direction = str(cfg.metadata["intent"]).upper()
+            elif cfg.trend and cfg.trend.direction:
+                intent_direction = cfg.trend.direction.upper()
+
             candidates = []
             for row in result.get("data", []):
                 raw_symbol = row.get("symbol")
                 if not raw_symbol:
                     continue
+
+                # Inject Intent into Row Metadata
+                if "direction" not in row:
+                    row["direction"] = intent_direction
 
                 # Registry-Aware Veto (Phase 520)
                 if not self.registry.is_healthy(raw_symbol) and raw_symbol in self.registry.data:
