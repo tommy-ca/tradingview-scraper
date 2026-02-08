@@ -160,7 +160,7 @@ def validate_io(func):
     """
 
     @functools.wraps(func)
-    def wrapper(self, context: SelectionContext, *args, **kwargs) -> SelectionContext:
+    def wrapper(self, context: Any, *args, **kwargs) -> Any:
         # Execute the stage logic
         result_context = func(self, context, *args, **kwargs)
 
@@ -245,7 +245,7 @@ class BasePipelineStage(ABC):
         pass
 
     @abstractmethod
-    def execute(self, context: SelectionContext) -> SelectionContext:
+    def execute(self, context: Any, *args, **kwargs) -> Any:
         """
         Main execution logic for the stage.
         Must return the modified (enriched) context.

@@ -187,6 +187,7 @@ class BackfillService:
         # We collect DataFrames for the final matrix, but we audit them one-by-one
         # to keep memory usage predictable during the audit phase.
         all_dfs = []
+        intermediate_dfs = []
         for symbol, path in tqdm(processed_results.items(), desc="Auditing & Collecting"):
             try:
                 df = pd.read_parquet(path)
@@ -202,23 +203,33 @@ class BackfillService:
                 # Prepare for wide-matrix consolidation
                 df.columns = pd.MultiIndex.from_product([[symbol], df.columns])
                 all_dfs.append(df)
+
+                # Incremental consolidation to bound peak memory (Task 099)
+                if len(all_dfs) >= 500:
+                    logger.info(f"Memory Guard: Performing intermediate consolidation of {len(all_dfs)} DataFrames")
+                    intermediate_dfs.append(pd.concat(all_dfs, axis=1))
+                    all_dfs = []
             except Exception as e:
                 logger.error(f"Failed to load/audit {symbol} from {path}: {e}")
 
+        # Collect any remaining DataFrames
+        if all_dfs:
+            intermediate_dfs.append(pd.concat(all_dfs, axis=1))
+            all_dfs = []
+
         registry.save()
 
-        if not all_dfs:
+        if not intermediate_dfs:
             logger.error("No valid feature DataFrames collected for consolidation.")
             return
 
         # 4. Final Matrix Generation
-        # This is the single point where memory usage will peak.
-        # By using pd.concat on the list of DataFrames, we avoid the overhead of the large dictionary.
-        logger.info("Performing final matrix concatenation...")
-        features_df = pd.concat(all_dfs, axis=1)
+        # This is the single point where memory usage will peak, but now bounded by intermediate chunks.
+        logger.info(f"Performing final matrix concatenation from {len(intermediate_dfs)} intermediate chunks...")
+        features_df = pd.concat(intermediate_dfs, axis=1)
 
-        # Clear the list of individual DataFrames as soon as possible
-        del all_dfs
+        # Clear the list of intermediate DataFrames as soon as possible
+        del intermediate_dfs
 
         # Drop rows that are all NaN (before any meaningful history started)
         features_df = features_df.dropna(how="all")

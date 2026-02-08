@@ -1,21 +1,26 @@
 import logging
 from typing import Any, Dict, List, Optional, cast
 import pandas as pd
-from tradingview_scraper.backtest.models import SimulationContext
+from tradingview_scraper.orchestration.registry import StageRegistry
+from tradingview_scraper.pipelines.selection.base import BasePipelineStage
 from tradingview_scraper.pipelines.allocation.base import AllocationContext
 from tradingview_scraper.portfolio_engines import EngineRequest, ProfileName, build_engine
-from tradingview_scraper.risk.constraints import apply_diversity_constraints
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.synthesis import StrategySynthesizer
 
 logger = logging.getLogger("pipelines.allocation.optimization")
 
 
-class OptimizationStage:
+@StageRegistry.register(id="allocation.optimize", name="Optimization", description="Portfolio optimization", category="allocation")
+class OptimizationStage(BasePipelineStage):
     """
     Pillar 3: Portfolio Allocation Stage.
     Handles the mathematical optimization of synthesized return streams.
     """
+
+    @property
+    def name(self) -> str:
+        return "Optimization"
 
     def __init__(self):
         self.settings = get_settings()
@@ -66,7 +71,13 @@ class OptimizationStage:
             # SOLVER CALL (Hardened by decorators in library)
             opt_resp = solver.optimize(returns=returns_for_opt, clusters=ctx.clusters, meta=ctx.window_meta, stats=ctx.stats, request=req)
 
-            return flat_weights
+            if opt_resp.weights.empty:
+                return pd.DataFrame()
+
+            if ctx.is_meta:
+                return opt_resp.weights
+
+            return self.synthesizer.flatten_weights(opt_resp.weights)
 
         except Exception as e:
             if ctx.ledger:

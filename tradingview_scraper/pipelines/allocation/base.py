@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
-from tradingview_scraper.backtest.orchestration import WalkForwardWindow
+
+if TYPE_CHECKING:
+    from tradingview_scraper.backtest.orchestration import WalkForwardWindow
 
 logger = logging.getLogger("pipelines.allocation")
 
@@ -20,7 +22,7 @@ class AllocationContext(BaseModel):
     run_id: str
 
     # Environment & Windows
-    window: WalkForwardWindow
+    window: Any  # Use Any to avoid circular imports with WalkForwardWindow
     regime_name: str
     market_env: str
 
@@ -52,3 +54,44 @@ class AllocationContext(BaseModel):
 
     def log_event(self, stage: str, event: str, data: Optional[Dict[str, Any]] = None):
         self.audit_trail.append({"stage": stage, "event": event, "data": data or {}})
+
+    def merge(self, overlay: AllocationContext):
+        """Merges another context into this one (additive and concatenation)."""
+        import pandas as pd
+
+        # 1. Merge Results (Append new entries, avoid duplicates)
+        existing_results = {(r.get("window"), r.get("engine"), r.get("profile"), r.get("simulator")) for r in self.results}
+        for res in overlay.results:
+            key = (res.get("window"), res.get("engine"), res.get("profile"), res.get("simulator"))
+            if key not in existing_results:
+                self.results.append(res)
+                existing_results.add(key)
+
+        # 2. Merge Holdings (Update state mapping)
+        if overlay.current_holdings:
+            self.current_holdings.update(overlay.current_holdings)
+
+        # 3. Merge Return Series (Combine series lists for each state key)
+        for key, series_list in overlay.return_series.items():
+            if key not in self.return_series:
+                self.return_series[key] = series_list
+            else:
+                self.return_series[key].extend(series_list)
+
+        # 4. Merge Stats (Concatenate rows and deduplicate)
+        if not overlay.stats.empty:
+            if self.stats.empty:
+                self.stats = overlay.stats
+            else:
+                self.stats = pd.concat([self.stats, overlay.stats], axis=0).drop_duplicates()
+
+        # 5. Merge Audit Trail (Append only new entries)
+        if len(overlay.audit_trail) > len(self.audit_trail):
+            new_entries = overlay.audit_trail[len(self.audit_trail) :]
+            self.audit_trail.extend(new_entries)
+
+        # 6. Merge Metadata & Clusters (Dictionaries)
+        if overlay.window_meta:
+            self.window_meta.update(overlay.window_meta)
+        if overlay.clusters:
+            self.clusters.update(overlay.clusters)

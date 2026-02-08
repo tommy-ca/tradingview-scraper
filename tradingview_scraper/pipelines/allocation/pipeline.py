@@ -43,7 +43,7 @@ class AllocationPipeline:
 
                 # B. Simulation
                 for sim_name in context.sim_names:
-                    self.simulation.execute(context, sim_name, engine_name, profile, weights_df)
+                    context = self.simulation.execute(context, sim_name, engine_name, profile, weights_df)
 
         return context
 

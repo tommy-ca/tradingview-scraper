@@ -12,8 +12,6 @@ from tradingview_scraper.backtest.orchestration import WalkForwardOrchestrator, 
 from tradingview_scraper.backtest.strategies import StrategyFactory
 from tradingview_scraper.data.loader import DataLoader, RunData
 from tradingview_scraper.portfolio_engines import EngineRequest, ProfileName, build_engine, build_simulator
-from tradingview_scraper.selection_engines import build_selection_engine
-from tradingview_scraper.selection_engines.base import SelectionRequest, SelectionResponse
 from tradingview_scraper.settings import TradingViewScraperSettings, get_settings
 from tradingview_scraper.utils.audit import AuditLedger
 from tradingview_scraper.utils.synthesis import StrategySynthesizer
@@ -21,6 +19,8 @@ from tradingview_scraper.regime import MarketRegimeDetector
 
 from tradingview_scraper.pipelines.allocation.base import AllocationContext
 from tradingview_scraper.pipelines.allocation.pipeline import AllocationPipeline
+from tradingview_scraper.pipelines.selection.base import SelectionContext
+from tradingview_scraper.pipelines.selection.pipeline import SelectionPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ class BacktestEngine:
 
         # Components
         self.detector = MarketRegimeDetector(enable_audit_log=False)
+        self.selection_pipeline = SelectionPipeline(run_id=getattr(self.settings, "run_id", "backtest_v4"))
         self.allocation_pipeline = AllocationPipeline()
 
     def load_data(self, run_dir: Path | None = None) -> None:
@@ -187,13 +188,33 @@ class BacktestEngine:
         regime_name, quadrant_name = self._detect_market_regime(train_rets, workspace=self.workspace)
         market_env = quadrant_name  # In new regime model, quadrant is the market env
 
-        # 3. Pillar 1: Universe Selection
-        selection = self._execute_selection(train_rets, window.step_index)
-        if not selection:
+        # 3. Pillar 1: Universe Selection (MLOps v4 Pipeline)
+        selection_ctx = self.selection_pipeline.run_with_data(
+            returns_df=train_rets,
+            raw_candidates=self.raw_candidates,
+            overrides={
+                "top_n": self.settings.top_n,
+                "threshold": self.settings.threshold,
+            },
+        )
+
+        if not selection_ctx.winners:
             return
 
+        # Integrity Check: Filter winners missing from returns matrix
+        winners = [w for w in selection_ctx.winners if w["symbol"] in train_rets.columns]
+        if not winners:
+            return
+
+        # Merge winner metadata into local state
+        for w in winners:
+            self.metadata[w["symbol"]] = w
+
+        if self.ledger:
+            self._record_selection_audit(winners, train_rets, window.step_index, selection_ctx)
+
         # 4. Pillar 2: Strategy Synthesis
-        train_rets_strat = self._execute_synthesis(train_rets, selection.winners, is_meta, workspace=self.workspace)
+        train_rets_strat = self._execute_synthesis(train_rets, winners, is_meta, workspace=self.workspace)
 
         # 5. Pillar 3: Allocation & Simulation (Pillar 3 Pipeline)
         alloc_ctx = AllocationContext(
@@ -219,43 +240,6 @@ class BacktestEngine:
         )
 
         self.allocation_pipeline.run(alloc_ctx)
-
-    def _execute_selection(self, train_rets: pd.DataFrame, window_index: int) -> SelectionResponse | None:
-        """Orchestrates Pillar 1: Universe Selection."""
-        strategy = StrategyFactory.infer_strategy(self.settings.profile or "", self.settings.strategy)
-        selection_engine = build_selection_engine(self.settings.features.selection_mode)
-
-        req_select = SelectionRequest(
-            top_n=self.settings.top_n,
-            threshold=self.settings.threshold,
-            strategy=strategy,
-        )
-        selection = selection_engine.select(
-            returns=train_rets,
-            raw_candidates=self.raw_candidates,
-            stats_df=self.stats,
-            request=req_select,
-            workspace=self.workspace,
-        )
-
-        # Integrity Check: Filter winners missing from returns matrix
-        if selection.winners:
-            winners = [w for w in selection.winners if w["symbol"] in train_rets.columns]
-            object.__setattr__(selection, "winners", winners)
-
-        if not selection.winners:
-            return None
-
-        winners_syms = [w["symbol"] for w in selection.winners]
-
-        # Merge winner metadata into local state
-        for w in selection.winners:
-            self.metadata[w["symbol"]] = w
-
-        if self.ledger:
-            self._record_selection_audit(selection, winners_syms, train_rets, selection_engine.name, window_index)
-
-        return selection
 
     def _execute_synthesis(
         self,
@@ -320,14 +304,18 @@ class BacktestEngine:
             return regime, quadrant
         return "NORMAL", "NORMAL"
 
-    def _record_selection_audit(self, selection, winners_syms, train_rets, engine_name, window_index):
+    def _record_selection_audit(self, winners: list[dict[str, Any]], train_rets: pd.DataFrame, window_index: int, context: SelectionContext):
         if self.ledger:
+            winners_syms = [w["symbol"] for w in winners]
+            alpha_scores = context.inference_outputs["alpha_score"].to_dict() if not context.inference_outputs.empty else {}
+
             metrics_payload = {
                 "n_universe_symbols": len(self.returns.columns),
                 "n_refinement_candidates": len(train_rets.columns),
                 "n_winners": len(winners_syms),
                 "winners": winners_syms,
-                **selection.metrics,
+                "alpha_scores": alpha_scores,
+                "pipeline_audit": context.audit_trail,
             }
             self.ledger.record_outcome(
                 step="backtest_select",
@@ -335,10 +323,10 @@ class BacktestEngine:
                 output_hashes={},
                 metrics=metrics_payload,
                 data={
-                    "relaxation_stage": selection.relaxation_stage,
-                    "winners_meta": selection.winners,
+                    "relaxation_stage": context.params.get("relaxation_stage", 1),
+                    "winners_meta": winners,
                 },
-                context={"window_index": window_index, "engine": engine_name},
+                context={"window_index": window_index, "engine": "SelectionPipelineV4"},
             )
 
     def _save_artifacts(self, run_dir: Path) -> None:
