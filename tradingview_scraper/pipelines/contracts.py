@@ -115,6 +115,8 @@ ReturnsMatrixSchema = pa.DataFrameSchema(
 FeatureStoreSchema = pa.DataFrameSchema(
     columns={
         "recommend_all": pa.Column(float, checks=[pa.Check.in_range(-1.0, 1.0)], nullable=True),
+        "recommend_ma": pa.Column(float, checks=[pa.Check.in_range(-1.0, 1.0)], nullable=True),
+        "recommend_other": pa.Column(float, checks=[pa.Check.in_range(-1.0, 1.0)], nullable=True),
         "adx": pa.Column(float, checks=[pa.Check.in_range(0, 100)], nullable=True),
         "rsi": pa.Column(float, checks=[pa.Check.in_range(0, 100)], nullable=True),
     },

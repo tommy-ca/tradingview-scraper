@@ -3,14 +3,16 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Tuple, cast
+from typing import List, Optional, Tuple, cast
 
 import pandas as pd
+import pandera as pa
 import ray
 from tqdm import tqdm
 
 from tradingview_scraper.orchestration.compute import RayComputeEngine
 from tradingview_scraper.orchestration.registry import StageRegistry
+from tradingview_scraper.pipelines.contracts import FeatureStoreSchema
 from tradingview_scraper.settings import get_settings
 from tradingview_scraper.utils.audit import get_df_hash
 from tradingview_scraper.utils.security import SecurityUtils
@@ -143,8 +145,6 @@ class BackfillService:
 
         logger.info(f"Backfilling features for {len(symbols)} unique symbols...")
 
-        all_features = {}
-
         # 2. Parallel Processing (Phase 470)
         use_parallel = os.getenv("TV_ORCH_PARALLEL") == "1"
         processed_results = {}  # Map of symbol -> file_path
@@ -233,6 +233,25 @@ class BackfillService:
 
         # Drop rows that are all NaN (before any meaningful history started)
         features_df = features_df.dropna(how="all")
+
+        # Validation Step (Filter-and-Log)
+        logger.info("Validating features against FeatureStoreSchema...")
+        valid_symbols = []
+        unique_symbols = features_df.columns.get_level_values("symbol").unique()
+
+        for sym in unique_symbols:
+            try:
+                sym_df = features_df.xs(sym, axis=1, level="symbol")
+                FeatureStoreSchema.validate(sym_df)
+                valid_symbols.append(sym)
+            except pa.errors.SchemaError as e:
+                logger.warning(f"Schema Validation Failed for {sym}: {e}. Dropping symbol.")
+                # Filter: Don't add to valid_symbols
+
+        # Apply filter if any symbols were dropped
+        if len(valid_symbols) < len(unique_symbols):
+            logger.info(f"Dropped {len(unique_symbols) - len(valid_symbols)} invalid symbols.")
+            features_df = features_df.loc[:, features_df.columns.get_level_values("symbol").isin(valid_symbols)]
 
         # 5. Save Artifact
         out_p.parent.mkdir(parents=True, exist_ok=True)
