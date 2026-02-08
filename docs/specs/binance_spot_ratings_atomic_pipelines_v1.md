@@ -7,6 +7,10 @@ Standardize the **full atomic production lifecycle** (Discovery → Selection �
 - `binance_spot_rating_all_long`
 - `binance_spot_rating_all_short`
 
+This spec also governs the MA-based sleeves used for trend-focused validation:
+- `binance_spot_rating_ma_long`
+- `binance_spot_rating_ma_short`
+
 These sleeves are the canonical baselines for:
 1) validating that TradingView “Rating All” signals survive friction, and  
 2) proving directional integrity (SHORT inversion) before downstream meta ensembling.
@@ -42,6 +46,8 @@ Run the full atomic pipeline per profile:
 ```bash
 make flow-production PROFILE=binance_spot_rating_all_long
 make flow-production PROFILE=binance_spot_rating_all_short
+make flow-production PROFILE=binance_spot_rating_ma_long
+make flow-production PROFILE=binance_spot_rating_ma_short
 ```
 
 ### 3.2 Recommended Immediate Validation (Runbook)
@@ -59,6 +65,7 @@ uv run python scripts/validate_atomic_run.py --run-id <RUN_ID> --profile binance
 Run the combined audit (sign test + validator):
 ```bash
 make atomic-audit RUN_ID=<RUN_ID> PROFILE=binance_spot_rating_all_short
+make atomic-audit RUN_ID=<RUN_ID> PROFILE=binance_spot_rating_ma_short
 ```
 
 Validation spec reference:
@@ -72,6 +79,8 @@ When enabled, the production pipeline persists:
 - `data/artifacts/summaries/runs/<RUN_ID>/data/directional_sign_test_pre_opt.json` (after synthesis; inversion boundary)
 - `data/artifacts/summaries/runs/<RUN_ID>/data/directional_sign_test.json` (post-optimization; includes optimizer normalization sanity when available)
 and runs `scripts/validate_atomic_run.py` after Reporting as a fail-fast artifact gate.
+
+MA SHORT sleeves MUST also enable this flag to ensure inversion correctness before meta usage.
 
 If the sleeve is later pinned into a meta profile, validate the meta run after execution:
 ```bash

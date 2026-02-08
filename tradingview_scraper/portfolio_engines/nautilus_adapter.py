@@ -209,40 +209,51 @@ def run_nautilus_backtest(
     engine.add_strategy(strategy)
 
     # 7. Run
-    engine.run()
-
-    # MITIGATION: Log True Equity to dispel CashAccount confusion
-    final_equity = strategy._get_nav()
-    final_cash = 0.0
     try:
-        acct = engine.portfolio.account(unified_venue)
-        # Try balance_total(USD) first, fallback to iteration if needed
+        engine.run()
+
+        # MITIGATION: Log True Equity to dispel CashAccount confusion
+        final_equity = strategy._get_nav()
+        final_cash = 0.0
         try:
-            final_cash = acct.balance_total(USD).as_double()
+            acct = engine.portfolio.account(unified_venue)
+            # Try balance_total(USD) first, fallback to iteration if needed
+            try:
+                final_cash = acct.balance_total(USD).as_double()
+            except Exception:
+                for bal in acct.balances():
+                    if hasattr(bal, "total"):
+                        final_cash = float(bal.total)
+                        break
         except Exception:
-            for bal in acct.balances():
-                if hasattr(bal, "total"):
-                    final_cash = float(bal.total)
-                    break
-    except Exception:
-        pass  # Fallback safe
+            pass  # Fallback safe
 
-    invested_value = final_equity - final_cash
-    pnl_pct = (final_equity - INITIAL_CASH) / INITIAL_CASH
+        invested_value = final_equity - final_cash
+        pnl_pct = (final_equity - INITIAL_CASH) / INITIAL_CASH
 
-    logger.info(
-        f"\n=== NAUTILUS AUDIT: {strategy.__class__.__name__} ===\n"
-        f"Initial Capital: ${INITIAL_CASH:,.2f}\n"
-        f"Final Free Cash: ${final_cash:,.2f} (This is NOT Equity)\n"
-        f"Final Asset Val: ${invested_value:,.2f}\n"
-        f"---------------------------------------\n"
-        f"TRUE EQUITY:     ${final_equity:,.2f}\n"
-        f"ACTUAL PnL:      {pnl_pct:+.2%}\n"
-        f"======================================="
-    )
+        logger.info(
+            f"\n=== NAUTILUS AUDIT: {strategy.__class__.__name__} ===\n"
+            f"Initial Capital: ${INITIAL_CASH:,.2f}\n"
+            f"Final Free Cash: ${final_cash:,.2f} (This is NOT Equity)\n"
+            f"Final Asset Val: ${invested_value:,.2f}\n"
+            f"---------------------------------------\n"
+            f"TRUE EQUITY:     ${final_equity:,.2f}\n"
+            f"ACTUAL PnL:      {pnl_pct:+.2%}\n"
+            f"======================================="
+        )
 
-    # 8. Extract results
-    return extract_nautilus_metrics(engine, cast(pd.DatetimeIndex, returns.index), strategy, INITIAL_CASH)
+        # 8. Extract results
+        return extract_nautilus_metrics(engine, cast(pd.DatetimeIndex, returns.index), strategy, INITIAL_CASH)
+
+    finally:
+        # CR-FIX: Explicitly dispose/reset Nautilus engine to release threads/resources
+        # preventing process hang at exit.
+        if hasattr(engine, "dispose"):
+            engine.dispose()
+        elif hasattr(engine, "reset"):
+            engine.reset()
+        elif hasattr(engine, "stop"):
+            engine.stop()
 
 
 def extract_nautilus_metrics(engine: Any, index: pd.DatetimeIndex, strategy: Any, initial_cash: float) -> Dict[str, Any]:

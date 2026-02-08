@@ -31,6 +31,8 @@ def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
     export_root = Path(os.getenv("TV_SCAN_DIR", str(settings.export_dir)))
     run_id = run_id or os.getenv("TV_EXPORT_RUN_ID") or ""
 
+    patterns = ["universe_selector_*.json", "strategy_selector_*.json", "strategy_alpha_*.json", "universe_foundation_*.json", "candidates.json"]
+
     if run_id:
         candidate = export_root / run_id
         if candidate.exists():
@@ -43,7 +45,7 @@ def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
             if not subdir.is_dir():
                 continue
             matches = []
-            for p in ["universe_selector_*.json", "strategy_selector_*.json", "strategy_alpha_*.json", "universe_foundation_*.json"]:
+            for p in patterns:
                 matches.extend(list(subdir.glob(p)))
 
             if not matches:
@@ -53,6 +55,8 @@ def _resolve_export_dir(run_id: Optional[str] = None) -> Path:
                 best_mtime = newest
                 best_dir = subdir
         if best_dir is not None:
+            logger.info(f"Resolved export dir to: {best_dir} (mtime={best_mtime})")
+            logger.info(f"Consuming files: {[f.name for f in best_dir.glob('*') if f.name in patterns]}")
             return best_dir
 
     return export_root
@@ -143,11 +147,17 @@ def select_top_universe(mode: str = "raw"):
 
     export_dir = _resolve_export_dir()
 
-    # Support both legacy and new scanner naming conventions
-    patterns = ["universe_selector_*.json", "strategy_selector_*.json", "strategy_alpha_*.json", "universe_foundation_*.json"]
-    files = []
-    for p in patterns:
-        files.extend([f for f in export_dir.glob(p) if "_base_universe" not in f.name])
+    # CR-930: Prefer pre-validated candidates from DataOps if available
+    validated_file = export_dir / "candidates_validated.json"
+    if validated_file.exists():
+        logger.info(f"Using pre-validated candidates from: {validated_file.name}")
+        files = [validated_file]
+    else:
+        # Support both legacy and new scanner naming conventions
+        patterns = ["universe_selector_*.json", "strategy_selector_*.json", "strategy_alpha_*.json", "universe_foundation_*.json", "candidates.json"]
+        files = []
+        for p in patterns:
+            files.extend([f for f in export_dir.glob(p) if "_base_universe" not in f.name])
 
     # Type-hinted audit structure to satisfy linter
     audit_discovery: Dict[str, Any] = {"total_scanned_files": len(files), "categories": {}, "total_symbols_found": 0}
@@ -201,8 +211,9 @@ def select_top_universe(mode: str = "raw"):
 
         for i in items:
             if isinstance(i, dict) and "symbol" in i:
-                i["_direction"] = meta_direction or file_direction
-                i["_logic"] = meta_logic
+                # CR-770: Respect item-level intent (injected by DiscoveryPipeline)
+                i["_direction"] = i.get("direction") or meta_direction or file_direction
+                i["_logic"] = i.get("logic") or meta_logic
                 i["_category"] = category
 
                 i["_asset_class"] = get_asset_class(category, i["symbol"])

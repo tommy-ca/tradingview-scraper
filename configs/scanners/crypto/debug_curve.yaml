@@ -1,0 +1,11 @@
+# Debug Scanner Config
+base_preset: "../../base/universes/binance_spot_base.yaml"
+# Relax to see drop-off curve
+volume:
+  min: 0
+  value_traded_min: 0
+volatility:
+  min: 0
+limit: 200
+sort_by: "Value.Traded"
+sort_order: "desc"

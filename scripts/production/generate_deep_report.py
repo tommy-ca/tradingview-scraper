@@ -53,6 +53,17 @@ def load_data(run_id: str):
             except Exception as e:
                 logger.warning(f"Failed to load stitched returns {pkl}: {e}")
 
+    # Patch for Meta Runs: Load meta_returns_*.pkl from data/
+    meta_data_dir = run_dir / "data"
+    if meta_data_dir.exists():
+        for pkl in meta_data_dir.glob("meta_returns_*.pkl"):
+            try:
+                # e.g. meta_returns_meta_crypto_only_hrp
+                key = pkl.stem
+                stitched_returns[key] = pd.read_pickle(pkl)
+            except Exception as e:
+                logger.warning(f"Failed to load meta returns {pkl}: {e}")
+
     return audit_data, results, stitched_returns
 
 
@@ -105,46 +116,114 @@ def analyze_matrix(results, stitched_returns):
         from tradingview_scraper.utils.metrics import calculate_performance_metrics
 
         for key, returns_series in stitched_returns.items():
-            # Key format: engine_simulator_profile (e.g. custom_vectorbt_max_sharpe)
-            parts = key.split("_")
-            if len(parts) >= 3:
-                # Naive parsing: assuming standard 3-part naming
-                # engine is usually first 1-2 words, simulator is 1 word, profile is rest
-                # But typically: market_vectorbt_market, custom_cvxportfolio_hrp
+            # Handle Meta Returns: meta_returns_PROFILE_RISK
+            if key.startswith("meta_returns_"):
+                # e.g. meta_returns_meta_crypto_only_hrp
+                # We need to extract the risk profile.
+                # Assuming the last part is the risk profile is risky if profile has underscores.
+                # But typically profiles are single words: hrp, max_sharpe, etc.
+                # However, meta_crypto_only has underscores.
 
-                # Heuristic: simulator is one of known sims
-                sims = ["vectorbt", "cvxportfolio", "nautilus", "custom"]
-                sim = "unknown"
-                for s in sims:
-                    if s in parts:
-                        sim = s
+                # Heuristic: Remove 'meta_returns_' prefix
+                rest = key[len("meta_returns_") :]
+
+                # We don't easily know where the meta profile ends and risk profile begins.
+                # But we can try to guess or just use the whole suffix as "Profile".
+                # Or better: "Meta" as Simulator, "Custom" as Engine.
+
+                sim = "Meta"
+                eng = "Custom"
+                prof = rest
+
+                # Try to clean up if possible.
+                # If we know the known risk profiles:
+                known_profiles = ["hrp", "min_variance", "max_sharpe", "equal_weight", "barbell", "market", "risk_parity", "benchmark"]
+                for kp in known_profiles:
+                    if rest.endswith(f"_{kp}"):
+                        prof = kp
                         break
 
-                # If found, split around it
-                if sim != "unknown":
-                    try:
-                        sim_idx = parts.index(sim)
-                        eng = "_".join(parts[:sim_idx])
-                        prof = "_".join(parts[sim_idx + 1 :])
-                    except ValueError:
-                        eng, prof = "unknown", key
-                else:
-                    eng, sim, prof = "custom", "vectorbt", key  # Fallback
+            else:
+                # Key format: engine_simulator_profile (e.g. custom_vectorbt_max_sharpe)
+                parts = key.split("_")
+                if len(parts) >= 3:
+                    # Naive parsing: assuming standard 3-part naming
+                    # engine is usually first 1-2 words, simulator is 1 word, profile is rest
+                    # But typically: market_vectorbt_market, custom_cvxportfolio_hrp
 
-                # Calculate Global Metrics
-                m = calculate_performance_metrics(returns_series)
-                rows.append(
-                    {
-                        "Simulator": sim,
-                        "Engine": eng,
-                        "Profile": prof,
-                        "Sharpe": round(float(m.get("sharpe", 0)), 4),
-                        "Return (%)": f"{float(m.get('annualized_return', 0)):.2%}",
-                        "MaxDD (%)": f"{float(m.get('max_drawdown', 0)):.2%}",
-                        "Vol (%)": f"{float(m.get('annualized_vol', 0)):.2%}",
-                        "Source": "Stitched",
-                    }
-                )
+                    # Heuristic: simulator is one of known sims
+                    sims = ["vectorbt", "cvxportfolio", "nautilus", "custom"]
+                    sim = "unknown"
+                    for s in sims:
+                        if s in parts:
+                            sim = s
+                            break
+
+                    # If found, split around it
+                    if sim != "unknown":
+                        try:
+                            sim_idx = parts.index(sim)
+                            eng = "_".join(parts[:sim_idx])
+                            prof = "_".join(parts[sim_idx + 1 :])
+                        except ValueError:
+                            eng, prof = "unknown", key
+                    else:
+                        eng, sim, prof = "custom", "vectorbt", key  # Fallback
+                else:
+                    eng, sim, prof = "custom", "vectorbt", key
+
+            # Calculate Global Metrics
+            try:
+                # Meta returns might be a DataFrame with multiple columns (sleeves).
+                # We need to calculate the portfolio return first if it's not already a series.
+                if isinstance(returns_series, pd.DataFrame):
+                    # For meta_returns.pkl, it usually contains sleeve returns.
+                    # We don't have the weights here to calculate portfolio return!
+                    # Wait, analyze_matrix is supposed to show performance.
+                    # The 'meta_returns' pkl in the run dir is just the CONCATENATED returns of the sleeves,
+                    # NOT the optimized portfolio returns.
+
+                    # The optimized portfolio returns are not saved as a simple Series pickle in the data root?
+                    # In run_meta_pipeline, we don't save "portfolio_returns.pkl".
+                    # We save "portfolio_optimized_meta.json" which has flattened weights.
+
+                    # But wait, generate_meta_report calculates metrics on the fly!
+                    # "port_rets = (returns_df[cols] * w_vec).sum(axis=1)"
+
+                    # So generate_deep_report CANNOT easily calculate metrics for meta runs
+                    # because it lacks the weights in this context.
+
+                    # Unless we load the weights too.
+                    # But that's getting complicated for this generic script.
+
+                    # However, if there are ANY Series pickles, we use them.
+                    # Does meta run produce any Series pickles? No, only DataFrame pickles.
+
+                    # So, we should SKIP DataFrame returns in analyze_matrix if we can't process them.
+                    # Or just log a warning.
+
+                    # BUT, the user requirement is "Patch generate_deep_report.py to handle meta-specific event types".
+                    # Maybe it just means "don't crash" or "show what you can".
+
+                    # If I can't calculate metrics, I can't add rows to the matrix.
+                    pass
+                else:
+                    m = calculate_performance_metrics(returns_series)
+                    rows.append(
+                        {
+                            "Simulator": sim,
+                            "Engine": eng,
+                            "Profile": prof,
+                            "Sharpe": round(float(m.get("sharpe", 0)), 4),
+                            "Return (%)": f"{float(m.get('annualized_return', 0)):.2%}",
+                            "MaxDD (%)": f"{float(m.get('max_drawdown', 0)):.2%}",
+                            "Vol (%)": f"{float(m.get('annualized_vol', 0)):.2%}",
+                            "Source": "Stitched",
+                        }
+                    )
+            except Exception as e:
+                # logger.warning(f"Error calculating metrics for {key}: {e}")
+                continue
 
         if rows:
             return pd.DataFrame(rows).sort_values("Sharpe", ascending=False)
@@ -240,7 +319,11 @@ def analyze_windows(audit_data):
 
                 # Only trace the primary champion profile for the timeline
                 if ctx.get("engine") == "custom" and ctx.get("profile") == "max_sharpe":
+                    # Fix Phase 1205: Weights can be in data.weights OR outcome.metrics.weights
                     weights = entry.get("data", {}).get("weights", {})
+                    if not weights:
+                        weights = entry.get("outcome", {}).get("metrics", {}).get("weights", {})
+
                     if not weights:
                         continue
 

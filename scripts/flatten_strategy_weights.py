@@ -3,6 +3,8 @@ import logging
 import os
 from collections import defaultdict
 
+import pandas as pd
+
 from tradingview_scraper.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -160,6 +162,20 @@ def flatten_strategy_weights():
                     "Sector": meta.get("sector", "N/A"),
                 }
             )
+
+        # 3.5 L4 Data Contract Validation
+        import pandera as pa
+
+        from tradingview_scraper.pipelines.contracts import WeightsSchema
+
+        df_flat = pd.DataFrame(flat_assets)
+        if not df_flat.empty:
+            try:
+                WeightsSchema.validate(df_flat)
+            except pa.errors.SchemaError as e:
+                logger.error(f"L4 Data Contract Violation in flattened weights ({profile_name}): {e}")
+                if os.getenv("TV_STRICT_STABILITY") == "1":
+                    raise
 
         flat_profiles[profile_name] = {
             "assets": flat_assets,

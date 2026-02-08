@@ -54,6 +54,7 @@ class FeatureFlags(BaseModel):
     feat_market_neutral: bool = False
     feat_directional_sign_test_gate: bool = False
     feat_directional_sign_test_gate_atomic: bool = False
+    feat_use_tv_ratings: bool = True  # New Flag: Use retrieved TV ratings if available (default True)
     feature_lookback: int = 120
     selection_mode: str = "v4"
 
@@ -256,6 +257,7 @@ class TradingViewScraperSettings(BaseSettings):
     strategy: str = "trend_following"
     cluster_lookbacks: list[int] = [60, 120, 200]
     ranking: SelectionRanking = Field(default_factory=SelectionRanking)
+    strategy_type: Optional[str] = None  # Resolved via Manifest or Profile Inference
 
     # Optimization
     cluster_cap: float = 0.25
@@ -266,7 +268,7 @@ class TradingViewScraperSettings(BaseSettings):
     test_window: int = 20
     step_size: int = 20
     backtest_simulator: str = "custom"
-    backtest_simulators: str = "custom,cvxportfolio,vectorbt"
+    backtest_simulators: str = "vectorbt,cvxportfolio,custom"
     backtest_slippage: float = 0.0005  # 5 bps
     backtest_commission: float = 0.0001  # 1 bp
     backtest_cash_asset: str = "USDT"

@@ -23,7 +23,11 @@ def main():
         return
 
     logger.info(f"Running discovery profile: {args.profile}")
-    candidates = pipeline.run_profile(args.profile)
+    try:
+        candidates = pipeline.run_profile(args.profile)
+    except Exception as e:
+        logger.error(f"❌ Discovery Pipeline Failed: {e}")
+        exit(1)
 
     logger.info(f"Discovery complete. Found {len(candidates)} candidates.")
     pipeline.save_candidates(candidates)

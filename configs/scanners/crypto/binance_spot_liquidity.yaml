@@ -1,0 +1,5 @@
+base_preset: "../../base/universes/binance_spot_base.yaml"
+# Using base filters (10M / 0.1%)
+limit: 200
+sort_by: "volume"
+sort_order: "desc"

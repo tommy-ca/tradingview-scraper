@@ -2,10 +2,9 @@ import argparse
 import json
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import ccxt
-import pandas as pd
 
 from tradingview_scraper.execution.metadata import ExecutionMetadataCatalog
 
@@ -64,9 +63,23 @@ def fetch_metadata(candidates_path: str):
     logger.info(f"Loading candidates from {candidates_path}")
     try:
         with open(candidates_path, "r") as f:
-            candidates = json.load(f)
+            raw_candidates = json.load(f)
     except FileNotFoundError:
         logger.error(f"Candidates file not found: {candidates_path}")
+        sys.exit(1)
+
+    # Robust parsing for polymorphism
+    candidates = []
+    if isinstance(raw_candidates, list):
+        for item in raw_candidates:
+            if isinstance(item, str):
+                candidates.append({"symbol": item})
+            elif isinstance(item, dict):
+                candidates.append(item)
+            else:
+                logger.warning(f"Skipping malformed candidate item: {item}")
+    else:
+        logger.error("Candidates file must contain a list.")
         sys.exit(1)
 
     catalog = ExecutionMetadataCatalog()

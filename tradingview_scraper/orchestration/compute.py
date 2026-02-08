@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import ray
 
@@ -8,6 +8,23 @@ from tradingview_scraper.orchestration.sleeve_executor import SleeveActor
 from tradingview_scraper.telemetry.tracing import trace_span
 
 logger = logging.getLogger(__name__)
+
+
+@ray.remote(num_cpus=1)
+def execute_stage_remote(stage_id: str, context: Any, params: Dict[str, Any]) -> Any:
+    """Ray remote function to execute a stage in a worker."""
+    from tradingview_scraper.orchestration.registry import StageRegistry
+
+    spec = StageRegistry.get(stage_id)
+    if not spec.stage_class:
+        raise ValueError(f"Stage {stage_id} must have a class implementation for remote execution")
+
+    try:
+        stage = spec.stage_class(**params)
+    except TypeError:
+        stage = spec.stage_class()
+
+    return stage.execute(context)
 
 
 class RayComputeEngine:
@@ -60,6 +77,24 @@ class RayComputeEngine:
                 },
             )
 
+    def map_stages(self, stage_id: str, contexts: list, params: dict = None) -> list:
+        """
+        Execute same stage across multiple contexts in parallel.
+        """
+        self.ensure_initialized()
+        futures = [execute_stage_remote.remote(stage_id, ctx, params or {}) for ctx in contexts]
+        return ray.get(futures)
+
+    def execute_dag(self, dag: Any, params: dict = None) -> Any:
+        """
+        Execute a Prefect DAG with Ray as the task runner.
+        """
+        from prefect_ray import RayTaskRunner
+
+        # We assume dag is a Prefect Flow
+        with dag.with_options(task_runner=RayTaskRunner()):
+            return dag.run(**(params or {}))
+
     @trace_span("execute_sleeves")
     def execute_sleeves(self, sleeves: List[Dict[str, str]]) -> List[Dict]:
         """
@@ -97,6 +132,7 @@ class RayComputeEngine:
             from opentelemetry import trace
             from opentelemetry.sdk.trace import TracerProvider
             from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+
             from tradingview_scraper.telemetry.exporter import ForensicSpanExporter
 
             tp = trace.get_tracer_provider()

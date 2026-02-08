@@ -1,17 +1,16 @@
-# L1: Binance Spot Pure Liquidity Baseline
-base_preset: binance_liquid_base.yaml
+# L1: Hardened Binance Spot Liquidity Base
+exchanges: ["BINANCE"]
+markets: ["crypto"]
 filters:
-  - { left: "Value.Traded", operation: "greater", right: 5000000 }
   - { left: "type", operation: "equal", right: "spot" }
-  - { left: "name", operation: "match", right: "USDT$|USDC$|FDUSD$|DAI$|USD$" }
-  - { left: "name", operation: "nmatch", right: ".P$" }
-  # Exclude Gold Pegged Assets (Commodity Risk)
-  - { left: "name", operation: "nmatch", right: "^PAXG|^XAUT" }
-  # Exclude Stablecoin Pairs (Pairs Trading Universe)
-  - { left: "name", operation: "nmatch", right: "^XUSD|^USD1|^AEUR|^EUR|^GBP|^JPY" }
-sort_by: name
-sort_order: asc
-base_universe_sort_by: name
+  - { left: "Value.Traded", operation: "greater", right: 1000000 } # Relaxed to 1M USD (assuming USD pairs)
+  - { left: "Volatility.D", operation: "greater", right: 0.1 }
+  # Force Quote Currency to USD-pegged assets to ensure "Value.Traded" sorting is comparable
+  - { left: "currency", operation: "in_range", right: ["USDT", "USDC", "FDUSD", "TUSD", "BUSD", "DAI", "USD"] }
+metadata:
+  intent: "DISCOVERY" # Bypasses legacy Trend/Strategy filters in FuturesUniverseSelector
+sort_by: "Value.Traded"
+sort_order: desc
 limit: 500
 export_metadata:
   symbol: binance_spot_base

@@ -246,10 +246,20 @@ def validate_meta_run(
             summary["results"][prof] = prof_res
             continue
 
+        if len(meta_rets.columns) < 2:
+            checks.append(CheckResult(False, "META_SINGLE_SLEEVE", f"[{meta_profile}/{prof}] meta returns contain fewer than 2 sleeves"))
+            summary["results"][prof] = prof_res
+            continue
+
         opt = _load_meta_optimized(base_dir, meta_profile, prof)
         weights = opt.get("weights", [])
         if not weights:
             checks.append(CheckResult(False, "META_EMPTY_WEIGHTS", f"[{meta_profile}/{prof}] meta_optimized has no weights"))
+            summary["results"][prof] = prof_res
+            continue
+
+        if len(weights) < 2:
+            checks.append(CheckResult(False, "META_SINGLE_WEIGHT", f"[{meta_profile}/{prof}] meta_optimized has fewer than 2 sleeves"))
             summary["results"][prof] = prof_res
             continue
 
@@ -262,6 +272,11 @@ def validate_meta_run(
         w_map = {str(w.get("Symbol")): float(w.get("Weight", 0.0)) for w in weights if w.get("Symbol") in meta_rets.columns}
         if not w_map:
             checks.append(CheckResult(False, "META_WEIGHT_COLUMN_MISMATCH", f"[{meta_profile}/{prof}] weights don't match meta_returns columns"))
+            summary["results"][prof] = prof_res
+            continue
+
+        if len(w_map) < 2:
+            checks.append(CheckResult(False, "META_SINGLE_MATCH", f"[{meta_profile}/{prof}] fewer than 2 sleeve weights matched meta_returns columns"))
             summary["results"][prof] = prof_res
             continue
 

@@ -84,6 +84,7 @@ class FeatureIngestionService:
             request_fields = sorted(list(set(request_fields)))
 
             res = self.overview.get_symbol_overview(symbol, fields=request_fields)
+            time.sleep(0.5)  # Throttling to avoid 429
 
             if res["status"] == "success" and res.get("data"):
                 data = res["data"]
@@ -122,29 +123,63 @@ class FeatureIngestionService:
         return None
 
     def ingest_batch(self, symbols: List[str]):
-        """Fetch and store technicals for a batch of symbols."""
+        """Fetch and store technicals for a batch of symbols with retries."""
         if not symbols:
             return
 
         logger.info(f"Fetching technicals for {len(symbols)} symbols...")
-        results = []
 
         # Current UTC timestamp for the snapshot
         now_ts = int(time.time())
         # Partition Date
         partition_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-        with ThreadPoolExecutor(max_workers=self.workers) as executor:
-            for i, result in enumerate(executor.map(self.fetch_technicals_single, symbols)):
-                if result:
-                    result["timestamp"] = now_ts
-                    results.append(result)
-                if (i + 1) % 50 == 0:
-                    logger.info(f"Processed {i + 1}/{len(symbols)}")
+        max_attempts = 3
+        backoff_seconds = 3
+        results: List[Dict[str, Any]] = []
+
+        for attempt in range(1, max_attempts + 1):
+            attempt_results: List[Dict[str, Any]] = []
+            failures = 0
+
+            with ThreadPoolExecutor(max_workers=self.workers) as executor:
+                for i, result in enumerate(executor.map(self.fetch_technicals_single, symbols)):
+                    if result:
+                        result["timestamp"] = now_ts
+                        attempt_results.append(result)
+                    else:
+                        failures += 1
+                    if (i + 1) % 50 == 0:
+                        logger.info(f"Attempt {attempt}: processed {i + 1}/{len(symbols)}")
+
+            if attempt_results:
+                results = attempt_results
+                if failures:
+                    logger.warning(
+                        "Attempt %s succeeded with partial coverage (%s/%s symbols).",
+                        attempt,
+                        len(attempt_results),
+                        len(symbols),
+                    )
+                break
+
+            if attempt == max_attempts:
+                break
+
+            sleep_for = backoff_seconds * attempt
+            logger.warning(
+                "Attempt %s/%s fetched zero technicals (failures=%s). Retrying in %ss...",
+                attempt,
+                max_attempts,
+                failures,
+                sleep_for,
+            )
+            time.sleep(sleep_for)
 
         if not results:
-            logger.warning("No technicals fetched.")
-            return
+            msg = "No technicals fetched after retries. Treating as failure."
+            logger.error(msg)
+            raise RuntimeError(msg)
 
         # Create DataFrame
         df = pd.DataFrame(results)
@@ -154,9 +189,6 @@ class FeatureIngestionService:
         part_dir.mkdir(parents=True, exist_ok=True)
 
         # Save Parquet
-        # We append a timestamp/uuid to filename to avoid overwrites in case of multiple runs per day?
-        # Or just overwrite "part-0.parquet" if we assume one batch per day?
-        # Let's use a timestamped filename to allow multiple batches.
         filename = f"part-{now_ts}.parquet"
         out_path = part_dir / filename
 
@@ -192,7 +224,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--candidates", required=True, help="Path to candidates.json")
     parser.add_argument("--lakehouse", default=None, help="Lakehouse root directory")
-    parser.add_argument("--workers", type=int, default=10, help="Concurrency level")
+    parser.add_argument("--workers", type=int, default=3, help="Concurrency level")
     args = parser.parse_args()
 
     lakehouse_path = Path(args.lakehouse) if args.lakehouse else None

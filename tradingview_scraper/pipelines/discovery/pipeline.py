@@ -67,6 +67,20 @@ class DiscoveryPipeline:
             logger.error(f"Profile {profile_name} not found in manifest")
             return []
 
+        # Resolve Profile Alias (recursively if needed, but 1 level is usually enough)
+        if isinstance(profile, str):
+            logger.info(f"Resolving profile alias: {profile_name} -> {profile}")
+            resolved_profile = manifest.get("profiles", {}).get(profile)
+            if not resolved_profile:
+                logger.error(f"Resolved profile {profile} not found in manifest")
+                return []
+            profile = resolved_profile
+
+        # Ensure profile is a dictionary (it might be a string alias or something else in some configs?)
+        if not isinstance(profile, dict):
+            logger.error(f"Profile {profile_name} is malformed (expected dict, got {type(profile)})")
+            return []
+
         discovery_config = profile.get("discovery", {})
         pipelines = discovery_config.get("pipelines", {})
         strategies = discovery_config.get("strategies", {})
@@ -118,6 +132,10 @@ class DiscoveryPipeline:
                         c.metadata["logic"] = s_name
                 all_candidates.extend(cands)
 
+        if not all_candidates:
+            logger.error(f"❌ No candidates discovered across all strategies for profile '{profile_name}'.")
+            raise RuntimeError(f"Discovery produced 0 candidates for profile '{profile_name}'.")
+
         return all_candidates
 
     def save_candidates(self, candidates: List[CandidateMetadata], output_dir: Optional[Path] = None):
@@ -138,7 +156,18 @@ class DiscoveryPipeline:
         # For now, let's just save a unified candidates.json
         output_path = output_dir / "candidates.json"
 
+        # CR-770: Flatten metadata into top-level for compatibility with prepare_portfolio_data.py
+        serialized = []
+        for c in candidates:
+            d = asdict(c)
+            # Flatten metadata into the top level
+            if "metadata" in d and isinstance(d["metadata"], dict):
+                d.update(d["metadata"])
+                # We can keep 'metadata' key for reference or remove it.
+                # Keeping it is safer for debugging, but updating top-level is crucial for downstream scripts.
+            serialized.append(d)
+
         with open(output_path, "w") as f:
-            json.dump([asdict(c) for c in candidates], f, indent=2)
+            json.dump(serialized, f, indent=2)
 
         logger.info(f"Saved {len(candidates)} candidates to {output_path}")
