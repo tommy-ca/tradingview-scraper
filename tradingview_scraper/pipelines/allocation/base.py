@@ -35,6 +35,7 @@ class AllocationContext(BaseModel):
     # Metadata & Clusters
     clusters: Dict[str, List[str]] = Field(default_factory=dict)
     window_meta: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    composition_map: Dict[str, Dict[str, float]] = Field(default_factory=dict)  # Strat -> {Asset: Weight}
     stats: pd.DataFrame = Field(default_factory=pd.DataFrame)
     is_meta: bool = False
 

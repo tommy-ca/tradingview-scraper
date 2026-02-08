@@ -228,6 +228,7 @@ class BacktestEngine:
             bench_rets=cast(pd.Series, train_rets[self.settings.benchmark_symbols[0]]) if self.settings.benchmark_symbols and self.settings.benchmark_symbols[0] in train_rets.columns else None,
             clusters={},  # Pipeline will fill this
             window_meta={s: self.metadata.get(s, {}) for s in train_rets_strat.columns},
+            composition_map=self.synthesizer.composition_map,
             stats=self.stats,
             is_meta=is_meta,
             engine_names=engines,

@@ -9,7 +9,7 @@ from contextvars import ContextVar, Token
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Optional
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (

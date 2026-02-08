@@ -135,3 +135,14 @@ WeightsSchema = pa.DataFrameSchema(
         pa.Check(lambda df: df["Weight"].sum() <= 1.05, name="simplex_sum_constraint")
     ],
 )
+
+# Inference Schema for L2 Validation
+InferenceSchema = pa.DataFrameSchema(
+    columns={
+        "alpha_score": pa.Column(float, checks=[pa.Check.in_range(-5.0, 5.0)], nullable=False),  # Z-score-like
+        # Regex for probability columns
+        "^(.*)_prob$": pa.Column(float, checks=[pa.Check.in_range(0.0, 1.0)], nullable=False, regex=True),
+    },
+    index=pa.Index(str),  # Asset Symbols (Cross-sectional)
+    strict=False,  # Allow extra debug columns
+)
