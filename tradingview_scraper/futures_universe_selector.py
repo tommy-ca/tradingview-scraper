@@ -22,6 +22,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+import pandas as pd
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from tradingview_scraper.settings import get_settings
@@ -317,6 +319,7 @@ class SelectorConfig(BaseModel):
     base_universe_sort_by: str = "Value.Traded"
     export: ExportConfig = Field(default_factory=ExportConfig)
     export_metadata: ExportMetadata = Field(default_factory=ExportMetadata)
+    metadata: dict[str, Any] | None = None
 
     @field_validator("sort_order", "final_sort_order")
     @classmethod
@@ -630,6 +633,79 @@ class FuturesUniverseSelector:
             offset += batch_size
 
         return collected, errors
+
+    @staticmethod
+    def _extract_base_quote_vectorized(df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df.assign(base="", quote="", exchange="")
+
+        # 1. Parse Exchange and Core Symbol
+        # Split by first colon
+        split_data = df["symbol"].str.split(":", n=1, expand=True)
+
+        # Handle case where no colon exists in ANY row (expand=True might return 1 col)
+        if split_data.shape[1] < 2:
+            split_data[1] = np.nan
+
+        df["exchange"] = split_data[0]
+        # If no colon, the whole symbol is in 0 and 1 is None/NaN
+        # But we want core to be the symbol part.
+        # If split_data[1] is NaN, it means no colon.
+        # Original logic: _extract_exchange returns None if no colon.
+        # _extract_base_quote uses split(":", 1)[-1].
+
+        # Adjust logic:
+        # if col 1 is NaN, then no colon found. core is col 0. exchange is None.
+        # if col 1 is set, exchange is col 0, core is col 1.
+
+        has_colon = split_data[1].notna()
+        df.loc[~has_colon, "exchange"] = None
+
+        # Prepare core column
+        core = split_data[1].where(has_colon, split_data[0]).fillna("").astype(str).str.upper()
+
+        # 2. Clean Core Symbol
+        # Strip .P, .F
+        core = core.str.replace(r"\.[PF]$", "", regex=True)
+
+        # Strip Dated Futures suffixes (e.g. Z2025, 27MAR2026)
+        # patterns = [r"[0-9]{1,2}[A-Z]{1,3}[0-9]{2,4}$", r"[A-Z][0-9]{2,4}$"]
+        core = core.str.replace(r"[0-9]{1,2}[A-Z]{1,3}[0-9]{2,4}$", "", regex=True)
+        core = core.str.replace(r"[A-Z][0-9]{2,4}$", "", regex=True)
+
+        # Strip numeric multipliers (e.g. 1000PEPE -> PEPE)
+        core = core.str.replace(r"^[0-9]+", "", regex=True)
+
+        # 3. Extract Base/Quote using STABLE_BASES
+        # Priority list from original code
+        priority_stables = ["USDT", "USDC", "FUSDT", "FDUSD", "FUSD", "BUSD", "DAI"]
+        # Merge with STABLE_BASES, sort by length desc
+        all_stables = sorted(set(priority_stables) | STABLE_BASES, key=len, reverse=True)
+
+        # Build regex: (.*)(USDT|USDC|...)$
+        # Escape just in case, though stables are usually alphanumeric
+        stable_pattern = "|".join(re.escape(s) for s in all_stables)
+        regex = f"^(.*?)({stable_pattern})$"
+
+        extracted = core.str.extract(regex)
+        df["base"] = extracted[0]
+        df["quote"] = extracted[1]
+
+        # 4. Fallback: 6-char alpha (e.g. EURUSD)
+        mask_nan = df["base"].isna()
+        mask_6char = mask_nan & (core.str.len() == 6) & core.str.isalpha()
+
+        if mask_6char.any():
+            df.loc[mask_6char, "base"] = core.loc[mask_6char].str[:3]
+            df.loc[mask_6char, "quote"] = core.loc[mask_6char].str[3:]
+
+        # 5. Final Fallback: base=core, quote=""
+        mask_still_nan = df["base"].isna()
+        if mask_still_nan.any():
+            df.loc[mask_still_nan, "base"] = core.loc[mask_still_nan]
+            df.loc[mask_still_nan, "quote"] = ""
+
+        return df
 
     @staticmethod
     def _extract_exchange(symbol: str) -> str | None:
@@ -1239,6 +1315,8 @@ class FuturesUniverseSelector:
                     # Prefer current if its liquidity is at least 30% of candidate
                     if best_value > candidate_value * 0.3:
                         better = False
+                    else:
+                        better = True
             else:
                 # Non-numeric sort field (e.g. name): stick strictly to quote priority
                 if cand_q_rank < curr_q_rank:
@@ -1429,70 +1507,97 @@ class FuturesUniverseSelector:
                 data_category=self.config.export_metadata.data_category,
             )
 
+    @staticmethod
+    def _get_numeric(df: pd.DataFrame, col: str) -> pd.Series:
+        """Safe extraction of numeric series, handling missing columns."""
+        if col not in df.columns:
+            return pd.Series(np.nan, index=df.index)
+        return pd.to_numeric(df[col], errors="coerce")
+
     def process_data(self, raw_data: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Processes raw screened data through the selector's post-filtering and aggregation pipeline.
+        Vectorized Implementation.
         """
         logger.info(f"AUDIT: Starting process_data with {len(raw_data)} candidates.")
 
-        # Global Ensure: Track symbols that MUST be in the result if they exist in raw data
+        if not raw_data:
+            return {
+                "status": "success",
+                "data": [],
+                "total_candidates": 0,
+                "total_selected": 0,
+            }
+
+        # Convert to DataFrame immediately
+        df = pd.DataFrame(raw_data)
+        initial_count = len(df)
+
+        # 0. Global Ensure: Track symbols that MUST be in the result
         ensure_set = {s.upper() for s in self.config.ensure_symbols}
-        ensured_rows = [r for r in raw_data if r.get("symbol", "").upper() in ensure_set]
+        # Keep a separate copy of ensured rows before any filtering
+        ensured_df = df[df["symbol"].str.upper().isin(list(ensure_set))].copy()
 
-        # 1. Basic Filters (Symbol, type, stable exclusion)
-        rows_step1 = self._apply_basic_filters(raw_data)
-        logger.info(f"AUDIT: Step 1 (Basic Filters) dropped {len(raw_data) - len(rows_step1)} items.")
+        # 1. Parse Symbols (Vectorized)
+        df = self._extract_base_quote_vectorized(df)
+        if not ensured_df.empty:
+            ensured_df = self._extract_base_quote_vectorized(ensured_df)
 
-        # 2. Market Cap Guard (Rank and Floor)
-        rows_step2 = self._apply_market_cap_filter(rows_step1)
-        logger.info(f"AUDIT: Step 2 (Market Cap) dropped {len(rows_step1) - len(rows_step2)} items.")
+        # 2. Basic Filters
+        df = self._apply_basic_filters_vectorized(df)
+        logger.info(f"AUDIT: Step 1 (Basic Filters) dropped {initial_count - len(df)} items.")
 
-        # 3. Volatility Filter
-        rows_step3 = []
-        for r in rows_step2:
-            passed, val = self._evaluate_volatility(r)
-            if passed:
-                rows_step3.append(r)
-            else:
-                logger.info(f"AUDIT: Dropped {r.get('symbol')} due to Volatility (Value={val})")
-        logger.info(f"AUDIT: Step 3 (Volatility) dropped {len(rows_step2) - len(rows_step3)} items.")
+        # 3. Market Cap Guard
+        count_before = len(df)
+        df = self._apply_market_cap_filter_vectorized(df)
+        logger.info(f"AUDIT: Step 2 (Market Cap) dropped {count_before - len(df)} items.")
 
-        # 4. Liquidity Filter (Floor)
-        rows_step4 = []
-        for r in rows_step3:
-            if self._evaluate_liquidity(r):
-                rows_step4.append(r)
-            else:
-                logger.info(f"AUDIT: Dropped {r.get('symbol')} due to Liquidity (Vol={r.get('volume')}, Val={r.get('Value.Traded')})")
-        logger.info(f"AUDIT: Step 4 (Liquidity) dropped {len(rows_step3) - len(rows_step4)} items.")
+        # 4. Volatility Filter
+        count_before = len(df)
+        df = self._apply_volatility_filter_vectorized(df)
+        logger.info(f"AUDIT: Step 3 (Volatility) dropped {count_before - len(df)} items.")
 
-        # 5. Recent performance / data completeness guard
-        rows_step5 = self._apply_recent_perf_filter(rows_step4)
-        logger.info(f"AUDIT: Step 5 (Recent Perf) dropped {len(rows_step4) - len(rows_step5)} items.")
+        # 5. Liquidity Filter
+        count_before = len(df)
+        df = self._apply_liquidity_filter_vectorized(df)
+        logger.info(f"AUDIT: Step 4 (Liquidity) dropped {count_before - len(df)} items.")
 
-        # Add back ensured rows if they were filtered out
-        # (This logic implies ensured rows might have failed above checks but are forced back in?
-        #  If so, we should log that too).
-        seen_symbols = {r.get("symbol") for r in rows_step5}
-        forced_back = 0
-        for er in ensured_rows:
-            if er.get("symbol") not in seen_symbols:
-                rows_step5.append(er)
-                forced_back += 1
-        if forced_back > 0:
-            logger.info(f"AUDIT: Forced back {forced_back} ensured symbols.")
+        # 6. Recent Perf Guard
+        count_before = len(df)
+        df = self._apply_recent_perf_filter_vectorized(df)
+        logger.info(f"AUDIT: Step 5 (Recent Perf) dropped {count_before - len(df)} items.")
 
-        rows = rows_step5
+        # 7. Strategy Filters (Vectorized) - Applied BEFORE Dedupe per instruction order
+        count_before = len(df)
+        df = self._apply_strategy_filters_vectorized(df)
+        logger.info(f"AUDIT: Step 8 (Strategy Filters - Pre-Dedupe) dropped {count_before - len(df)} items.")
 
-        # 6. Aggregation (Deduplicate by base currency)
+        # Add back ensured rows if missing
+        if not ensure_set:
+            pass
+        else:
+            current_symbols = set(df["symbol"].unique())
+            missing_mask = ~ensured_df["symbol"].isin(current_symbols)
+            missing_ensured = ensured_df[missing_mask]
+            if not missing_ensured.empty:
+                logger.info(f"AUDIT: Forced back {len(missing_ensured)} ensured symbols.")
+                # We need to ensure 'passes' column exists if we merge
+                if "passes" not in missing_ensured.columns and "passes" in df.columns:
+                    missing_ensured["passes"] = [{"all": True}] * len(missing_ensured)
+                df = pd.concat([df, missing_ensured], ignore_index=True)
+
+        # 8. Aggregation / Dedupe
+        # Convert to list of dicts for complex tie-breaker logic
+        rows = df.to_dict("records")
+
         if self.config.dedupe_by_symbol and not self.config.attach_perp_counterparts:
             before_dedupe = len(rows)
             rows = self._aggregate_by_base(rows)
             logger.info(f"AUDIT: Step 6 (Deduplication) reduced count from {before_dedupe} to {len(rows)} (merged {before_dedupe - len(rows)}).")
 
-        # 7. Sorting & Limiting (Base Universe)
+        # 9. Sorting & Limiting (Base Universe)
         base_sort_field = self.config.base_universe_sort_by or "Value.Traded"
-        rows.sort(key=lambda x: x.get(base_sort_field) or 0, reverse=True)
+        rows.sort(key=lambda x: float(x.get(base_sort_field) or 0), reverse=True)
 
         if self.config.base_universe_limit:
             before_limit = len(rows)
@@ -1500,29 +1605,24 @@ class FuturesUniverseSelector:
             if len(rows) < before_limit:
                 logger.info(f"AUDIT: Step 7 (Base Limit) dropped {before_limit - len(rows)} items.")
 
-        # 8. Strategy Filters (Trend, Screens)
-        filtered = self._apply_strategy_filters(rows)
-        logger.info(f"AUDIT: Step 8 (Strategy Filters) dropped {len(rows) - len(filtered)} items.")
-
-        # Log specific strategy drops if count > 0
-        if len(rows) > len(filtered):
-            survivors = {r.get("symbol") for r in filtered}
-            for r in rows:
-                if r.get("symbol") not in survivors:
-                    logger.info(f"AUDIT: Dropped {r.get('symbol')} due to Strategy Filters (Passes: {r.get('passes')})")
-
+        # 10. Momentum Composite (Vectorized)
         if self.config.momentum_composite_fields:
-            filtered = self._apply_momentum_composite(filtered)
+            # Convert back to DF for vectorized math
+            if rows:
+                df_final = pd.DataFrame(rows)
+                df_final = self._apply_momentum_composite_vectorized(df_final)
+                rows = df_final.to_dict("records")
 
+        # 11. Attach Perps OR Final Sort/Limit
         if self.config.attach_perp_counterparts:
-            trimmed = self._attach_perp_counterparts(filtered)
+            trimmed = self._attach_perp_counterparts(rows)
         else:
-            final_sorted = self._sort_rows(filtered)
+            final_sorted = self._sort_rows(rows)
             trimmed = final_sorted[: self.config.limit]
             if len(trimmed) < len(final_sorted):
                 logger.info(f"AUDIT: Step 9 (Final Limit) dropped {len(final_sorted) - len(trimmed)} items.")
 
-        # Final Uniqueness Guard: Ensure no duplicate symbols in final output
+        # Final Uniqueness Guard
         seen_final: set[str] = set()
         unique_final: list[dict[str, Any]] = []
         for r in trimmed:
@@ -1673,6 +1773,455 @@ class FuturesUniverseSelector:
             result["status"] = "partial_success"
             result["errors"] = errors
         return result
+
+    def _apply_basic_filters_vectorized(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+
+        include_set = set(s.upper() for s in self.config.include_symbols)
+        exclude_set = set(s.upper() for s in self.config.exclude_symbols)
+        exchange_set = set(self.config.exchanges)
+
+        # 1. Exclude Stable Bases
+        if self.config.exclude_stable_bases:
+            df = df[~df["base"].isin(list(STABLE_BASES))].copy()
+
+        # 2. Include Set (Symbol OR Base)
+        if include_set:
+            l_inc = list(include_set)
+            mask = df["symbol"].isin(l_inc) | df["base"].isin(l_inc)
+            df = df[mask].copy()
+
+        # 3. Exclude Set (Symbol OR Base)
+        if exclude_set:
+            l_exc = list(exclude_set)
+            mask = df["symbol"].isin(l_exc) | df["base"].isin(l_exc)
+            df = df[~mask].copy()
+
+        # 4. Exchange Set
+        if exchange_set:
+            df = df[df["exchange"].isin(list(exchange_set))].copy()
+
+        return df
+
+    def _apply_market_cap_filter_vectorized(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+
+        cap_map = self._load_market_cap_map()
+
+        # Always add the column for consistency
+        if not cap_map:
+            df["market_cap_external"] = np.nan
+        else:
+            df["market_cap_external"] = df["base"].map(cap_map)
+
+        # Guard B: Floor-based
+        if self.config.market_cap_floor is not None:
+            # Calculate max(calc, external)
+            # Use fillna(0) to handle NaNs safely
+            calc = self._get_numeric(df, "market_cap_calc").fillna(0)
+            ext = self._get_numeric(df, "market_cap_external").fillna(0)
+            max_cap = np.maximum(calc, ext)
+
+            mask = max_cap >= self.config.market_cap_floor
+            dropped_count = (~mask).sum()
+            if dropped_count > 0:
+                logger.info("Floor guard (%s) dropped %d items", self.config.market_cap_floor, dropped_count)
+            df = df[mask].copy()
+
+        # Guard A: Rank-based
+        if cap_map and (self.config.market_cap_rank_limit or self.config.market_cap_limit):
+            limit = self.config.market_cap_rank_limit or self.config.market_cap_limit
+            tops = sorted(((b, v) for b, v in cap_map.items()), key=lambda x: x[1], reverse=True)[:limit]
+            allowed_bases = {b for b, _ in tops}
+
+            mask = df["base"].isin(allowed_bases)
+            dropped_count = (~mask).sum()
+            if dropped_count > 0:
+                logger.info("Rank guard (%d) dropped %d items", limit, dropped_count)
+            df = df[mask].copy()
+
+        return df
+
+    def _apply_volatility_filter_vectorized(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+
+        vol_cfg = self.config.volatility
+
+        # Calculate ATR %
+        if vol_cfg.fallback_use_atr_pct:
+            # Ensure numeric
+            close = self._get_numeric(df, "close")
+            atr = self._get_numeric(df, "ATR")
+
+            # Valid mask: close != 0 and both not NaN
+            valid = (close.notna()) & (close != 0) & (atr.notna())
+            df.loc[valid, "atr_pct"] = atr[valid] / close[valid]
+
+        checks_present = any(value is not None for value in (vol_cfg.min, vol_cfg.max, vol_cfg.atr_pct_max))
+        if not checks_present:
+            return df
+
+        # Volatility.D checks
+        vol_pass = pd.Series(False, index=df.index)
+        if "Volatility.D" in df.columns:
+            v = self._get_numeric(df, "Volatility.D")
+            cond = v.notna()
+            if vol_cfg.min is not None:
+                cond &= v >= vol_cfg.min
+            if vol_cfg.max is not None:
+                cond &= v <= vol_cfg.max
+            vol_pass = cond
+
+        # ATR % checks
+        atr_pass = pd.Series(False, index=df.index)
+        if "atr_pct" in df.columns and vol_cfg.atr_pct_max is not None:
+            a = self._get_numeric(df, "atr_pct")
+            cond = a.notna() & (a <= vol_cfg.atr_pct_max)
+            atr_pass = cond
+
+        # Combined: (Vol Valid & Pass) OR (ATR Valid & Pass)
+        # Note: Original logic implies if Vol is present, it takes precedence?
+        # Re-reading original:
+        # if vol_val is not None: return pass/fail (don't check ATR)
+        # if vol_val is None: check ATR
+        # So it's: Vol_Present ? Vol_Pass : ATR_Pass
+
+        vol_present = self._get_numeric(df, "Volatility.D").notna()
+        final_mask = vol_pass.where(vol_present, atr_pass)
+
+        # If neither present, what happens?
+        # Original: returns False, atr_pct
+        # So if vol missing and atr missing/failed, False.
+        # My logic: vol_present False -> takes atr_pass. atr_pass default False. Correct.
+
+        dropped_count = (~final_mask).sum()
+        if dropped_count > 0:
+            logger.info("AUDIT: Dropped %d items due to Volatility", dropped_count)
+
+        return df[final_mask].copy()
+
+    def _apply_liquidity_filter_vectorized(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+
+        vt_floor = self.config.volume.value_traded_min or 0
+
+        # 1. Value.Traded Check
+        if vt_floor > 0:
+            vt = self._get_numeric(df, "Value.Traded")
+            # Fail if VT is present (not NaN) AND < floor
+            # So pass if NaN or >= floor
+            pass_vt = vt.isna() | (vt >= vt_floor)
+
+            dropped_vt = (~pass_vt).sum()
+            if dropped_vt > 0:
+                logger.info("AUDIT: Dropped %d items due to Value.Traded floor", dropped_vt)
+            df = df[pass_vt].copy()
+
+        if df.empty:
+            return df
+
+        # 2. Volume Check
+        vol_floor = self.config.volume.min or 0
+        default_thresh = vol_floor
+
+        # Build thresholds array
+        thresholds = pd.Series(default_thresh, index=df.index)
+        if self.config.volume.per_exchange:
+            for exc, thresh in self.config.volume.per_exchange.items():
+                mask = df["exchange"] == exc
+                thresholds[mask] = thresh
+
+        vol = self._get_numeric(df, "volume").fillna(0)
+
+        # Pass if volume >= threshold
+        # If vol is NaN (0) and threshold <= 0, it passes.
+        pass_vol = vol >= thresholds
+
+        dropped_vol = (~pass_vol).sum()
+        if dropped_vol > 0:
+            logger.info("AUDIT: Dropped %d items due to Volume floor", dropped_vol)
+
+        return df[pass_vol].copy()
+
+    def _apply_recent_perf_filter_vectorized(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty or not self.config.recent_perf.enabled:
+            return df
+
+        cfg = self.config.recent_perf
+        required = [f for f in (cfg.required_fields or []) if f]
+        abs_min = cfg.abs_min or {}
+        abs_max = cfg.abs_max or {}
+
+        mask = pd.Series(True, index=df.index)
+
+        # Required Fields
+        for field in required:
+            vals = self._get_numeric(df, field)
+            mask &= vals.notna()
+
+        # Abs Min
+        for field, thresh in abs_min.items():
+            vals = self._get_numeric(df, field)
+            mask &= vals.notna() & (vals.abs() >= thresh)
+
+        # Abs Max
+        for field, thresh in abs_max.items():
+            vals = self._get_numeric(df, field)
+            mask &= vals.notna() & (vals.abs() <= thresh)
+
+        dropped = (~mask).sum()
+        if dropped > 0:
+            logger.info("AUDIT: Dropped %d items due to Recent Perf", dropped)
+
+        return df[mask].copy()
+
+    def _evaluate_trend_vectorized(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Returns DataFrame of boolean checks
+        checks = pd.DataFrame(index=df.index)
+        trend_cfg = self.config.trend
+        is_long = trend_cfg.direction == "long"
+
+        # Recommendation
+        if trend_cfg.recommendation.enabled:
+            rec = self._get_numeric(df, "Recommend.All")
+            rec_min = trend_cfg.recommendation.min
+            if rec_min is not None:
+                if is_long:
+                    checks["recommendation"] = rec >= rec_min
+                else:
+                    checks["recommendation"] = rec <= rec_min
+            else:
+                checks["recommendation"] = True  # Present but no min? or False? Original says rec_min is not None check.
+                # If rec_min is None, original logic: rec_pass=False.
+                # Wait: if rec_min is not None and rec_value is not None: check.
+                # else: rec_pass = False.
+                # So if rec_min is None, it fails?
+                # "rec_pass = False ... if rec_min is not None..."
+                # Yes.
+                if rec_min is None:
+                    checks["recommendation"] = False
+
+        # ADX
+        if trend_cfg.adx.enabled:
+            adx = self._get_numeric(df, "ADX")
+            adx_min = trend_cfg.adx.min
+            if adx_min is not None:
+                checks["adx"] = (adx.notna()) & (adx >= adx_min)
+            else:
+                checks["adx"] = False
+
+        # Momentum
+        if trend_cfg.momentum.enabled:
+            horizons = trend_cfg.momentum.horizons or {}
+            # Defaults logic
+            if not horizons:
+                # Logic for defaults (skipped for brevity, assuming populated or handled)
+                # Original copies logic.
+                if trend_cfg.timeframe == "daily":
+                    horizons = {"change": 0.0, "Perf.W": 0.0}
+                elif trend_cfg.timeframe == "weekly":
+                    horizons = {"Perf.W": 0.0}
+                else:
+                    horizons = DEFAULT_MOMENTUM
+
+            mom_pass = pd.Series(True, index=df.index)
+            for field, thresh in horizons.items():
+                val = self._get_numeric(df, field)
+                # Fail if NaN
+                mom_pass &= val.notna()
+                if is_long:
+                    mom_pass &= val > thresh  # Original: if val <= thresh: fail. So val > thresh pass.
+                else:
+                    mom_pass &= val < thresh  # Original: if val >= thresh: fail. So val < thresh pass.
+            checks["momentum"] = mom_pass
+
+        # Confirmation Momentum
+        if trend_cfg.confirmation_momentum.enabled:
+            horizons = trend_cfg.confirmation_momentum.horizons or {}
+            conf_pass = pd.Series(True, index=df.index)
+            for field, thresh in horizons.items():
+                val = self._get_numeric(df, field)
+                conf_pass &= val.notna()
+                if is_long:
+                    conf_pass &= val > thresh
+                else:
+                    conf_pass &= val < thresh
+            checks["confirmation_momentum"] = conf_pass
+
+        return checks
+
+    def _evaluate_screen_vectorized(self, df: pd.DataFrame, screen: ScreenConfig) -> pd.DataFrame:
+        checks = pd.DataFrame(index=df.index)
+        is_long = screen.direction == "long"
+
+        suffix = ""
+        if screen.timeframe == "weekly":
+            suffix = "|1W"
+        elif screen.timeframe == "monthly":
+            suffix = "|1M"
+
+        # Recommendation
+        if screen.recommendation.enabled:
+            rec_col = f"Recommend.All{suffix}" if f"Recommend.All{suffix}" in df.columns else "Recommend.All"
+            rec = self._get_numeric(df, rec_col)
+            rec_min = screen.recommendation.min
+            if rec_min is None:
+                checks["recommendation"] = True
+            else:
+                if is_long:
+                    checks["recommendation"] = rec >= rec_min
+                else:
+                    checks["recommendation"] = rec <= rec_min
+            # Original: if rec_min is None: True. Else check.
+
+        # ADX
+        if screen.adx.enabled:
+            adx_col = f"ADX{suffix}" if f"ADX{suffix}" in df.columns else "ADX"
+            adx = self._get_numeric(df, adx_col)
+            adx_min = screen.adx.min
+            if adx_min is None:
+                checks["adx"] = True
+            else:
+                checks["adx"] = (adx.notna()) & (adx >= adx_min)
+
+        # Momentum
+        if screen.momentum.enabled:
+            horizons = screen.momentum.horizons or {}
+            if not horizons:
+                checks["momentum"] = True
+            else:
+                mom_pass = pd.Series(True, index=df.index)
+                for field, thresh in horizons.items():
+                    val = self._get_numeric(df, field)
+                    mom_pass &= val.notna()
+                    if is_long:
+                        mom_pass &= val > thresh
+                    else:
+                        mom_pass &= val < thresh
+                checks["momentum"] = mom_pass
+
+        # Osc
+        if screen.osc.enabled:
+            horizons = screen.osc.horizons or {}
+            if not horizons:
+                checks["osc"] = True
+            else:
+                osc_pass = pd.Series(True, index=df.index)
+                for field, thresh in horizons.items():
+                    val = self._get_numeric(df, field)
+                    osc_pass &= val.notna()
+                    if is_long:
+                        osc_pass &= val < thresh  # Original: if val >= thresh fail -> val < thresh pass
+                    else:
+                        osc_pass &= val > thresh  # Original: if val <= thresh fail -> val > thresh pass
+                checks["osc"] = osc_pass
+
+        # Volatility
+        if screen.volatility.enabled:
+            horizons = screen.volatility.horizons or {}
+            if not horizons:
+                checks["volatility"] = True
+            else:
+                vol_pass = pd.Series(True, index=df.index)
+                for field, thresh in horizons.items():
+                    val = self._get_numeric(df, field)
+                    vol_pass &= val.notna()
+                    if is_long:
+                        vol_pass &= val < thresh  # if >= thresh fail -> < pass
+                    else:
+                        vol_pass &= val > thresh  # if <= thresh fail -> > pass
+                checks["volatility"] = vol_pass
+
+        return checks
+
+    def _combine_checks(self, checks: pd.DataFrame, logic: str) -> pd.Series:
+        if checks.empty or checks.columns.empty:
+            return pd.Series(True, index=checks.index)
+
+        if logic == "AND":
+            return checks.all(axis=1)
+        else:
+            return checks.any(axis=1)
+
+    def _apply_strategy_filters_vectorized(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+
+        # Trend
+        trend_checks = self._evaluate_trend_vectorized(df)
+        trend_combined = self._combine_checks(trend_checks, self.config.trend.logic)
+
+        # Store passes
+        # We need a dict column 'passes'.
+        # Vectorized way:
+        passes_df = trend_checks.add_prefix("trend_")
+        passes_df["combined"] = trend_combined
+
+        # Screens
+        screens_combined = pd.Series(True, index=df.index)
+
+        if trend_combined.any():  # Only calc for potential survivors? No, vector calc all
+            if self.config.trend_screen:
+                sc = self._evaluate_screen_vectorized(df, self.config.trend_screen)
+                sc_combined = self._combine_checks(sc, self.config.trend_screen.logic)
+                passes_df = pd.concat([passes_df, sc.add_prefix("trend_screen_")], axis=1)
+                screens_combined &= sc_combined
+
+            if self.config.confirm_screen:
+                sc = self._evaluate_screen_vectorized(df, self.config.confirm_screen)
+                sc_combined = self._combine_checks(sc, self.config.confirm_screen.logic)
+                passes_df = pd.concat([passes_df, sc.add_prefix("confirm_screen_")], axis=1)
+                screens_combined &= sc_combined
+
+            if self.config.execute_screen:
+                sc = self._evaluate_screen_vectorized(df, self.config.execute_screen)
+                sc_combined = self._combine_checks(sc, self.config.execute_screen.logic)
+                passes_df = pd.concat([passes_df, sc.add_prefix("execute_screen_")], axis=1)
+                screens_combined &= sc_combined
+
+        final_pass = trend_combined & screens_combined
+        passes_df["all"] = final_pass
+
+        # Merge passes dict into df
+        # df['passes'] = passes_df.apply(lambda x: x.to_dict(), axis=1) # Slow
+        # Faster: to_dict('records')
+        passes_records = passes_df.to_dict("records")
+        df["passes"] = passes_records
+
+        dropped = (~final_pass).sum()
+        if dropped > 0:
+            logger.info("AUDIT: Dropped %d items due to Strategy Filters", dropped)
+
+        return df[final_pass].copy()
+
+    def _apply_momentum_composite_vectorized(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty or not self.config.momentum_composite_fields:
+            return df
+
+        fields = [f for f in self.config.momentum_composite_fields if f]
+        composite_field = self.config.momentum_composite_field_name or "momentum_zscore"
+
+        if not fields:
+            return df
+
+        zscores = pd.DataFrame(index=df.index)
+        for field in fields:
+            vals = self._get_numeric(df, field)
+            mean = vals.mean()
+            std = vals.std()
+            if pd.notna(std) and std > 0:
+                zscores[field] = (vals - mean) / std
+
+        if not zscores.empty:
+            df[composite_field] = zscores.mean(axis=1)
+        else:
+            df[composite_field] = np.nan
+
+        return df
 
 
 def _format_markdown_table(rows: list[Mapping[str, Any]], columns: list[str] | None = None) -> str:
