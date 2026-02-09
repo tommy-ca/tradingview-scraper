@@ -22,6 +22,11 @@ from tradingview_scraper.pipelines.allocation.pipeline import AllocationPipeline
 from tradingview_scraper.pipelines.selection.base import SelectionContext
 from tradingview_scraper.pipelines.selection.pipeline import SelectionPipeline
 
+try:
+    from tradingview_scraper.symbols.stream.persistent_loader import PersistentDataLoader
+except ImportError:
+    PersistentDataLoader = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,6 +75,9 @@ class BacktestEngine:
         self.detector = MarketRegimeDetector(enable_audit_log=False)
         self.selection_pipeline = SelectionPipeline(run_id=getattr(self.settings, "run_id", "backtest_v4"))
         self.allocation_pipeline = AllocationPipeline()
+
+        # MTF Ingestion
+        self.mtf_loader = None
 
     def load_data(self, run_dir: Path | None = None) -> None:
         """
@@ -210,6 +218,10 @@ class BacktestEngine:
         for w in winners:
             self.metadata[w["symbol"]] = w
 
+        # MTF Ingestion Trigger
+        if self.settings.timeframes:
+            self._fetch_mtf_for_candidates(winners)
+
         if self.ledger:
             self._record_selection_audit(winners, train_rets, window.step_index, selection_ctx)
 
@@ -241,6 +253,30 @@ class BacktestEngine:
         )
 
         self.allocation_pipeline.run(alloc_ctx)
+
+    def _fetch_mtf_for_candidates(self, winners: list[dict[str, Any]]) -> None:
+        """Triggers Multi-Timeframe ingestion for winning candidates."""
+        if not self.settings.timeframes:
+            return
+
+        if PersistentDataLoader is None:
+            logger.warning("PersistentDataLoader not available. Skipping MTF ingestion.")
+            return
+
+        logger.info(f"Fetching MTF data for {len(winners)} candidates: {self.settings.timeframes}")
+
+        # Lazy initialization
+        if self.mtf_loader is None:
+            self.mtf_loader = PersistentDataLoader(lakehouse_path=self.settings.lakehouse_dir)
+
+        for w in winners:
+            symbol = w["symbol"]
+            for tf in self.settings.timeframes:
+                try:
+                    # Sync with 1000 candle depth to ensure sufficient history for indicators
+                    self.mtf_loader.sync(symbol, interval=tf, depth=1000)
+                except Exception as e:
+                    logger.error(f"Failed to fetch MTF {tf} for {symbol}: {e}")
 
     def _execute_synthesis(
         self,

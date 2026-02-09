@@ -117,6 +117,7 @@ class BaseSimulator(ABC):
         returns: pd.DataFrame,
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Runs a simulation over the test_data period.
@@ -135,6 +136,7 @@ class ReturnsSimulator(BaseSimulator):
         returns: pd.DataFrame,
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         self._validate_inputs(weights_df, returns)
 
@@ -278,11 +280,12 @@ class CVXPortfolioSimulator(BaseSimulator):
         returns: pd.DataFrame,
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         self._validate_inputs(weights_df, returns)
 
         if self.cvp is None:
-            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings, **kwargs)
 
         settings = get_settings()
         cash_key = "cash"
@@ -384,7 +387,7 @@ class CVXPortfolioSimulator(BaseSimulator):
             return self._sanitize_metrics(res)
         except Exception as e:
             logger.error(f"cvxportfolio backtest failed: {e}")
-            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings, **kwargs)
 
 
 # Backward-compatible alias (legacy/tests).
@@ -407,11 +410,12 @@ class VectorBTSimulator(BaseSimulator):
         returns: pd.DataFrame,
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         self._validate_inputs(weights_df, returns)
 
         if self.vbt is None:
-            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+            return ReturnsSimulator().simulate(returns, weights_df, initial_holdings, **kwargs)
 
         vbt = self.vbt
         settings = get_settings()
@@ -438,7 +442,12 @@ class VectorBTSimulator(BaseSimulator):
             w_df = pd.DataFrame(np.nan, columns=w_series.index, index=prices.index)
             w_df.iloc[0] = w_series.values
 
-        portfolio = vbt.Portfolio.from_orders(
+        # Extract exit rules
+        exit_rules = kwargs.get("exit_rules", {})
+        sl_stop = exit_rules.get("sl_stop")
+        tp_stop = exit_rules.get("tp_stop")
+
+        portfolio_kwargs = dict(
             close=prices,
             size=w_df,
             size_type="target_percent",
@@ -448,6 +457,14 @@ class VectorBTSimulator(BaseSimulator):
             cash_sharing=True,
             group_by=True,
         )
+
+        if sl_stop is not None:
+            portfolio_kwargs["sl_stop"] = sl_stop
+        if tp_stop is not None:
+            portfolio_kwargs["tp_stop"] = tp_stop
+
+        portfolio = vbt.Portfolio.from_orders(**portfolio_kwargs)
+
         # Shift and cap returns
         p_returns = portfolio.returns().fillna(0.0)
 
@@ -493,7 +510,7 @@ class VectorBTSimulator(BaseSimulator):
             # Let's try to get VBT total trade value.
             try:
                 # Value of all trades
-                total_trade_val = portfolio.trades().value.abs().sum()
+                total_trade_val = portfolio.trades.value().abs().sum()
                 vbt_total_turnover = total_trade_val / 2.0 / init_cash  # Normalize by init_cash
 
                 # Correct it

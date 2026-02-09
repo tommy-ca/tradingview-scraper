@@ -276,6 +276,8 @@ class TradingViewScraperSettings(BaseSettings):
     report_mode: str = "full"
     dynamic_universe: bool = False
     raw_pool_universe: str = "selected"
+    exit_rules: dict[str, float] | None = None
+    timeframes: list[str] | None = None
 
     # Tournament
     engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"

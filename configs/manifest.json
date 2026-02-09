@@ -427,7 +427,14 @@
         "backtest_commission": 0.0004,
         "train_window": 20,
         "test_window": 10,
-        "step_size": 10
+        "step_size": 10,
+        "exit_rules": {
+          "sl_stop": 0.05,
+          "tp_stop": 0.15
+        },
+        "timeframes": [
+          "4h"
+        ]
       },
       "features": {
         "selection_mode": "v4",
@@ -486,7 +493,14 @@
         "backtest_commission": 0.0004,
         "train_window": 20,
         "test_window": 10,
-        "step_size": 10
+        "step_size": 10,
+        "exit_rules": {
+          "sl_stop": 0.04,
+          "tp_stop": 0.12
+        },
+        "timeframes": [
+          "4h"
+        ]
       },
       "features": {
         "selection_mode": "v4",
