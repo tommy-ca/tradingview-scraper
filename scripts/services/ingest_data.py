@@ -140,6 +140,74 @@ class IngestionService:
             except Exception as e:
                 logger.error(f"Failed to ingest {symbol}: {e}")
 
+    def fetch_mtf_for_candidates(self, candidates: list[str], intervals: list[str]):
+        """
+        Fetch multi-timeframe data for a list of candidates.
+        Saves to data/lakehouse/mtf/{interval}/{symbol}.parquet.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        # Import Streamer lazily to avoid top-level dependency issues if package is partial
+        try:
+            from tradingview_scraper.symbols.stream import Streamer
+        except ImportError:
+            logger.error("Could not import Streamer. Ensure tradingview_scraper is installed.")
+            return
+
+        # Subclass to suppress default file export side-effect
+        class SilentStreamer(Streamer):
+            def _export(self, json_data, symbol, data_category):
+                pass
+
+        logger.info(f"Starting MTF fetch for {len(candidates)} symbols and {len(intervals)} intervals.")
+
+        def _fetch_worker(symbol: str, interval: str):
+            try:
+                # Use a fresh Streamer for each thread to ensure thread safety
+                streamer = SilentStreamer(export_result=True, websocket_jwt_token="unauthorized_user_token")
+
+                parts = symbol.split(":")
+                if len(parts) != 2:
+                    logger.warning(f"Invalid symbol format {symbol}. Expected EXCHANGE:SYMBOL.")
+                    return
+
+                exchange, sym = parts
+
+                # Default depth
+                depth = 1000  # Reasonable default for MTF
+
+                res = streamer.stream(exchange, sym, timeframe=interval, numb_price_candles=depth, auto_close=True)
+                candles = res.get("ohlc", [])
+
+                if candles:
+                    df = pd.DataFrame(candles)
+                    if not df.empty and "timestamp" in df.columns:
+                        df = df.sort_values("timestamp").drop_duplicates(subset=["timestamp"], keep="last")
+
+                        # Save
+                        safe_sym = SecurityUtils.sanitize_symbol(symbol)
+                        mtf_dir = self.lakehouse_dir / "mtf" / interval
+                        mtf_dir.mkdir(parents=True, exist_ok=True)
+
+                        file_path = mtf_dir / f"{safe_sym}.parquet"
+                        df.to_parquet(file_path, index=False)
+                        logger.info(f"Saved {len(df)} candles for {symbol} ({interval})")
+                    else:
+                        logger.warning(f"Empty dataframe for {symbol} ({interval})")
+                else:
+                    logger.warning(f"No candles returned for {symbol} ({interval})")
+
+            except Exception as e:
+                logger.error(f"Failed to fetch {symbol} ({interval}): {e}")
+
+        # Execute in parallel
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            for interval in intervals:
+                for symbol in candidates:
+                    executor.submit(_fetch_worker, symbol, interval)
+                    # Small delay to stagger start times and reduce burst on API
+                    time.sleep(0.1)
+
     def is_toxic(self, df: pd.DataFrame) -> bool:
         """Check for >500% daily returns."""
         if "close" not in df.columns:

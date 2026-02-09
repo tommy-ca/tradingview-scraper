@@ -259,24 +259,34 @@ class BacktestEngine:
         if not self.settings.timeframes:
             return
 
-        if PersistentDataLoader is None:
-            logger.warning("PersistentDataLoader not available. Skipping MTF ingestion.")
-            return
-
         logger.info(f"Fetching MTF data for {len(winners)} candidates: {self.settings.timeframes}")
 
-        # Lazy initialization
-        if self.mtf_loader is None:
-            self.mtf_loader = PersistentDataLoader(lakehouse_path=self.settings.lakehouse_dir)
+        try:
+            # Use IngestionService for optimized parallel fetching
+            # Deferred import to avoid circular dependencies with scripts
+            from scripts.services.ingest_data import IngestionService
 
-        for w in winners:
-            symbol = w["symbol"]
-            for tf in self.settings.timeframes:
-                try:
-                    # Sync with 1000 candle depth to ensure sufficient history for indicators
-                    self.mtf_loader.sync(symbol, interval=tf, depth=1000)
-                except Exception as e:
-                    logger.error(f"Failed to fetch MTF {tf} for {symbol}: {e}")
+            service = IngestionService(lakehouse_dir=self.settings.lakehouse_dir)
+            candidates = [w["symbol"] for w in winners]
+            service.fetch_mtf_for_candidates(candidates, self.settings.timeframes)
+
+        except (ImportError, ModuleNotFoundError):
+            # Fallback to serial PersistentDataLoader if scripts module not available
+            if PersistentDataLoader is None:
+                logger.warning("IngestionService and PersistentDataLoader not available. Skipping MTF.")
+                return
+
+            if self.mtf_loader is None:
+                self.mtf_loader = PersistentDataLoader(lakehouse_path=self.settings.lakehouse_dir)
+
+            for w in winners:
+                symbol = w["symbol"]
+                for tf in self.settings.timeframes:
+                    try:
+                        # Sync with 1000 candle depth to ensure sufficient history for indicators
+                        self.mtf_loader.sync(symbol, interval=tf, depth=1000)
+                    except Exception as e:
+                        logger.error(f"Failed to fetch MTF {tf} for {symbol}: {e}")
 
     def _execute_synthesis(
         self,
