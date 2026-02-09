@@ -5,6 +5,7 @@ from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.selection.base import BasePipelineStage
 from tradingview_scraper.pipelines.allocation.base import AllocationContext
 from tradingview_scraper.portfolio_engines import build_simulator
+from tradingview_scraper.settings import get_settings
 
 logger = logging.getLogger("pipelines.allocation.simulation")
 
@@ -39,8 +40,16 @@ class SimulationStage(BasePipelineStage):
             final_weights = self._flatten_weights(weights_df, ctx.composition_map)
 
             # 1. Execute Simulator
+            settings = get_settings()
+            exit_rules = settings.exit_rules or {}
+
             simulator = build_simulator(sim_name)
-            sim_results = simulator.simulate(weights_df=final_weights, returns=ctx.test_rets, initial_holdings=last_state)
+            sim_results = simulator.simulate(
+                weights_df=final_weights,
+                returns=ctx.test_rets,
+                initial_holdings=last_state,
+                exit_rules=exit_rules,
+            )
 
             # 2. Sanitize Metrics
             metrics = self._sanitize_sim_metrics(sim_results)
