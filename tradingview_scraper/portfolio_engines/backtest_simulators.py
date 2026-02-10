@@ -447,23 +447,41 @@ class VectorBTSimulator(BaseSimulator):
         sl_stop = exit_rules.get("sl_stop")
         tp_stop = exit_rules.get("tp_stop")
 
-        portfolio_kwargs = dict(
-            close=prices,
-            size=w_df,
-            size_type="target_percent",
-            fees=settings.backtest_slippage + settings.backtest_commission,
-            freq="D",
-            init_cash=init_cash,
-            cash_sharing=True,
-            group_by=True,
-        )
+        if sl_stop is not None or tp_stop is not None:
+            # Switch to Signals Mode to support native SL/TP
+            # We treat any non-zero weight as an Entry signal.
+            entries = w_df > 0
+            short_entries = w_df < 0
 
-        if sl_stop is not None:
-            portfolio_kwargs["sl_stop"] = sl_stop
-        if tp_stop is not None:
-            portfolio_kwargs["tp_stop"] = tp_stop
+            # Use abs(weights) for size as vbt expects positive size per direction
+            abs_w_df = w_df.abs()
 
-        portfolio = vbt.Portfolio.from_orders(**portfolio_kwargs)
+            portfolio = vbt.Portfolio.from_signals(
+                close=prices,
+                entries=entries,
+                short_entries=short_entries,
+                size=abs_w_df,
+                size_type="Percent",
+                fees=settings.backtest_slippage + settings.backtest_commission,
+                freq="D",
+                init_cash=init_cash,
+                sl_stop=sl_stop,
+                tp_stop=tp_stop,
+                cash_sharing=True,
+                group_by=True,
+            )
+        else:
+            # Standard rebalancing mode without stops
+            portfolio = vbt.Portfolio.from_orders(
+                close=prices,
+                size=w_df,
+                size_type="target_percent",
+                fees=settings.backtest_slippage + settings.backtest_commission,
+                freq="D",
+                init_cash=init_cash,
+                cash_sharing=True,
+                group_by=True,
+            )
 
         # Shift and cap returns
         p_returns = portfolio.returns().fillna(0.0)
@@ -540,7 +558,13 @@ def build_simulator(name: str) -> BaseSimulator:
 class NautilusSimulator(BaseSimulator):
     """Event-driven high-fidelity simulator using NautilusTrader (Placeholder)."""
 
-    def simulate(self, returns: pd.DataFrame, weights_df: pd.DataFrame, initial_holdings: Optional[pd.Series] = None) -> Dict[str, Any]:
+    def simulate(
+        self,
+        returns: pd.DataFrame,
+        weights_df: pd.DataFrame,
+        initial_holdings: Optional[pd.Series] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         self._validate_inputs(weights_df, returns)
 
         # Requirement: Physical Flattening
@@ -557,6 +581,6 @@ class NautilusSimulator(BaseSimulator):
             res = run_nautilus_backtest(returns=returns, weights_df=weights_df, initial_holdings=initial_holdings, settings=get_settings())
         except Exception as e:
             logger.warning(f"Nautilus adapter unavailable, falling back to custom simulator: {e}")
-            res = ReturnsSimulator().simulate(returns, weights_df, initial_holdings)
+            res = ReturnsSimulator().simulate(returns, weights_df, initial_holdings, **kwargs)
 
         return self._sanitize_metrics(res)
