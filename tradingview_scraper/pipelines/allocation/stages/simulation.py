@@ -39,8 +39,18 @@ class SimulationStage(BasePipelineStage):
             final_weights = self._flatten_weights(weights_df, ctx.composition_map)
 
             # 1. Execute Simulator
+            settings = get_settings()
+            # Extract exit rules from settings (L3 tactical risk)
+            exit_rules = settings.exit_rules or {}
+
             simulator = build_simulator(sim_name)
-            sim_results = simulator.simulate(weights_df=final_weights, returns=ctx.test_rets, initial_holdings=last_state)
+            sim_results = simulator.simulate(
+                weights_df=final_weights,
+                returns=ctx.test_rets,
+                initial_holdings=last_state,
+                # Pass exit rules to the simulator for discrete monitoring
+                **exit_rules,
+            )
 
             # 2. Sanitize Metrics
             metrics = self._sanitize_sim_metrics(sim_results)

@@ -19,7 +19,12 @@
         60,
         120,
         200
-      ]
+      ],
+      "initial_capital": 100000.0,
+      "max_daily_loss_pct": 0.05,
+      "max_total_loss_pct": 0.10,
+      "risk_reset_tz": "UTC",
+      "risk_reset_time": "00:00"
     },
       "backtest": {
         "engines": "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio",
@@ -131,24 +136,43 @@
       }
     },
     "meta_production": {
-      "description": "Multi-Sleeve Institutional Meta-Portfolio",
-      "sleeves": [
-        {
-          "id": "crypto_all",
-          "profile": "crypto_rating_all"
-        },
-        {
-          "id": "crypto_ma",
-          "profile": "crypto_rating_ma"
-        },
-        {
-          "id": "crypto_osc",
-          "profile": "crypto_rating_osc"
-        },
-        {
-          "id": "tradfi",
-          "profile": "production_2026_q1"
+      "description": "Fractal Meta-Portfolio Production Profile",
+      "data": {
+        "lookback_days": 252,
+        "min_days_floor": 120
+      },
+      "selection": {
+        "strategy": "meta_ensemble",
+        "top_n": 3,
+        "threshold": 0.45,
+        "selection_mode": "v4"
+      },
+      "backtest": {
+        "profiles": "min_variance,hrp,max_sharpe",
+        "train_window": 252,
+        "test_window": 20,
+        "step_size": 20,
+        "gist_id": "e888e1eab0b86447c90c26e92ec4dc36"
+      }
+    },
+    "ftmo_compliance": {
+      "description": "FTMO-Compliant Risk Profile (5% Daily, 10% Total)",
+      "risk": {
+        "initial_capital": 100000.0,
+        "max_daily_loss_pct": 0.05,
+        "max_total_loss_pct": 0.10,
+        "risk_reset_tz": "UTC",
+        "risk_reset_time": "00:00"
+      },
+      "backtest": {
+        "backtest_simulator": "vectorbt",
+        "exit_rules": {
+          "sl_stop": 0.02,
+          "tp_stop": 0.06
         }
+      }
+    }
+
       ],
       "meta_allocation": {
         "engine": "custom",

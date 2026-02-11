@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
+    import pandas as pd
     from tradingview_scraper.risk.models import RiskContext
 
 from tradingview_scraper.risk.models import RiskEvent
@@ -20,7 +21,7 @@ def check_account_mdd(context: RiskContext) -> Optional[RiskEvent]:
         return None
 
     # Calculate drawdown from starting equity of the day
-    # Prop-firm logic: Loss is measured against the starting balance/equity snapshot.
+    # Prop-firm logic: Baseline is the start of the day.
     daily_dd = (context.current_equity - context.daily_starting_equity) / context.daily_starting_equity
 
     if daily_dd <= -context.max_daily_loss_pct:
@@ -38,11 +39,12 @@ def check_account_mdd(context: RiskContext) -> Optional[RiskEvent]:
 def check_equity_guard(context: RiskContext) -> Optional[RiskEvent]:
     """
     Enforces Level 1: Max Total Loss (Equity Guard).
-    Global circuit breaker if total account value drops too low.
+    Global circuit breaker if total account value drops below the absolute hard limit.
     """
     if context.starting_balance <= 0:
         return None
 
+    # Overall drawdown from initial capital pool
     total_dd = (context.current_equity - context.starting_balance) / context.starting_balance
 
     if total_dd <= -context.max_total_loss_pct:
@@ -57,17 +59,14 @@ def check_equity_guard(context: RiskContext) -> Optional[RiskEvent]:
     return None
 
 
-def check_cluster_caps(context: RiskContext, weights: dict[str, float], clusters: dict[str, list[str]], cap: float = 0.25) -> list[RiskEvent]:
+def check_cluster_caps(context: RiskContext, weights: dict[str, float], clusters: dict[str, list[str]], cap: float = 0.25) -> List[RiskEvent]:
     """
     Enforces Level 2: Correlation Guard (Cluster Caps).
-    Ensures no single volatility cluster dominates the portfolio.
+    Ensures no single volatility cluster (Pillar 1) dominates the portfolio.
     """
     events = []
-    cluster_weights = {}
-
     for cid, members in clusters.items():
         total_w = sum(abs(weights.get(m, 0.0)) for m in members)
-        cluster_weights[cid] = total_w
 
         if total_w > cap:
             events.append(
@@ -86,8 +85,8 @@ def check_cluster_caps(context: RiskContext, weights: dict[str, float], clusters
 def apply_kelly_scaling(weights: pd.Series, win_rate: float, payoff_ratio: float, fraction: float = 0.1) -> pd.Series:
     """
     Applies prop-firm adjusted Kelly Criterion scaling.
-    Standard Kelly: f* = (bp - q) / b = p - (1-p)/R
-    Prop-Firm Safety: f* * fraction (default 1/10th Kelly).
+    Standard Kelly: f* = p - (1-p)/R
+    Prop-Firm Safety: Uses fractional Kelly (default 1/10th) to ensure compliance.
     """
     if payoff_ratio <= 0:
         return weights * 0.0
@@ -97,8 +96,7 @@ def apply_kelly_scaling(weights: pd.Series, win_rate: float, payoff_ratio: float
     R = payoff_ratio
     kelly_full = p - ((1 - p) / R)
 
-    # Apply safety fraction and floor at 0
+    # Apply safety fraction (conservative institutional standard)
     multiplier = max(0.0, kelly_full * fraction)
 
-    # Scale all weights by the Kelly multiplier
     return weights * multiplier

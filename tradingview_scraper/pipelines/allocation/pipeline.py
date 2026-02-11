@@ -5,6 +5,7 @@ from tradingview_scraper.orchestration.registry import StageRegistry
 from tradingview_scraper.pipelines.allocation.base import AllocationContext
 from tradingview_scraper.pipelines.allocation.stages.optimization import OptimizationStage
 from tradingview_scraper.pipelines.allocation.stages.simulation import SimulationStage
+from tradingview_scraper.risk.engine import RiskManagementEngine
 from tradingview_scraper.selection_engines import get_hierarchical_clusters
 from tradingview_scraper.settings import get_settings
 
@@ -22,12 +23,22 @@ class AllocationPipeline:
         self.settings = get_settings()
         self.optimization = OptimizationStage()
         self.simulation = SimulationStage()
+        self.risk_engine = RiskManagementEngine(self.settings)
 
     def run(self, context: AllocationContext) -> AllocationContext:
         """
         Executes the allocation and simulation sequence for a window.
         """
-        # 1. Clustering (Pillar 3 specific on synthesized returns)
+        # 1. Sync Risk State for current window
+        # We estimate current equity from last holdings if available
+        current_equity = context.current_holdings.get("total_equity", self.settings.initial_capital)
+        self.risk_engine.sync_daily_state(
+            equity=current_equity,
+            balance=context.starting_balance,
+            ledger=context.ledger,  # Pass ledger for shadow snapshot recovery
+        )
+
+        # 2. Clustering (Pillar 3 specific on synthesized returns)
         context = self._execute_clustering(context)
 
         # 2. Iterate Engines & Profiles
