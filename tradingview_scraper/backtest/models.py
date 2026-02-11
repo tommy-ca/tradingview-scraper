@@ -25,6 +25,9 @@ class NumericalWorkspace:
     perm_counts: np.ndarray  # Shape: (4000+)
     segment_buffer: np.ndarray  # Shape: (order)
 
+    # Risk state mask (persistent VETOED assets)
+    vetoed_mask: np.ndarray  # Shape: (N,)
+
     @classmethod
     def for_dimensions(cls, n_obs: int, n_assets: int, max_order: int = 5) -> NumericalWorkspace:
         """Initializes buffers with np.empty for maximum efficiency."""
@@ -37,6 +40,7 @@ class NumericalWorkspace:
             equity_curve=np.empty(n_obs, dtype=np.float64),
             perm_counts=np.zeros(buf_size, dtype=np.int32),
             segment_buffer=np.zeros(max_order, dtype=np.float64),
+            vetoed_mask=np.zeros(n_assets, dtype=bool),
         )
 
 
@@ -59,3 +63,4 @@ class SimulationContext:
     bench_rets: pd.Series | None
     is_meta: bool
     test_rets: pd.DataFrame
+    veto_registry: Any | None = None

@@ -48,6 +48,7 @@ class AllocationContext(BaseModel):
     results: List[Dict[str, Any]] = Field(default_factory=list)
     current_holdings: Dict[str, Any] = Field(default_factory=dict)  # State key -> holdings
     return_series: Dict[str, List[pd.Series]] = Field(default_factory=dict)  # State key -> list of returns
+    veto_registry: Optional[Any] = None  # Lazy import tradingview_scraper.risk.models.VetoRegistry
 
     # Audit & Ledger
     ledger: Optional[Any] = None
@@ -96,3 +97,10 @@ class AllocationContext(BaseModel):
             self.window_meta.update(overlay.window_meta)
         if overlay.clusters:
             self.clusters.update(overlay.clusters)
+
+        # 7. Merge Veto Registry
+        if overlay.veto_registry:
+            if not self.veto_registry:
+                self.veto_registry = overlay.veto_registry
+            else:
+                self.veto_registry.locked_symbols.update(overlay.veto_registry.locked_symbols)

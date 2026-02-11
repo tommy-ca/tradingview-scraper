@@ -277,6 +277,15 @@ class TradingViewScraperSettings(BaseSettings):
     dynamic_universe: bool = False
     raw_pool_universe: str = "selected"
 
+    # Risk Management (New)
+    exit_rules: dict[str, float] = Field(default_factory=dict)
+    timeframes: list[str] = Field(default_factory=list)
+    initial_capital: float = 100000.0
+    max_daily_loss_pct: float = 0.05
+    max_total_loss_pct: float = 0.10
+    risk_reset_tz: str = "UTC"
+    risk_reset_time: str = "00:00"
+
     # Tournament
     engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
     profiles: str = "min_variance,hrp,max_sharpe,barbell,benchmark,market"
