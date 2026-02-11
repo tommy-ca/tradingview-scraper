@@ -111,18 +111,6 @@ class BaseSimulator(ABC):
 
         return _sanitize_value(metrics)
 
-    @abstractmethod
-    def simulate(
-        self,
-        returns: pd.DataFrame,
-        weights_df: pd.DataFrame,
-        initial_holdings: Optional[pd.Series] = None,
-    ) -> Dict[str, Any]:
-        """
-        Runs a simulation over the test_data period.
-        """
-        pass
-
 
 class ReturnsSimulator(BaseSimulator):
     """
@@ -135,6 +123,7 @@ class ReturnsSimulator(BaseSimulator):
         returns: pd.DataFrame,
         weights_df: pd.DataFrame,
         initial_holdings: Optional[pd.Series] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         self._validate_inputs(weights_df, returns)
 
@@ -432,22 +421,49 @@ class VectorBTSimulator(BaseSimulator):
         if initial_holdings is not None:
             init_cash = float(initial_holdings.sum())
 
-        if rebalance_mode == "daily":
-            w_df = pd.DataFrame([w_series.values] * len(prices), columns=w_series.index, index=prices.index)
-        else:
-            w_df = pd.DataFrame(np.nan, columns=w_series.index, index=prices.index)
-            w_df.iloc[0] = w_series.values
+        # CR-FIX: Sparse Instruction Matrix Pattern (Approach A)
+        # Instead of repeating weights (dense), we emit a row ONLY at t=0.
+        # VectorBT handles NaNs as "Maintain current position", allowing SL/TP to stay out.
+        w_df = pd.DataFrame(np.nan, columns=w_series.index, index=prices.index)
+        w_df.iloc[0] = w_series.values
 
-        portfolio = vbt.Portfolio.from_orders(
-            close=prices,
-            size=w_df,
-            size_type="target_percent",
-            fees=settings.backtest_slippage + settings.backtest_commission,
-            freq="D",
-            init_cash=init_cash,
-            cash_sharing=True,
-            group_by=True,
-        )
+        # Check for SL/TP in kwargs (from SimulationStage)
+        sl_stop = kwargs.get("sl_stop")
+        tp_stop = kwargs.get("tp_stop")
+
+        if sl_stop is not None or tp_stop is not None:
+            # Switch to Signals Mode to support native SL/TP
+            # We treat any non-zero weight as an Entry signal.
+            # vbt will then maintain the position according to 'size' (target percent).
+            entries = w_df != 0
+            exits = pd.DataFrame(False, index=w_df.index, columns=w_df.columns)
+
+            portfolio = vbt.Portfolio.from_signals(
+                close=prices,
+                entries=entries,
+                exits=exits,
+                size=w_df,
+                size_type="target_percent",
+                fees=settings.backtest_slippage + settings.backtest_commission,
+                freq="D",
+                init_cash=init_cash,
+                sl_stop=sl_stop,
+                tp_stop=tp_stop,
+                cash_sharing=True,
+                group_by=True,
+            )
+        else:
+            # Standard rebalancing mode without stops
+            portfolio = vbt.Portfolio.from_orders(
+                close=prices,
+                size=w_df,
+                size_type="target_percent",
+                fees=settings.backtest_slippage + settings.backtest_commission,
+                freq="D",
+                init_cash=init_cash,
+                cash_sharing=True,
+                group_by=True,
+            )
         # Shift and cap returns
         p_returns = portfolio.returns().fillna(0.0)
 
@@ -493,7 +509,12 @@ class VectorBTSimulator(BaseSimulator):
             # Let's try to get VBT total trade value.
             try:
                 # Value of all trades
-                total_trade_val = portfolio.trades().value.abs().sum()
+                trades_obj = portfolio.trades
+                if callable(trades_obj):
+                    trades_obj = trades_obj()
+
+                # Use getattr to satisfy static analysis for dynamic VBT objects
+                total_trade_val = getattr(trades_obj, "value").abs().sum()
                 vbt_total_turnover = total_trade_val / 2.0 / init_cash  # Normalize by init_cash
 
                 # Correct it

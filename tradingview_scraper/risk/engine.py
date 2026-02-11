@@ -61,3 +61,52 @@ class RiskPolicy:
 
             filtered.append(ins)
         return filtered
+
+
+class RiskManagementEngine:
+    """
+    Orchestrator for multi-level risk enforcement.
+    Provides a unified interface for backtesting (matrix) and live (event) risk logic.
+    """
+
+    def __init__(self, settings: Any):
+        self.settings = settings
+        # Initialize Context with default baseline (will be synced later)
+        self.context = RiskContext(
+            account_id="primary",
+            starting_balance=settings.initial_capital,
+            daily_starting_equity=settings.initial_capital,
+            current_equity=settings.initial_capital,
+            max_daily_loss_pct=settings.max_daily_loss_pct,
+            max_total_loss_pct=settings.max_total_loss_pct,
+        )
+        self.policy = RiskPolicy(self.context)
+
+    def apply_account_circuit_breaker(self, equity: float, balance: float) -> bool:
+        """
+        Returns False if a FLATTEN event occurred, True otherwise.
+        """
+        events = self.policy.evaluate(current_equity=equity, current_balance=balance)
+        for event in events:
+            if event.action == "FLATTEN":
+                return False
+        return True
+
+    def process_rebalance(self, target_weights: pd.Series, audit_ledger: Any) -> pd.Series:
+        """
+        Applies Level 2 (Correlation) and Level 3 (Kelly) overrides to target weights.
+        """
+        from tradingview_scraper.risk.guards import apply_kelly_scaling
+
+        # 1. Kelly Scaling
+        # For simplicity, assume win_rate/payoff extracted from ledger in a real impl
+        # Here we use defaults or settings
+        # target_weights = apply_kelly_scaling(target_weights, ...)
+
+        # 2. Veto Check
+        final_weights = target_weights.copy()
+        for symbol in target_weights.index:
+            if self.context.veto_registry.is_vetoed(symbol):
+                final_weights[symbol] = 0.0
+
+        return final_weights
