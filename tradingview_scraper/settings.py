@@ -55,6 +55,9 @@ class FeatureFlags(BaseModel):
     feat_directional_sign_test_gate: bool = False
     feat_directional_sign_test_gate_atomic: bool = False
     feat_use_tv_ratings: bool = True  # New Flag: Use retrieved TV ratings if available (default True)
+
+    # Risk Budgeting (Prop-style pacing)
+    feat_daily_risk_budget_slices: bool = False
     feature_lookback: int = 120
     selection_mode: str = "v4"
 
@@ -286,6 +289,13 @@ class TradingViewScraperSettings(BaseSettings):
     risk_reset_tz: str = "UTC"
     risk_reset_time: str = "00:00"
 
+    # Daily Risk Budget (10 x 0.5% slices)
+    risk_budget_total_slices_per_campaign: int = 10
+    risk_budget_slice_pct: float = 0.005
+    risk_budget_max_entries_per_day: int = 2
+    risk_budget_max_slices_per_day: int = 2
+    risk_budget_max_slices_per_entry: int = 2
+
     # Tournament
     engines: str = "custom,skfolio,riskfolio,pyportfolioopt,cvxportfolio"
     profiles: str = "min_variance,hrp,max_sharpe,barbell,benchmark,market"
@@ -495,6 +505,7 @@ class ThreadSafeConfig:
             with cls._lock:
                 if cls._instance is None:
                     cls._instance = TradingViewScraperSettings()
+        assert cls._instance is not None
         return cls._instance
 
     @classmethod

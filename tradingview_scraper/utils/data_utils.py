@@ -1,9 +1,11 @@
-from typing import Any, Union
+from typing import Any, TypeVar
 
 import pandas as pd
 
+T = TypeVar("T", pd.DataFrame, pd.Series)
 
-def ensure_utc_index(df_or_series: Union[pd.DataFrame, pd.Series]) -> Union[pd.DataFrame, pd.Series]:
+
+def ensure_utc_index(df_or_series: T) -> T:
     """
     Ensures that the index of the provided DataFrame or Series is a UTC-aware pd.DatetimeIndex.
     Supports MultiIndex by recursively localizing/converting datetime levels.
@@ -43,17 +45,21 @@ def ensure_utc_index(df_or_series: Union[pd.DataFrame, pd.Series]) -> Union[pd.D
     return df_or_series
 
 
-def normalize_to_market_day(ts: Any) -> pd.Timestamp:
+def normalize_to_market_day(ts: Any) -> pd.Timestamp | None:
     """
     Normalizes a timestamp to the standard UTC midnight (00:00:00).
     Follows Market-Day convention where late-night UTC starts (>= 21:00)
     are normalized to the NEXT business day.
     """
-    ts_utc = pd.Timestamp(ts, tz="UTC")
+    ts_utc = pd.Timestamp(ts)
+    if pd.isna(ts_utc):
+        return None
+    if ts_utc.tz is None:
+        ts_utc = ts_utc.tz_localize("UTC")
+    else:
+        ts_utc = ts_utc.tz_convert("UTC")
 
-    # Type guard for LSP
-    if not isinstance(ts_utc, pd.Timestamp) or pd.isna(ts_utc):
-        return ts_utc
+    # ts_utc is now a UTC-aware Timestamp.
 
     if ts_utc.hour >= 21:
         # Pushes late-night starts into next day

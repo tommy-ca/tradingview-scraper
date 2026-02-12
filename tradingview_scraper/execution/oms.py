@@ -22,6 +22,8 @@ class UnifiedOrderRequest:
     type: OrderType = OrderType.MARKET
     price: Optional[float] = None  # Required for LIMIT
     stop_price: Optional[float] = None  # Required for STOP
+    stop_loss: Optional[float] = None  # Risk stop-loss (SL)
+    take_profit: Optional[float] = None  # Risk take-profit (TP)
     time_in_force: str = "GTC"
     ref_id: Optional[str] = None
 

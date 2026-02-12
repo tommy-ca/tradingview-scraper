@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -109,39 +110,115 @@ class AuditLedger:
         self.last_hash: str | None = None
         self._initialize_chain()
 
+    @staticmethod
+    def _lock_exclusive(fd: int) -> None:
+        """Cross-process exclusive lock on a file descriptor."""
+        if os.name == "nt":
+            # Best-effort no-op on Windows; repository primarily targets Linux.
+            return
+
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_EX)
+
+    @staticmethod
+    def _unlock(fd: int) -> None:
+        if os.name == "nt":
+            return
+
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_UN)
+
+    @staticmethod
+    def _read_last_hash_from_file(f) -> str | None:
+        """Reads the last valid JSONL record hash without loading the full file."""
+        try:
+            f.seek(0, os.SEEK_END)
+            end = f.tell()
+            if end == 0:
+                return None
+
+            block_size = 4096
+            pos = end
+            data = b""
+
+            # Collect enough bytes from the tail to include the last full line.
+            # This scales with last-line length, not file length.
+            while pos > 0 and data.count(b"\n") < 2:
+                read_size = block_size if pos >= block_size else pos
+                pos -= read_size
+                f.seek(pos, os.SEEK_SET)
+                chunk = f.read(read_size)
+                if not chunk:
+                    break
+                data = chunk + data
+                if len(data) > 1024 * 1024:
+                    # Defensive cap: we should never need to read more than
+                    # a reasonable single JSON line.
+                    break
+
+            # Remove trailing newlines and try parsing from the end.
+            data = data.rstrip(b"\n")
+            if not data:
+                return None
+
+            for raw_line in reversed(data.splitlines()):
+                raw_line = raw_line.strip()
+                if not raw_line:
+                    continue
+                try:
+                    obj = json.loads(raw_line.decode("utf-8"))
+                except Exception:
+                    continue
+                h = obj.get("hash")
+                if isinstance(h, str) and len(h) == 64:
+                    return h
+            return None
+        except Exception as e:
+            logger.error(f"Failed to tail-read audit chain: {e}")
+            return None
+
     def _initialize_chain(self):
         """Discovers the last hash if the file already exists (for resumed runs)."""
         if not self.path.exists():
             return
 
         try:
-            with open(self.path, "r") as f:
-                lines = f.readlines()
-                if lines:
-                    last_line = json.loads(lines[-1])
-                    self.last_hash = last_line.get("hash")
+            with open(self.path, "rb") as f:
+                self.last_hash = self._read_last_hash_from_file(f)
         except Exception as e:
             logger.error(f"Failed to recover audit chain: {e}")
 
     def _append(self, record: dict[str, Any]):
         """Calculates hash, chains to previous, and appends to disk."""
-        # Refresh last_hash from disk to support nested/concurrent processes
-        self._initialize_chain()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
 
-        ts = datetime.now().isoformat()
-        record["ts"] = ts
-        record["prev_hash"] = self.last_hash or "0" * 64
+        # One critical section: read tail (prev hash) + append.
+        # This prevents hash-chain forks and JSONL interleaving.
+        with open(self.path, "a+b") as f:
+            fd = f.fileno()
+            self._lock_exclusive(fd)
+            try:
+                prev_hash = self._read_last_hash_from_file(f) or "0" * 64
 
-        # Calculate signature of this record
-        # We sort keys for determinism
-        record_json = json.dumps(record, sort_keys=True)
-        current_hash = hashlib.sha256(record_json.encode()).hexdigest()
-        record["hash"] = current_hash
+                ts = datetime.now().isoformat()
+                record["ts"] = ts
+                record["prev_hash"] = prev_hash
 
-        with open(self.path, "a") as f:
-            f.write(json.dumps(record) + "\n")
+                # Calculate signature of this record (deterministic ordering)
+                record_json = json.dumps(record, sort_keys=True)
+                current_hash = hashlib.sha256(record_json.encode("utf-8")).hexdigest()
+                record["hash"] = current_hash
 
-        self.last_hash = current_hash
+                line = (json.dumps(record) + "\n").encode("utf-8")
+                f.write(line)
+                f.flush()
+                os.fsync(fd)
+
+                self.last_hash = current_hash
+            finally:
+                self._unlock(fd)
 
     def record_genesis(self, run_id: str, profile: str, manifest_hash: str, config: dict[str, Any] | None = None):
         """Creates the Genesis Block for a new run."""
@@ -216,3 +293,35 @@ class AuditLedger:
         if context:
             record["context"] = context
         self._append(record)
+
+
+def verify_audit_chain(path: Path) -> bool:
+    """Verifies that the audit.jsonl file is a valid, chained ledger."""
+    try:
+        prev = "0" * 64
+        with open(path, "rb") as f:
+            for raw_line in f:
+                raw_line = raw_line.strip()
+                if not raw_line:
+                    continue
+                obj = json.loads(raw_line.decode("utf-8"))
+
+                if obj.get("prev_hash") != prev:
+                    return False
+
+                recorded_hash = obj.get("hash")
+                if not isinstance(recorded_hash, str) or len(recorded_hash) != 64:
+                    return False
+
+                # Recompute the hash on the record without its own hash field.
+                unsigned = dict(obj)
+                unsigned.pop("hash", None)
+                record_json = json.dumps(unsigned, sort_keys=True)
+                computed = hashlib.sha256(record_json.encode("utf-8")).hexdigest()
+                if computed != recorded_hash:
+                    return False
+
+                prev = recorded_hash
+        return True
+    except Exception:
+        return False

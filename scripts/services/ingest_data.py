@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import time
 from pathlib import Path
 from typing import Any, cast
@@ -36,10 +35,17 @@ class IngestionService:
         self.lakehouse_dir.mkdir(parents=True, exist_ok=True)
         self.registry = FoundationHealthRegistry(path=self.lakehouse_dir / "foundation_health.json")
 
+    def _sanitize_symbol(self, symbol: str) -> str:
+        return SecurityUtils.sanitize_symbol(symbol)
+
+    def _parquet_path(self, symbol: str) -> Path:
+        safe_symbol = self._sanitize_symbol(symbol)
+        return SecurityUtils.get_safe_path(self.lakehouse_dir, safe_symbol)
+
     def is_fresh(self, symbol: str) -> bool:
         """Check if symbol data exists and is fresh."""
         try:
-            p_path = SecurityUtils.get_safe_path(self.lakehouse_dir, symbol)
+            p_path = self._parquet_path(symbol)
         except ValueError as e:
             logger.error(f"Security/Validation error for {symbol}: {e}")
             return False
@@ -74,8 +80,8 @@ class IngestionService:
         for c in candidates:
             if isinstance(c, dict) and "symbol" in c:
                 try:
-                    # Validate symbol before adding to fetch list
-                    SecurityUtils.get_safe_path(self.lakehouse_dir, c["symbol"])
+                    # Validate symbol before any filesystem use (incl. loader sync)
+                    self._sanitize_symbol(c["symbol"])
                     validated_candidates.append(c)
                 except ValueError as e:
                     logger.error(f"Validation failed for {c['symbol']}: {e}")
@@ -94,6 +100,9 @@ class IngestionService:
         for item in to_fetch:
             symbol = item["symbol"]
             try:
+                # Validate early: PersistentDataLoader.sync writes to disk
+                self._sanitize_symbol(symbol)
+
                 # Use sync to fetch data. The loader handles writing to parquet usually,
                 # but we want to intercept for toxic check if possible.
                 # However, PersistentLoader writes directly.
@@ -117,7 +126,7 @@ class IngestionService:
                 # Usually it reads from disk.
 
                 # Let's assume standard path for validation
-                p_path = SecurityUtils.get_safe_path(self.lakehouse_dir, symbol)
+                p_path = self._parquet_path(symbol)
 
                 if p_path.exists():
                     df = pd.read_parquet(p_path)

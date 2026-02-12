@@ -1,5 +1,5 @@
 ---
-status: completed
+status: complete
 priority: p1
 issue_id: 002
 tags: ['data-integrity', 'critical', 'backfill']

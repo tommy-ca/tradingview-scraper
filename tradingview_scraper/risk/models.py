@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, Literal, Optional
 
-import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -38,7 +37,7 @@ class RiskEvent(BaseModel):
     Persisted to audit.jsonl for forensic integrity.
     """
 
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     trigger: str  # e.g., "DAILY_LOSS_LIMIT", "STOP_LOSS_HIT"
     symbol: Optional[str] = None
     action: Literal["VETO", "FLATTEN", "SCALE"]
@@ -55,7 +54,7 @@ class VetoEntry(BaseModel):
     reason: str
     expires_at: Optional[datetime] = None
     value_at_trigger: float
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class VetoRegistry(BaseModel):
@@ -71,7 +70,7 @@ class VetoRegistry(BaseModel):
         if not entry:
             return False
 
-        if entry.expires_at and datetime.utcnow() > entry.expires_at:
+        if entry.expires_at and datetime.now(timezone.utc) > entry.expires_at:
             # Self-healing: remove expired veto
             del self.locked_symbols[symbol]
             return False
@@ -83,7 +82,7 @@ class VetoRegistry(BaseModel):
         if ttl_seconds:
             from datetime import timedelta
 
-            expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
 
         self.locked_symbols[symbol] = VetoEntry(reason=reason, expires_at=expires_at, value_at_trigger=value)
 

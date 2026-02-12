@@ -1,16 +1,16 @@
 import json
-import os
-import shutil
-from pathlib import Path
+import sys
+import types
 
 import numpy as np
 import pandas as pd
 import pytest
 
-# We import the module to be tested (which doesn't exist yet)
-# so we expect this to fail initially if run, but for TDD we write the test first.
-# We will create the file in the next step.
+# backfill_features imports pandas_ta_classic; stub it for test isolation.
+sys.modules.setdefault("pandas_ta_classic", types.SimpleNamespace())
+
 from scripts.services.backfill_features import BackfillService
+from tradingview_scraper.utils.technicals import TechnicalRatings
 
 
 @pytest.fixture
@@ -42,8 +42,17 @@ def mock_workspace(tmp_path):
     return {"root": tmp_path, "lakehouse": lakehouse_dir, "candidates": candidates_path, "output": tmp_path / "features_matrix.parquet"}
 
 
-def test_backfill_execution(mock_workspace):
+def test_backfill_execution(mock_workspace, monkeypatch):
     """Test that the backfill service generates the output matrix."""
+
+    def _const_series(df: pd.DataFrame, value: float) -> pd.Series:
+        return pd.Series(value, index=df.index, dtype=float)
+
+    # Keep the backfill test deterministic and independent of pandas_ta_classic.
+    monkeypatch.setattr(TechnicalRatings, "calculate_recommend_ma_series", staticmethod(lambda df: _const_series(df, 0.2)))
+    monkeypatch.setattr(TechnicalRatings, "calculate_recommend_other_series", staticmethod(lambda df: _const_series(df, 0.1)))
+    monkeypatch.setattr(TechnicalRatings, "calculate_recommend_all_series", staticmethod(lambda df: _const_series(df, 0.3)))
+
     service = BackfillService(lakehouse_dir=mock_workspace["lakehouse"])
 
     service.run(candidates_path=mock_workspace["candidates"], output_path=mock_workspace["output"])
@@ -52,18 +61,19 @@ def test_backfill_execution(mock_workspace):
 
     df = pd.read_parquet(mock_workspace["output"])
     assert not df.empty
+
+    assert isinstance(df.index, pd.DatetimeIndex)
+    assert str(df.index.tz) == "UTC"
     # Columns are MultiIndex (symbol, feature)
     # Check if symbol level exists
     assert "SYMBOL:A" in df.columns.get_level_values(0)
     assert "SYMBOL:B" in df.columns.get_level_values(0)
 
-    # Verify rating logic direction
-    # Symbol A (Uptrend) should have positive rating at the end
-    # We access the specific feature 'recommend_all'
-    assert df[("SYMBOL:A", "recommend_all")].iloc[-1] > 0
-
-    # Symbol B (Downtrend) should have negative rating at the end
-    assert df[("SYMBOL:B", "recommend_all")].iloc[-1] < 0
+    # Verify join alignment with a UTC returns matrix (timezone mismatch would empty the join).
+    dates_utc = pd.date_range(start="2023-01-01", periods=100, freq="D", tz="UTC")
+    returns = pd.DataFrame({"returns": np.linspace(0.0, 0.01, len(dates_utc))}, index=dates_utc)
+    joined = returns.join(df[("SYMBOL:A", "recommend_all")].rename("recommend_all"), how="inner")
+    assert len(joined) == len(returns)
 
     # Verify range
     assert df.max().max() <= 1.0

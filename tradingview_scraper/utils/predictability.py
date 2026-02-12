@@ -257,6 +257,57 @@ def compute_rolling_hurst_numba(x, window, z_buffer):
     return out
 
 
+def rolling_permutation_entropy(
+    x: np.ndarray,
+    *,
+    window: int,
+    order: int = 5,
+    delay: int = 1,
+) -> np.ndarray:
+    """Compute rolling normalized permutation entropy.
+
+    This is a thin convenience wrapper around the Numba kernel.
+    It avoids pandas `rolling().apply()` overhead and normalizes
+    raw entropy into [0, 1].
+    """
+    if window <= 1:
+        raise ValueError("window must be > 1")
+    if order <= 1:
+        raise ValueError("order must be > 1")
+    if delay <= 0:
+        raise ValueError("delay must be > 0")
+
+    x_arr = np.ascontiguousarray(x, dtype=np.float64)
+
+    # Keep buffers local to avoid cross-thread/process sharing.
+    max_key = int(order**order)
+    perm_counts = np.zeros(max(4000, max_key + 1), dtype=np.int32)
+    segment_buffer = np.zeros(int(order), dtype=np.float64)
+
+    raw = compute_rolling_entropy_numba(x_arr, int(window), perm_counts, segment_buffer, int(order), int(delay))
+    denom = math.log(math.factorial(int(order)))
+    if denom <= 0:
+        return raw
+    return np.clip(raw / denom, 0.0, 1.0)
+
+
+def rolling_rs(
+    x: np.ndarray,
+    *,
+    window: int,
+) -> np.ndarray:
+    """Compute rolling R/S statistic (Hurst proxy).
+
+    Uses the Numba kernel to avoid pandas rolling apply overhead.
+    """
+    if window <= 1:
+        raise ValueError("window must be > 1")
+
+    x_arr = np.ascontiguousarray(x, dtype=np.float64)
+    z_buffer = np.zeros(int(window), dtype=np.float64)
+    return compute_rolling_hurst_numba(x_arr, int(window), z_buffer)
+
+
 def calculate_efficiency_ratio(returns: np.ndarray) -> float | None:
     """
     Calculates Kaufman's Efficiency Ratio (ER).

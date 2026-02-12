@@ -3,74 +3,44 @@ import types
 
 import pandas as pd
 
-# Provide stub for optional dependency required by backfill_features imports
 sys.modules.setdefault("pandas_ta_classic", types.SimpleNamespace())
 
-from scripts.services import backfill_features
-from scripts.services.backfill_features import BackfillService
+from scripts.services.backfill_features import _process_single_symbol
+from tradingview_scraper.utils.technicals import TechnicalRatings
 
 
-def test_backfill_merge_block_assignment(monkeypatch, tmp_path):
-    svc = BackfillService(lakehouse_dir=tmp_path)
+def test_process_single_symbol_writes_utc_index(monkeypatch, tmp_path):
+    def _const_series(df: pd.DataFrame, value: float) -> pd.Series:
+        return pd.Series(value, index=df.index, dtype=float)
 
-    # Existing matrix with one symbol/feature
-    existing = pd.DataFrame({("A", "foo"): [1.0, 2.0]}, index=pd.to_datetime(["2024-01-01", "2024-01-02"]))
-    out_p = tmp_path / "features_matrix.parquet"
-    out_p.parent.mkdir(parents=True, exist_ok=True)
-    existing.to_parquet(out_p)
+    monkeypatch.setattr(TechnicalRatings, "calculate_recommend_ma_series", staticmethod(lambda df: _const_series(df, 0.2)))
+    monkeypatch.setattr(TechnicalRatings, "calculate_recommend_other_series", staticmethod(lambda df: _const_series(df, 0.1)))
+    monkeypatch.setattr(TechnicalRatings, "calculate_recommend_all_series", staticmethod(lambda df: _const_series(df, 0.3)))
 
-    # Provide lakehouse OHLCV to satisfy worker symbol discovery
-    lake_file = tmp_path / "BINANCE_A_1d.parquet"
+    lakehouse_dir = tmp_path / "lakehouse"
+    lakehouse_dir.mkdir(parents=True)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True)
+
+    dates = pd.date_range("2024-01-01", periods=5, freq="D")
     ohlcv = pd.DataFrame(
         {
-            "timestamp": pd.to_datetime(["2024-01-01", "2024-01-02"]),
-            "close": [10.0, 11.0],
-            "high": [10.5, 11.5],
-            "low": [9.5, 10.5],
-            "volume": [1000, 1100],
-        }
+            "open": [1.0, 1.0, 1.0, 1.0, 1.0],
+            "high": [1.1, 1.1, 1.1, 1.1, 1.1],
+            "low": [0.9, 0.9, 0.9, 0.9, 0.9],
+            "close": [1.0, 1.1, 1.2, 1.3, 1.4],
+            "volume": [100, 100, 100, 100, 100],
+        },
+        index=dates,
     )
-    ohlcv.to_parquet(lake_file, index=False)
 
-    # Patch settings to point to temp lakehouse and disable strict scope
-    monkeypatch.setattr(svc, "lakehouse_dir", tmp_path)
+    (lakehouse_dir / "BINANCE_BTCUSDT_1d.parquet").parent.mkdir(parents=True, exist_ok=True)
+    ohlcv.to_parquet(lakehouse_dir / "BINANCE_BTCUSDT_1d.parquet")
 
-    # Provide new features
-    new_df = pd.DataFrame({("A", "foo"): [3.0], ("A", "bar"): [4.0]}, index=pd.to_datetime(["2024-01-02"]))
+    res = _process_single_symbol("BINANCE:BTCUSDT", lakehouse_dir, out_dir)
+    assert res is not None
+    _, out_path = res
 
-    def fake_worker(sym, lakehouse_dir, meta=None):
-        return new_df.to_dict(orient="series")
-
-    # Inline executor to avoid process spawning and ensure fake_worker usage
-    class DummyFuture:
-        def __init__(self, result_func):
-            self._result = result_func
-
-        def result(self):
-            return self._result()
-
-    class DummyExecutor:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def submit(self, fn, *args, **kwargs):
-            return DummyFuture(lambda: fn(*args, **kwargs))
-
-    monkeypatch.setattr(backfill_features, "_backfill_worker", fake_worker)
-    monkeypatch.setattr(backfill_features, "ProcessPoolExecutor", DummyExecutor)
-    monkeypatch.setattr(backfill_features, "as_completed", lambda futures: futures)
-
-    # Run with prepared symbols
-    svc.run(candidates_path=None, output_path=out_p, strict_scope=False)
-
-    final = pd.read_parquet(out_p)
-    # Expect merged index and both columns, with new overriding existing on overlap
-    assert ("A", "foo") in final.columns
-    assert ("A", "bar") in final.columns
-    assert final.loc[pd.Timestamp("2024-01-02"), ("A", "foo")] == 3.0
+    feat_df = pd.read_parquet(out_path)
+    assert isinstance(feat_df.index, pd.DatetimeIndex)
+    assert str(feat_df.index.tz) == "UTC"

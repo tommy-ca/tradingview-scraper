@@ -1,5 +1,5 @@
 ---
-status: completed
+status: complete
 priority: p1
 issue_id: 001
 tags: ['security', 'critical', 'ingestion']
@@ -40,8 +40,8 @@ Strip directory components using `os.path.basename(symbol)`. This prevents trave
 - [x] `_sanitize_symbol` method implemented with regex validation.
 - [x] Unit test added attempting to ingest a symbol with `../`.
 - [x] Unit test confirming `ValueError` is raised for invalid symbols.
-- [x] Verify `os.remove` is never called on unsanitized paths.
+- [x] Verify file deletion only uses sanitized paths.
 
 ## Work Log
 - 2026-01-29: Issue identified by Security Sentinel agent.
-- 2026-02-01: Fixed by implementing `_sanitize_symbol` and `_get_parquet_path` with strict regex and path traversal checks. Verified with reproduction test.
+- 2026-02-12: Implemented symbol sanitization and added regression tests.

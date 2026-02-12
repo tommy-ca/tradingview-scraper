@@ -1,6 +1,5 @@
-import pandera as pa
 import pandas as pd
-from typing import Optional
+import pandera as pa
 
 # Crypto exchanges for determining asset class
 CRYPTO_EXCHANGES = ["BINANCE", "OKX", "BYBIT", "BITGET", "KUCOIN", "COINBASE", "KRAKEN"]
@@ -117,8 +116,9 @@ FeatureStoreSchema = pa.DataFrameSchema(
         "recommend_all": pa.Column(float, checks=[pa.Check.in_range(-1.0, 1.0)], nullable=True),
         "recommend_ma": pa.Column(float, checks=[pa.Check.in_range(-1.0, 1.0)], nullable=True),
         "recommend_other": pa.Column(float, checks=[pa.Check.in_range(-1.0, 1.0)], nullable=True),
-        "adx": pa.Column(float, checks=[pa.Check.in_range(0, 100)], nullable=True),
-        "rsi": pa.Column(float, checks=[pa.Check.in_range(0, 100)], nullable=True),
+        # Optional: not all feature backfills compute these fields.
+        "adx": pa.Column(float, checks=[pa.Check.in_range(0, 100)], nullable=True, required=False),
+        "rsi": pa.Column(float, checks=[pa.Check.in_range(0, 100)], nullable=True, required=False),
     },
     index=pa.Index("datetime64[ns, UTC]", coerce=True),
     strict=False,  # Allow other technical features

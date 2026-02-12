@@ -101,6 +101,8 @@ class Mt5OmsAdapter(ExecutionEngine):
             order_type=mt5_type_str,
             volume=order.quantity,
             price=order.price,
+            stop_loss=order.stop_loss,
+            take_profit=order.take_profit,
             comment=order.ref_id or "",
             magic=123456,  # Should be configurable?
         )
